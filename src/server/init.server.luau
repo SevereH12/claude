@@ -1,5 +1,5 @@
 --!strict
--- ClickSimulator server entry point. Two-phase bootstrap: init() every
+-- Storm Bottler Simulator server entry point. Two-phase bootstrap: init() every
 -- system, then start() every system.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -32,4 +32,4 @@ for _, system in loaded do
 	end
 end
 
-print("[ClickSimulator] server started")
+print("[StormBottler] server started")

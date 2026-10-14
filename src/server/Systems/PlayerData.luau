@@ -17,7 +17,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local Types = require(ReplicatedStorage.Shared.Types)
 
-local STORE_NAME = "PlayerData_v1"
+local STORE_NAME = "StormBottler_PlayerData"
 local CURRENT_VERSION = 1
 -- A lock older than this belongs to a server that crashed; it may be taken.
 local LOCK_STALE_SECONDS = Config.AUTOSAVE_INTERVAL * 3
@@ -41,10 +41,11 @@ type Session = {
 
 local DEFAULT_PROFILE: Types.Profile = {
 	version = CURRENT_VERSION,
-	coins = 0,
-	totalCoins = 0,
-	rebirths = 0,
-	upgrades = {},
+	volts = 0,
+	totalVolts = 0,
+	bottleTier = 1,
+	chargeCount = 0,
+	chargeValue = 0,
 }
 
 -- MIGRATIONS[n] turns a version-n profile into version n+1. When the profile

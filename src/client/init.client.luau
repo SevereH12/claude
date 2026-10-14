@@ -1,5 +1,5 @@
 --!strict
--- ClickSimulator client entry point. Same two-phase bootstrap as the server.
+-- Storm Bottler Simulator client entry point. Same two-phase bootstrap as the server.
 
 -- make sure ReplicatedStorage has fully arrived before any controller
 -- requires shared modules
@@ -30,4 +30,4 @@ for _, controller in loaded do
 	end
 end
 
-print("[ClickSimulator] client started")
+print("[StormBottler] client started")

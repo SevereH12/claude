@@ -5,28 +5,67 @@
 -- What gets saved to the DataStore for each player.
 export type Profile = {
 	version: number,
-	coins: number,
-	totalCoins: number,
-	rebirths: number,
-	upgrades: { [string]: number }, -- upgrade id -> level
+	volts: number,
+	totalVolts: number, -- lifetime earnings (for stats/leaderboards later)
+	bottleTier: number, -- index into Config.BOTTLES
+	chargeCount: number, -- charges in the bottle (limited by capacity)
+	chargeValue: number, -- Volts those charges sell for
 }
 
--- What the server sends the client whenever the player's state changes.
+-- Sent to the owning client whenever their state changes.
 export type Snapshot = {
-	coins: number,
-	totalCoins: number,
-	rebirths: number,
-	upgrades: { [string]: number },
+	volts: number,
+	totalVolts: number,
+	bottleTier: number,
+	chargeCount: number,
+	chargeValue: number,
 }
 
-export type UpgradeDef = {
-	id: string,
+export type StormPhase = "Storm" | "Calm"
+
+-- endsAt is in workspace:GetServerTimeNow() time, so every client's timer agrees.
+export type StormState = {
+	phase: StormPhase,
+	endsAt: number,
+}
+
+-- "Shared": everyone inside the circle catches it.
+-- "Single": only the closest player inside the circle catches it.
+export type ZoneMode = "Shared" | "Single"
+
+export type ZoneDef = {
+	id: string, -- must match the part name in Workspace.Map.Zones
+	displayName: string,
+	mode: ZoneMode,
+	chargeValue: number, -- Volts per caught charge
+	strikeInterval: number, -- average seconds between strikes during a storm
+	order: number,
+}
+
+export type BottleDef = {
 	name: string,
-	description: string,
-	basePrice: number,
-	priceGrowth: number, -- each level costs this much more (1.15 = +15%)
-	maxLevel: number,
-	order: number, -- position in the shop list
+	capacity: number,
+	price: number,
+}
+
+-- Server -> all clients: a bolt is about to land here.
+export type StrikeWarning = {
+	id: number,
+	zoneId: string,
+	position: Vector3,
+	radius: number,
+	landsAt: number, -- workspace:GetServerTimeNow() time
+}
+
+-- Server -> all clients: the bolt landed. Lists who caught it (UserIds) and
+-- who was inside but had a full bottle.
+export type StrikeLanded = {
+	id: number,
+	zoneId: string,
+	position: Vector3,
+	value: number,
+	catchers: { number },
+	full: { number },
 }
 
 return nil

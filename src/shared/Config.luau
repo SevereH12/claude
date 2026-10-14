@@ -1,37 +1,33 @@
 --!strict
--- Tunable gameplay values. Change balance here.
+-- Every tunable number in the game. Balance changes happen here.
 -- NOTE: replicated to clients, so nothing secret goes here. The server uses
 -- its own copy of this file and never trusts numbers sent by a client.
 
 local Types = require(script.Parent.Types)
 
-local UPGRADES: { [string]: Types.UpgradeDef } = {
-	ClickPower = {
-		id = "ClickPower",
-		name = "Click Power",
-		description = "+1 coin per click",
-		basePrice = 10,
-		priceGrowth = 1.15,
-		maxLevel = 500,
+local BOTTLES: { Types.BottleDef } = {
+	{ name = "Jar", capacity = 5, price = 0 },
+	{ name = "Flask", capacity = 15, price = 250 },
+	{ name = "Battery Pack", capacity = 40, price = 1_500 },
+	{ name = "Storm Cell", capacity = 100, price = 8_000 },
+}
+
+local ZONES: { [string]: Types.ZoneDef } = {
+	Shoreline = {
+		id = "Shoreline",
+		displayName = "Shoreline",
+		mode = "Shared",
+		chargeValue = 5,
+		strikeInterval = 0.8,
 		order = 1,
 	},
-	AutoClicker = {
-		id = "AutoClicker",
-		name = "Auto Clicker",
-		description = "+1 coin every second",
-		basePrice = 50,
-		priceGrowth = 1.18,
-		maxLevel = 500,
+	Mesa = {
+		id = "Mesa",
+		displayName = "Mesa",
+		mode = "Single",
+		chargeValue = 20,
+		strikeInterval = 1.2,
 		order = 2,
-	},
-	GoldenHands = {
-		id = "GoldenHands",
-		name = "Golden Hands",
-		description = "+10% to all coins",
-		basePrice = 500,
-		priceGrowth = 1.6,
-		maxLevel = 50,
-		order = 3,
 	},
 }
 
@@ -39,18 +35,27 @@ return table.freeze({
 	-- Saving
 	AUTOSAVE_INTERVAL = 60, -- seconds between autosaves per player
 
-	-- Clicking
-	BASE_CLICK_VALUE = 1,
-	MAX_CLICKS_PER_SECOND = 15, -- server-side cap; extra clicks are dropped
-	CLICK_BURST = 20,
+	-- Storm cycle (seconds)
+	FIRST_STORM_DELAY = 8, -- calm time when a server starts
+	STORM_DURATION = 90,
+	CALM_DURATION = 20,
 
-	-- Upgrades
-	UPGRADES = table.freeze(UPGRADES),
-	AUTO_CLICKER_PER_LEVEL = 1, -- coins per second per Auto Clicker level
-	GOLDEN_HANDS_BONUS = 0.1, -- +10% per level
+	-- Strikes
+	WARNING_TIME = 1.5, -- seconds between the warning circle and the bolt
+	STRIKE_RADIUS = 8, -- studs; stand within this of the centre to catch
+	STRIKE_MAX_HEIGHT_ABOVE = 8, -- studs; you can catch mid-jump, but not from below a cliff
+	STRIKE_INTERVAL_JITTER = 0.3, -- +/-30% randomness on strike timing
 
-	-- Rebirth: resets coins and upgrades, gives a permanent multiplier
-	REBIRTH_BASE_COST = 10_000,
-	REBIRTH_COST_GROWTH = 3,
-	REBIRTH_MULTIPLIER = 0.5, -- +50% coins per rebirth
+	-- Selling
+	SELL_COOLDOWN = 1, -- seconds between sells per player
+
+	BOTTLES = table.freeze(BOTTLES),
+	ZONES = table.freeze(ZONES),
+
+	-- Placeholder sounds (built into Roblox). Swap for Creator Store sounds.
+	SOUNDS = table.freeze({
+		STRIKE = "rbxasset://sounds/collide.wav",
+		CATCH = "rbxasset://sounds/electronicpingshort.wav",
+		SELL = "rbxasset://sounds/electronicpingshort.wav",
+	}),
 })

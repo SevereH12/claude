@@ -1,50 +1,34 @@
 --!strict
 -- Pure game math used by both sides. The server's result is the one that
--- counts; the client uses it only to show prices and stats in the UI.
+-- counts; the client uses it only for the UI.
 
 local Config = require(script.Parent.Parent.Config)
 local Types = require(script.Parent.Parent.Types)
 
--- Anything with the fields the formulas read (a Profile or a Snapshot).
-type State = {
-	rebirths: number,
-	upgrades: { [string]: number },
-}
-
 local Formulas = {}
 
-function Formulas.level(state: State, upgradeId: string): number
-	return state.upgrades[upgradeId] or 0
+function Formulas.bottle(tier: number): Types.BottleDef
+	local index = math.clamp(tier, 1, #Config.BOTTLES)
+	return Config.BOTTLES[index]
 end
 
-function Formulas.multiplier(state: State): number
-	local rebirthBonus = 1 + state.rebirths * Config.REBIRTH_MULTIPLIER
-	local goldenBonus = 1 + Formulas.level(state, "GoldenHands") * Config.GOLDEN_HANDS_BONUS
-	return rebirthBonus * goldenBonus
+-- The next bottle to buy, or nil when the best one is owned.
+function Formulas.nextBottle(tier: number): Types.BottleDef?
+	return Config.BOTTLES[tier + 1]
 end
 
-function Formulas.clickValue(state: State): number
-	local base = Config.BASE_CLICK_VALUE + Formulas.level(state, "ClickPower")
-	return math.max(1, math.floor(base * Formulas.multiplier(state)))
+function Formulas.capacity(tier: number): number
+	return Formulas.bottle(tier).capacity
 end
 
-function Formulas.autoIncome(state: State): number
-	local base = Formulas.level(state, "AutoClicker") * Config.AUTO_CLICKER_PER_LEVEL
-	return math.floor(base * Formulas.multiplier(state))
+function Formulas.isFull(state: { bottleTier: number, chargeCount: number }): boolean
+	return state.chargeCount >= Formulas.capacity(state.bottleTier)
 end
 
-function Formulas.upgradeCost(def: Types.UpgradeDef, currentLevel: number): number
-	return math.floor(def.basePrice * def.priceGrowth ^ currentLevel)
-end
-
-function Formulas.rebirthCost(rebirths: number): number
-	return math.floor(Config.REBIRTH_BASE_COST * Config.REBIRTH_COST_GROWTH ^ rebirths)
-end
-
--- Upgrade definitions sorted for display.
-function Formulas.sortedUpgrades(): { Types.UpgradeDef }
-	local list: { Types.UpgradeDef } = {}
-	for _, def in Config.UPGRADES do
+-- Zone definitions sorted for display.
+function Formulas.sortedZones(): { Types.ZoneDef }
+	local list: { Types.ZoneDef } = {}
+	for _, def in Config.ZONES do
 		table.insert(list, def)
 	end
 	table.sort(list, function(a, b)
