@@ -1,0 +1,38 @@
+--!strict
+-- Per-player, per-action token buckets. Call allow() first thing in every
+-- remote handler so spamming a remote can't flood the server.
+
+local Players = game:GetService("Players")
+
+type Bucket = { tokens: number, last: number }
+
+local buckets: { [Player]: { [string]: Bucket } } = {}
+
+Players.PlayerRemoving:Connect(function(player)
+	buckets[player] = nil
+end)
+
+local RateLimit = {}
+
+function RateLimit.allow(player: Player, key: string, ratePerSec: number, burst: number): boolean
+	local now = os.clock()
+	local playerBuckets = buckets[player]
+	if not playerBuckets then
+		playerBuckets = {}
+		buckets[player] = playerBuckets
+	end
+	local bucket = playerBuckets[key]
+	if not bucket then
+		bucket = { tokens = burst, last = now }
+		playerBuckets[key] = bucket
+	end
+	bucket.tokens = math.min(burst, bucket.tokens + (now - bucket.last) * ratePerSec)
+	bucket.last = now
+	if bucket.tokens < 1 then
+		return false
+	end
+	bucket.tokens -= 1
+	return true
+end
+
+return RateLimit
