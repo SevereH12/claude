@@ -41,7 +41,14 @@ export type ZoneDef = {
 	mode: ZoneMode,
 	chargeValue: number, -- Volts per caught charge
 	strikeInterval: number, -- average seconds between strikes during a storm
-	order: number,
+	order: number, -- position along the zone spiral (1 = closest to the hub)
+
+	-- World layout (see src/server/World). Zones are placed automatically on
+	-- a spiral around the hub in `order`; these only describe the zone itself.
+	theme: string, -- biome theme each world style decorates it with, e.g. "Beach"
+	width: number, -- catch floor size in studs (side to side, facing the hub)
+	depth: number, -- catch floor size in studs (from the gate to the back)
+	floor: number, -- height of the catch floor above sea level
 }
 
 export type BottleDef = {

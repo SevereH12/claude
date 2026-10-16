@@ -81,7 +81,13 @@ end
 -- Builds a directory the way Rojo does (init.server.luau => Script, etc.).
 local function buildDirectory(path, name)
 	local className, source = "Folder", nil
-	for initName, initClass in { ["init.server.luau"] = "Script", ["init.client.luau"] = "LocalScript", ["init.luau"] = "ModuleScript" } do
+	for initName, initClass in
+		{
+			["init.server.luau"] = "Script",
+			["init.client.luau"] = "LocalScript",
+			["init.luau"] = "ModuleScript",
+		}
+	do
 		if fs.isFile(path .. "/" .. initName) then
 			className, source = initClass, fs.readFile(path .. "/" .. initName)
 		end
@@ -134,6 +140,45 @@ function World.new(srcPath)
 	return self
 end
 
+-- Lune's CFrame.lookAt mirrors the Z axis (looking south gives north).
+-- Everything else in Lune's CFrame matches Roblox, so wrap it and replace
+-- lookAt with Roblox's definition built from fromMatrix (verified correct).
+local function lookAt(at, target, up)
+	local upVector = up or roblox.Vector3.new(0, 1, 0)
+	local look = (target - at).Unit
+	local right = look:Cross(upVector)
+	if right.Magnitude < 1e-6 then
+		right = look:Cross(roblox.Vector3.new(0, 0, 1))
+	end
+	right = right.Unit
+	return roblox.CFrame.fromMatrix(at, right, right:Cross(look), -look)
+end
+local CFrameShim = setmetatable({ lookAt = lookAt }, { __index = roblox.CFrame })
+
+-- Roblox's Random (seeded, deterministic). Lune has no Random class.
+local RandomClass = {}
+RandomClass.__index = RandomClass
+function RandomClass.new(seed)
+	local self = setmetatable({}, RandomClass)
+	self.state = math.floor(seed or 1) % 2147483647
+	if self.state <= 0 then
+		self.state += 2147483646
+	end
+	return self
+end
+function RandomClass:_next()
+	-- Park-Miller minimal standard generator
+	self.state = (self.state * 48271) % 2147483647
+	return self.state / 2147483647
+end
+function RandomClass:NextNumber(min, max)
+	local lo, hi = min or 0, max or 1
+	return lo + (hi - lo) * self:_next()
+end
+function RandomClass:NextInteger(min, max)
+	return min + math.floor(self:_next() * (max - min + 1))
+end
+
 -- Stand-ins for engine services Lune doesn't simulate.
 local function fakeTween()
 	return {
@@ -151,6 +196,8 @@ function World:environment(scriptInstance)
 		workspace = self.workspace,
 		script = scriptInstance,
 		task = task,
+		Random = RandomClass,
+		CFrame = CFrameShim,
 		warn = function(...)
 			table.insert(world.warnings, table.concat({ ... }, " "))
 		end,
@@ -194,7 +241,9 @@ end
 function World:require(path)
 	local node = self.game
 	for part in path:gmatch("[^%.]+") do
-		local nextNode = if node == self.game then self.game:GetService(part) else node:FindFirstChild(part)
+		local nextNode = if node == self.game
+			then self.game:GetService(part)
+			else node:FindFirstChild(part)
 		assert(nextNode, "harness: no " .. part .. " under " .. node:GetFullName())
 		node = nextNode
 	end

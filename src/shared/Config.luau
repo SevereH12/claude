@@ -22,6 +22,10 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		chargeValue = 5,
 		strikeInterval = 0.8,
 		order = 1,
+		theme = "Beach",
+		width = 112,
+		depth = 132,
+		floor = 4,
 	},
 	Mesa = {
 		id = "Mesa",
@@ -32,10 +36,17 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		chargeValue = 20,
 		strikeInterval = 1.2,
 		order = 2,
+		theme = "Canyon",
+		width = 96,
+		depth = 104,
+		floor = 20,
 	},
 }
 
 return table.freeze({
+	-- Which world style MapBuilder builds (src/server/World/Styles/<name>).
+	WORLD_STYLE = "Legacy",
+
 	-- Saving
 	AUTOSAVE_INTERVAL = 60, -- seconds between autosaves per player
 

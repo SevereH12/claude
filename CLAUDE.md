@@ -49,19 +49,35 @@ Rules:
   `[StormBottler] server started` and `[StormBottler] client started`
   with no errors, then stop play mode.
 
-## The map
+## The map (world framework)
 
-`src/server/Lib/MapBuilder.luau` builds the placeholder map. The game builds
-it at runtime if `Workspace.Map` is missing. To save it into the place so it
-can be edited in Studio, run in Edit mode (execute_luau, or the command bar):
+`Lib/MapBuilder.build(style?)` is the entry point (the updater plugin and the
+Map system call it). It builds the world in `Config.WORLD_STYLE`:
+- `"Legacy"`: the old hand-placed map (`Lib/LegacyMapBuilder.luau`), kept live
+  until a new style ships.
+- anything else: `src/server/World/Builder.luau` with the style pack
+  `src/server/World/Styles/<Style>` (a module, or a folder with `init.luau`).
 
-    require(game.ServerScriptService.Server.Lib.MapBuilder).build()
+The framework decides where things go and guarantees the gameplay contracts;
+a style pack decides how everything looks:
+- `World/Layout.luau`: zones sit on a spiral around the hub in `order`
+  (`StylePack.layout` sets the spiral). Adding a zone = adding a
+  `Config.ZONES` entry (`theme`, `width`, `depth`, `floor`); it lands in the
+  next slot, the "Coming Soon" teaser moves one slot out, nothing else moves.
+  `Layout.plan` errors if anything would overlap or a connector is too steep.
+- `World/Builder.luau` creates `Workspace.Map.Zones.<ZoneId>` (the zone volume,
+  floor + 46 studs) itself, then calls the style: atmosphere, buildBase,
+  buildHub, then per zone buildZoneGround/buildConnector/buildBorder/buildGate
+  and `themes[def.theme]` (or `themes.Default`), then buildTeaser. It errors if
+  there is no SpawnLocation or no part tagged `SellArea`.
+- `World/Kit.luau`: shared building pieces (parts, struts, walkways, cables,
+  signs, rocks, terrain landmasses, `Kit.sellArea`, `Kit.spawn`).
+- `World/Types.luau`: the StylePack interface and slot/zone contexts.
+- `World/Styles/Blockout.luau`: the reference style pack to copy.
 
-Code only depends on `Workspace.Map.Zones.<ZoneId>` (invisible boxes covering
-each zone's whole volume, used for strikes, walk speed and the zone banner)
-and `Workspace.Map.PowerPlant.SellPad`; everything else is art. Zone layout
-(footprint and floor height) is in `ZONE_LAYOUT` in MapBuilder; zone names,
-colours and values are in `Config.ZONES`.
+Map rules: catch floors are flat and clear (nothing above floor + 0.3 inside
+a zone except its outer 2-stud band); selling is a position check against
+`SellArea` boxes; the spawn is outside every zone; stay under 2,500 parts.
 
 ## Testing without Studio
 
@@ -73,7 +89,10 @@ colours and values are in `Config.ZONES`.
   (zone volumes, sell station detection, spawn placement).
 - `python3 tools/render_map.py map.json out` draws top-down and side views
   (needs Pillow) so map layout can be reviewed as images.
-Run all three after any map or zone change.
+- `tools/walkcheck.py map.json out` checks you can walk from spawn to every
+  zone and sell area and that catch floors are flat and open.
+- `tools/check_world.sh <Style> [outdir]` runs all of the above for a style.
+Run it after any map or zone change.
 
 ## Conventions
 

@@ -1,7 +1,7 @@
 --!nocheck
 -- Builds the map with the real MapBuilder in a stand-in world and writes
 -- every part + terrain fill to a JSON file for checks and rendering.
---   lune run tools/harness/buildmap.luau [outfile]
+--   lune run tools/harness/buildmap.luau [outfile] [style]
 -- Exits non-zero if the build errors or required map pieces are missing.
 
 local fs = require("@lune/fs")
@@ -11,10 +11,11 @@ local serde = require("@lune/serde")
 local World = require("./World")
 
 local outPath = process.args[1] or "map.json"
+local styleName = process.args[2] -- nil = Config.WORLD_STYLE
 local world = World.new("src")
 
 local MapBuilder = world:require("ServerScriptService.Server.Lib.MapBuilder")
-local ok, err = pcall(MapBuilder.build)
+local ok, err = pcall(MapBuilder.build, styleName)
 if not ok then
 	print("BUILD FAILED: " .. tostring(err))
 	process.exit(1)
@@ -74,6 +75,52 @@ for _, inst in workspace:GetDescendants() do
 	end
 end
 
+-- cables (Beams) between attachments, as world-space segments
+local beams = {}
+for _, inst in workspace:GetDescendants() do
+	if inst.ClassName == "Beam" then
+		local a0, a1 = inst.Attachment0, inst.Attachment1
+		if a0 and a1 and a0.Parent and a1.Parent then
+			local p0 = a0.Parent.CFrame:PointToWorldSpace(a0.Position)
+			local p1 = a1.Parent.CFrame:PointToWorldSpace(a1.Position)
+			local color = inst.Color.Keypoints[1].Value
+			table.insert(beams, {
+				a = vec(p0),
+				b = vec(p1),
+				width = inst.Width0,
+				color = { color.R, color.G, color.B },
+				glow = inst.LightEmission,
+			})
+		end
+	end
+end
+
+-- lights, for the render's glow pass
+local lights = {}
+for _, inst in workspace:GetDescendants() do
+	if inst.ClassName == "PointLight" or inst.ClassName == "SpotLight" then
+		local holder = inst.Parent
+		local position = nil
+		if holder and holder:IsA("BasePart") then
+			position = holder.CFrame.Position
+		elseif
+			holder
+			and holder.ClassName == "Attachment"
+			and holder.Parent
+			and holder.Parent:IsA("BasePart")
+		then
+			position = holder.Parent.CFrame:PointToWorldSpace(holder.Position)
+		end
+		if position then
+			table.insert(lights, {
+				p = vec(position),
+				range = inst.Range,
+				color = { inst.Color.R, inst.Color.G, inst.Color.B },
+			})
+		end
+	end
+end
+
 local terrain = {}
 for _, op in world.terrainOps do
 	local entry = { kind = op.kind }
@@ -102,7 +149,9 @@ for _, inst in workspace:GetDescendants() do
 		sellAreas += 1
 	end
 end
-local legacyPad = map and map:FindFirstChild("PowerPlant") and map.PowerPlant:FindFirstChild("SellPad")
+local legacyPad = map
+	and map:FindFirstChild("PowerPlant")
+	and map.PowerPlant:FindFirstChild("SellPad")
 need(sellAreas > 0 or legacyPad ~= nil, "no sell area (tagged SellArea) or PowerPlant.SellPad")
 local spawns = 0
 for _, inst in workspace:GetDescendants() do
@@ -117,12 +166,23 @@ fs.writeFile(
 	serde.encode("json", {
 		parts = parts,
 		terrain = terrain,
+		beams = beams,
+		lights = lights,
+		style = map and map:GetAttribute("Style"),
 		counts = counts,
 		warnings = world.warnings,
 		problems = problems,
 	})
 )
-print(string.format("built: %d parts, %d terrain ops, %d warnings -> %s", #parts, #terrain, #world.warnings, outPath))
+print(
+	string.format(
+		"built: %d parts, %d terrain ops, %d warnings -> %s",
+		#parts,
+		#terrain,
+		#world.warnings,
+		outPath
+	)
+)
 for _, w in world.warnings do
 	print("WARN: " .. w)
 end

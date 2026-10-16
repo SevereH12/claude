@@ -204,6 +204,20 @@ def main():
         else:
             draw.polygon(hull([P(c[0], c[2]) for c in cs]), fill=fill, outline=(0, 0, 0, 60))
 
+    # cables
+    for bm in data.get("beams", []):
+        color = to255(bm["color"])
+        width = max(1, int(bm["width"] * scale))
+        if bm.get("glow", 0) > 0:
+            draw.line([P(bm["a"][0], bm["a"][2]), P(bm["b"][0], bm["b"][2])], fill=color + (90,), width=width + 4)
+        draw.line([P(bm["a"][0], bm["a"][2]), P(bm["b"][0], bm["b"][2])], fill=color + (230,), width=width)
+
+    # light glow
+    for lt in data.get("lights", []):
+        x, y = P(lt["p"][0], lt["p"][2])
+        r = lt["range"] * scale * 0.35
+        draw.ellipse([x - r, y - r, x + r, y + r], fill=to255(lt["color"]) + (28,))
+
     # gameplay overlays
     for p in zones:
         cs = corners(p["cframe"], p["size"])
@@ -221,7 +235,8 @@ def main():
             draw.ellipse([x - 6, y - 6, x + 6, y + 6], outline=(0, 255, 255, 255), width=3)
             draw.text((x + 8, y - 6), "SPAWN", fill=(0, 255, 255, 255), font=font)
 
-    draw.text((10, H - 20), "top-down, north up, 50-stud grid", fill=(255, 255, 255, 200), font=font)
+    title = f"style: {data.get('style')}  |  {len(parts)} parts  |  top-down, north up, 50-stud grid"
+    draw.text((10, H - 20), title, fill=(255, 255, 255, 220), font=font)
     img.save(prefix + "_top.png")
 
     # ---------------- side view (looking north) ----------------
@@ -272,6 +287,8 @@ def main():
             sd.ellipse([S(cx - r, cy + r), S(cx + r, cy - r)], fill=color + (alpha,), outline=(0, 0, 0, 60))
         else:
             sd.polygon(hull([S(c[0], c[1]) for c in cs]), fill=color + (alpha,), outline=(0, 0, 0, 60))
+    for bm in data.get("beams", []):
+        sd.line([S(bm["a"][0], bm["a"][1]), S(bm["b"][0], bm["b"][1])], fill=to255(bm["color"]) + (200,), width=max(1, int(bm["width"] * scale)))
     for p in zones:
         cs = corners(p["cframe"], p["size"])
         sd.polygon(hull([S(c[0], c[1]) for c in cs]), outline=(255, 255, 255, 200), width=2)

@@ -23,30 +23,85 @@ type Look = {
 	rainRate: number,
 }
 
-local LOOKS: { [Types.StormPhase]: Look } = {
-	Storm = {
+local RAIN_RATE = 450
+
+-- Calm = however the world style set up the lighting (captured at start).
+-- Storm = the style's storm values from Lighting attributes
+-- (StormBrightness, StormAmbient, StormAtmosphereColor, StormCloudColor),
+-- falling back to a darker, bluer version of the calm look.
+local LOOKS: { [string]: Look } = {}
+
+local function attribute<T>(name: string, fallback: T): T
+	local value = Lighting:GetAttribute(name)
+	if value == nil then
+		return fallback
+	end
+	return value :: any
+end
+
+local function darker(color: Color3, amount: number): Color3
+	return color:Lerp(Color3.fromRGB(40, 48, 72), amount)
+end
+
+local function captureLooks()
+	local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
+	local clouds = workspace.Terrain:FindFirstChildOfClass("Clouds")
+	local grade = Lighting:FindFirstChild("StormGrade")
+
+	local calm: Look = {
 		lighting = {
-			Brightness = 0.9,
-			OutdoorAmbient = Color3.fromRGB(70, 78, 105),
-			ClockTime = 17.4,
+			Brightness = Lighting.Brightness,
+			OutdoorAmbient = Lighting.OutdoorAmbient,
+			ClockTime = Lighting.ClockTime,
 		},
-		atmosphere = { Density = 0.45, Color = Color3.fromRGB(95, 105, 135), Haze = 2.5 },
-		clouds = { Cover = 0.92, Density = 0.85, Color = Color3.fromRGB(75, 80, 98) },
-		grade = { Saturation = -0.15, Contrast = 0.18, TintColor = Color3.fromRGB(205, 220, 255) },
-		rainRate = 450,
-	},
-	Calm = {
-		lighting = {
-			Brightness = 2.2,
-			OutdoorAmbient = Color3.fromRGB(125, 130, 150),
-			ClockTime = 16.5,
-		},
-		atmosphere = { Density = 0.32, Color = Color3.fromRGB(195, 202, 218), Haze = 1.6 },
-		clouds = { Cover = 0.62, Density = 0.55, Color = Color3.fromRGB(215, 218, 230) },
-		grade = { Saturation = 0.1, Contrast = 0.1, TintColor = Color3.fromRGB(240, 244, 255) },
+		atmosphere = {},
+		clouds = {},
+		grade = {},
 		rainRate = 0,
-	},
-}
+	}
+	local storm: Look = {
+		lighting = {
+			Brightness = attribute("StormBrightness", Lighting.Brightness * 0.4),
+			OutdoorAmbient = attribute("StormAmbient", darker(Lighting.OutdoorAmbient, 0.45)),
+			ClockTime = Lighting.ClockTime + 0.9,
+		},
+		atmosphere = {},
+		clouds = {},
+		grade = {},
+		rainRate = RAIN_RATE,
+	}
+	if atmosphere then
+		calm.atmosphere =
+			{ Density = atmosphere.Density, Color = atmosphere.Color, Haze = atmosphere.Haze }
+		storm.atmosphere = {
+			Density = math.min(atmosphere.Density + 0.13, 0.7),
+			Color = attribute("StormAtmosphereColor", darker(atmosphere.Color, 0.45)),
+			Haze = atmosphere.Haze + 0.9,
+		}
+	end
+	if clouds then
+		calm.clouds = { Cover = clouds.Cover, Density = clouds.Density, Color = clouds.Color }
+		storm.clouds = {
+			Cover = math.max(clouds.Cover, 0.92),
+			Density = math.max(clouds.Density, 0.85),
+			Color = attribute("StormCloudColor", darker(clouds.Color, 0.6)),
+		}
+	end
+	if grade and grade:IsA("ColorCorrectionEffect") then
+		calm.grade = {
+			Saturation = grade.Saturation,
+			Contrast = grade.Contrast,
+			TintColor = grade.TintColor,
+		}
+		storm.grade = {
+			Saturation = grade.Saturation - 0.25,
+			Contrast = grade.Contrast + 0.08,
+			TintColor = grade.TintColor:Lerp(Color3.fromRGB(200, 215, 255), 0.6),
+		}
+	end
+	LOOKS.Calm = calm
+	LOOKS.Storm = storm
+end
 
 local Storm = {}
 
@@ -115,6 +170,7 @@ local function makeRain(): ParticleEmitter
 end
 
 function Storm.init()
+	captureLooks()
 	rainEmitter = makeRain()
 	Net.get("StormState").OnClientEvent:Connect(function(state: Types.StormState)
 		local previous = Storm.current
