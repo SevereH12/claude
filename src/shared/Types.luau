@@ -36,6 +36,8 @@ export type ZoneMode = "Shared" | "Single"
 export type ZoneDef = {
 	id: string, -- must match the part name in Workspace.Map.Zones
 	displayName: string,
+	tagline: string, -- shown on the zone sign and banner
+	color: Color3, -- border, sign and warning circle colour
 	mode: ZoneMode,
 	chargeValue: number, -- Volts per caught charge
 	strikeInterval: number, -- average seconds between strikes during a storm

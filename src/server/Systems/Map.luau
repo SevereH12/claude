@@ -23,11 +23,6 @@ local function child(path: { string }): Instance?
 	return current
 end
 
-function Map.zoneArea(zoneId: string): BasePart?
-	local area = child({ "Zones", zoneId })
-	return if area and area:IsA("BasePart") then area else nil
-end
-
 function Map.sellPad(): BasePart?
 	local pad = child({ "PowerPlant", "SellPad" })
 	return if pad and pad:IsA("BasePart") then pad else nil

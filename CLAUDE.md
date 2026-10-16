@@ -5,6 +5,16 @@ the Power Plant for Volts, buy bigger bottles. All game code lives in `src/`
 as Luau files laid out for Rojo (`default.project.json`). Use the roblox-dev
 skills when writing Luau.
 
+## How the code gets into Studio
+
+The user installs `plugin/StormBottlerUpdater.server.luau` once (built with
+`rojo build plugin/plugin.project.json -o StormBottlerUpdater.rbxmx`). Its
+"Update Game" button downloads `src/` from GitHub (repo SevereH12/claude,
+branch `claude/sweet-planck-ea1ob4`, must be public) and installs it with
+the layout below, then rebuilds the map if `Map` has `AutoBuilt = true`.
+So: commit and push to that branch and the user clicks Update Game.
+If the branch changes, update `BRANCH` in the plugin and send a new build.
+
 ## Syncing `src/` into Roblox Studio (MCP, no Rojo)
 
 When asked to sync, push, or install the code into Studio, use the
@@ -47,8 +57,11 @@ can be edited in Studio, run in Edit mode (execute_luau, or the command bar):
 
     require(game.ServerScriptService.Server.Lib.MapBuilder).build()
 
-Code only depends on `Workspace.Map.Zones.<ZoneId>` (invisible strike-area
-boxes) and `Workspace.Map.PowerPlant.SellPad`; everything else is art.
+Code only depends on `Workspace.Map.Zones.<ZoneId>` (invisible boxes covering
+each zone's whole volume, used for strikes, walk speed and the zone banner)
+and `Workspace.Map.PowerPlant.SellPad`; everything else is art. Zone layout
+(footprint and floor height) is in `ZONE_LAYOUT` in MapBuilder; zone names,
+colours and values are in `Config.ZONES`.
 
 ## Conventions
 

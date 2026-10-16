@@ -3,54 +3,41 @@
 Catch lightning in bottles on a stormy island, sell the charges at the Power
 Plant for Volts, and buy bigger bottles.
 
-## MVP features
+## Features
 
-- **Storm cycle**: 90s storms, 20s calm (first storm 8s after the server starts).
-- **Strikes**: a glowing circle appears 1.5s before each bolt. Stand in it
-  with your Bottle equipped to catch a charge.
-  - **Shoreline** (yellow circles): everyone in the circle catches. 5 Volts per charge.
-  - **Mesa** (orange circles, up the ramp): only the closest player catches. 20 Volts per charge.
-- **Selling**: step on the yellow pad at the Power Plant.
+- **Storm cycle**: 90s storms, 20s calm (first storm 8s after the server
+  starts). The sky darkens, clouds roll in and it rains during storms.
+- **Zones** with glowing force-field borders and entrance arches:
+  - **Shoreline** (yellow): everyone in the circle catches. 5 Volts per charge.
+  - **Mesa** (orange, up the ramp): only the closest player catches. 20 Volts per charge.
+- **Strikes**: a ring and light pillar appear 1.5s before each bolt. Stand in
+  the ring to catch a charge. The bottle is always in your hand.
+- **Speed**: normal speed inside zones, fast everywhere else.
+- **Selling**: step on the glowing SELL pad at the Power Plant.
 - **Bottles**: Jar (5) → Flask (15) → Battery Pack (40) → Storm Cell (100).
 - **Saving**: Volts, bottle tier and held charges save (retries, session
   locking, autosave every 60s, save on leave and shutdown).
 - **HUD**: Volts, storm timer, bottle fill bar, server city meter (placeholder).
 
-Every number (timings, values, prices, radius) is in `src/shared/Config.luau`.
+Every number (timings, values, prices, radius, walk speeds) is in
+`src/shared/Config.luau`.
 
 ## Getting it into Roblox Studio
 
-### Option A: Claude Code on your PC (no extra tools)
+**One-time setup**
 
-1. Get the code onto your PC:
-   ```
-   git clone https://github.com/SevereH12/claude.git StormBottler
-   cd StormBottler
-   git checkout claude/sweet-planck-ea1ob4
-   ```
-2. Open Roblox Studio with a new **Baseplate** place and make sure the MCP
-   server is on (Assistant > ... > Manage MCP Servers).
-3. Run `claude` in the folder and say:
-   > Sync src into my open Roblox Studio place following CLAUDE.md, then build the map and playtest it.
+1. This GitHub repo must be **public** (the plugin downloads from it).
+2. Install the updater plugin: in Studio, **Plugins** tab → **Plugins
+   Folder**, then drag `StormBottlerUpdater.rbxmx` into the folder that opens.
+   Restart Studio.
 
-### Option B: Rojo
+**Every update**
 
-1. Install [Rokit](https://github.com/rojo-rbx/rokit), then run `rokit install`.
-2. Run `rojo serve`.
-3. In Studio, install the Rojo plugin and click **Connect**.
+1. Open your Storm Bottler place in Studio.
+2. **Plugins** tab → **Update Game**. Allow the web-access popup the first time.
+3. Press **Ctrl+S** to save, then **Play**.
 
-### Making the map editable
-
-The game builds the placeholder map itself when you press Play. To keep it
-in your place (so you can see and edit it in Edit mode), paste this into
-Studio's command bar (View > Command Bar) and press Enter, then save:
-
-```lua
-require(game.ServerScriptService.Server.Lib.MapBuilder).build()
-```
-
-Keep the names `Map/Zones/Shoreline`, `Map/Zones/Mesa` and
-`Map/PowerPlant/SellPad` when you replace the art.
+Build the plugin yourself with `rojo build plugin/plugin.project.json -o StormBottlerUpdater.rbxmx`.
 
 ### Testing saving in Studio
 
@@ -58,14 +45,21 @@ Publish the place, then Game Settings > Security > **Enable Studio Access to
 API Services**. Without it the game still runs, but uses a temporary profile
 that doesn't save (a warning in Output says so).
 
+### Protecting a hand-edited map
+
+The updater rebuilds the map each time while `Workspace.Map` has the
+attribute `AutoBuilt = true`. Delete that attribute once you start editing
+the map by hand and the updater will leave it alone.
+
 ## Code layout
 
-- `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas
+- `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas, zone geometry
+- `plugin/` → the Studio updater plugin (not part of the game)
 - `src/server` → ServerScriptService.Server
-  - `Systems/`: PlayerData (saving), Map, StormCycle, Strikes, Bottles, Selling, Shop, Sync
+  - `Systems/`: PlayerData (saving), Map, StormCycle, Strikes, Bottles, Movement, Selling, Shop, Sync
   - `Lib/`: MapBuilder, RateLimit
 - `src/client` → StarterPlayerScripts.Client
-  - `Controllers/`: State, Storm, StrikeFX, HUD, ShopUI
+  - `Controllers/`: State, Storm, StrikeFX, HUD, ShopUI, ZoneBanner
   - `Lib/`: UI helpers
 
 ## Checks

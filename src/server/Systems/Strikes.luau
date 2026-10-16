@@ -12,7 +12,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Types = require(ReplicatedStorage.Shared.Types)
-local Map = require(script.Parent.Map)
+local Zones = require(ReplicatedStorage.Shared.Util.Zones)
 local PlayerData = require(script.Parent.PlayerData)
 local StormCycle = require(script.Parent.StormCycle)
 local Sync = require(script.Parent.Sync)
@@ -28,23 +28,32 @@ local landedRemote: RemoteEvent
 
 local Strikes = {}
 
--- Random point on the ground inside the zone's box.
-local function randomGroundPoint(area: BasePart): Vector3?
+-- Random point on the ground inside the zone, kept far enough from the
+-- border that the whole circle fits inside it.
+local function randomGroundPoint(zonePart: BasePart): Vector3?
+	local inset = Config.STRIKE_RADIUS + 2
+	local halfX = math.max(zonePart.Size.X / 2 - inset, 0)
+	local halfZ = math.max(zonePart.Size.Z / 2 - inset, 0)
 	local offset = Vector3.new(
-		(random:NextNumber() - 0.5) * area.Size.X,
-		0,
-		(random:NextNumber() - 0.5) * area.Size.Z
+		random:NextNumber(-halfX, halfX),
+		zonePart.Size.Y / 2,
+		random:NextNumber(-halfZ, halfZ)
 	)
-	local top = area.CFrame:PointToWorldSpace(offset) + Vector3.new(0, 60, 0)
+	local top = zonePart.CFrame:PointToWorldSpace(offset)
 
+	-- the ground is terrain; ignore every part (posts, walls, trees, players)
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Include
-	params.FilterDescendantsInstances = { workspace:FindFirstChild("Map") :: Instance }
-	local result = workspace:Raycast(top, Vector3.new(0, -200, 0), params)
-	return if result then result.Position else nil
+	params.FilterDescendantsInstances = { workspace.Terrain }
+	local result = workspace:Raycast(top, Vector3.new(0, -zonePart.Size.Y - 10, 0), params)
+	if not result or not Zones.contains(zonePart, result.Position + Vector3.new(0, 1, 0)) then
+		return nil
+	end
+	return result.Position
 end
 
--- The player's root part if they can catch right now: alive, holding the bottle.
+-- The player's root part if they can catch right now (alive). The bottle
+-- is always in their hand, so there's nothing to equip.
 local function catchingRoot(player: Player): BasePart?
 	local character = player.Character
 	if not character then
@@ -52,11 +61,6 @@ local function catchingRoot(player: Player): BasePart?
 	end
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	if not humanoid or humanoid.Health <= 0 then
-		return nil
-	end
-	-- an equipped Tool is parented to the character
-	local bottle = character:FindFirstChild("Bottle")
-	if not bottle or not bottle:IsA("Tool") then
 		return nil
 	end
 	local root = character:FindFirstChild("HumanoidRootPart")
@@ -120,8 +124,8 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3)
 	landedRemote:FireAllClients(landed)
 end
 
-local function spawnStrike(zone: Types.ZoneDef, area: BasePart)
-	local position = randomGroundPoint(area)
+local function spawnStrike(zone: Types.ZoneDef, zonePart: BasePart)
+	local position = randomGroundPoint(zonePart)
 	if not position then
 		return
 	end
@@ -140,14 +144,14 @@ local function spawnStrike(zone: Types.ZoneDef, area: BasePart)
 end
 
 local function runZone(zone: Types.ZoneDef)
-	local area = Map.zoneArea(zone.id)
-	if not area then
+	local zonePart = Zones.part(zone.id)
+	if not zonePart then
 		warn(`[Strikes] no Workspace.Map.Zones.{zone.id} part; zone disabled`)
 		return
 	end
 	while true do
 		if StormCycle.isStorming() then
-			spawnStrike(zone, area)
+			spawnStrike(zone, zonePart)
 			local jitter = 1 + (random:NextNumber() * 2 - 1) * Config.STRIKE_INTERVAL_JITTER
 			task.wait(zone.strikeInterval * jitter)
 		else

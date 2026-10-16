@@ -17,3 +17,5 @@ roblox.yml
 # OS
 .DS_Store
 Thumbs.db
+*.rbxm
+*.rbxmx

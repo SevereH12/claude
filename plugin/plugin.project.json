@@ -1,0 +1,6 @@
+{
+  "name": "StormBottlerUpdater",
+  "tree": {
+    "$path": "StormBottlerUpdater.server.luau"
+  }
+}

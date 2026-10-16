@@ -16,6 +16,8 @@ local ZONES: { [string]: Types.ZoneDef } = {
 	Shoreline = {
 		id = "Shoreline",
 		displayName = "Shoreline",
+		tagline = "Everyone in the circle catches",
+		color = Color3.fromRGB(255, 220, 80),
 		mode = "Shared",
 		chargeValue = 5,
 		strikeInterval = 0.8,
@@ -24,6 +26,8 @@ local ZONES: { [string]: Types.ZoneDef } = {
 	Mesa = {
 		id = "Mesa",
 		displayName = "Mesa",
+		tagline = "One catcher per bolt - 4x Volts",
+		color = Color3.fromRGB(255, 120, 60),
 		mode = "Single",
 		chargeValue = 20,
 		strikeInterval = 1.2,
@@ -45,6 +49,10 @@ return table.freeze({
 	STRIKE_RADIUS = 8, -- studs; stand within this of the centre to catch
 	STRIKE_MAX_HEIGHT_ABOVE = 8, -- studs; you can catch mid-jump, but not from below a cliff
 	STRIKE_INTERVAL_JITTER = 0.3, -- +/-30% randomness on strike timing
+
+	-- Movement: you move faster between zones so travel isn't a chore
+	WALK_SPEED_IN_ZONE = 16, -- Roblox default
+	WALK_SPEED_OUTSIDE = 30,
 
 	-- Selling
 	SELL_COOLDOWN = 1, -- seconds between sells per player

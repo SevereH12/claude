@@ -2,13 +2,16 @@
 -- All lightning visuals and feedback. Purely cosmetic: the server already
 -- decided who caught what before any of this plays.
 --
---   StrikeWarning -> glowing circle that fills up until the bolt lands
---   StrikeLanded  -> bolt + flash + thunder; if we caught it: screen flash,
---                    camera shake, "+5" popup, catch sound
+--   StrikeWarning -> glowing ring + light pillar; inner disc fills until the bolt lands
+--   StrikeLanded  -> forked, flickering bolt; area lights up; sparks,
+--                    shockwave, scorch mark, thunder. Arcs into each
+--                    catcher's bottle. If we caught it: screen flash,
+--                    camera shake, "+5" popup.
 --   Sold          -> big "+Volts" popup
---   State         -> bottle glows brighter as it fills
+--   (ambient)     -> the Power Plant's tesla coil crackles
 
 local Debris = game:GetService("Debris")
+local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -16,35 +19,37 @@ local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
-local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Types = require(ReplicatedStorage.Shared.Types)
 local UI = require(script.Parent.Parent.Lib.UI)
-local State = require(script.Parent.State)
 
 local player = Players.LocalPlayer
 
-local ZONE_COLORS: { [Types.ZoneMode]: Color3 } = {
-	Shared = Color3.fromRGB(255, 225, 90),
-	Single = Color3.fromRGB(255, 120, 70),
-}
-local BOLT_COLOR = Color3.fromRGB(200, 225, 255)
-local BOLT_HEIGHT = 140
-local BOLT_SEGMENTS = 7
-local FADE = TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local POPUP_RISE = TweenInfo.new(0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local CORE_COLOR = Color3.fromRGB(240, 248, 255)
+local GLOW_COLOR = Color3.fromRGB(120, 175, 255)
+local BOLT_HEIGHT = 160
+local BOLT_SEGMENTS = 9
+local FLASH_DISTANCE = 220 -- strikes closer than this light up your screen
 local FULL_MESSAGE_COOLDOWN = 3
 
-type Warning = { ring: BasePart, fill: BasePart }
+local FADE = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local SLOW_FADE = TweenInfo.new(4, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+local SHOCKWAVE = TweenInfo.new(0.45, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+local POPUP_RISE = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+type Warning = { anchor: BasePart, pillar: BasePart }
 
 local warnings: { [number]: Warning } = {}
 local fxFolder: Folder
 local screenGui: ScreenGui
 local flashFrame: Frame
+local strikeFlash: ColorCorrectionEffect
 local random = Random.new()
 local lastFullMessage = 0
 
 local StrikeFX = {}
+
+-- Helpers -------------------------------------------------------------------
 
 local function effectPart(props: { [string]: any }): BasePart
 	local part = UI.make(Instance.new("Part"), {
@@ -58,45 +63,60 @@ local function effectPart(props: { [string]: any }): BasePart
 	return UI.make(part, props)
 end
 
--- Flat disc lying on the ground (cylinders point along X, so tip it over).
-local function discCFrame(position: Vector3, lift: number): CFrame
-	return CFrame.new(position + Vector3.new(0, lift, 0)) * CFrame.Angles(0, 0, math.rad(90))
+-- Invisible anchor part used to position adornments and lights in the world.
+local function anchorAt(position: Vector3, lifetime: number): BasePart
+	local anchor = effectPart({
+		Name = "FXAnchor",
+		Size = Vector3.new(0.2, 0.2, 0.2),
+		Position = position,
+		Transparency = 1,
+		Parent = fxFolder,
+	})
+	Debris:AddItem(anchor, lifetime)
+	return anchor
 end
 
-local function playSound(soundId: string, parent: Instance, speed: number?)
+-- Flat ring/disc lying on the ground around the anchor.
+local function groundRing(anchor: BasePart, props: { [string]: any }): CylinderHandleAdornment
+	local ring = UI.make(Instance.new("CylinderHandleAdornment"), {
+		Adornee = anchor,
+		CFrame = CFrame.Angles(math.rad(90), 0, 0), -- cylinder runs along Z; lay it flat
+		Height = 0.25,
+		AlwaysOnTop = false,
+		ZIndex = 0,
+	})
+	return UI.make(ring, props)
+end
+
+local function playSound(soundId: string, parent: Instance, speed: number?, volume: number?)
 	local sound = UI.make(Instance.new("Sound"), {
 		SoundId = soundId,
-		Volume = 0.8,
+		Volume = volume or 0.8,
 		PlaybackSpeed = (speed or 1) * random:NextNumber(0.92, 1.08),
-		RollOffMaxDistance = 400,
+		RollOffMaxDistance = 500,
 		Parent = parent,
 	})
 	sound:Play()
-	Debris:AddItem(sound, 4)
+	Debris:AddItem(sound, 5)
 end
 
-local function playSoundAt(soundId: string, position: Vector3, speed: number?)
-	local attachment = UI.make(Instance.new("Attachment"), {
-		WorldPosition = position,
-		Parent = workspace.Terrain,
-	})
-	playSound(soundId, attachment, speed)
-	Debris:AddItem(attachment, 4)
-end
-
-local function popup(text: string, color: Color3, y: number)
+local function popup(text: string, gold: boolean, y: number, size: number?)
 	local label = UI.label({
+		Title = true,
 		Text = text,
-		TextColor3 = color,
+		TextColor3 = if gold then Color3.new(1, 1, 1) else UI.COLORS.red,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, y),
-		Size = UDim2.fromScale(0.4, 0.07),
+		Size = UDim2.fromScale(0.5, size or 0.08),
 		Parent = screenGui,
 	})
-	UI.maxText(label, 48)
-	UI.pop(label, 1.25)
+	if gold then
+		UI.gradient(label, UI.COLORS.volt, UI.COLORS.voltDeep)
+	end
+	UI.maxText(label, 64)
+	UI.pop(label, 1.35)
 	local rise = TweenService:Create(label, POPUP_RISE, {
-		Position = UDim2.fromScale(0.5, y - 0.08),
+		Position = UDim2.fromScale(0.5, y - 0.09),
 		TextTransparency = 1,
 	})
 	rise.Completed:Once(function()
@@ -105,8 +125,8 @@ local function popup(text: string, color: Color3, y: number)
 	rise:Play()
 end
 
-local function screenFlash()
-	flashFrame.BackgroundTransparency = 0.35
+local function screenFlash(amount: number)
+	flashFrame.BackgroundTransparency = 1 - amount
 	TweenService:Create(flashFrame, FADE, { BackgroundTransparency = 1 }):Play()
 end
 
@@ -131,169 +151,301 @@ local function cameraShake(duration: number, intensity: number)
 	end)
 end
 
+-- Bolts ---------------------------------------------------------------------
+
+-- Jagged path from a to b: straight line plus sideways jitter that shrinks
+-- toward the end.
+local function jaggedPath(a: Vector3, b: Vector3, segments: number, wobble: number): { Vector3 }
+	local points = { a }
+	for i = 1, segments - 1 do
+		local t = i / segments
+		local amount = wobble * (1 - t * 0.7)
+		table.insert(
+			points,
+			a:Lerp(b, t)
+				+ Vector3.new(
+					random:NextNumber(-amount, amount),
+					random:NextNumber(-amount, amount) * 0.3,
+					random:NextNumber(-amount, amount)
+				)
+		)
+	end
+	table.insert(points, b)
+	return points
+end
+
+-- Draws a glowing line along the points and returns its parts.
+local function drawPath(points: { Vector3 }, thickness: number, into: { BasePart })
+	for i = 1, #points - 1 do
+		local a, b = points[i], points[i + 1]
+		local length = (b - a).Magnitude
+		local cframe = CFrame.lookAt((a + b) / 2, b)
+		table.insert(
+			into,
+			effectPart({
+				Name = "BoltCore",
+				Size = Vector3.new(thickness, thickness, length + thickness),
+				CFrame = cframe,
+				Color = CORE_COLOR,
+				Parent = fxFolder,
+			})
+		)
+		table.insert(
+			into,
+			effectPart({
+				Name = "BoltGlow",
+				Size = Vector3.new(thickness * 3.5, thickness * 3.5, length),
+				CFrame = cframe,
+				Color = GLOW_COLOR,
+				Transparency = 0.72,
+				Parent = fxFolder,
+			})
+		)
+	end
+end
+
+-- Flicker on-off-on like real lightning, then fade out.
+local function flickerAndFade(parts: { BasePart })
+	local original: { [BasePart]: number } = {}
+	for _, part in parts do
+		original[part] = part.Transparency
+	end
+	local function setVisible(visible: boolean)
+		for _, part in parts do
+			part.Transparency = if visible then original[part] else 1
+		end
+	end
+	task.delay(0.05, setVisible, false)
+	task.delay(0.09, setVisible, true)
+	task.delay(0.14, function()
+		for _, part in parts do
+			TweenService:Create(part, FADE, { Transparency = 1 }):Play()
+			Debris:AddItem(part, FADE.Time + 0.05)
+		end
+	end)
+end
+
+local function bolt(from: Vector3, to: Vector3, thickness: number, branches: number)
+	local parts: { BasePart } = {}
+	local main = jaggedPath(from, to, BOLT_SEGMENTS, (from - to).Magnitude * 0.06)
+	drawPath(main, thickness, parts)
+	for _ = 1, branches do
+		local startIndex = random:NextInteger(2, math.max(2, #main - 3))
+		local start = main[startIndex]
+		local reach = (from - to).Magnitude * random:NextNumber(0.12, 0.22)
+		local finish = start
+			+ Vector3.new(
+				random:NextNumber(-1, 1) * reach,
+				-reach,
+				random:NextNumber(-1, 1) * reach
+			)
+		drawPath(jaggedPath(start, finish, 4, reach * 0.25), thickness * 0.5, parts)
+	end
+	flickerAndFade(parts)
+end
+
+-- Thunder crack at a point in the world.
+local function playThunderAt(position: Vector3)
+	local attachment = UI.make(Instance.new("Attachment"), {
+		WorldPosition = position,
+		Parent = workspace.Terrain,
+	})
+	playSound(Config.SOUNDS.STRIKE, attachment, 0.55, 1)
+	Debris:AddItem(attachment, 5)
+end
+
+-- Impact: light burst, sparks, shockwave, scorch mark.
+local function impact(position: Vector3)
+	local anchor = anchorAt(position + Vector3.new(0, 0.3, 0), 5)
+
+	local burst = UI.make(Instance.new("PointLight"), {
+		Color = GLOW_COLOR,
+		Brightness = 14,
+		Range = 60,
+		Shadows = true,
+		Parent = anchor,
+	})
+	TweenService:Create(burst, TweenInfo.new(0.6, Enum.EasingStyle.Quad), { Brightness = 0 }):Play()
+
+	local sparkOrigin = UI.make(Instance.new("Attachment"), { Parent = anchor })
+	local sparks = UI.make(Instance.new("ParticleEmitter"), {
+		Enabled = false,
+		Color = ColorSequence.new(CORE_COLOR, GLOW_COLOR),
+		LightEmission = 1,
+		Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.5),
+			NumberSequenceKeypoint.new(1, 0),
+		}),
+		Speed = NumberRange.new(25, 50),
+		Lifetime = NumberRange.new(0.3, 0.7),
+		SpreadAngle = Vector2.new(75, 75),
+		EmissionDirection = Enum.NormalId.Top,
+		Acceleration = Vector3.new(0, -70, 0),
+		Drag = 2,
+		Parent = sparkOrigin,
+	})
+	sparks:Emit(45)
+
+	local shockwave = groundRing(anchor, {
+		Radius = 1,
+		InnerRadius = 0.4,
+		Color3 = GLOW_COLOR,
+		Transparency = 0.1,
+		Parent = anchor,
+	})
+	TweenService:Create(shockwave, SHOCKWAVE, { Radius = 16, InnerRadius = 15, Transparency = 1 })
+		:Play()
+
+	local scorch = groundRing(anchor, {
+		Radius = 3.5,
+		InnerRadius = 0,
+		Height = 0.1,
+		Color3 = Color3.fromRGB(20, 18, 25),
+		Transparency = 0.35,
+		Parent = anchor,
+	})
+	TweenService:Create(scorch, SLOW_FADE, { Transparency = 1 }):Play()
+
+	-- strikes near you light up the whole screen for a moment
+	local camera = workspace.CurrentCamera
+	local distance = if camera then (camera.CFrame.Position - position).Magnitude else math.huge
+	if distance < FLASH_DISTANCE then
+		local strength = 1 - distance / FLASH_DISTANCE
+		strikeFlash.Brightness = 0.45 * strength
+		strikeFlash.TintColor = Color3.fromRGB(215, 230, 255)
+		TweenService:Create(strikeFlash, TweenInfo.new(0.35), { Brightness = 0 }):Play()
+	end
+
+	playThunderAt(position)
+end
+
+-- Where a player's bottle is, for the arc that flies into it.
+local function bottlePosition(userId: number): Vector3?
+	local catcher = Players:GetPlayerByUserId(userId)
+	local character = catcher and catcher.Character
+	local bottle = character and character:FindFirstChild("Bottle")
+	if bottle and bottle:IsA("Model") then
+		return bottle:GetPivot().Position
+	end
+	return nil
+end
+
+-- Events --------------------------------------------------------------------
+
 local function onWarning(warning: Types.StrikeWarning)
 	local timeLeft = warning.landsAt - workspace:GetServerTimeNow()
 	if timeLeft <= 0 then
 		return
 	end
 	local zone = Config.ZONES[warning.zoneId]
-	local mode: Types.ZoneMode = if zone then zone.mode else "Shared"
-	local color = ZONE_COLORS[mode]
-	local diameter = warning.radius * 2
+	local color = if zone then zone.color else UI.COLORS.volt
+	local lifetime = timeLeft + 2 -- safety net if the landed event never arrives
 
-	local ring = effectPart({
-		Name = "WarningRing",
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(0.15, diameter, diameter),
-		CFrame = discCFrame(warning.position, 0.1),
+	local anchor = anchorAt(warning.position + Vector3.new(0, 0.4, 0), lifetime)
+	local ring = groundRing(anchor, {
+		Radius = warning.radius,
+		InnerRadius = warning.radius - 0.6,
+		Height = 0.35,
+		Color3 = color,
+		Transparency = 0.05,
+		Parent = anchor,
+	})
+	local fill = groundRing(anchor, {
+		Radius = 0.3,
+		InnerRadius = 0,
+		Color3 = color,
+		Transparency = 0.55,
+		Parent = anchor,
+	})
+	-- the inner disc reaches the ring exactly when the bolt lands
+	TweenService
+		:Create(fill, TweenInfo.new(timeLeft, Enum.EasingStyle.Linear), { Radius = warning.radius })
+		:Play()
+	-- pulse the ring faster and faster
+	TweenService:Create(
+		ring,
+		TweenInfo.new(0.25, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+		{ Transparency = 0.5 }
+	):Play()
+
+	-- a column of light so you can spot circles from across the zone
+	local pillar = effectPart({
+		Name = "WarningPillar",
+		Size = Vector3.new(0.5, 70, 0.5),
+		Position = warning.position + Vector3.new(0, 35, 0),
 		Color = color,
-		Transparency = 0.65,
+		Transparency = 0.8,
 		Parent = fxFolder,
 	})
-	local fill = effectPart({
-		Name = "WarningFill",
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(0.2, 0.5, 0.5),
-		CFrame = discCFrame(warning.position, 0.12),
-		Color = color,
-		Transparency = 0.35,
-		Parent = fxFolder,
-	})
-	-- the inner disc grows to the edge exactly when the bolt lands
-	TweenService:Create(fill, TweenInfo.new(timeLeft, Enum.EasingStyle.Linear), {
-		Size = Vector3.new(0.2, diameter, diameter),
-	}):Play()
+	Debris:AddItem(pillar, lifetime)
 
-	warnings[warning.id] = { ring = ring, fill = fill }
-	-- safety net in case the landed event never arrives
-	Debris:AddItem(ring, timeLeft + 2)
-	Debris:AddItem(fill, timeLeft + 2)
-end
-
-local function bolt(position: Vector3)
-	local points = {
-		position + Vector3.new(random:NextNumber(-12, 12), BOLT_HEIGHT, random:NextNumber(-12, 12)),
-	}
-	for i = 1, BOLT_SEGMENTS - 1 do
-		local t = i / BOLT_SEGMENTS
-		local straight = points[1]:Lerp(position, t)
-		local wobble = 6 * (1 - t)
-		table.insert(
-			points,
-			straight
-				+ Vector3.new(
-					random:NextNumber(-wobble, wobble),
-					0,
-					random:NextNumber(-wobble, wobble)
-				)
-		)
-	end
-	table.insert(points, position)
-
-	for i = 1, #points - 1 do
-		local a, b = points[i], points[i + 1]
-		local segment = effectPart({
-			Name = "Bolt",
-			Size = Vector3.new(0.6, 0.6, (b - a).Magnitude),
-			CFrame = CFrame.lookAt((a + b) / 2, b),
-			Color = BOLT_COLOR,
-			Parent = fxFolder,
-		})
-		local fade = TweenService:Create(segment, FADE, { Transparency = 1 })
-		fade.Completed:Once(function()
-			segment:Destroy()
-		end)
-		fade:Play()
-	end
-
-	-- ground flash
-	local flash = effectPart({
-		Name = "ImpactFlash",
-		Shape = Enum.PartType.Ball,
-		Size = Vector3.new(4, 4, 4),
-		Position = position,
-		Color = BOLT_COLOR,
-		Transparency = 0.2,
-		Parent = fxFolder,
-	})
-	UI.make(Instance.new("PointLight"), {
-		Color = BOLT_COLOR,
-		Brightness = 8,
-		Range = 45,
-		Parent = flash,
-	})
-	local grow =
-		TweenService:Create(flash, FADE, { Size = Vector3.new(16, 16, 16), Transparency = 1 })
-	grow.Completed:Once(function()
-		flash:Destroy()
-	end)
-	grow:Play()
-
-	playSoundAt(Config.SOUNDS.STRIKE, position, 0.6)
+	warnings[warning.id] = { anchor = anchor, pillar = pillar }
 end
 
 local function onLanded(landed: Types.StrikeLanded)
 	local warning = warnings[landed.id]
 	if warning then
 		warnings[landed.id] = nil
-		warning.ring:Destroy()
-		warning.fill:Destroy()
+		warning.anchor:Destroy()
+		warning.pillar:Destroy()
 	end
 
-	bolt(landed.position)
+	local sky = landed.position
+		+ Vector3.new(random:NextNumber(-15, 15), BOLT_HEIGHT, random:NextNumber(-15, 15))
+	bolt(sky, landed.position, 0.5, 2)
+	impact(landed.position)
+
+	-- little arcs from the strike into every catcher's bottle
+	for _, userId in landed.catchers do
+		local target = bottlePosition(userId)
+		if target then
+			bolt(landed.position + Vector3.new(0, 1, 0), target, 0.18, 0)
+		end
+	end
 
 	if table.find(landed.catchers, player.UserId) then
-		screenFlash()
-		cameraShake(0.25, 0.6)
-		popup(`+{Format.abbreviate(landed.value)} ⚡`, UI.COLORS.volt, 0.42)
+		screenFlash(0.55)
+		cameraShake(0.3, 0.7)
+		popup(`+{Format.abbreviate(landed.value)} ⚡`, true, 0.42)
 		playSound(Config.SOUNDS.CATCH, screenGui, 1.2)
 	elseif table.find(landed.full, player.UserId) then
 		local now = os.clock()
 		if now - lastFullMessage > FULL_MESSAGE_COOLDOWN then
 			lastFullMessage = now
-			popup("Bottle full! Sell at the Power Plant", UI.COLORS.red, 0.42)
+			popup("Bottle full! Sell at the Power Plant", false, 0.42, 0.06)
 		end
 	end
 end
 
 local function onSold(earned: number, count: number)
-	popup(`+{Format.abbreviate(earned)} Volts!`, UI.COLORS.volt, 0.35)
-	popup(`sold {count} charges`, UI.COLORS.subtext, 0.42)
-	cameraShake(0.15, 0.3)
+	popup(`+{Format.abbreviate(earned)} Volts!`, true, 0.36, 0.1)
+	popup(`sold {count} charges`, false, 0.45, 0.045)
+	screenFlash(0.25)
+	cameraShake(0.2, 0.35)
 	playSound(Config.SOUNDS.SELL, screenGui, 0.8)
 end
 
--- Bottle glows brighter the fuller it is.
-local function updateBottleGlow()
-	local snapshot = State.current
-	if not snapshot then
+-- The Power Plant's tesla coil throws small arcs now and then.
+local function coilCrackle()
+	local map = workspace:FindFirstChild("Map")
+	local plant = map and map:FindFirstChild("PowerPlant")
+	local orb = plant and plant:FindFirstChild("CoilOrb")
+	local camera = workspace.CurrentCamera
+	if not orb or not orb:IsA("BasePart") or not camera then
 		return
 	end
-	local fill = snapshot.chargeCount / Formulas.capacity(snapshot.bottleTier)
-	-- the tool lives in the character while equipped, otherwise in the backpack
-	local containers: { Instance } = {}
-	if player.Character then
-		table.insert(containers, player.Character)
+	if (camera.CFrame.Position - orb.Position).Magnitude > 300 then
+		return
 	end
-	local backpack = player:FindFirstChildOfClass("Backpack")
-	if backpack then
-		table.insert(containers, backpack)
-	end
-	for _, container in containers do
-		local tool = container:FindFirstChild("Bottle")
-		local handle = tool and tool:FindFirstChild("Handle")
-		local glow = handle and handle:FindFirstChild("Glow")
-		if glow and glow:IsA("PointLight") then
-			glow.Brightness = fill * 4
-		end
-		if handle and handle:IsA("BasePart") then
-			handle.Material = if fill > 0 then Enum.Material.Neon else Enum.Material.Glass
-		end
-	end
+	local angle = random:NextNumber(0, math.pi * 2)
+	local target = orb.Position + Vector3.new(math.cos(angle) * 7, -5, math.sin(angle) * 7)
+	bolt(orb.Position, target, 0.15, 1)
 end
 
 function StrikeFX.init()
 	fxFolder = UI.make(Instance.new("Folder"), { Name = "StrikeFX", Parent = workspace })
+	strikeFlash =
+		UI.make(Instance.new("ColorCorrectionEffect"), { Name = "StrikeFlash", Parent = Lighting })
 	screenGui = UI.make(Instance.new("ScreenGui"), {
 		Name = "StrikeFX",
 		ResetOnSpawn = false,
@@ -304,7 +456,7 @@ function StrikeFX.init()
 	flashFrame = UI.make(Instance.new("Frame"), {
 		Name = "Flash",
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundColor3 = Color3.fromRGB(235, 245, 255),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Parent = screenGui,
@@ -316,11 +468,9 @@ function StrikeFX.init()
 end
 
 function StrikeFX.start()
-	State.Changed:Connect(updateBottleGlow)
-	-- also catches respawns and equipping (the tool moves between containers)
 	while true do
-		updateBottleGlow()
-		task.wait(0.5)
+		task.wait(random:NextNumber(1.5, 4))
+		coilCrackle()
 	end
 end
 

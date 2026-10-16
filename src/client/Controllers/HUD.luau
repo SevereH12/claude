@@ -2,14 +2,15 @@
 -- Always-on screen UI. Shows state, never changes it.
 --
 --   StormBottlerHUD (ScreenGui)
---   ├── VoltsPanel   top centre: Volts (counts up)
---   ├── StormPill    under Volts: "STORM 1:12" / "CALM 0:15"
+--   ├── VoltsPanel   top centre: ⚡ Volts (counts up)
+--   ├── StormPill    under Volts: "⚡ STORM 1:12" / "☀ CALM  storm in 0:15"
 --   ├── CityMeter    top right: server city meter (placeholder until that update)
 --   ├── ShopButton   left: opens the bottle shop
---   └── BottleBar    bottom centre, above the hotbar: fill + "Jar 3/5"
+--   └── BottleBar    bottom centre: shiny fill + "JAR 3 / 5"
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterGui = game:GetService("StarterGui")
 local TweenService = game:GetService("TweenService")
 
 local Format = require(ReplicatedStorage.Shared.Util.Format)
@@ -21,6 +22,7 @@ local State = require(script.Parent.State)
 local Storm = require(script.Parent.Storm)
 
 local COLORS = UI.COLORS
+local FULL_PULSE = TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
 
 local HUD = {}
 
@@ -28,32 +30,47 @@ local screenGui: ScreenGui
 local voltsLabel: TextLabel
 local stormPill: Frame
 local stormLabel: TextLabel
+local bottleBar: Frame
 local bottleFill: Frame
+local fillGradient: UIGradient
 local bottleLabel: TextLabel
+local bottleValue: TextLabel
 local displayedVolts: NumberValue
+local fullPulse: Tween?
 local lastChargeCount = -1
+local lastPhase: Types.StormPhase? = nil
 
 local function buildVoltsPanel()
-	local panel = UI.make(Instance.new("Frame"), {
+	local panel = UI.panel({
 		Name = "VoltsPanel",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 8),
-		Size = UDim2.fromScale(0.26, 0.09),
-		BackgroundColor3 = COLORS.panel,
+		Position = UDim2.new(0.5, 0, 0, 10),
+		Size = UDim2.fromScale(0.24, 0.085),
 		Parent = screenGui,
 	})
-	UI.corner(panel, UDim.new(0.3, 0))
-	UI.stroke(panel, 4)
-	UI.sizeLimits(panel, Vector2.new(190, 48), Vector2.new(380, 80))
-	voltsLabel = UI.label({
-		Name = "Volts",
-		Text = "0 Volts",
-		TextColor3 = COLORS.volt,
-		Position = UDim2.fromScale(0.05, 0.1),
-		Size = UDim2.fromScale(0.9, 0.8),
+	UI.sizeLimits(panel, Vector2.new(200, 50), Vector2.new(360, 76))
+
+	local icon = UI.label({
+		Title = true,
+		Name = "Icon",
+		Text = "⚡",
+		Position = UDim2.fromScale(0.03, 0.1),
+		Size = UDim2.fromScale(0.2, 0.8),
 		Parent = panel,
 	})
-	UI.maxText(voltsLabel, 44)
+	UI.gradient(icon, COLORS.volt, COLORS.voltDeep)
+
+	voltsLabel = UI.label({
+		Title = true,
+		Name = "Volts",
+		Text = "0",
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromScale(0.24, 0.1),
+		Size = UDim2.fromScale(0.72, 0.8),
+		Parent = panel,
+	})
+	UI.gradient(voltsLabel, COLORS.volt, COLORS.voltDeep)
+	UI.maxText(voltsLabel, 46)
 end
 
 local function buildStormPill()
@@ -61,47 +78,47 @@ local function buildStormPill()
 		Name = "StormPill",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 92),
-		Size = UDim2.fromScale(0.16, 0.05),
+		Size = UDim2.fromScale(0.2, 0.048),
 		BackgroundColor3 = COLORS.calm,
 		Parent = screenGui,
 	})
 	UI.corner(stormPill, UDim.new(0.5, 0))
 	UI.stroke(stormPill, 3)
-	UI.sizeLimits(stormPill, Vector2.new(140, 30), Vector2.new(240, 44))
+	UI.gradient(stormPill, Color3.new(1, 1, 1), Color3.fromRGB(170, 170, 185))
+	UI.make(Instance.new("UIScale"), { Parent = stormPill })
+	UI.sizeLimits(stormPill, Vector2.new(180, 30), Vector2.new(300, 42))
 	stormLabel = UI.label({
+		Title = true,
 		Name = "Timer",
 		Text = "...",
 		Position = UDim2.fromScale(0.05, 0.12),
 		Size = UDim2.fromScale(0.9, 0.76),
 		Parent = stormPill,
 	})
-	UI.maxText(stormLabel, 28)
+	UI.maxText(stormLabel, 26)
 end
 
 local function buildCityMeter()
-	local meter = UI.make(Instance.new("Frame"), {
+	local meter = UI.panel({
 		Name = "CityMeter",
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -12, 0, 8),
-		Size = UDim2.fromScale(0.18, 0.08),
-		BackgroundColor3 = COLORS.panel,
-		BackgroundTransparency = 0.3,
+		Position = UDim2.new(1, -12, 0, 10),
+		Size = UDim2.fromScale(0.17, 0.08),
 		Parent = screenGui,
 	})
-	UI.corner(meter, UDim.new(0.25, 0))
-	UI.stroke(meter, 3)
-	UI.sizeLimits(meter, Vector2.new(150, 44), Vector2.new(260, 70))
+	UI.sizeLimits(meter, Vector2.new(150, 46), Vector2.new(250, 68))
 	local title = UI.label({
+		Title = true,
 		Text = "SERVER CITY",
 		TextColor3 = COLORS.subtext,
-		Position = UDim2.fromScale(0.05, 0.06),
-		Size = UDim2.fromScale(0.9, 0.42),
+		Position = UDim2.fromScale(0.06, 0.08),
+		Size = UDim2.fromScale(0.88, 0.4),
 		Parent = meter,
 	})
-	UI.maxText(title, 20)
+	UI.maxText(title, 18)
 	local track = UI.make(Instance.new("Frame"), {
 		Position = UDim2.fromScale(0.06, 0.58),
-		Size = UDim2.fromScale(0.88, 0.26),
+		Size = UDim2.fromScale(0.88, 0.28),
 		BackgroundColor3 = COLORS.panelDark,
 		Parent = meter,
 	})
@@ -112,20 +129,20 @@ local function buildCityMeter()
 		Size = UDim2.fromScale(1, 1),
 		Parent = track,
 	})
-	UI.maxText(comingSoon, 14)
+	UI.maxText(comingSoon, 13)
 end
 
 local function buildShopButton()
 	local button = UI.button({
 		Name = "ShopButton",
-		Text = "Shop",
+		Text = "SHOP",
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.fromScale(0.015, 0.5),
-		Size = UDim2.fromScale(0.11, 0.08),
+		Size = UDim2.fromScale(0.1, 0.075),
 		BackgroundColor3 = COLORS.green,
 		Parent = screenGui,
 	})
-	UI.sizeLimits(button, Vector2.new(90, 44), Vector2.new(160, 64))
+	UI.sizeLimits(button, Vector2.new(96, 46), Vector2.new(150, 62))
 	UI.maxText(button, 30)
 	button.Activated:Connect(function()
 		UI.pop(button)
@@ -134,41 +151,73 @@ local function buildShopButton()
 end
 
 local function buildBottleBar()
-	local bar = UI.make(Instance.new("Frame"), {
+	bottleBar = UI.panel({
 		Name = "BottleBar",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -90), -- sits above the backpack hotbar
-		Size = UDim2.fromScale(0.34, 0.055),
-		BackgroundColor3 = COLORS.panelDark,
+		Position = UDim2.new(0.5, 0, 1, -24),
+		Size = UDim2.fromScale(0.36, 0.06),
 		Parent = screenGui,
 	})
-	UI.corner(bar, UDim.new(0.5, 0))
-	UI.stroke(bar, 3)
-	UI.sizeLimits(bar, Vector2.new(240, 30), Vector2.new(460, 44))
+	UI.sizeLimits(bottleBar, Vector2.new(260, 36), Vector2.new(480, 50))
+	local barCorner = bottleBar:FindFirstChildOfClass("UICorner")
+	if barCorner then
+		barCorner.CornerRadius = UDim.new(0.5, 0)
+	end
 
+	-- CanvasGroup clips the fill to the bar's rounded shape
 	local clip = UI.make(Instance.new("CanvasGroup"), {
 		Name = "Clip",
-		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
-		Parent = bar,
+		Position = UDim2.fromOffset(4, 4),
+		Size = UDim2.new(1, -8, 1, -8),
+		BackgroundColor3 = COLORS.panelDark,
+		Parent = bottleBar,
 	})
 	UI.corner(clip, UDim.new(0.5, 0))
 	bottleFill = UI.make(Instance.new("Frame"), {
 		Name = "Fill",
 		Size = UDim2.fromScale(0, 1),
-		BackgroundColor3 = COLORS.storm,
+		BackgroundColor3 = Color3.new(1, 1, 1),
 		BorderSizePixel = 0,
 		Parent = clip,
 	})
+	fillGradient = UI.make(Instance.new("UIGradient"), {
+		Color = ColorSequence.new(COLORS.storm, COLORS.stormDeep),
+		Parent = bottleFill,
+	})
+	-- glassy highlight across the top half
+	UI.make(Instance.new("Frame"), {
+		Name = "Shine",
+		Size = UDim2.fromScale(1, 0.45),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0.82,
+		BorderSizePixel = 0,
+		ZIndex = 2,
+		Parent = clip,
+	})
+
 	bottleLabel = UI.label({
+		Title = true,
 		Name = "Text",
 		Text = "",
-		Position = UDim2.fromScale(0.04, 0.12),
-		Size = UDim2.fromScale(0.92, 0.76),
-		ZIndex = 2,
-		Parent = bar,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromScale(0.05, 0.14),
+		Size = UDim2.fromScale(0.6, 0.72),
+		ZIndex = 3,
+		Parent = bottleBar,
 	})
 	UI.maxText(bottleLabel, 24)
+	bottleValue = UI.label({
+		Title = true,
+		Name = "Value",
+		Text = "",
+		TextXAlignment = Enum.TextXAlignment.Right,
+		Position = UDim2.fromScale(0.6, 0.14),
+		Size = UDim2.fromScale(0.35, 0.72),
+		ZIndex = 3,
+		Parent = bottleBar,
+	})
+	UI.gradient(bottleValue, COLORS.volt, COLORS.voltDeep)
+	UI.maxText(bottleValue, 24)
 end
 
 local function renderStorm()
@@ -179,11 +228,29 @@ local function renderStorm()
 	local seconds = math.ceil(Storm.secondsLeft())
 	local clock = string.format("%d:%02d", seconds // 60, seconds % 60)
 	if state.phase == "Storm" then
-		stormLabel.Text = `STORM  {clock}`
+		stormLabel.Text = `⚡ STORM  {clock}`
 		stormPill.BackgroundColor3 = COLORS.storm
 	else
-		stormLabel.Text = `Storm in {clock}`
+		stormLabel.Text = `☀ STORM IN {clock}`
 		stormPill.BackgroundColor3 = COLORS.calm
+	end
+	if lastPhase ~= state.phase then
+		lastPhase = state.phase
+		UI.pop(stormPill, 1.25)
+	end
+end
+
+local function setFull(full: boolean)
+	if full and not fullPulse then
+		fillGradient.Color = ColorSequence.new(COLORS.volt, COLORS.red)
+		local pulse = TweenService:Create(bottleFill, FULL_PULSE, { BackgroundTransparency = 0.35 })
+		fullPulse = pulse
+		pulse:Play()
+	elseif not full and fullPulse then
+		fullPulse:Cancel()
+		fullPulse = nil
+		bottleFill.BackgroundTransparency = 0
+		fillGradient.Color = ColorSequence.new(COLORS.storm, COLORS.stormDeep)
 	end
 end
 
@@ -194,24 +261,25 @@ local function render(snapshot: Types.Snapshot)
 	local fraction = math.clamp(snapshot.chargeCount / bottle.capacity, 0, 1)
 	TweenService:Create(bottleFill, UI.TWEEN.fast, { Size = UDim2.fromScale(fraction, 1) }):Play()
 
-	if fraction >= 1 then
-		bottleFill.BackgroundColor3 = COLORS.red
-		bottleLabel.Text = "FULL! Sell at the Power Plant"
-	else
-		bottleFill.BackgroundColor3 = COLORS.storm
-		bottleLabel.Text =
-			`{bottle.name}  {snapshot.chargeCount}/{bottle.capacity}  •  {Format.abbreviate(
-				snapshot.chargeValue
-			)} Volts`
-	end
+	local full = fraction >= 1
+	setFull(full)
+	bottleLabel.Text = if full
+		then "FULL! SELL AT THE POWER PLANT"
+		else `{string.upper(bottle.name)}  {snapshot.chargeCount} / {bottle.capacity}`
+	bottleValue.Text = if full then "" else `{Format.abbreviate(snapshot.chargeValue)} ⚡`
 
 	if snapshot.chargeCount > lastChargeCount and lastChargeCount >= 0 then
-		UI.pop(bottleFill.Parent :: GuiObject, 1.06)
+		UI.pop(bottleBar, 1.08)
 	end
 	lastChargeCount = snapshot.chargeCount
 end
 
 function HUD.init()
+	-- there are no tools in this game; hide the empty hotbar
+	pcall(function()
+		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+	end)
+
 	screenGui = UI.make(Instance.new("ScreenGui"), {
 		Name = "StormBottlerHUD",
 		ResetOnSpawn = false,
@@ -220,15 +288,16 @@ function HUD.init()
 	})
 	displayedVolts =
 		UI.make(Instance.new("NumberValue"), { Name = "DisplayedVolts", Parent = screenGui })
-	displayedVolts.Changed:Connect(function(value: number)
-		voltsLabel.Text = `{Format.abbreviate(value)} Volts`
-	end)
 
 	buildVoltsPanel()
 	buildStormPill()
 	buildCityMeter()
 	buildShopButton()
 	buildBottleBar()
+
+	displayedVolts.Changed:Connect(function(value: number)
+		voltsLabel.Text = Format.abbreviate(value)
+	end)
 end
 
 function HUD.start()
