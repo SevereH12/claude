@@ -63,12 +63,25 @@ and `Workspace.Map.PowerPlant.SellPad`; everything else is art. Zone layout
 (footprint and floor height) is in `ZONE_LAYOUT` in MapBuilder; zone names,
 colours and values are in `Config.ZONES`.
 
+## Testing without Studio
+
+`tools/harness/` runs the real modules in a stand-in DataModel with Lune
+(https://github.com/lune-org/lune):
+- `lune run tools/harness/buildmap.luau map.json` builds the map with
+  MapBuilder and fails if required pieces (zones, sell station, spawn) are missing.
+- `lune run tools/harness/test_gameplay.luau` checks gameplay contracts
+  (zone volumes, sell station detection, spawn placement).
+- `python3 tools/render_map.py map.json out` draws top-down and side views
+  (needs Pillow) so map layout can be reviewed as images.
+Run all three after any map or zone change.
+
 ## Conventions
 
 - `--!strict` at the top of every file.
 - Server owns all state; every client->server remote handler rate-limits and
   validates its arguments (`src/server/Systems/Shop.luau` is the example).
   Catching and selling are decided by the server with no client request.
+  Selling is a position check against parts tagged `SellArea` (never Touched).
 - Systems that change a profile call `Sync.markDirty(player)`.
 - Remotes are listed in `src/shared/Remotes.luau` and created by the server.
 - Balance numbers live in `src/shared/Config.luau`.

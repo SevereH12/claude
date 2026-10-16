@@ -1,49 +1,83 @@
 --!strict
--- Step on the Power Plant pad to turn charges into Volts. The server sees
--- the touch itself; there's no "sell" remote for a client to spam.
+-- Selling: stand at a sell station and your charges turn into Volts.
+--
+-- Each station has an invisible box tagged "SellArea" (CollectionService)
+-- over its pad. The server checks every player's position several times a
+-- second; anyone inside a SellArea with charges sells. This deliberately
+-- does NOT use Touched: touch events depend on the player's client
+-- reporting the contact, which can silently stop working (streaming,
+-- replaced parts, touch replication). Position checks on the server can't.
+-- There is no "sell" remote, so there is nothing for a client to spam.
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
+local Volumes = require(ReplicatedStorage.Shared.Util.Volumes)
 local Map = require(script.Parent.Map)
 local PlayerData = require(script.Parent.PlayerData)
 local Sync = require(script.Parent.Sync)
+
+local SELL_TAG = "SellArea"
+local CHECK_INTERVAL = 0.15
+-- Maps built before SellArea existed only have a pad: sell above it.
+local LEGACY_PAD_HEIGHT = 12
+local LEGACY_PAD_MARGIN = 2
 
 local lastSell: { [Player]: number } = {}
 
 local Selling = {}
 
--- Is the player's root actually over the pad (not just a flung limb)?
-local function standingOn(root: BasePart, pad: BasePart): boolean
-	local localPos = pad.CFrame:PointToObjectSpace(root.Position)
-	local margin = 4
-	return math.abs(localPos.X) <= pad.Size.X / 2 + margin
-		and math.abs(localPos.Z) <= pad.Size.Z / 2 + margin
-		and localPos.Y >= -2
-		and localPos.Y <= 10
+local function sellAreas(): { BasePart }
+	local areas: { BasePart } = {}
+	for _, instance in CollectionService:GetTagged(SELL_TAG) do
+		if instance:IsA("BasePart") and instance:IsDescendantOf(workspace) then
+			table.insert(areas, instance)
+		end
+	end
+	return areas
 end
 
-local function trySell(soldRemote: RemoteEvent, pad: BasePart, hit: BasePart)
-	local character = hit.Parent
-	if not character then
-		return
+-- Is this position at a sell station?
+function Selling.isAtStation(position: Vector3): boolean
+	local areas = sellAreas()
+	for _, area in areas do
+		if Volumes.contains(area, position) then
+			return true
+		end
 	end
-	local player = Players:GetPlayerFromCharacter(character)
-	if not player then
+	if #areas == 0 then
+		local pad = Map.sellPad()
+		if pad and Volumes.aboveTop(pad, position, LEGACY_PAD_HEIGHT, LEGACY_PAD_MARGIN) then
+			return true
+		end
+	end
+	return false
+end
+
+local function livingRoot(player: Player): BasePart?
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not humanoid or humanoid.Health <= 0 or not root or not root:IsA("BasePart") then
+		return nil
+	end
+	return root
+end
+
+local function sell(soldRemote: RemoteEvent, player: Player)
+	local profile = PlayerData.get(player)
+	if not profile or profile.chargeCount <= 0 then
 		return
 	end
 	local now = os.clock()
 	if now - (lastSell[player] or 0) < Config.SELL_COOLDOWN then
 		return
 	end
-	local root = character:FindFirstChild("HumanoidRootPart")
-	if not root or not root:IsA("BasePart") or not standingOn(root, pad) then
-		return
-	end
-	local profile = PlayerData.get(player)
-	if not profile or profile.chargeCount <= 0 then
+	local root = livingRoot(player)
+	if not root or not Selling.isAtStation(root.Position) then
 		return
 	end
 	lastSell[player] = now
@@ -59,18 +93,21 @@ local function trySell(soldRemote: RemoteEvent, pad: BasePart, hit: BasePart)
 end
 
 function Selling.start()
-	local pad = Map.sellPad()
-	if not pad then
-		warn("[Selling] no Workspace.Map.PowerPlant.SellPad part; selling disabled")
-		return
-	end
 	local soldRemote = Net.get("Sold")
-	pad.Touched:Connect(function(hit)
-		trySell(soldRemote, pad, hit)
-	end)
+	if #sellAreas() == 0 and not Map.sellPad() then
+		warn(
+			`[Selling] no part tagged "{SELL_TAG}" and no Map.PowerPlant.SellPad; selling disabled`
+		)
+	end
 	Players.PlayerRemoving:Connect(function(player)
 		lastSell[player] = nil
 	end)
+	while true do
+		task.wait(CHECK_INTERVAL)
+		for _, player in Players:GetPlayers() do
+			sell(soldRemote, player)
+		end
+	end
 end
 
 return Selling

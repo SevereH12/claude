@@ -5,6 +5,7 @@
 
 local Config = require(script.Parent.Parent.Config)
 local Types = require(script.Parent.Parent.Types)
+local Volumes = require(script.Parent.Volumes)
 
 local Zones = {}
 
@@ -15,13 +16,8 @@ function Zones.part(zoneId: string): BasePart?
 	return if part and part:IsA("BasePart") then part else nil
 end
 
-function Zones.contains(part: BasePart, position: Vector3): boolean
-	local localPos = part.CFrame:PointToObjectSpace(position)
-	local half = part.Size / 2
-	return math.abs(localPos.X) <= half.X
-		and math.abs(localPos.Y) <= half.Y
-		and math.abs(localPos.Z) <= half.Z
-end
+-- Same box test as sell areas (Util/Volumes).
+Zones.contains = Volumes.contains
 
 -- The zone a position is in, or nil when it's outside every zone.
 function Zones.at(position: Vector3): Types.ZoneDef?
