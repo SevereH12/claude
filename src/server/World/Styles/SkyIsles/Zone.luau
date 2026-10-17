@@ -350,37 +350,37 @@ function Zone.ground(ctx: Context, zone: ZoneContext, spec: ThemeSpec): Land
 		)
 	end
 
-	-- iron tether anchors on the hub-facing cliff (the hub runs chains here)
-	for _, u in { -0.32, 0.32 } do
-		local anchor = frame:PointToWorldSpace(Vector3.new(u * slot.width, -6, front + 1))
-		Pieces.block(
+	-- mooring bollards on the hub-side rim: the hub's iron tethers end here
+	for _, point in Zone.tetherPoints(ctx, zone) do
+		local foot = point - UP * 2.2
+		Pieces.cylinder(
 			zone.folder,
-			CFrame.lookAt(anchor, anchor - frame.LookVector),
-			Vector3.new(3, 3, 2),
+			foot,
+			2.4,
+			2.4,
 			C.iron,
 			Enum.Material.Metal,
-			{ Name = "TetherAnchor" }
+			{ CanCollide = true, Name = "MooringBollard" }
 		)
-		Pieces.block(
-			zone.folder,
-			CFrame.lookAt(anchor, anchor - frame.LookVector) * CFrame.new(0, 0, -1.2),
-			Vector3.new(1.8, 1.8, 0.6),
-			zone.color,
-			Enum.Material.Neon
-		)
+		Pieces.cylinder(zone.folder, foot + UP * 1.6, 0.35, 2.6, zone.color, Enum.Material.Neon, {
+			CastShadow = false,
+		})
+		Pieces.cylinder(zone.folder, foot + UP * 2.4, 0.5, 3, C.iron, Enum.Material.Metal)
 	end
 	return land
 end
 
--- Where the hub's tether for this zone attaches (left and right).
+-- Where the hub's tethers for this zone are moored (left and right): the
+-- top of a bollard on the rim, 2.5 studs inside the hub-side land edge and
+-- well clear of the bridge.
 function Zone.tetherPoints(ctx: Context, zone: ZoneContext): { Vector3 }
 	local slot = zone.slot
 	local front = -slot.depth / 2 - frontRim(ctx, zone)
 	local points = {}
-	for _, u in { -0.32, 0.32 } do
+	for _, u in { -0.3, 0.3 } do
 		table.insert(
 			points,
-			slot.frame:PointToWorldSpace(Vector3.new(u * slot.width, -6, front - 0.5))
+			slot.frame:PointToWorldSpace(Vector3.new(u * slot.width, 2.6, front + 3))
 		)
 	end
 	return points

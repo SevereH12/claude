@@ -418,10 +418,19 @@ end
 
 -- A heavy iron tether with a sag. Every chain is recorded so the style can
 -- check, after the build, that none of them runs through land.
-local chains: { { a: Vector3, b: Vector3, sag: number } } = {}
+type ChainRecord = { a: Vector3, b: Vector3, sag: number }
+
+-- Kept on the ctx (one per build, shared by every module copy).
+local function chainsOf(ctx: Context): { ChainRecord }
+	local store = ctx :: any
+	if not store.skyChains then
+		store.skyChains = {}
+	end
+	return store.skyChains
+end
 
 function Pieces.chain(ctx: Context, a: Vector3, b: Vector3, sag: number)
-	table.insert(chains, { a = a, b = b, sag = sag })
+	table.insert(chainsOf(ctx), { a = a, b = b, sag = sag })
 	Pieces.beam(ctx, a, b, {
 		color = C.iron,
 		width = 1.1,
@@ -432,8 +441,8 @@ function Pieces.chain(ctx: Context, a: Vector3, b: Vector3, sag: number)
 end
 
 -- Forget recorded chains (start of a build).
-function Pieces.resetChecks()
-	table.clear(chains)
+function Pieces.resetChecks(ctx: Context)
+	(ctx :: any).skyChains = {}
 end
 
 -- Sample every recorded chain against the terrain the style laid; warns and
@@ -441,9 +450,9 @@ end
 -- inside land, so a bad layout shows up in the build output.
 function Pieces.checkChains(ctx: Context)
 	local buried = 0
-	for _, chain in chains do
+	for _, chain in chainsOf(ctx) do
 		local down = UP * chain.sag
-		local n = Terra.buried(chain.a, chain.a - down, chain.b - down, chain.b, 24)
+		local n = Terra.buried(ctx, chain.a, chain.a - down, chain.b - down, chain.b, 24)
 		if n > 0 then
 			buried += 1
 			warn(
@@ -497,7 +506,7 @@ function Pieces.waterfall(
 	local mouth: Vector3? = nil
 	for s = 0, 40, 2 do
 		local p = lip + out * s
-		if Terra.clearBelow(p - UP * 0.5, 30, 1.5) then
+		if Terra.clearBelow(ctx, p - UP * 0.5, 30, 1.5) then
 			mouth = p + out * 1
 			break
 		end
@@ -511,7 +520,7 @@ function Pieces.waterfall(
 	local s = 0
 	while s < length do
 		local q = lip + out * s
-		if Terra.solidAt(q - UP * 3, 0) then
+		if Terra.solidAt(ctx, q - UP * 3, 0) then
 			ctx.terrain:FillBlock(
 				CFrame.lookAt(q - UP * 1, q - UP * 1 + out),
 				Vector3.new(4, 2, 4.5),

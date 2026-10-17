@@ -263,6 +263,49 @@ function Zone.buildBorder(ctx: Context, zone: ZoneContext)
 	end
 end
 
+-- Vignette placement ----------------------------------------------------------------------
+
+export type Placer = {
+	-- first candidate (slot-frame x, z) that has settled ground (not on a
+	-- crumbly edge), is clear of fields and decks and keeps `room` studs
+	-- from earlier vignettes; returns the ground point or nil
+	find: (candidates: { Vector2 }, room: number, minTop: number?, maxTop: number?) -> Vector3?,
+	-- ground under one slot-frame spot (nil if none)
+	ground: (x: number, z: number, clearance: number) -> Vector3?,
+}
+
+function Zone.placer(ctx: Context, zone: ZoneContext, layers: { Land.Layer }): Placer
+	local used: { { p: Vector3, r: number } } = {}
+	local function ground(x: number, z: number, clearance: number): Vector3?
+		local p = Geo.slotPoint(zone, x, z)
+		local top = Land.surfaceAt(layers, p, clearance)
+		if top and top > 0.5 and Geo.isClear(ctx, p, clearance) then
+			return Vector3.new(p.X, top, p.Z)
+		end
+		return nil
+	end
+	local function find(candidates: { Vector2 }, room: number, minTop: number?, maxTop: number?): Vector3?
+		for _, c in candidates do
+			local p = ground(c.X, c.Y, math.min(room, 4))
+			if p and p.Y >= (minTop or -math.huge) and p.Y <= (maxTop or math.huge) then
+				local free = true
+				for _, u in used do
+					if (Vector3.new(p.X, 0, p.Z) - Vector3.new(u.p.X, 0, u.p.Z)).Magnitude < room + u.r then
+						free = false
+						break
+					end
+				end
+				if free then
+					table.insert(used, { p = p, r = room })
+					return p
+				end
+			end
+		end
+		return nil
+	end
+	return { find = find, ground = ground }
+end
+
 -- Floor patterns (flush inlays, top at floor + 0.12) ----------------------------------------
 
 local INLAY_LIFT = 0.12

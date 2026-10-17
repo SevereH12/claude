@@ -14,7 +14,18 @@ type Op = {
 	solid: boolean,
 }
 
-local ops: { Op } = {}
+-- The log lives on the proxy itself (not in this module), so every copy
+-- of the module sees the same fills.
+local function opsOf(ctx: any): { Op }
+	local terrain = ctx.terrain
+	if type(terrain) == "table" then
+		local log = rawget(terrain, "__skyOps")
+		if log then
+			return log
+		end
+	end
+	return {}
+end
 
 local function isSolid(material: Enum.Material): boolean
 	return material ~= Enum.Material.Air and material ~= Enum.Material.Water
@@ -22,13 +33,14 @@ end
 
 -- Replace ctx.terrain with a recording proxy. Call once at the start of a build.
 function Terra.install(ctx: any)
-	table.clear(ops)
+	local ops: { Op } = {}
 	local real = ctx.terrain
 	if type(real) == "table" and rawget(real, "__skyTerra") then
 		real = rawget(real, "__skyTerra")
 	end
 	local proxy: { [string]: any } = {
 		__skyTerra = real,
+		__skyOps = ops,
 		FillBlock = function(_, cframe: CFrame, size: Vector3, material: Enum.Material)
 			table.insert(ops, {
 				kind = "Block",
@@ -111,7 +123,8 @@ end
 
 -- Is p inside land (later fills win)? `pad` grows every fill a little
 -- (voxels round outward), default 2 studs.
-function Terra.solidAt(p: Vector3, pad: number?): boolean
+function Terra.solidAt(ctx: any, p: Vector3, pad: number?): boolean
+	local ops = opsOf(ctx)
 	local grow = pad or 2
 	for i = #ops, 1, -1 do
 		local op = ops[i]
@@ -123,10 +136,10 @@ function Terra.solidAt(p: Vector3, pad: number?): boolean
 end
 
 -- Is the whole column under p (to `depth` studs down) free of land?
-function Terra.clearBelow(p: Vector3, depth: number, pad: number?): boolean
+function Terra.clearBelow(ctx: any, p: Vector3, depth: number, pad: number?): boolean
 	local d = 0
 	while d <= depth do
-		if Terra.solidAt(p - Vector3.yAxis * d, pad) then
+		if Terra.solidAt(ctx, p - Vector3.yAxis * d, pad) then
 			return false
 		end
 		d += 3
@@ -141,10 +154,12 @@ function Terra.bezier(p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3, t: num
 end
 
 -- How many of `samples` points along the curve are inside land.
-function Terra.buried(p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3, samples: number): number
+function Terra.buried(
+	ctx: any,
+	p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3, samples: number): number
 	local n = 0
 	for i = 1, samples - 1 do
-		if Terra.solidAt(Terra.bezier(p0, p1, p2, p3, i / samples), 0.5) then
+		if Terra.solidAt(ctx, Terra.bezier(p0, p1, p2, p3, i / samples), 0.5) then
 			n += 1
 		end
 	end

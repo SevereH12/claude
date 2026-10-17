@@ -20,9 +20,11 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local WorldTypes = require(ServerScriptService.Server.World.Types)
 local Hub = require(script.Hub)
 local Palette = require(script.Palette)
+local Pieces = require(script.Pieces)
 local Sky = require(script.Sky)
 local SkyTypes = require(script.SkyTypes)
 local Teaser = require(script.Teaser)
+local Terra = require(script.Terra)
 local Zone = require(script.Zone)
 
 type Context = WorldTypes.Context
@@ -61,6 +63,9 @@ Style.layout = {
 }
 
 function Style.atmosphere(ctx: Context)
+	-- record every terrain fill so pieces can test "is this inside land?"
+	Terra.install(ctx)
+	Pieces.resetChecks(ctx)
 	Sky.atmosphere(ctx)
 end
 
@@ -104,6 +109,7 @@ Style.themes = themes
 
 function Style.buildTeaser(ctx: Context, zone: ZoneContext)
 	Teaser.build(ctx, zone)
+	Pieces.checkChains(ctx)
 end
 
 return Style

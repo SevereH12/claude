@@ -743,34 +743,33 @@ end
 local function buildTethers(ctx: Context)
 	local hub = ctx.folders.hub
 	local floor = ctx.layout.hubFloor
-	local towerY = floor + 34
+	-- the chains leave the spire's third tier, high above the canopy and
+	-- the lawns, and fall gently to the bollards on each island's rim
+	local towerY = floor + 63
+	local function bracket(start: Vector3, dir: Vector3)
+		Pieces.block(
+			hub,
+			CFrame.lookAt(start - dir * 1, start + dir),
+			Vector3.new(2.4, 2.4, 3),
+			C.iron,
+			Enum.Material.Metal
+		)
+	end
 	for _, zone in ctx.zones do
 		local dir = zone.slot.hubExit.LookVector
 		local right = dir:Cross(UP)
 		for _, point in Zone.tetherPoints(ctx, zone) do
 			local side = if (point - Vector3.zero):Dot(right) > 0 then 1 else -1
-			local start = dir * 12.5 + right * side * 3.5 + UP * towerY
-			Pieces.block(
-				hub,
-				CFrame.lookAt(start, start + dir),
-				Vector3.new(2.2, 2.2, 1.2),
-				C.iron,
-				Enum.Material.Metal
-			)
-			Pieces.chain(ctx, start, point, (point - start).Magnitude * 0.1)
+			local start = dir * 8.5 + right * side * 2 + UP * towerY
+			bracket(start, dir)
+			Pieces.chain(ctx, start, point, (point - start).Magnitude * 0.035)
 		end
 	end
 	-- the teaser's tether hangs snapped
 	local dir = ctx.teaser.slot.hubExit.LookVector
-	local start = dir * 12.5 + UP * towerY
-	Pieces.block(
-		hub,
-		CFrame.lookAt(start, start + dir),
-		Vector3.new(2.2, 2.2, 1.2),
-		C.iron,
-		Enum.Material.Metal
-	)
-	Pieces.chain(ctx, start, start + dir * 14 - UP * 26, 6)
+	local start = dir * 8.5 + UP * towerY
+	bracket(start, dir)
+	Pieces.chain(ctx, start, start + dir * 10 - UP * 24, 5)
 end
 
 function Hub.build(ctx: Context)
