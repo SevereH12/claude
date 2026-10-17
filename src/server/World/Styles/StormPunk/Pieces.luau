@@ -449,7 +449,8 @@ function Pieces.building(
 end
 
 -- A window on a wall: `cframe` on the wall surface, LookVector outward.
--- Glowing pane set into the wall between a brass lintel and sill (3 parts).
+-- Glowing pane set into the wall, recessed behind a proud brass lintel
+-- and sill (3 parts).
 function Pieces.window(
 	parent: Instance,
 	cframe: CFrame,
@@ -457,23 +458,17 @@ function Pieces.window(
 	height: number,
 	glow: Color3?
 )
+	Pieces.block(parent, cframe, Vector3.new(width, height, 0.2), glow or L.warm, M.neon)
 	Pieces.block(
 		parent,
-		cframe * CFrame.new(0, 0, -0.05),
-		Vector3.new(width, height, 0.2),
-		glow or L.warm,
-		M.neon
-	)
-	Pieces.block(
-		parent,
-		cframe * CFrame.new(0, height / 2 + 0.2, 0.25),
+		cframe * CFrame.new(0, height / 2 + 0.22, -0.25),
 		Vector3.new(width + 0.9, 0.45, 0.6),
 		C.brass,
 		M.metal
 	)
 	Pieces.block(
 		parent,
-		cframe * CFrame.new(0, -height / 2 - 0.18, 0.3),
+		cframe * CFrame.new(0, -height / 2 - 0.18, -0.3),
 		Vector3.new(width + 0.9, 0.36, 0.7),
 		C.brass,
 		M.metal

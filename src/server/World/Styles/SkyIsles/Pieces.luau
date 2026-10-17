@@ -11,6 +11,7 @@ local Layout = require(World.Layout)
 local WorldTypes = require(World.Types)
 local Palette = require(script.Parent.Palette)
 local SkyTypes = require(script.Parent.SkyTypes)
+local Terra = require(script.Parent.Terra)
 
 type Context = WorldTypes.Context
 type ZoneContext = WorldTypes.ZoneContext
@@ -415,8 +416,12 @@ function Pieces.arc(
 	end
 end
 
--- A heavy iron tether with a sag.
+-- A heavy iron tether with a sag. Every chain is recorded so the style can
+-- check, after the build, that none of them runs through land.
+local chains: { { a: Vector3, b: Vector3, sag: number } } = {}
+
 function Pieces.chain(ctx: Context, a: Vector3, b: Vector3, sag: number)
+	table.insert(chains, { a = a, b = b, sag = sag })
 	Pieces.beam(ctx, a, b, {
 		color = C.iron,
 		width = 1.1,
@@ -424,6 +429,37 @@ function Pieces.chain(ctx: Context, a: Vector3, b: Vector3, sag: number)
 		curve1 = -sag,
 		segments = 20,
 	})
+end
+
+-- Forget recorded chains (start of a build).
+function Pieces.resetChecks()
+	table.clear(chains)
+end
+
+-- Sample every recorded chain against the terrain the style laid; warns and
+-- notes the count on the Map folder (attribute SkyBuriedChains) if any is
+-- inside land, so a bad layout shows up in the build output.
+function Pieces.checkChains(ctx: Context)
+	local buried = 0
+	for _, chain in chains do
+		local down = UP * chain.sag
+		local n = Terra.buried(chain.a, chain.a - down, chain.b - down, chain.b, 24)
+		if n > 0 then
+			buried += 1
+			warn(
+				string.format(
+					"[SkyIsles] tether %s -> %s runs through land (%d samples)",
+					tostring(chain.a),
+					tostring(chain.b),
+					n
+				)
+			)
+		end
+	end
+	local map = ctx.folders.hub.Parent
+	if map then
+		map:SetAttribute("SkyBuriedChains", buried)
+	end
 end
 
 -- Glowing rune cable (border fences, bridge rails).
@@ -445,11 +481,47 @@ function Pieces.runeCable(
 	})
 end
 
--- A waterfall pouring off a lip into the clouds.
-function Pieces.waterfall(ctx: Context, lip: Vector3, outward: Vector3, drop: number, width: number)
+-- A waterfall pouring off a lip into the clouds. The lip is pushed out
+-- along `outward` until nothing the style filled is underneath it (past
+-- every coast lobe and shelf), and a water channel joins it back to the
+-- source, so the water spills off the rim instead of out of the cliff.
+-- Returns false (and builds nothing) when no clear lip is found.
+function Pieces.waterfall(
+	ctx: Context,
+	lip: Vector3,
+	outward: Vector3,
+	drop: number,
+	width: number
+): boolean
 	local out = flat(outward).Unit
-	local bottom = lip + out * 6 - UP * drop
-	Pieces.beam(ctx, lip, bottom, {
+	local mouth: Vector3? = nil
+	for s = 0, 40, 2 do
+		local p = lip + out * s
+		if Terra.clearBelow(p - UP * 0.5, 30, 1.5) then
+			mouth = p + out * 1
+			break
+		end
+	end
+	if not mouth then
+		return false
+	end
+	local start = mouth :: Vector3
+	-- the spill channel: water laid over the land between source and mouth
+	local length = (start - lip).Magnitude
+	local s = 0
+	while s < length do
+		local q = lip + out * s
+		if Terra.solidAt(q - UP * 3, 0) then
+			ctx.terrain:FillBlock(
+				CFrame.lookAt(q - UP * 1, q - UP * 1 + out),
+				Vector3.new(4, 2, 4.5),
+				Enum.Material.Water
+			)
+		end
+		s += 4
+	end
+	local bottom = start + out * 6 - UP * drop
+	Pieces.beam(ctx, start, bottom, {
 		color = C.seafoam,
 		color1 = C.cloud,
 		width = width,
@@ -464,7 +536,7 @@ function Pieces.waterfall(ctx: Context, lip: Vector3, outward: Vector3, drop: nu
 		axis0 = out,
 		segments = 16,
 	})
-	Pieces.beam(ctx, lip + UP * 0.2, bottom, {
+	Pieces.beam(ctx, start + UP * 0.2, bottom, {
 		color = C.cream,
 		width = width * 0.45,
 		width1 = width,
@@ -478,6 +550,7 @@ function Pieces.waterfall(ctx: Context, lip: Vector3, outward: Vector3, drop: nu
 		axis0 = out,
 		segments = 16,
 	})
+	return true
 end
 
 -- Crystals -----------------------------------------------------------------------

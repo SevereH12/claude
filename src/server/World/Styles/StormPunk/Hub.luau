@@ -1,10 +1,11 @@
 --!strict
--- Bottleworks Plaza: the ocean, the hub island, scenery islets with Tesla
--- pylons, and the hub itself (Grand Coil, Volt Exchange sell station,
--- spawn, light trails, bridgeheads, arrow signs and props).
+-- Bottleworks Plaza: the ocean, the hub island with its crags, scenery
+-- islets with Tesla pylons, and the hub itself (Grand Coil, Volt Exchange
+-- sell station, spawn, light trails, bridgeheads, arrow signs and props).
 --
 -- Every hub prop stands on a "quiet" bearing halfway between the spiral's
--- exit bearings, so zones added later always find their exit free.
+-- exit bearings and is checked against every (future) exit lane, so zones
+-- added later always find their exit free.
 
 local ServerScriptService = game:GetService("ServerScriptService")
 
@@ -22,10 +23,12 @@ type ZoneContext = WorldTypes.ZoneContext
 local C = Palette.colors
 local T = Palette.tints
 local M = Palette.materials
+local L = Palette.light
 local TERRAIN = Enum.Material
 
-local SEA_FLOOR = -20
+local SEA_FLOOR = Geo.SEA_FLOOR
 local UP = Vector3.new(0, 1, 0)
+local TEASER_TRAIL = C.soot
 
 local Hub = {}
 
@@ -34,27 +37,11 @@ local function slotName(zone: ZoneContext): string
 	return if def then def.displayName else "Coming Soon"
 end
 
-local function slotColor(zone: ZoneContext): Color3
-	return zone.color -- the teaser is grey: not open yet
-end
-
 local function bearingOf(zone: ZoneContext): number
 	return math.deg(zone.slot.angle) % 360
 end
 
--- The quiet bearing closest to south: spawn and sell station live on it.
-local function spawnBearing(ctx: Context): number
-	local best, bestDiff = 180, math.huge
-	for _, b in Geo.quietBearings(ctx) do
-		local diff = math.abs(((b - 180 + 180) % 360) - 180)
-		if diff < bestDiff then
-			best, bestDiff = b, diff
-		end
-	end
-	return best
-end
-
--- Base: ocean, hub island, islets ------------------------------------------------
+-- Base: ocean, hub island ------------------------------------------------------------
 
 local function buildOcean(ctx: Context)
 	-- sea bed, then the water above it; every land fill afterwards replaces water
@@ -67,52 +54,91 @@ local function buildOcean(ctx: Context)
 	)
 end
 
--- `upperOnly` re-lays just the terrace and plaza (same seed, same shapes):
--- used after the zone landmasses so the hub always wins where shores merge.
+-- `upperOnly` re-lays just the terrace, plaza and crags (same seed, same
+-- shapes): used after the zone landmasses so the hub always wins where
+-- shores merge.
 local function buildHubIsland(ctx: Context, upperOnly: boolean?)
 	local rng = Geo.rng(ctx, "hub-island")
 	local R = ctx.layout.hubRadius
 	local floor = ctx.layout.hubFloor
 	local origin = Vector3.zero
+	local guard = Geo.guard(ctx, nil)
+	local sb = Geo.spawnBearing(ctx)
 
-	-- shallows and beach
-	local shallows = Land.roundOutline(origin, R + 38, rng, 11, 8)
-	local beach = Land.roundOutline(origin, R + 28, rng, 10, 6)
+	-- shallows and a beach with bays between its points, each layer shifted
+	-- a different way so the rings never read as a bullseye
+	local function shifted(amount: number): Vector3
+		return origin + Geo.dir(rng:NextNumber(0, 360)) * amount
+	end
+	local shallows = Land.blob(shifted(10), R + 42, rng, 12, 9)
+	local beach = Land.blob(shifted(7), R + 28, rng, 11, 7)
 	if not upperOnly then
 		Land.fill(ctx, shallows, SEA_FLOOR, -3, TERRAIN.Sand)
 		Land.fill(ctx, beach, SEA_FLOOR, 2, TERRAIN.Sand)
 	end
-	-- green terrace ring halfway up
+	-- green terrace halfway up, leaning slate cliffs under it
+	local terrace = Land.blob(shifted(5), R + 17, rng, 10, 5)
 	Land.cliff(
 		ctx,
-		Land.clip(Land.roundOutline(origin, R + 18, rng, 10, 4), Geo.landSafe(ctx, floor - 4)),
+		terrace,
 		SEA_FLOOR,
 		floor - 4,
 		TERRAIN.Slate,
 		{ TERRAIN.Rock },
-		TERRAIN.LeafyGrass
+		TERRAIN.LeafyGrass,
+		rng,
+		{ lean = 6, foot = 0 }
 	)
-	-- plaza block with layered slate cliffs
+	-- plaza block with strata cliffs; its edge lobes stay off the harbour
+	-- ramp so the spawn spoke leads somewhere
+	local rampA, rampB = Geo.polar(sb, R - 4, 0), Geo.polar(sb, R + 34, 0)
+	local plaza = Land.clip(Land.blob(origin, R + 8, rng, 12, 3), function(c)
+		local p = Vector3.new(c.x, 0, c.z)
+		return p.Magnitude < R - 8 or Geo.segmentDistance(p, rampA, rampB) > c.r + 3
+	end)
 	Land.cliff(
 		ctx,
-		Land.clip(Land.roundOutline(origin, R + 8, rng, 12, 3), Geo.landSafe(ctx, floor)),
+		plaza,
 		SEA_FLOOR,
 		floor,
 		TERRAIN.Slate,
-		{ TERRAIN.Rock },
-		TERRAIN.Brick
+		{ TERRAIN.Rock, TERRAIN.Basalt },
+		TERRAIN.Brick,
+		rng,
+		{ lean = 4, foot = floor - 8 }
 	)
-	-- guaranteed plaza out to past every exit, pavement core
+	if not upperOnly then
+		Land.talus(ctx, terrace, 2, rng, 16, TERRAIN.Rock, guard)
+	else
+		-- crags: a rock massif on three quiet bearings, the island's
+		-- silhouette and a backdrop behind the coil (clipped off decks and
+		-- the plaza); built once every zone landmass is down
+		local cragRng = Geo.rng(ctx, "hub-crags")
+		for k, offset in { 180, 225, 270 } do
+			local b = sb + offset
+			Land.ridge(
+				ctx,
+				Geo.polar(b, R + 12, 0),
+				Geo.polar(b, R + 32, 0),
+				22 + k * 3,
+				30 + k * 4,
+				15,
+				cragRng,
+				TERRAIN.Basalt,
+				{ TERRAIN.Slate, TERRAIN.Rock },
+				TERRAIN.LeafyGrass,
+				guard
+			)
+		end
+	end
+
+	-- guaranteed plaza out past every exit, pavement core
 	ctx.terrain:FillCylinder(CFrame.new(0, floor - 2, 0), 4, R + 4, TERRAIN.Brick)
 	ctx.terrain:FillCylinder(CFrame.new(0, floor - 2, 0), 4, 27, TERRAIN.Pavement)
-	-- paved spokes toward every exit (and the spawn)
-	local spokes = {}
+	-- paved spokes toward every exit
 	for _, zone in Geo.allSlots(ctx) do
-		table.insert(spokes, bearingOf(zone))
-	end
-	table.insert(spokes, spawnBearing(ctx))
-	for _, b in spokes do
-		local a = Geo.polar(b, 20, floor - 2)
+		local b = bearingOf(zone)
+		local a = Geo.polar(b, 24, floor - 2)
 		local z = Geo.polar(b, R + 4, floor - 2)
 		ctx.terrain:FillBlock(
 			CFrame.lookAt(a:Lerp(z, 0.5), z),
@@ -120,61 +146,64 @@ local function buildHubIsland(ctx: Context, upperOnly: boolean?)
 			TERRAIN.Pavement
 		)
 	end
+	-- the spawn spoke is a real path: a paved ramp down to the harbour
+	local steps = 7
+	local run = 26
+	for i = 0, steps - 1 do
+		local r0 = R + 4 + i * run / steps
+		local top = floor - (i + 1) * (floor - 2) / steps
+		local a = Geo.polar(sb, r0, 0)
+		local z = Geo.polar(sb, r0 + run / steps + 1, 0)
+		ctx.terrain:FillBlock(
+			CFrame.lookAt(a:Lerp(z, 0.5), z) + UP * (top / 2),
+			Vector3.new(10, top, (z - a).Magnitude),
+			TERRAIN.Pavement
+		)
+	end
 end
 
--- Little basalt islets on quiet bearings, each carrying a Tesla pylon, all
--- strung together with power lines: the island's "grid".
+-- Little basalt islets on quiet bearings, each carrying a Tesla pylon,
+-- strung together with power lines where they clear every deck. Built
+-- after the zone landmasses, well clear of their skirts.
 local function buildIslets(ctx: Context)
 	local rng = Geo.rng(ctx, "islets")
 	local folder = ctx.folders.decor
 	local R = ctx.layout.hubRadius
-	local tips: { { bearing: number, a: Vector3, b: Vector3, tip: Vector3 } } = {}
-	local harbour = spawnBearing(ctx) -- the harbour pier uses this bearing
+	local guard = Geo.guard(ctx, nil)
+	local tips: { { bearing: number, a: Vector3, b: Vector3 } } = {}
+	local harbour = Geo.spawnBearing(ctx)
 	for _, bearing in Geo.quietBearings(ctx) do
-		local radius = R + 58 + rng:NextNumber(-4, 8)
+		local radius = R + 60 + rng:NextNumber(-4, 8)
 		local center = Geo.polar(bearing, radius, 0)
 		local size = rng:NextNumber(10, 14)
 		if
-			math.abs(bearing - harbour) > 1 and Geo.isClear(ctx, center, size + 4, { hub = false })
+			math.abs(Geo.angleDiff(bearing, harbour)) > 1
+			and Geo.isClear(ctx, center, size + 40, { hub = false })
 		then
-			Land.fill(
-				ctx,
-				Land.roundOutline(center, size + 8, rng, 6, 2),
-				SEA_FLOOR,
-				-2,
-				TERRAIN.Sand
-			)
+			Land.fill(ctx, Land.blob(center, size + 8, rng, 6, 2), SEA_FLOOR, -2, TERRAIN.Sand)
 			Land.cliff(
 				ctx,
-				Land.roundOutline(center, size, rng, 6, 2),
+				Land.blob(center, size, rng, 6, 2),
 				SEA_FLOOR,
 				4,
 				TERRAIN.Basalt,
 				{ TERRAIN.Slate },
-				TERRAIN.LeafyGrass
+				TERRAIN.LeafyGrass,
+				rng,
+				{ lean = 4, guard = guard }
 			)
-			local yaw = bearing + 90
-			local a, b, tip =
-				Pieces.pylon(folder, center + Vector3.new(0, 4, 0), rng:NextNumber(26, 32), yaw, 3)
-			table.insert(tips, { bearing = bearing, a = a, b = b, tip = tip })
-			for _ = 1, 3 do
-				local p = center
-					+ Vector3.new(
-						rng:NextNumber(-1, 1) * size * 0.6,
-						4,
-						rng:NextNumber(-1, 1) * size * 0.6
-					)
-				Pieces.rocks(folder, p, rng:NextNumber(1.5, 3), rng, T.rockDark)
-			end
+			Land.talus(ctx, Land.blob(center, size, rng, 5, 1), 0, rng, 3, TERRAIN.Basalt, guard)
+			local a, b =
+				Pieces.pylon(folder, center + UP * 4, rng:NextNumber(26, 32), bearing + 90, 3, 0.8)
+			table.insert(tips, { bearing = bearing, a = a, b = b })
 			Pieces.tuft(folder, center + Vector3.new(3, 4, -2), rng, C.sage)
-			Pieces.tuft(folder, center + Vector3.new(-2, 4, 3), rng, C.sage)
+			Pieces.tuft(folder, center + Vector3.new(-2, 4, 3), rng, T.sageDark)
 		end
 	end
-	-- power lines between neighbouring pylons
+	-- power lines between neighbouring pylons, kept 10 studs over any deck
 	for i, from in tips do
 		local to = tips[i % #tips + 1]
-		if #tips > 1 and ((to.bearing - from.bearing) % 360) <= 100 then
-			-- pair the closer crossarm ends
+		if #tips > 1 and ((to.bearing - from.bearing) % 360) <= 50 then
 			local fa, fb = from.a, from.b
 			local ta, tb = to.a, to.b
 			if
@@ -183,8 +212,27 @@ local function buildIslets(ctx: Context)
 			then
 				ta, tb = tb, ta
 			end
-			Pieces.wire(ctx, fa, ta, 6)
-			Pieces.wire(ctx, fb, tb, 6)
+			local sag = 6
+			local lowest = math.min(fa.Y, ta.Y) - 0.75 * sag
+			local clear = true
+			for _, zone in Geo.allSlots(ctx) do
+				local d, at = Geo.segmentsDistance(
+					fa,
+					ta,
+					zone.slot.hubExit.Position,
+					zone.slot.gate.Position
+				)
+				if d < Geo.CORRIDOR then
+					local deck = Geo.deckHeightAt(ctx, at, Geo.CORRIDOR + 1, 6)
+					if deck and lowest < (deck :: number) + 10 then
+						clear = false
+					end
+				end
+			end
+			if clear then
+				Pieces.wire(ctx, fa, ta, sag)
+				Pieces.wire(ctx, fb, tb, sag)
+			end
 		end
 	end
 end
@@ -192,18 +240,19 @@ end
 -- Free-standing basalt sea stacks: big silhouettes that cost no parts.
 local function buildSeaStacks(ctx: Context)
 	local rng = Geo.rng(ctx, "stacks")
+	local guard = Geo.guard(ctx, nil)
 	local count = 0
 	local tries = 0
-	while count < 9 and tries < 80 do
+	while count < 10 and tries < 90 do
 		tries += 1
 		local bearing = rng:NextNumber(0, 360)
-		local radius = rng:NextNumber(100, 330)
+		local radius = rng:NextNumber(100, 340)
 		local base = Geo.polar(bearing, radius, SEA_FLOOR)
 		local r = rng:NextNumber(5, 9)
-		if Geo.isClear(ctx, base, r + 22, { hub = false }) then
+		if Geo.isClear(ctx, base, r + 30, { hub = false }) then
 			count += 1
-			local height = -SEA_FLOOR + rng:NextNumber(10, 30)
-			Land.fill(ctx, Land.roundOutline(base, r + 6, rng, 5, 2), SEA_FLOOR, -3, TERRAIN.Sand)
+			local height = -SEA_FLOOR + rng:NextNumber(10, 32)
+			Land.fill(ctx, Land.blob(base, r + 6, rng, 5, 2), SEA_FLOOR, -3, TERRAIN.Sand)
 			Land.pinnacle(
 				ctx,
 				base,
@@ -212,104 +261,111 @@ local function buildSeaStacks(ctx: Context)
 				rng,
 				{ TERRAIN.Basalt, TERRAIN.Slate, TERRAIN.Basalt, TERRAIN.Rock },
 				r * 0.55,
-				TERRAIN.LeafyGrass
+				TERRAIN.LeafyGrass,
+				guard
 			)
 		end
 	end
 end
 
+-- After every zone landmass: re-lay the hub's upper terrain and add the
+-- scenery that must stay clear of the zones' skirts.
 function Hub.restoreIsland(ctx: Context)
 	buildHubIsland(ctx, true)
+	buildIslets(ctx)
+	buildSeaStacks(ctx)
 end
 
 function Hub.buildBase(ctx: Context)
 	buildOcean(ctx)
 	buildHubIsland(ctx)
-	buildIslets(ctx)
-	buildSeaStacks(ctx)
 end
 
 -- Hub pieces ---------------------------------------------------------------------------
 
--- The Grand Coil: the hub's hero landmark. Returns the crown centre.
+-- The Grand Coil, the hub's hero: a fat copper secondary banded in brass
+-- and ceramic inside a chunky lattice, standing on a copper drum, crowned
+-- with a big copper torus and a sparking cyan orb. Returns the crown centre.
 local function grandCoil(parent: Instance, floor: number): Vector3
 	local o = Vector3.new(0, floor, 0)
-	Kit.cylinder(parent, o - Vector3.new(0, 0.4, 0), 1, 19, { Color = C.brass, Material = M.metal })
+	Kit.cylinder(parent, o - UP * 0.4, 1, 19, { Color = C.brass, Material = M.metal })
 	Kit.cylinder(parent, o, 0.7, 17.5, { Color = C.iron, Material = M.plate })
-	local drumBase = o + Vector3.new(0, 0.7, 0)
-	Pieces.column(parent, drumBase, 9, 11, C.copper, M.metal, true)
-	Pieces.column(parent, drumBase, 1.3, 11.8, C.patina)
-	Pieces.column(parent, drumBase + Vector3.new(0, 7.8, 0), 1.4, 12.2, C.patina)
+	local drumBase = o + UP * 0.7
+	Pieces.column(parent, drumBase, 9, 12, C.copper, M.metal, true)
+	Pieces.column(parent, drumBase, 1.3, 12.8, C.patina)
+	Pieces.column(parent, drumBase + UP * 7.8, 1.4, 13.2, C.patina)
 	for i = 0, 3 do
 		local d = Geo.dir(i * 90 + 45)
 		local cf = CFrame.lookAt(
-			drumBase + d * 5.45 + Vector3.new(0, 4.5, 0),
-			drumBase + d * 10 + Vector3.new(0, 4.5, 0)
+			drumBase + d * 5.95 + UP * 4.5,
+			drumBase + d * 10 + UP * 4.5
 		)
-		Pieces.block(parent, cf, Vector3.new(1.2, 4.5, 0.3), C.volt, M.neon)
+		Pieces.block(parent, cf, Vector3.new(1.4, 4.5, 0.3), C.volt, M.neon)
 	end
 	local deckY = floor + 10
-	Kit.cylinder(
-		parent,
-		Vector3.new(0, deckY, 0),
-		0.8,
-		12.6,
-		{ Color = C.brass, Material = M.metal }
-	)
+	Kit.cylinder(parent, Vector3.new(0, deckY, 0), 0.9, 14, { Color = C.brass, Material = M.metal })
 
-	-- lattice tower
+	-- the secondary: a fat copper column banded every ~9 studs
+	local coilTop = floor + 66
+	Pieces.column(parent, Vector3.new(0, deckY + 0.9, 0), coilTop - deckY - 0.9, 6.6, C.copper)
+	for k, y in { 20, 29, 38, 47, 56 } do
+		Pieces.column(
+			parent,
+			Vector3.new(0, floor + y, 0),
+			1.4,
+			7.8,
+			if k % 2 == 1 then C.brass else C.ceramic,
+			if k % 2 == 1 then M.metal else M.ceramic
+		)
+	end
+	local glowBand = Pieces.column(parent, Vector3.new(0, floor + 42, 0), 2.2, 7.4, C.volt, M.neon)
+	Pieces.glow(glowBand, C.volt, 26, 1.6)
+
+	-- lattice legs and two rings, thick enough to read from the zones
 	local legs: { Vector3 } = {}
 	local heads: { Vector3 } = {}
 	for i = 0, 3 do
 		local d = Geo.dir(i * 90 + 45)
-		local foot = d * 5.2 + Vector3.new(0, deckY + 0.8, 0)
-		local head = d * 1.9 + Vector3.new(0, floor + 62, 0)
-		Pieces.strut(parent, foot, head, 0.8, C.iron)
+		local foot = d * 6.2 + Vector3.new(0, deckY + 0.9, 0)
+		local head = d * 5 + Vector3.new(0, coilTop - 4, 0)
+		Pieces.strut(parent, foot, head, 1.5, C.iron)
 		table.insert(legs, foot)
 		table.insert(heads, head)
 	end
-	for _, t in { 0.25, 0.5, 0.75 } do
+	for _, t in { 0.33, 0.66 } do
 		for i = 1, 4 do
 			Pieces.strut(
 				parent,
 				legs[i]:Lerp(heads[i], t),
 				legs[i % 4 + 1]:Lerp(heads[i % 4 + 1], t),
-				0.45,
+				0.9,
 				C.copper
 			)
 		end
 	end
-	Pieces.column(parent, Vector3.new(0, deckY + 0.8, 0), 54, 2.2, C.copper)
-	for _, y in { 18, 30, 42, 54 } do
-		Pieces.insulator(parent, Vector3.new(0, floor + y, 0), 1.25, 3)
-	end
-	-- crown: copper torus, brass deck, dome, orb and lightning rod
-	local crownY = floor + 66
-	Kit.cylinder(
-		parent,
-		Vector3.new(0, crownY - 1.4, 0),
-		1.2,
-		10.5,
-		{ Color = C.brass, Material = M.metal }
-	)
-	Pieces.torus(parent, Vector3.new(0, crownY, 0), 6.2, 3.4, 14, C.copper)
-	Pieces.ball(parent, Vector3.new(0, crownY + 0.6, 0), 8.5, C.patina)
-	Pieces.orb(parent, Vector3.new(0, crownY + 6, 0), 5, C.volt, 60, true)
-	Pieces.column(parent, Vector3.new(0, crownY + 8, 0), 7, 0.5, C.copper)
-	Pieces.ball(parent, Vector3.new(0, crownY + 15.2, 0), 1, C.volt, M.neon)
+	-- crown: brass deck, big copper torus, patina dome, orb and rod
+	local crownY = coilTop + 2
+	Kit.cylinder(parent, Vector3.new(0, coilTop - 1, 0), 1.6, 13, { Color = C.brass, Material = M.metal })
+	Pieces.torus(parent, Vector3.new(0, crownY, 0), 8, 4.5, 12, C.copper)
+	Pieces.ball(parent, Vector3.new(0, crownY + 0.4, 0), 11, C.patina)
+	Pieces.orb(parent, Vector3.new(0, crownY + 7.5, 0), 6, C.volt, 60, true)
+	Pieces.column(parent, Vector3.new(0, crownY + 10, 0), 8, 0.8, C.copper)
+	Pieces.ball(parent, Vector3.new(0, crownY + 18.5, 0), 1.4, C.volt, M.neon)
 	return Vector3.new(0, crownY, 0)
 end
 
--- The Volt Exchange: amber pad, marquee SELL gantry, capacitor towers.
--- Returns the capacitor tops (for the coil's cables).
+-- The Volt Exchange: amber pad, marquee SELL gantry, capacitor towers. The
+-- only amber in the hub. Kept inside r < 26 sideways so it never reaches
+-- an exit lane. Returns the capacitor tops (for the coil's cables).
 local function voltExchange(parent: Instance, floor: number, bearing: number): { Vector3 }
 	local padPos = Geo.polar(bearing, 19, floor)
 	local frame = Geo.facing(padPos, Vector3.new(0, floor, 0)) -- -Z toward the coil, +Z toward spawn
 	local toSpawn = frame * CFrame.Angles(0, math.pi, 0)
+	local half = 7
 
 	local pad = Kit.part({
 		Name = "SellPad",
-		Size = Vector3.new(18, 1, 18),
+		Size = Vector3.new(2 * half, 1, 2 * half),
 		CFrame = frame * CFrame.new(0, -0.3, 0),
 		Color = C.hazard,
 		Material = M.plate,
@@ -324,56 +380,53 @@ local function voltExchange(parent: Instance, floor: number, bearing: number): {
 	})
 	Kit.sellArea(parent, pad)
 
-	-- neon border and brass bollards
+	-- neon border and chevrons from the spawn side toward the pad
 	local top = 0.2
-	for _, e in { { -9, -9, 9, -9 }, { 9, -9, 9, 9 }, { 9, 9, -9, 9 }, { -9, 9, -9, -9 } } do
-		local a = (frame * CFrame.new(e[1], top, e[2])).Position
-		local b = (frame * CFrame.new(e[3], top, e[4])).Position
-		Pieces.trail(parent, a, b, 0.8, C.hazard, M.neon, 0.06)
+	local e = half
+	for _, s in { { -e, -e, e, -e }, { e, -e, e, e }, { e, e, -e, e }, { -e, e, -e, -e } } do
+		local a = (frame * CFrame.new(s[1], top, s[2])).Position
+		local b = (frame * CFrame.new(s[3], top, s[4])).Position
+		Pieces.trail(parent, a, b, 0.9, C.hazard, M.neon, 0.06)
 	end
-	for _, c in { { -10, -10 }, { 10, -10 }, { 10, 10 }, { -10, 10 } } do
-		local p = (frame * CFrame.new(c[1], 0, c[2])).Position
-		Pieces.column(parent, p, 2.2, 1.4, C.brass, M.metal, true)
-		Pieces.ball(parent, p + Vector3.new(0, 2.5, 0), 1.1, C.hazard, M.neon)
-	end
-	-- chevrons from the spawn side toward the pad
 	for i = 1, 3 do
-		local at = (frame * CFrame.new(0, 0.02, 9 + i * 3.2)).Position
+		local at = (frame * CFrame.new(0, 0.02, half + i * 3)).Position
 		Pieces.chevron(parent, at, frame.LookVector, 3.2, C.hazard)
 	end
 
 	-- gantry with the giant marquee SELL sign
-	local signZ = -5
+	local signZ = -4
+	local legX = 10.5
 	for _, side in { -1, 1 } do
-		local foot = (frame * CFrame.new(side * 12.5, 0, signZ)).Position
+		local foot = (frame * CFrame.new(side * legX, 0, signZ)).Position
 		Pieces.column(parent, foot, 25, 2.2, C.copper, M.metal, true)
-		Pieces.column(parent, foot, 1.5, 3.2, C.iron)
-		Pieces.column(parent, foot + Vector3.new(0, 11, 0), 1, 2.8, C.brass)
-		Pieces.insulator(parent, foot + Vector3.new(0, 25, 0), 0.9, 3)
-		Pieces.ball(parent, foot + Vector3.new(0, 27.6, 0), 1.6, C.volt, M.neon)
+		Pieces.column(parent, foot, 1.6, 3.4, C.iron)
+		Pieces.column(parent, foot + UP * 24.6, 1.6, 3, C.ceramic, M.ceramic)
+		Pieces.ball(parent, foot + UP * 27.4, 1.8, C.hazard, M.neon)
 	end
 	local header = Pieces.block(
 		parent,
 		toSpawn * CFrame.new(0, 24.5, -signZ),
-		Vector3.new(27, 3, 1.4),
+		Vector3.new(2 * legX + 2.4, 3, 1.4),
 		C.soot,
 		Enum.Material.SmoothPlastic
 	)
 	Kit.faceText(header, Enum.NormalId.Front, "VOLT EXCHANGE", nil, Palette.sign(C.brass))
 	Kit.faceText(header, Enum.NormalId.Back, "VOLT EXCHANGE", nil, Palette.sign(C.brass))
-	local signCF = toSpawn * CFrame.new(0, 17.5, -signZ)
+	local signCF = toSpawn * CFrame.new(0, 17, -signZ)
+	local signW = 2 * legX - 3
 	local board =
-		Pieces.framedSign(parent, signCF, 22, 8, "SELL", "charges for Volts", Palette.marquee())
-	Pieces.glow(board, T.warmLight, 26, 2)
+		Pieces.framedSign(parent, signCF, signW, 8, "SELL", "charges for Volts", Palette.marquee())
+	Pieces.glow(board, L.warm, 26, 2)
 	-- marquee bulbs, alternating amber and cyan
-	for i = 0, 10 do
-		local x = -11 + i * 2.2
-		for _, y in { 4.7, -4.7 } do
+	local bulbs = 8
+	for i = 0, bulbs do
+		local x = -signW / 2 + i * signW / bulbs
+		for _, y in { 4.75, -4.75 } do
 			local p = (signCF * CFrame.new(x, y, 0)).Position
 			Pieces.ball(
 				parent,
 				p,
-				0.8,
+				0.9,
 				if (i + (if y > 0 then 0 else 1)) % 2 == 0 then C.hazard else C.volt,
 				M.neon
 			)
@@ -381,360 +434,267 @@ local function voltExchange(parent: Instance, floor: number, bearing: number): {
 	end
 	-- lightning bolt emblem on top
 	local boltCF = signCF * CFrame.new(0, 9.6, 0)
-	Pieces.block(
-		parent,
-		boltCF * CFrame.new(-0.8, 1.6, 0) * CFrame.Angles(0, 0, math.rad(-28)),
-		Vector3.new(1.4, 3.6, 0.8),
-		C.hazard,
-		M.neon
-	)
-	Pieces.block(
-		parent,
-		boltCF * CFrame.new(0, 0, 0) * CFrame.Angles(0, 0, math.rad(62)),
-		Vector3.new(1.2, 3, 0.8),
-		C.hazard,
-		M.neon
-	)
-	Pieces.block(
-		parent,
-		boltCF * CFrame.new(0.8, -1.6, 0) * CFrame.Angles(0, 0, math.rad(-28)),
-		Vector3.new(1.4, 3.6, 0.8),
-		C.hazard,
-		M.neon
-	)
+	for _, b in
+		{
+			{ -0.8, 1.6, -28, 1.4, 3.6 },
+			{ 0, 0, 62, 1.2, 3 },
+			{ 0.8, -1.6, -28, 1.4, 3.6 },
+		}
+	do
+		Pieces.block(
+			parent,
+			boltCF * CFrame.new(b[1], b[2], 0) * CFrame.Angles(0, 0, math.rad(b[3])),
+			Vector3.new(b[4], b[5], 0.8),
+			C.hazard,
+			M.neon
+		)
+	end
 
-	-- capacitor towers
+	-- capacitor towers beside the pad, fed from the coil
 	local caps: { Vector3 } = {}
 	for _, side in { -1, 1 } do
-		local foot = (frame * CFrame.new(side * 15, 0, 3)).Position
+		local foot = (frame * CFrame.new(side * 11.5, 0, 1.5)).Position
 		Pieces.column(parent, foot, 1.6, 6, C.iron, M.metal, true)
-		local core = Pieces.column(parent, foot + Vector3.new(0, 1.6, 0), 13, 1.7, C.volt, M.neon)
+		local core = Pieces.column(parent, foot + UP * 1.6, 13, 1.8, C.volt, M.neon)
 		Pieces.sparks(core, C.volt, 5)
-		local glass =
-			Pieces.column(parent, foot + Vector3.new(0, 1.6, 0), 13, 4.6, T.glass, M.glass, true)
+		local glass = Pieces.column(parent, foot + UP * 1.6, 13, 4.6, T.glass, M.glass, true)
 		glass.Transparency = 0.45
-		Pieces.column(parent, foot + Vector3.new(0, 5.5, 0), 0.6, 5, C.brass)
-		Pieces.column(parent, foot + Vector3.new(0, 10.5, 0), 0.6, 5, C.brass)
-		Pieces.column(parent, foot + Vector3.new(0, 14.6, 0), 1.2, 5.6, C.copper)
-		local capTop = Pieces.insulator(parent, foot + Vector3.new(0, 15.8, 0), 0.9, 3)
-		local knob = Pieces.ball(parent, capTop + Vector3.new(0, 0.6, 0), 1.6, C.copper)
+		Pieces.column(parent, foot + UP * 8, 0.7, 5, C.brass)
+		Pieces.column(parent, foot + UP * 14.6, 1.4, 5.6, C.copper)
+		Pieces.column(parent, foot + UP * 16, 1.6, 2.6, C.ceramic, M.ceramic)
+		local knob = Pieces.ball(parent, foot + UP * 18.2, 1.8, C.copper)
 		Pieces.glow(knob, C.volt, 16, 1.5)
-		table.insert(caps, capTop + Vector3.new(0, 0.6, 0))
+		table.insert(caps, foot + UP * 18.2)
 	end
 	return caps
 end
 
--- Gateway arch at a hub exit, in the zone's colour. Returns the pillar tops.
-local function bridgehead(parent: Instance, zone: ZoneContext, floor: number): { Vector3 }
+-- Gateway arch at a hub exit, in the zone's colour. Returns a pillar top.
+local function bridgehead(parent: Instance, zone: ZoneContext, floor: number, color: Color3): Vector3
 	local exit = zone.slot.hubExit
-	local color = slotColor(zone)
 	local base = exit.Position - exit.LookVector * 3
 	local frame = CFrame.lookAt(base, base - exit.LookVector) -- text faces the hub
 	local tops: { Vector3 } = {}
 	for _, side in { -1, 1 } do
 		local foot = (frame * CFrame.new(side * 7, 0, 0)).Position
-		Pieces.column(parent, Vector3.new(foot.X, floor, foot.Z), 12, 2, C.copper, M.metal, true)
-		Pieces.column(parent, Vector3.new(foot.X, floor, foot.Z), 1.2, 3, C.iron)
-		Pieces.column(parent, Vector3.new(foot.X, floor + 6, foot.Z), 0.8, 2.6, C.brass)
-		local top = Pieces.insulator(parent, Vector3.new(foot.X, floor + 12, foot.Z), 0.8, 3)
-		local lamp = Pieces.ball(parent, top + Vector3.new(0, 0.7, 0), 1.6, color, M.neon)
-		Pieces.glow(lamp, color, 14, 1.4)
-		table.insert(tops, top + Vector3.new(0, 0.7, 0))
+		local f = Vector3.new(foot.X, floor, foot.Z)
+		Pieces.column(parent, f, 12, 2.2, C.copper, M.metal, true)
+		Pieces.column(parent, f + UP * 10.4, 1.6, 3, C.ceramic, M.ceramic)
+		Pieces.ball(parent, f + UP * 12.9, 2, color, M.neon)
+		table.insert(tops, f + UP * 12.9)
 	end
 	Pieces.framedSign(
 		parent,
-		frame * CFrame.new(0, 10, 0),
+		frame * CFrame.new(0, 9.6, 0),
 		11,
 		2.8,
 		string.upper(slotName(zone)),
 		nil,
-		Palette.sign(color, true)
+		Palette.sign(if zone.isTeaser then C.ceramic else color, true)
 	)
-	return tops
+	return tops[1]
 end
 
 local function lightTrail(parent: Instance, zone: ZoneContext, floor: number, hubRadius: number)
 	local b = bearingOf(zone)
-	local color = slotColor(zone)
-	local from = Geo.polar(b, 10.5, floor)
+	local color = if zone.isTeaser then TEASER_TRAIL else zone.color
+	local chevrons = if zone.isTeaser then C.hazard else zone.color
+	local from = Geo.polar(b, 28, floor)
 	local to = Geo.polar(b, hubRadius + 2, floor)
-	local side = Geo.dir(b):Cross(UP)
-	Pieces.trail(parent, from, to, 1.4, color, M.neon)
-	for _, s in { -1, 1 } do
-		Pieces.trail(parent, from + side * s * 2.6, to + side * s * 2.6, 0.45, C.brass, M.metal)
-	end
-	for _, r in { 24, 34 } do
-		Pieces.chevron(parent, Geo.polar(b, r, floor), Geo.dir(b), 3.4, color)
+	Pieces.trail(parent, from, to, 1.6, color, if zone.isTeaser then M.metal else M.neon)
+	for _, r in { 34, 44 } do
+		Pieces.chevron(parent, Geo.polar(b, r, floor), Geo.dir(b), 3.4, chevrons)
 	end
 end
 
 -- Props on quiet bearings -------------------------------------------------------------
 
-local function kiosk(parent: Instance, frame: CFrame, rng: Random)
+local function kiosk(parent: Instance, frame: CFrame)
 	-- frame: on the floor, LookVector toward the hub centre (shop front)
+	local roof =
+		Pieces.building(parent, frame * CFrame.new(0, 0, 1.5), Vector3.new(9, 5, 5), C.timber, M.planks)
 	Pieces.block(
 		parent,
-		frame * CFrame.new(0, 2.5, 1.5),
-		Vector3.new(9, 5, 5),
-		C.timber,
-		M.planks,
-		true
-	)
-	Pieces.block(
-		parent,
-		frame * CFrame.new(0, 1.3, -1.6),
+		frame * CFrame.new(0, 1.3, -1.7),
 		Vector3.new(9.4, 2.6, 1.4),
 		C.copper,
 		M.metal,
 		true
 	)
-	for i = 0, 4 do
-		local x = -4 + i * 2
+	-- striped awning sloping down toward the customers
+	for i = 0, 2 do
+		local x = -3 + i * 3
 		Pieces.wedge(
 			parent,
-			frame * CFrame.new(x, 6.2, -1) * CFrame.Angles(0, math.pi, 0),
-			Vector3.new(2, 1.6, 4),
+			frame * CFrame.new(x, 6.4, -1.8),
+			Vector3.new(3, 1.6, 3.6),
 			if i % 2 == 0 then C.patina else C.ceramic,
 			M.fabric
 		)
 	end
-	Pieces.block(
-		parent,
-		frame * CFrame.new(0, 5.2, 2),
-		Vector3.new(9.6, 0.5, 6),
-		T.copperDark,
-		M.metal
-	)
-	for i = 0, 3 do
-		local p = (frame * CFrame.new(-3 + i * 2, 3, -1.6)).Position
-		Pieces.ball(parent, p, 0.9, if rng:NextNumber() < 0.5 then C.volt else C.hazard, M.neon)
-	end
+	local _ = roof
 	local sign = Pieces.framedSign(
 		parent,
-		frame * CFrame.new(0, 8.4, -0.2),
+		frame * CFrame.new(0, 8.6, 0.4),
 		8,
 		2,
 		"BOTTLES",
 		nil,
 		Palette.sign(C.volt, true)
 	)
-	Pieces.glow(sign, T.warmLight, 14, 1.2)
+	Pieces.glow(sign, L.warm, 14, 1.2)
+	for _, x in { -3, 3 } do
+		Pieces.ball(parent, (frame * CFrame.new(x, 3.1, -1.7)).Position, 0.9, C.volt, M.neon)
+	end
 end
 
 local function foundry(parent: Instance, frame: CFrame)
 	-- frame: on the floor, LookVector toward the hub
-	Pieces.block(
+	local roof = Pieces.building(
 		parent,
-		frame * CFrame.new(0, 5, 0),
+		frame,
 		Vector3.new(16, 10, 12),
 		T.copperDark,
-		Enum.Material.Brick,
-		true
+		M.brick,
+		C.copper
 	)
-	Pieces.block(
-		parent,
-		frame * CFrame.new(0, 0.6, 0),
-		Vector3.new(16.6, 1.2, 12.6),
-		C.iron,
-		M.metal
-	)
+	-- sawtooth roof
 	for i = 0, 2 do
 		local x = -5.4 + i * 5.4
 		Pieces.wedge(
 			parent,
-			frame * CFrame.new(x, 12.5, 0) * CFrame.Angles(0, math.rad(90), 0),
-			Vector3.new(12, 5, 5.4),
+			roof * CFrame.new(x, 2.5, 0) * CFrame.Angles(0, math.rad(90), 0),
+			Vector3.new(13, 5, 5.4),
 			C.patina,
 			M.metal
 		)
 	end
-	for i = 0, 2 do
-		local x = -5.4 + i * 5.4
-		Pieces.block(
-			parent,
-			frame * CFrame.new(x, 6.5, -6.05),
-			Vector3.new(3.2, 3.2, 0.2),
-			C.hazard,
-			M.neon
-		)
+	-- warm windows and a big door on the hub side
+	local wall = frame * CFrame.new(0, 0, -6) * CFrame.Angles(0, math.pi, 0)
+	for _, x in { -4.8, 4.8 } do
+		Pieces.window(parent, wall * CFrame.new(x, 6.6, 0) * CFrame.Angles(0, math.pi, 0), 3, 3.2)
 	end
 	Pieces.block(
 		parent,
-		frame * CFrame.new(0, 2.4, -6.05),
+		frame * CFrame.new(0, 3.3, -6.05),
 		Vector3.new(4, 4.8, 0.3),
 		C.soot,
 		M.metal
 	)
-	Pieces.smokestack(parent, (frame * CFrame.new(-5, 10, 4)).Position, 18, 3, true)
-	Pieces.smokestack(parent, (frame * CFrame.new(1, 10, 4.5)).Position, 24, 3.4, true)
+	Pieces.smokestack(parent, (frame * CFrame.new(-5, 11, 4)).Position, 18, 3, true)
+	Pieces.smokestack(parent, (frame * CFrame.new(1.5, 11, 4.5)).Position, 24, 3.4, true)
+	-- the sign hangs on the hub-facing wall, text toward the hub
 	local sign = Pieces.framedSign(
 		parent,
-		frame * CFrame.new(0, 9.4, -6.6) * CFrame.Angles(0, math.pi, 0),
+		frame * CFrame.new(0, 9.7, -6.9),
 		12,
 		1.8,
 		"BOTTLE FOUNDRY",
 		nil,
 		Palette.sign(C.brass)
 	)
-	Pieces.glow(sign, T.warmLight, 16, 1.2)
+	Pieces.glow(sign, L.warm, 16, 1.2)
 end
 
 local function waterTower(parent: Instance, bottom: Vector3)
 	for i = 0, 3 do
 		local d = Geo.dir(i * 90 + 45)
-		Pieces.strut(parent, bottom + d * 4, bottom + d * 2.6 + Vector3.new(0, 16, 0), 0.6, C.iron)
+		Pieces.strut(parent, bottom + d * 4, bottom + d * 2.8 + UP * 16, 0.9, C.iron)
 	end
 	Pieces.strut(
 		parent,
-		bottom + Geo.dir(45) * 3.3 + Vector3.new(0, 8, 0),
-		bottom + Geo.dir(225) * 3.3 + Vector3.new(0, 8, 0),
-		0.4,
+		bottom + Geo.dir(45) * 3.4 + UP * 8,
+		bottom + Geo.dir(225) * 3.4 + UP * 8,
+		0.5,
 		C.copper
 	)
-	Pieces.strut(
-		parent,
-		bottom + Geo.dir(135) * 3.3 + Vector3.new(0, 8, 0),
-		bottom + Geo.dir(315) * 3.3 + Vector3.new(0, 8, 0),
-		0.4,
-		C.copper
-	)
-	Pieces.column(parent, bottom + Vector3.new(0, 16, 0), 7, 8, C.timber, M.planks, true)
-	Pieces.column(parent, bottom + Vector3.new(0, 18, 0), 0.6, 8.4, C.iron)
-	Pieces.column(parent, bottom + Vector3.new(0, 21, 0), 0.6, 8.4, C.iron)
-	Pieces.ball(parent, bottom + Vector3.new(0, 22.5, 0), 7.6, C.patina)
-	Pieces.column(parent, bottom + Vector3.new(0, 26, 0), 3, 0.4, C.copper)
+	Pieces.column(parent, bottom + UP * 16, 7, 8, C.timber, M.planks, true)
+	Pieces.column(parent, bottom + UP * 18, 0.7, 8.5, C.iron)
+	Pieces.column(parent, bottom + UP * 21, 0.7, 8.5, C.iron)
+	Pieces.ball(parent, bottom + UP * 22.5, 7.8, C.patina)
+	Pieces.ball(parent, bottom + UP * 26.6, 1.2, C.volt, M.neon)
 end
 
 local function sirenMast(parent: Instance, bottom: Vector3, yaw: number)
-	local _, _, tip = Pieces.pylon(parent, bottom, 22, yaw, 2.2)
-	Pieces.column(parent, tip - Vector3.new(0, 4.5, 0), 1.6, 3, C.brass)
-	local beacon = Pieces.ball(parent, tip - Vector3.new(0, 2, 0), 1.8, C.hazard, M.neon)
-	Pieces.glow(beacon, C.hazard, 18, 1.6)
-	local cf = CFrame.new(tip - Vector3.new(0, 3.6, 0)) * CFrame.Angles(0, math.rad(yaw), 0)
+	local _, _, tip = Pieces.pylon(parent, bottom, 22, yaw, 2.2, 0.7)
+	local beacon = Pieces.ball(parent, tip + UP * 1.2, 1.8, C.volt, M.neon)
+	Pieces.glow(beacon, C.volt, 18, 1.6)
+	local cf = CFrame.new(tip - UP * 3.6) * CFrame.Angles(0, math.rad(yaw), 0)
 	for _, s in { -1, 1 } do
 		Pieces.pipe(
 			parent,
-			(cf * CFrame.new(0, 0, 0)).Position,
+			cf.Position,
 			(cf * CFrame.new(s * 3, 0.4, 0)).Position,
-			1.2,
+			1.4,
 			C.ceramic,
 			M.ceramic
 		)
 	end
 end
 
-local function weatherMast(parent: Instance, frame: CFrame)
-	Pieces.block(
-		parent,
-		frame * CFrame.new(0, 2.5, 0),
-		Vector3.new(6, 5, 6),
-		C.ceramic,
-		Enum.Material.SmoothPlastic,
-		true
-	)
-	Pieces.wedge(parent, frame * CFrame.new(0, 6, 1.5), Vector3.new(6.6, 2, 3.3), C.patina, M.metal)
-	Pieces.wedge(
-		parent,
-		frame * CFrame.new(0, 6, -1.5) * CFrame.Angles(0, math.pi, 0),
-		Vector3.new(6.6, 2, 3.3),
-		C.patina,
-		M.metal
-	)
-	Pieces.block(parent, frame * CFrame.new(0, 3, -3.05), Vector3.new(2.6, 2, 0.2), C.volt, M.neon)
-	local base = (frame * CFrame.new(2, 7, 2)).Position
-	Pieces.column(parent, base, 10, 0.5, C.iron)
-	local top = base + Vector3.new(0, 10, 0)
+local function weatherHut(parent: Instance, frame: CFrame)
+	local roof = Pieces.building(parent, frame, Vector3.new(6, 5, 6), C.ceramic, M.ceramic, C.brass)
+	Pieces.gable(parent, roof, 6, 6, 2.2, C.patina, M.metal)
+	Pieces.window(parent, frame * CFrame.new(0, 3.4, -3), 2.4, 1.8, C.volt)
+	local base = (frame * CFrame.new(2, 0, 2)).Position + UP * (roof.Position.Y - frame.Position.Y)
+	Pieces.column(parent, base, 10, 0.6, C.iron)
+	local top = base + UP * 10
 	for i = 0, 2 do
-		local d = Geo.dir(i * 120)
-		Pieces.strut(parent, top, top + d * 2, 0.2, C.brass)
-		Pieces.ball(parent, top + d * 2, 0.9, C.copper)
+		Pieces.ball(parent, top + Geo.dir(i * 120) * 1.8, 1, C.copper)
 	end
-	Pieces.ball(parent, top + Vector3.new(0, 1.4, 0), 1.2, C.volt, M.neon)
-	Pieces.wedge(
-		parent,
-		CFrame.new(top + Vector3.new(0, 2.6, 0)),
-		Vector3.new(0.2, 1.2, 3),
-		C.brass,
-		M.metal
-	)
+	Pieces.ball(parent, top + UP * 1.4, 1.2, C.volt, M.neon)
+	Pieces.wedge(parent, CFrame.new(top + UP * 2.6), Vector3.new(0.2, 1.2, 3), C.brass, M.metal)
 end
 
 local function bench(parent: Instance, frame: CFrame)
-	Pieces.block(
-		parent,
-		frame * CFrame.new(0, 1.2, 0),
-		Vector3.new(5, 0.4, 1.6),
-		C.timber,
-		M.planks,
-		true
-	)
-	Pieces.block(
-		parent,
-		frame * CFrame.new(0, 2.2, 0.7),
-		Vector3.new(5, 1.4, 0.3),
-		C.timber,
-		M.planks
-	)
-	for _, s in { -1, 1 } do
-		Pieces.block(
-			parent,
-			frame * CFrame.new(s * 2.1, 0.6, 0),
-			Vector3.new(0.4, 1.2, 1.4),
-			C.iron,
-			M.metal
-		)
-	end
+	Pieces.block(parent, frame * CFrame.new(0, 1.2, 0), Vector3.new(5, 0.5, 1.6), C.timber, M.planks, true)
+	Pieces.block(parent, frame * CFrame.new(0, 2.2, 0.7), Vector3.new(5, 1.4, 0.3), C.timber, M.planks)
+	Pieces.block(parent, frame * CFrame.new(0, 0.5, 0), Vector3.new(4.2, 1, 0.5), C.iron, M.metal)
 end
 
 local function garden(parent: Instance, ctx: Context, center: Vector3, frame: CFrame, rng: Random)
-	ctx.terrain:FillCylinder(
-		CFrame.new(center.X, center.Y - 2, center.Z),
-		4,
-		6.5,
-		TERRAIN.LeafyGrass
-	)
-	Kit.cylinder(
-		parent,
-		center - Vector3.new(0, 0.6, 0),
-		1.2,
-		14,
-		{ Color = C.brass, Material = M.metal }
-	)
-	Kit.cylinder(
-		parent,
-		center - Vector3.new(0, 0.5, 0),
-		1.2,
-		13,
-		{ Color = C.sage, Material = Enum.Material.Grass }
-	)
-	for i = 1, 5 do
-		local a = i * 72 + rng:NextNumber(-15, 15)
-		local p = center + Geo.dir(a) * rng:NextNumber(1.5, 4.5) + Vector3.new(0, 0.6, 0)
+	ctx.terrain:FillCylinder(CFrame.new(center.X, center.Y - 2, center.Z), 4, 6.5, TERRAIN.LeafyGrass)
+	Kit.cylinder(parent, center - UP * 0.6, 1.2, 14, { Color = C.brass, Material = M.metal })
+	Kit.cylinder(parent, center - UP * 0.5, 1.2, 13, { Color = C.sage, Material = Enum.Material.Grass })
+	for i = 1, 4 do
+		local a = i * 90 + rng:NextNumber(-15, 15)
+		local p = center + Geo.dir(a) * rng:NextNumber(2.5, 4.5) + UP * 0.6
 		Pieces.shrub(parent, p, rng, if i % 2 == 0 then C.sage else T.sageDark)
 	end
-	Pieces.lamp(parent, center + Vector3.new(0, 0.6, 0), 9, T.warmLight, 22)
+	Pieces.lamp(parent, center + UP * 0.6, 9, L.warm, 22, true)
 	bench(parent, frame * CFrame.new(-8.5, 0, 0) * CFrame.Angles(0, math.rad(90), 0))
 	bench(parent, frame * CFrame.new(8.5, 0, 0) * CFrame.Angles(0, math.rad(-90), 0))
 end
 
-local function fingerPost(parent: Instance, ctx: Context, base: Vector3)
-	Pieces.column(parent, base, 12.5, 0.9, C.iron, M.metal, true)
-	Pieces.column(parent, base, 1, 2, C.brass)
-	Pieces.ball(parent, base + Vector3.new(0, 13, 0), 1.6, C.volt, M.neon)
+-- Arrow posts by the spawn: up to four arrows per post, one post per four
+-- slots, so arrows never pile up or sink however many zones there are.
+local function fingerPosts(parent: Instance, ctx: Context, base: Vector3, along: Vector3)
 	local slots = Geo.allSlots(ctx)
-	for i, zone in slots do
-		local target = zone.slot.hubExit.Position
-		local dir = Vector3.new(target.X - base.X, 0, target.Z - base.Z).Unit
-		local y = 11 - (i - 1) * 2.4
-		Pieces.arrowSign(
-			parent,
-			base + Vector3.new(0, y, 0) + dir * 4.3,
-			dir,
-			7,
-			1.8,
-			string.upper(slotName(zone)),
-			slotColor(zone)
-		)
+	local perPost = 4
+	local posts = math.ceil(#slots / perPost)
+	for p = 1, posts do
+		local postBase = base + along * ((p - 1) * 5)
+		local first = (p - 1) * perPost + 1
+		local last = math.min(#slots, p * perPost)
+		local n = last - first + 1
+		Pieces.column(parent, postBase, 9 + n * 2.2, 0.9, C.iron, M.metal, true)
+		Pieces.column(parent, postBase, 1, 2, C.brass)
+		Pieces.ball(parent, postBase + UP * (9.6 + n * 2.2), 1.6, C.volt, M.neon)
+		for i = first, last do
+			local zone = slots[i]
+			local target = zone.slot.hubExit.Position
+			local dir = Vector3.new(target.X - postBase.X, 0, target.Z - postBase.Z).Unit
+			local y = 8 + (last - i) * 2.2
+			Pieces.arrowSign(
+				parent,
+				postBase + UP * y + dir * 4.3,
+				dir,
+				7,
+				1.8,
+				string.upper(slotName(zone)),
+				if zone.isTeaser then C.ceramic else zone.color
+			)
+		end
 	end
 end
 
@@ -743,22 +703,28 @@ function Hub.buildHub(ctx: Context)
 	local floor = ctx.layout.hubFloor
 	local R = ctx.layout.hubRadius
 	local rng = Geo.rng(ctx, "hub")
-	local sb = spawnBearing(ctx)
+	local sb = Geo.spawnBearing(ctx)
 
-	-- spawn: brass pad facing the Volt Exchange and the coil
+	-- spawn: brass pad on the spawn bearing, turned from the coil toward
+	-- zone 1's exit so the first frame holds SELL, the coil and zone 1
 	local spawnPos = Geo.polar(sb, 41, floor)
-	local spawnFrame = Geo.facing(spawnPos, Vector3.new(0, floor, 0))
+	local toCoil = Geo.bearingOf(-spawnPos)
+	local firstExit = (ctx.zones[1] or ctx.teaser).slot.hubExit.Position
+	local toFirst = Geo.bearingOf(firstExit - spawnPos)
+	local turn = math.clamp(Geo.angleDiff(toFirst, toCoil), -36, 36)
+	local spawnYaw = toCoil + turn
+	local spawnFrame = Geo.facing(spawnPos, spawnPos + Geo.dir(spawnYaw))
 	Kit.spawn(parent, spawnFrame * CFrame.new(0, 0.5, 0), Vector3.new(12, 1, 12), {
 		Color = C.brass,
 		Material = M.plate,
 	})
-	Kit.cylinder(parent, spawnPos - Vector3.new(0, 0.1, 0), 0.25, 17, {
+	Kit.cylinder(parent, spawnPos - UP * 0.1, 0.25, 17, {
 		Color = C.volt,
 		Material = M.neon,
 		CanCollide = false,
 		CastShadow = false,
 	})
-	Kit.cylinder(parent, spawnPos - Vector3.new(0, 0.05, 0), 0.3, 15.6, {
+	Kit.cylinder(parent, spawnPos - UP * 0.05, 0.3, 15.6, {
 		Color = C.iron,
 		Material = M.plate,
 		CanCollide = false,
@@ -770,44 +736,76 @@ function Hub.buildHub(ctx: Context)
 	local caps = voltExchange(parent, floor, sb)
 	for i, cap in caps do
 		local a = (i - 1.5) * 2
-		Pieces.liveCable(ctx, crown + Vector3.new(a * 2.4, 0, 3), cap, C.volt, 0.45, 4)
+		Pieces.liveCable(ctx, crown + Vector3.new(a * 3, -1, 0), cap, C.volt, 0.5, 5)
 	end
 
 	-- wayfinding: trails, bridgeheads and power cables to every exit
 	for _, zone in Geo.allSlots(ctx) do
 		lightTrail(parent, zone, floor, R)
-		local tops = bridgehead(parent, zone, floor)
-		Pieces.liveCable(ctx, crown, tops[1], slotColor(zone), 0.3, 6)
+		local color = if zone.isTeaser then C.ceramic else zone.color
+		local top = bridgehead(parent, zone, floor, color)
+		if not zone.isTeaser then
+			Pieces.liveCable(ctx, crown + UP * 2, top, color, 0.35, 6)
+		end
 	end
-	local postBase = spawnPos + spawnFrame.LookVector * 9 + spawnFrame.RightVector * 8
-	fingerPost(parent, ctx, postBase)
+	-- arrow posts on the spawn's far side from zone 1, clear of the lanes
+	local postSide = if turn >= 0 then -1 else 1
+	local postBase = spawnPos + Geo.dir(sb + 90) * (postSide * 9) + Geo.dir(sb) * 2
+	fingerPosts(parent, ctx, postBase, Geo.dir(sb))
 
 	-- props on the quiet bearings
+	local lampIndex = 0
 	for _, b in Geo.quietBearings(ctx) do
-		if math.abs(((b - sb + 180) % 360) - 180) > 1 then
+		local onSpawn = math.abs(Geo.angleDiff(b, sb)) < 1
+		if not onSpawn then
 			local center = Geo.polar(b, 42, floor)
 			local frame = Geo.facing(center, Vector3.new(0, floor, 0))
 			-- clockwise from the spawn: kiosk, gasometer, foundry, water
-			-- tower, siren, weather mast, garden
+			-- tower, siren, weather hut, garden
 			local slotIndex = math.floor(((b - sb) % 360) / 45 + 0.5)
 			if slotIndex == 1 then
-				kiosk(parent, frame, rng)
+				kiosk(parent, frame)
+				Pieces.crate(parent, (frame * CFrame.new(6.5, 0, 2)).Position, 2.2, 20, nil, true)
+				Pieces.barrel(parent, (frame * CFrame.new(-6.8, 0, 2.5)).Position, C.patina)
 			elseif slotIndex == 2 then
 				Pieces.tank(parent, Geo.polar(b, 44, floor), 15, 11, true)
+				Pieces.barrel(parent, Geo.polar(b + 9, 46, floor), C.copper)
 			elseif slotIndex == 3 then
 				foundry(parent, Geo.facing(Geo.polar(b, 45, floor), Vector3.new(0, floor, 0)))
+				Pieces.crate(parent, Geo.polar(b - 12, 47, floor), 2.4, 10, nil, true)
+				Pieces.crate(parent, Geo.polar(b - 12.5, 49.5, floor), 1.8, 35)
 			elseif slotIndex == 4 then
 				waterTower(parent, center)
 			elseif slotIndex == 5 then
 				sirenMast(parent, center, b)
 			elseif slotIndex == 6 then
-				weatherMast(parent, frame)
+				weatherHut(parent, frame)
 			else
 				garden(parent, ctx, Geo.polar(b, 40, floor), frame, rng)
 			end
+			-- inner lamp ring, alternating warm and cyan
+			lampIndex += 1
+			local lampColor = if lampIndex % 2 == 0 then C.volt else L.warm
+			Pieces.lamp(parent, Geo.polar(b, 27, floor), 8, lampColor, 20, true)
+			-- planter beside it
+			local pc = Geo.polar(b, 33.5, floor)
+			local pf = Geo.facing(pc, Vector3.new(0, floor, 0))
+			Pieces.block(parent, pf * CFrame.new(0, 0.7, 0), Vector3.new(7, 1.4, 2.6), C.copper, M.metal, true)
+			Pieces.block(
+				parent,
+				pf * CFrame.new(0, 1.45, 0),
+				Vector3.new(6.4, 0.2, 2),
+				C.sage,
+				Enum.Material.Grass
+			)
+			Pieces.ball(
+				parent,
+				(pf * CFrame.new(rng:NextNumber(-1.5, 1.5), 2, 0)).Position,
+				rng:NextNumber(1.8, 2.4),
+				if rng:NextNumber() < 0.5 then T.sageDark else C.sage,
+				Enum.Material.Grass
+			)
 		end
-		-- inner lamp ring
-		Pieces.lamp(parent, Geo.polar(b, 27, floor), 8, if b < 180 then T.warmLight else C.volt, 20)
 	end
 
 	-- brass ring around the pavement core (flush, under the trails)
@@ -818,26 +816,25 @@ function Hub.buildHub(ctx: Context)
 		CastShadow = false,
 	})
 	Kit.cylinder(parent, Vector3.new(0, floor - 0.26, 0), 0.33, 53.4, {
-		Color = Color3.fromRGB(150, 148, 140),
+		Color = Palette.terrain[TERRAIN.Pavement],
 		Material = Enum.Material.Pavement,
 		CanCollide = false,
 		CastShadow = false,
 	})
 
-	-- promenade: brass bollards with dark chains round the plaza rim,
-	-- open wherever a trail or the spawn meets the rim
-	local open = { sb }
-	for _, zone in Geo.allSlots(ctx) do
-		table.insert(open, bearingOf(zone))
-	end
+	-- promenade: brass-capped bollards with dark chains round the plaza
+	-- rim, open wherever an exit lane (present or future) or the spawn
+	-- ramp meets the rim
+	local open = Geo.exitBearings(ctx)
+	table.insert(open, sb)
 	local prevTop: Vector3? = nil
 	local firstTop: Vector3? = nil
-	local steps = 40
+	local steps = 32
 	for i = 0, steps - 1 do
-		local b = i * 360 / steps
+		local b = i * 360 / steps + 360 / steps / 2
 		local blocked = false
 		for _, o in open do
-			if math.abs(((b - o + 180) % 360) - 180) < 10 then
+			if math.abs(Geo.angleDiff(b, o)) < 9 then
 				blocked = true
 			end
 		end
@@ -845,90 +842,37 @@ function Hub.buildHub(ctx: Context)
 			prevTop = nil
 		else
 			local p = Geo.polar(b, R + 2.5, floor)
-			Pieces.column(parent, p, 2.4, 1, C.iron, M.metal, true)
-			Pieces.ball(parent, p + Vector3.new(0, 2.6, 0), 0.9, C.brass)
-			local top = p + Vector3.new(0, 2.1, 0)
+			Pieces.column(parent, p, 2.6, 1.2, C.iron, M.metal, true)
+			local top = p + UP * 2.2
 			if prevTop then
-				Pieces.wire(ctx, prevTop, top, 0.6, 0.16)
+				Pieces.wire(ctx, prevTop, top, 0.6, 0.18)
 			elseif i == 0 then
 				firstTop = top
 			end
 			if i == steps - 1 and firstTop then
-				Pieces.wire(ctx, top, firstTop, 0.6, 0.16)
+				Pieces.wire(ctx, top, firstTop, 0.6, 0.18)
 			end
 			prevTop = top
 		end
 	end
 
-	-- flower planters beside the inner lamps
-	for _, b in Geo.quietBearings(ctx) do
-		if math.abs(((b - sb + 180) % 360) - 180) > 1 then
-			local center = Geo.polar(b, 34, floor)
-			local frame = Geo.facing(center, Vector3.new(0, floor, 0))
-			Pieces.block(
-				parent,
-				frame * CFrame.new(0, 0.7, 0),
-				Vector3.new(7, 1.4, 2.6),
-				C.copper,
-				M.metal,
-				true
-			)
-			Pieces.block(
-				parent,
-				frame * CFrame.new(0, 1.45, 0),
-				Vector3.new(6.4, 0.2, 2),
-				C.sage,
-				Enum.Material.Grass
-			)
-			for _, x in { -2, 0.2, 2.2 } do
-				Pieces.ball(
-					parent,
-					(frame * CFrame.new(x, 1.9, rng:NextNumber(-0.3, 0.3))).Position,
-					rng:NextNumber(1.2, 1.8),
-					if rng:NextNumber() < 0.5 then T.sageDark else C.sage,
-					Enum.Material.Grass
-				)
-			end
-		end
-	end
-
-	-- a little harbour below the spawn: pier, moored skiff, buoys
+	-- a little harbour at the foot of the spawn ramp: pier and moored skiff
 	do
 		local a = Geo.polar(sb, R + 24, 0)
-		local b = Geo.polar(sb, R + 46, 0)
-		Pieces.pier(parent, a, b, 2.6, "HARBOUR")
+		local b = Geo.polar(sb, R + 44, 0)
+		Pieces.pier(parent, a, b, 2.6, "HARBOUR", SEA_FLOOR)
 		local along = Geo.dir(sb)
-		local berth = Geo.polar(sb, R + 38, 0) + along:Cross(Vector3.new(0, 1, 0)) * 6.5
-		Pieces.skiff(
-			parent,
-			CFrame.lookAt(berth + Vector3.new(0, 0.1, 0), berth + along + Vector3.new(0, 0.1, 0))
-		)
+		local berth = Geo.polar(sb, R + 37, 0) + along:Cross(UP) * 6.5
+		Pieces.skiff(parent, CFrame.lookAt(berth + UP * 0.1, berth + along + UP * 0.1))
 	end
 
-	-- small dressing around the rim: crates, barrels, tufts
-	for _, b in Geo.quietBearings(ctx) do
-		for _ = 1, 2 do
-			local a = b + rng:NextNumber(-12, 12)
-			local p = Geo.polar(a, rng:NextNumber(50, 54), floor)
-			if Geo.isClear(ctx, p, 2, { hub = false }) and (p - spawnPos).Magnitude > 10 then
-				if rng:NextNumber() < 0.5 then
-					Pieces.crate(parent, p, rng:NextNumber(1.8, 2.6), rng:NextNumber(0, 90))
-				else
-					Pieces.barrel(parent, p, if rng:NextNumber() < 0.5 then C.patina else C.copper)
-				end
-			end
-		end
-	end
-	-- shrubs and rocks on the green terrace below the plaza
-	for _ = 1, 26 do
-		local a = rng:NextNumber(0, 360)
-		local p = Geo.polar(a, R + rng:NextNumber(9, 13), floor - 4)
-		if Geo.isClear(ctx, p, 2, { hub = false }) then
-			if rng:NextNumber() < 0.6 then
-				Pieces.shrub(parent, p, rng, if rng:NextNumber() < 0.5 then C.sage else T.sageDark)
-			else
-				Pieces.rocks(parent, p, rng:NextNumber(1.5, 2.8), rng)
-			end
+	-- shrubs on the green terrace below the plaza, in small clumps
+	for k = 1, 8 do
+		local a = sb + 22.5 + k * 40 + rng:NextNumber(-8, 8)
+		local p = Geo.polar(a, R + rng:NextNumber(9, 12), floor - 4)
+		if Geo.isClear(ctx, p, 3, { hub = false }) and not Geo.inExitLane(ctx, p, 8) then
+			Pieces.shrub(parent, p, rng, C.sage)
+			Pieces.tuft(parent, p + Geo.dir(a + 90) * 2.5, rng, T.sageDark)
 		end
 	end
 end
