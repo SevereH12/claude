@@ -25,11 +25,11 @@ local MARGINS = { front = -6, side = -10, back = -6 }
 local function island(ctx: Context, zone: ZoneContext)
 	local floor = zone.slot.floor
 	local m = MARGINS
-	Geo.terrace(ctx, zone, m, 26, -4, -18, Enum.Material.Sand, 10, 1, 0.3)
+	Geo.terrace(ctx, zone, m, 26, -4, -18, Enum.Material.Sand, 10, 1, 0.9)
 	Geo.terrace(ctx, zone, m, 20, 1.5, -16, Enum.Material.Sand, 8, 1, 1)
 	Geo.cliffs(ctx, zone, m, 1.5, floor - 3, { Enum.Material.Rock, Enum.Material.Slate }, 16, 4, 8)
-	Geo.terrace(ctx, zone, m, 2, floor - 2, -16, Enum.Material.Rock, 7, 2)
-	Geo.terrace(ctx, zone, m, 0, floor, -16, Enum.Material.LeafyGrass, 7, 1.5)
+	Geo.terrace(ctx, zone, m, 2, floor - 2, -16, Enum.Material.Rock, 11, 2)
+	Geo.terrace(ctx, zone, m, 0, floor, -16, Enum.Material.LeafyGrass, 11, 1.5)
 	local hw, hd = zone.slot.width / 2, zone.slot.depth / 2
 	Geo.lobe(ctx, zone, hw + 4, -hd * 0.3, 9, 16, floor - 10, Enum.Material.Slate, 2)
 	Geo.lobe(ctx, zone, -hw - 2, hd * 0.4, 10, 18, 1, Enum.Material.Sand, 0.5)
@@ -326,8 +326,78 @@ local function camp(ctx: Context, zone: ZoneContext)
 	end
 end
 
+-- The next field, staked out with survey pegs and caution tape and half
+-- ploughed into stripes, so it reads as "a field is coming" from afar.
+local function survey(ctx: Context, zone: ZoneContext)
+	local folder = zone.folder
+	local floor = zone.slot.floor
+	local x0, x1, z0, z1 = -26, 26, -22, 30
+	-- ploughed stripes, the last one only half done
+	local columns = 7
+	local w = (x1 - x0) / columns
+	for i = 0, columns - 1, 2 do
+		local done = if i >= columns - 1 then 0.45 else 1
+		local za, zb = z0, z0 + (z1 - z0) * done
+		local c = Geo.at(zone, x0 + (i + 0.5) * w, (za + zb) / 2, -2)
+		ctx.terrain:FillBlock(
+			CFrame.new(c) * zone.slot.frame.Rotation,
+			Vector3.new(w, 4, zb - za),
+			Enum.Material.Ground
+		)
+	end
+	-- pegs with orange flags round the edge, joined by caution tape
+	local corners = { { x0, z0 }, { x1, z0 }, { x1, z1 }, { x0, z1 } }
+	local tops: { Vector3 } = {}
+	for k = 1, 4 do
+		local a, b = corners[k], corners[k % 4 + 1]
+		local len = math.sqrt((b[1] - a[1]) ^ 2 + (b[2] - a[2]) ^ 2)
+		local n = math.max(1, math.floor(len / 13 + 0.5))
+		for j = 0, n - 1 do
+			local t = j / n
+			local x, z = a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t
+			local bottom = Geo.at(zone, x, z, 0)
+			Pieces.box(
+				folder,
+				CFrame.new(bottom + Vector3.new(0, 1.4, 0)),
+				Vector3.new(0.35, 2.8, 0.35),
+				C.driftwood,
+				Enum.Material.Wood,
+				false
+			)
+			Pieces.box(
+				folder,
+				Geo.cf(zone, x, z, 2.5, 90) * CFrame.new(0.6, 0, 0),
+				Vector3.new(1.1, 0.7, 0.08),
+				C.beacon:Lerp(C.slicker, 0.45),
+				Enum.Material.Fabric,
+				false
+			)
+			table.insert(tops, bottom + Vector3.new(0, 2.2, 0))
+		end
+	end
+	for i, top in tops do
+		Kit.cable(ctx, top, tops[i % #tops + 1], {
+			Color = C.slicker,
+			Width = 0.2,
+			CurveSize = 0.4,
+		})
+	end
+	-- a peg-and-string sign at the near edge
+	Pieces.signBoard(
+		folder,
+		Geo.cf(zone, -16, z0 - 2, 2.2),
+		7,
+		2,
+		"FIELD SITE",
+		"keep off the pegs",
+		Palette.SIGN,
+		floor
+	)
+end
+
 function Teaser.build(ctx: Context, zone: ZoneContext)
 	island(ctx, zone)
+	survey(ctx, zone)
 	walk(ctx, zone)
 	camp(ctx, zone)
 end

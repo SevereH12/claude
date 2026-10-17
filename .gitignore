@@ -19,3 +19,6 @@ roblox.yml
 Thumbs.db
 *.rbxm
 *.rbxmx
+
+# Python
+__pycache__/

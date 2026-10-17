@@ -4,7 +4,7 @@
 -- each zone is a field station on its own island in a different biome,
 -- reached by a winding plank boardwalk. Modules:
 --   Palette     colours, terrain tints, sign styles
---   Geo         zone-local coordinates and terrain landmasses
+--   Geo         zone-local coordinates, contour-terrace islands, ground queries
 --   Pieces      building pieces (lamps, cottages, domes, balloons, plants...)
 --   Atmosphere  calm and storm lighting
 --   Hub         sea, hub island, lighthouse, sell station, spawn, village

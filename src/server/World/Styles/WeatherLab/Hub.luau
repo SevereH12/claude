@@ -127,6 +127,36 @@ local function clearOfZones(ctx: Context, p: Vector3, margin: number): boolean
 	return true
 end
 
+-- Distance along a ray from the hub centre to the nearest zone (or teaser)
+-- footprint grown by `pad`; math.huge if the ray misses them all.
+local function zoneCap(ctx: Context, dir: Vector3, pad: number): number
+	local all = table.clone(ctx.zones)
+	table.insert(all, ctx.teaser)
+	local best = math.huge
+	for _, zone in all do
+		local slot = zone.slot
+		local o = slot.frame:PointToObjectSpace(Vector3.new(0, slot.floor, 0))
+		local d = slot.frame:VectorToObjectSpace(dir)
+		local tmin, tmax = 0, math.huge
+		for _, axis in { { o.X, d.X, slot.width / 2 + pad }, { o.Z, d.Z, slot.depth / 2 + pad } } do
+			local p0, v, h = axis[1], axis[2], axis[3]
+			if math.abs(v) < 1e-6 then
+				if math.abs(p0) > h then
+					tmin = math.huge
+				end
+			else
+				local t1, t2 = (-h - p0) / v, (h - p0) / v
+				tmin = math.max(tmin, math.min(t1, t2))
+				tmax = math.min(tmax, math.max(t1, t2))
+			end
+		end
+		if tmin <= tmax then
+			best = math.min(best, tmin)
+		end
+	end
+	return best
+end
+
 -- Base: sea and hub island ---------------------------------------------------------
 
 function Hub.buildBase(ctx: Context)
@@ -138,11 +168,38 @@ function Hub.buildBase(ctx: Context)
 	terrain:FillBlock(CFrame.new(0, -10, 0), Vector3.new(2400, 20, 2400), Enum.Material.Water)
 
 	-- hub island: shallows, beach, grass bank, village top, plaza
-	local o = Vector3.zero
-	Geo.disc(ctx, o, R + 22, R + 36, -4, -20, Enum.Material.Sand, 9, 1)
-	Geo.disc(ctx, o, R + 15, R + 31, 2.5, -20, Enum.Material.Sand, 10, 0.8)
-	Geo.disc(ctx, o, R + 9, R + 22, floor - 2.5, -20, Enum.Material.LeafyGrass, 8, 1)
-	Geo.disc(ctx, o, R + 4, R + 14, floor, -20, Enum.Material.Grass, 8, 0)
+	-- every layer follows one shared wobble (contour lines); the coast dips
+	-- into a little bay wherever a boardwalk leaves the island and stops
+	-- short of every zone island, so the boardwalks cross open water
+	local shape = Geo.wave(ctx.rng)
+	local exits = exitAngles(ctx)
+	local function layer(
+		base: number,
+		amp: number,
+		bay: number,
+		pad: number,
+		topY: number,
+		material: Enum.Material,
+		jag: number
+	)
+		local own = Geo.wave(ctx.rng)
+		local function radius(theta: number): number
+			local r = base + amp * (shape(theta) * 0.7 + own(theta) * 0.3)
+			local deg = math.deg(theta)
+			for _, e in exits do
+				local t = math.clamp(Geo.angleDiff(deg, e) / 24, 0, 1)
+				r -= math.max(r - bay, 0) * (1 - t * t * (3 - 2 * t))
+			end
+			local cap = zoneCap(ctx, Geo.dir(deg), pad)
+			return math.min(r, math.max(cap, R + 6))
+		end
+		Geo.fan(ctx, CFrame.new(), radius, 80, topY, -20, material, jag)
+		Geo.register(ctx, "Hub", CFrame.new(), radius, topY)
+	end
+	layer(R + 33, 10, R + 22, 8, -4, Enum.Material.Sand, 1)
+	layer(R + 22, 9, R + 11, 24, 2.5, Enum.Material.Sand, 0.8)
+	layer(R + 13, 5, R + 8, 26, floor - 2.5, Enum.Material.LeafyGrass, 1)
+	layer(R + 8, 4, R + 6, 28, floor, Enum.Material.Grass, 0)
 	-- plaza: brick kerb, cobbles, cream and brick rings round the lighthouse
 	local rings: { { radius: number, material: Enum.Material } } = {
 		{ radius = 47.5, material = Enum.Material.Brick },
@@ -154,6 +211,22 @@ function Hub.buildBase(ctx: Context)
 	}
 	for _, ring in rings do
 		terrain:FillCylinder(CFrame.new(0, floor - 2, 0), 4, ring.radius, ring.material)
+		if ring.radius == 45 then
+			-- a cream sunburst inlaid in the outer ring; the boardwalk spokes
+			-- (every 22.5 degrees from the first zone) run down cobbled rays
+			for k = 1, 15, 2 do
+				local a = ctx.layout.firstAngle + k * 22.5
+				local dir = Geo.dir(a)
+				for _, seg in { { 33, 38.5, 9 }, { 38.5, 44, 12.5 } } do
+					local mid = dir * ((seg[1] + seg[2]) / 2) + Vector3.new(0, floor - 2, 0)
+					terrain:FillBlock(
+						CFrame.lookAt(mid, mid + dir),
+						Vector3.new(seg[3], 4, seg[2] - seg[1]),
+						Enum.Material.Limestone
+					)
+				end
+			end
+		end
 	end
 	-- a few slate outcrops on the shore, away from every boardwalk
 	local corridors = corridorAngles(ctx)
@@ -186,7 +259,7 @@ function Hub.buildBase(ctx: Context)
 		local p = Geo.polar(g.angle, r, 0)
 		if placed < 4 and Geo.angleDiff(g.angle, coveA) > 1 and clearOfZones(ctx, p, 48) then
 			placed += 1
-			Geo.disc(ctx, Vector3.new(p.X, 0, p.Z), 7, 12, 1, -20, Enum.Material.Sand, 5, 0.5)
+			Geo.disc(ctx, Vector3.new(p.X, 0, p.Z), 6, 13, 1, -20, Enum.Material.Sand, 0.5)
 			Geo.stack(
 				ctx,
 				Vector3.new(p.X + 2, -4, p.Z - 1),
@@ -827,6 +900,7 @@ end
 local function shore(ctx: Context, parent: Instance, corridors: { number }, coveA: number)
 	local rng = ctx.rng
 	local R = ctx.layout.hubRadius
+	local floor = ctx.layout.hubFloor
 	local function clear(angle: number): boolean
 		for _, c in corridors do
 			if Geo.angleDiff(angle, c) < 12 then
@@ -841,11 +915,14 @@ local function shore(ctx: Context, parent: Instance, corridors: { number }, cove
 			break
 		end
 		local a = rng:NextNumber(0, 360)
-		if clear(a) then
+		local p = Geo.polar(a, R + rng:NextNumber(14, 30), 0)
+		local h = Geo.heightAt(ctx, "Hub", p)
+		-- on the beach or half in the shallows, never out at sea
+		if clear(a) and h and h < floor - 3 then
 			count += 1
 			Pieces.rocks(
 				parent,
-				Geo.polar(a, R + rng:NextNumber(17, 24), 2),
+				Vector3.new(p.X, math.max(h, -0.6), p.Z),
 				rng:NextNumber(2.5, 4),
 				rng
 			)
@@ -856,9 +933,13 @@ local function shore(ctx: Context, parent: Instance, corridors: { number }, cove
 		local a = i * 15 + 7
 		if buoys < 7 and clear(a) and i % 3 == 0 then
 			buoys += 1
+			local r = R + 40
+			while r < R + 80 and (Geo.heightAt(ctx, "Hub", Geo.polar(a, r, 0)) or -99) > -3 do
+				r += 4
+			end
 			Pieces.buoy(
 				parent,
-				Geo.polar(a, R + 46, 0.2),
+				Geo.polar(a, r, 0.2),
 				if buoys % 2 == 0 then C.beacon else C.slicker
 			)
 		end

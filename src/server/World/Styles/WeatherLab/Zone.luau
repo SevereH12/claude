@@ -266,6 +266,7 @@ function Zone.boardwalk(
 	-- rail posts, ropes, stilts and lanterns at each sample
 	local last: { [number]: Vector3 } = {}
 	local nextLantern = 24
+	local lanternSide = 1
 	for i, s in list do
 		local point = p.at(s)
 		local dir = p.tangent(s)
@@ -276,16 +277,13 @@ function Zone.boardwalk(
 			or (platform and (math.abs(s - platform.from) < 0.2 or math.abs(s - platform.to) < 0.2))
 		then
 			last = {}
-		elseif not endpoint then
+		elseif not endpoint and (i % 2 == 1 or i == #list) then
 			for _, side in { -1, 1 } do
 				local bottom = point + right * side * (width / 2 - 0.3)
 				local ropePoint
-				if
-					s >= nextLantern
-					and side == (if i % 2 == 0 then 1 else -1)
-					and s < p.length - 10
-				then
+				if s >= nextLantern and side == lanternSide and s < p.length - 10 then
 					nextLantern = s + 30
+					lanternSide = -lanternSide
 					Pieces.lampPost(parent, bottom, 5.5, -right * side)
 					ropePoint = bottom + Vector3.new(0, 2.7, 0)
 				else
@@ -407,7 +405,8 @@ function Zone.border(ctx: Context, zone: ZoneContext)
 	local folder = zone.folder
 	type Post = { top: Vector3?, corner: boolean }
 	local posts: { Post } = {}
-	for _, cf in Kit.perimeter(zone, 9, inset) do
+	local spacing = 9 / math.sqrt(Geo.detail(ctx))
+	for _, cf in Kit.perimeter(zone, spacing, inset) do
 		local l = Geo.toLocal(zone, cf.Position)
 		local corner = math.abs(math.abs(l.X) - (hw - inset)) < 0.5
 			and math.abs(math.abs(l.Z) - (hd - inset)) < 0.5

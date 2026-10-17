@@ -63,9 +63,15 @@ Grass, blue-grey Slate) and the sea is a clear teal.
 - Tall thin verticals mark places (the lighthouse, balloon tethers, the
   observatory spire, the radar mast) against long low horizontals (fields,
   boardwalks, beaches).
-- Natural forms are never rectangles or circles: every landmass is a
-  stack of terraces with wobbly outlines that steps down through beach and
-  shallows into the sea, so coastlines read as layered and irregular.
+- Natural forms are never rectangles or circles. Every island is a stack
+  of terraces drawn like contour lines on a map: one smooth random wobble
+  per island (2-8 lobes) is shared by all its layers, so headlands, coves
+  and sand spits line up from the plateau down through beach and shallows.
+  Where the beach swings back to nothing the plateau drops straight into
+  the sea (a cove); where it swings out it becomes a spit or headland.
+  Small coves are bitten into the gate side away from the boardwalk.
+- Terrace edges get a traced band: cream limestone cap rock on the mesa,
+  a broken dune-grass fringe on the beach, mossy stones on the meadow.
 - Three scales of detail: hero landmark per area (seen from spawn),
   mid-size props (huts, lamps, signs, boats, windmills), small details
   (rocks, shells, tufts, flowers, crates, ropes). None of it on the fields.
@@ -102,15 +108,26 @@ Grass, blue-grey Slate) and the sea is a clear teal.
   posts, benches, planters and round trees. All of it sits between the
   boardwalk directions of every possible future zone, so new zones never
   hit a building.
-- **Coast**: terraced grass bank, sand beach, shallows; a brick-walled cove
-  with a jetty and moored boats; marker buoys; sea-stack islets.
+- **Coast**: terraced grass bank, sand beach, shallows, all following one
+  shared wobble. The coast dips into a little bay wherever a boardwalk
+  leaves and stops well short of every zone island, so each boardwalk
+  crosses open water. A brick-walled round harbour with a jetty and moored
+  boats; marker buoys placed out on real open water; sea-stack islets.
+- **Plaza**: brick kerb, cobbles and cream rings round the lighthouse, with
+  eight cream paving plinths under the bunting posts. They are aligned so
+  every boardwalk spoke (current and future, every 22.5 degrees) runs down
+  a cobbled ray and its cream path and zone-coloured dashes stay readable.
 
 ## Zones
 
 Every zone island is generic (any slot position, rotation, size, height):
-- **Ground**: a stack of terraces with wobbly outlines around the
-  footprint (shallows, beach, then theme layers), flat at the floor height
-  across the footprint plus a rim for props.
+- **Ground**: contour-nested terraces around the footprint (shallows,
+  beach, theme cliff bands, the top), flat at the floor height across the
+  footprint plus a rim for props. The top terrace only ever bulges
+  outward, so props on the rim always stand on land. Islands keep out of
+  a circle round the hub, and land above water stays nearer its own
+  footprint than any neighbour's, so islands never merge, however many
+  zones are added.
 - **Catch floor**: flat terrain painted in a bold two-tone pattern with a
   contrasting trim around the field edge. Nothing stands on it.
 - **Border**: posts just outside the footprint edge every ~9 studs, each
@@ -125,16 +142,37 @@ Every zone island is generic (any slot position, rotation, size, height):
 
 | Theme | Field pattern | Hero landmark (outside the field) | Edge dressing |
 | --- | --- | --- | --- |
-| `Beach` | Sand / Salt beach-towel stripes, plank trim | A giant red-and-white striped weather balloon on tethers above a launch deck | dunes with beach grass, beach huts, umbrellas, a tide-watch tower, palms, buoys, a rowboat, rocks, shells, driftwood |
-| `Canyon` | Sandstone / Limestone checkerboard, brick trim | The Anvil Observatory: a white dome with a telescope on a striped rock spire | layered sandstone cliffs and hoodoos, a farm windmill, adobe weather huts, windsocks, cacti, tumbleweeds, rocks |
-| `Default` | Grass / LeafyGrass mowed stripes, salt-white line trim | A radar mast with a big white radome and a red beacon | grass banks, a greenhouse, an instrument shelter, hay bales, round trees, flowers, rocks |
+| `Beach` | Sand / Salt beach-towel stripes, plank trim | A giant red-and-white striped weather balloon on tethers above a launch deck | dune-grass fringe, a lagoon pool, a plank pier out to open water (T-head, lamp, striped tide gauge, tied rowboat, sea spray), beach huts, umbrellas, a tide-watch tower, palms, buoys, rocks, shells, driftwood |
+| `Canyon` | Sandstone / Limestone checkerboard, brick trim | The Anvil Observatory: a white dome with a telescope on a striped rock spire | cream cap-rock lip, layered cliff bands and hoodoos, a wooden water tower, a farm windmill, adobe weather huts, dry-scrub and rock-pavement patches, windsocks, cacti, tumbleweeds, rocks |
+| `Default` | Mowed lawn: Grass / dark LeafyGrass stripes, salt-white line trim, set in rough LeafyGrass meadow so it pops | A radar mast with a big white radome and a red beacon | grass banks with mossy stones on the edge, a greenhouse, an instrument shelter, hay bales, round trees, flowers, rocks |
 
 ## Teaser (Coming Soon)
 
-A misty rock island in the next slot with a survey camp (tent, crates,
-scaffold) and a grey "?" balloon. The boardwalk to it stops half-way:
-bare stilts stick out of the water past a striped barrier, caution rope,
-and a big "COMING SOON" board.
+A misty rock island in the next slot. The next field is already staked
+out on top: survey pegs with orange flags and yellow caution tape, and
+the ground half ploughed into stripes (the last stripe only half done),
+so it reads as "a field is coming" from the hub. A survey camp (tent,
+crates, scaffold with a work light) and a grey "?" balloon stand on it.
+The boardwalk to it stops half-way: bare stilts stick out of the water
+past a striped barrier, caution rope, and a big "COMING SOON" board.
+
+## Stacking and budget
+
+- A new zone needs only its `Config.ZONES` entry (and a theme module for a
+  new look; unknown themes use `Default`). The spiral (135 degrees, +38
+  studs per slot) places it; its island shape, channel to its
+  neighbours, hub bay, boardwalk, border, gate, sign and light trail all
+  follow from the slot.
+- Detail budget: with up to two zones everything is at full detail. Each
+  extra zone thins the scattered small props (palms, umbrellas, tufts,
+  shells, cacti, flowers, rocks, buoys) and widens the border post
+  spacing a little (`Geo.detail`), and boardwalk rail posts stand every
+  ~14 studs. Measured: 2 zones ~1,960 parts, 3 zones ~2,270, 4 zones
+  ~2,470. Seven zones come to ~3,860, so past four zones the 2,500-part
+  budget needs raising (or StreamingEnabled).
+- Props find real ground with `Geo.heightAt` / `Geo.groundAt` (every
+  terrace outline is remembered on the build context) and open water
+  with `Geo.seaward`, so buoys, boats and rocks follow the organic coast.
 
 ## Proposed names (ids unchanged)
 

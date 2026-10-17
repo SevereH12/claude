@@ -29,7 +29,7 @@ local function ground(ctx: Context, zone: ZoneContext)
 	local floor = zone.slot.floor
 	local hw, hd = zone.slot.width / 2, zone.slot.depth / 2
 	local m = MARGINS
-	Geo.terrace(ctx, zone, m, 24, -4, -18, Enum.Material.Sand, 10, 1, 0.3)
+	Geo.terrace(ctx, zone, m, 26, -4, -18, Enum.Material.Sand, 10, 1, 0.9)
 	Geo.terrace(ctx, zone, m, 19, math.min(1.5, floor - 2), -16, Enum.Material.Sand, 8, 1, 1)
 	Geo.cliffs(ctx, zone, m, 1.5, floor, {
 		Enum.Material.Rock,
@@ -37,7 +37,9 @@ local function ground(ctx: Context, zone: ZoneContext)
 		Enum.Material.Limestone,
 		Enum.Material.Sandstone,
 	}, 16, 4, 8)
-	Geo.terrace(ctx, zone, m, 0, floor, -16, Enum.Material.Sandstone, 7, 0)
+	Geo.terrace(ctx, zone, m, 0, floor, -16, Enum.Material.Sandstone, 10, 0)
+	-- a cream cap-rock lip round the plateau edge
+	Geo.rim(ctx, zone, floor, Enum.Material.Limestone, 3, 0.9)
 	-- lower mesa steps breaking out of the outline on two sides
 	if floor >= 12 then
 		local lx, lz = -hw - m.side - 8, hd * 0.25
@@ -47,15 +49,15 @@ local function ground(ctx: Context, zone: ZoneContext)
 		Geo.lobe(ctx, zone, rx, rz, 10, 18, floor - 10, Enum.Material.Rock, 1)
 		Geo.lobe(ctx, zone, rx - 2, rz, 8, 14, floor - 5, Enum.Material.Sandstone, 0.5)
 	end
-	-- desert scrub patches on the plateau rim
-	for _ = 1, 5 do
-		local x, z = Geo.rimPoint(zone, rng, 7, 13, true)
+	-- dry scrub and bare rock pavement patches on the plateau rim
+	for i = 1, 10 do
+		local x, z = Geo.rimPoint(ctx, zone, 6, 15, true)
 		local p = Geo.at(zone, x, z, 0)
 		ctx.terrain:FillCylinder(
 			CFrame.new(p.X, floor - 1, p.Z),
-			2.2,
-			rng:NextNumber(3, 5),
-			Enum.Material.Ground
+			2,
+			rng:NextNumber(3.5, 7),
+			if i % 3 == 0 then Enum.Material.Limestone else Enum.Material.Ground
 		)
 	end
 
@@ -94,7 +96,7 @@ local function ground(ctx: Context, zone: ZoneContext)
 	)
 	-- boulders on the plateau rim
 	for _ = 1, 5 do
-		local x, z = Geo.rimPoint(zone, rng, 6, 12, true)
+		local x, z = Geo.rimPoint(ctx, zone, 6, 12, true)
 		ctx.terrain:FillBall(
 			Geo.at(zone, x, z, -1),
 			rng:NextNumber(2.5, 4),
@@ -349,6 +351,80 @@ local function adobe(parent: Instance, cframe: CFrame, w: number, d: number, h: 
 	)
 end
 
+-- Wooden water tower on four splayed legs: a western silhouette.
+local function waterTower(parent: Instance, bottom: Vector3)
+	local h = 11
+	local top = bottom + Vector3.new(0, h, 0)
+	for _, c in { { 1, 1 }, { 1, -1 }, { -1, -1 }, { -1, 1 } } do
+		Pieces.beam(
+			parent,
+			bottom + Vector3.new(c[1] * 3.4, 0, c[2] * 3.4),
+			top + Vector3.new(c[1] * 2.2, 0, c[2] * 2.2),
+			0.6,
+			C.piling,
+			Enum.Material.Wood
+		)
+	end
+	for _, y in { 4, 8 } do
+		local s = 3.4 - y / h * 1.2
+		Pieces.beam(
+			parent,
+			bottom + Vector3.new(-s, y, s),
+			bottom + Vector3.new(s, y, -s),
+			0.35,
+			C.piling,
+			Enum.Material.Wood
+		)
+	end
+	Pieces.cyl(parent, top, 0.6, 7.4, C.piling, Enum.Material.WoodPlanks)
+	Pieces.cyl(
+		parent,
+		top + Vector3.new(0, 0.6, 0),
+		5.4,
+		6.4,
+		C.driftwood,
+		Enum.Material.WoodPlanks
+	)
+	for _, y in { 1.6, 4.4 } do
+		Pieces.cyl(parent, top + Vector3.new(0, y, 0), 0.35, 6.6, C.ink, Enum.Material.Metal, false)
+	end
+	Pieces.cyl(
+		parent,
+		top + Vector3.new(0, 6, 0),
+		0.8,
+		7,
+		C.beacon,
+		Enum.Material.WoodPlanks,
+		false
+	)
+	Pieces.ball(
+		parent,
+		top + Vector3.new(0, 6.4, 0),
+		2.4,
+		C.beacon,
+		Enum.Material.WoodPlanks,
+		false
+	)
+	Pieces.rod(
+		parent,
+		top + Vector3.new(3.3, 3, 0),
+		top + Vector3.new(4.6, -1.5, 0),
+		0.5,
+		C.harbor,
+		Enum.Material.Metal
+	)
+	for _, z in { -0.5, 0.5 } do
+		Pieces.rod(
+			parent,
+			bottom + Vector3.new(-3.6, 0, z),
+			top + Vector3.new(-3.3, 0.6, z),
+			0.18,
+			C.harbor,
+			Enum.Material.Metal
+		)
+	end
+end
+
 local function dress(ctx: Context, zone: ZoneContext)
 	local rng = ctx.rng
 	local folder = zone.folder
@@ -376,6 +452,10 @@ local function dress(ctx: Context, zone: ZoneContext)
 		Pieces.crate(folder, cf * CFrame.new(h[3] / 2 + 1.4, 0, -1), 1.8)
 		Pieces.barrel(folder, (cf * CFrame.new(-h[3] / 2 - 1.2, 0, -1.5)).Position, C.beacon)
 	end
+	local tx, tz = -hw * 0.62, hd + 13
+	Geo.claim(spots, tx, tz, 6)
+	waterTower(folder, Geo.at(zone, tx, tz))
+
 	local lampX, lampZ = -hw - 6, hd * 0.1
 	Pieces.lampPost(folder, Geo.at(zone, lampX, lampZ), 6, zone.slot.frame.RightVector)
 
@@ -397,14 +477,14 @@ local function dress(ctx: Context, zone: ZoneContext)
 	Pieces.anemometer(folder, foot + Vector3.new(0, 5, 0))
 
 	-- cacti, tumbleweeds, desert flowers and rocks around the rim
-	for _ = 1, 10 do
-		local x, z = Geo.findSpot(zone, rng, spots, 4, 14, 1.8, true)
+	for _ = 1, Geo.count(ctx, 14) do
+		local x, z = Geo.findSpot(ctx, zone, spots, 4, 14, 1.8, true)
 		if x and z then
 			Pieces.cactus(folder, Geo.at(zone, x, z, -0.3), rng:NextNumber(4, 7.5), rng)
 		end
 	end
-	for _ = 1, 5 do
-		local x, z = Geo.findSpot(zone, rng, spots, 4, 14, 1.2, false)
+	for _ = 1, Geo.count(ctx, 5) do
+		local x, z = Geo.findSpot(ctx, zone, spots, 4, 14, 1.2, false)
 		if x and z then
 			local weed = Pieces.ball(
 				folder,
@@ -417,14 +497,14 @@ local function dress(ctx: Context, zone: ZoneContext)
 			weed.Transparency = 0.15
 		end
 	end
-	for _ = 1, 8 do
-		local x, z = Geo.findSpot(zone, rng, spots, 3, 12, 1.2, false)
+	for _ = 1, Geo.count(ctx, 8) do
+		local x, z = Geo.findSpot(ctx, zone, spots, 3, 12, 1.2, false)
 		if x and z then
 			Pieces.flowers(folder, Geo.at(zone, x, z), rng)
 		end
 	end
-	for _ = 1, 7 do
-		local x, z = Geo.findSpot(zone, rng, spots, 4, 15, 2.5, false)
+	for _ = 1, Geo.count(ctx, 7) do
+		local x, z = Geo.findSpot(ctx, zone, spots, 4, 15, 2.5, false)
 		if x and z then
 			Pieces.rocks(
 				folder,

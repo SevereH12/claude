@@ -27,11 +27,14 @@ local function ground(ctx: Context, zone: ZoneContext)
 	local floor = zone.slot.floor
 	local hw, hd = zone.slot.width / 2, zone.slot.depth / 2
 	local m = MARGINS
-	Geo.terrace(ctx, zone, m, 19, -4, -18, Enum.Material.Sand, 10, 1, 0.3)
+	Geo.terrace(ctx, zone, m, 22, -4, -18, Enum.Material.Sand, 10, 1, 0.9)
 	Geo.terrace(ctx, zone, m, 14, math.min(1.5, floor - 2), -16, Enum.Material.Sand, 8, 1, 1)
 	Geo.cliffs(ctx, zone, m, 1.5, floor - 2, { Enum.Material.Rock, Enum.Material.Slate }, 12, 5, 8)
-	Geo.terrace(ctx, zone, m, 4, floor - 1.5, -16, Enum.Material.LeafyGrass, 7, 1)
-	Geo.terrace(ctx, zone, m, 0, floor, -16, Enum.Material.Grass, 7, 0)
+	Geo.terrace(ctx, zone, m, 4, floor - 1.5, -16, Enum.Material.Grass, 7, 1)
+	-- rough meadow round the mowed field, so the bright field pops
+	Geo.terrace(ctx, zone, m, 0, floor, -16, Enum.Material.LeafyGrass, 8, 0)
+	-- mossy stones breaking through along the bank edge
+	Geo.rim(ctx, zone, floor, Enum.Material.Slate, 2.6, 0.4)
 	-- a grassy hill on one back corner and a rocky point on the other side
 	Geo.lobe(
 		ctx,
@@ -273,8 +276,8 @@ local function dress(ctx: Context, zone: ZoneContext)
 	}, rng)
 
 	-- hay bales
-	for i = 1, 4 do
-		local x, z = Geo.findSpot(zone, rng, spots, 4, 12, 2, true)
+	for i = 1, Geo.count(ctx, 4) do
+		local x, z = Geo.findSpot(ctx, zone, spots, 4, 12, 2, true)
 		if x and z then
 			local cf = Geo.cf(zone, x, z, 1.3, rng:NextNumber(0, 180))
 			Kit.decor({
@@ -287,26 +290,26 @@ local function dress(ctx: Context, zone: ZoneContext)
 			})
 		end
 	end
-	for _ = 1, 7 do
-		local x, z = Geo.findSpot(zone, rng, spots, 6, 16, 3, true)
+	for _ = 1, Geo.count(ctx, 7) do
+		local x, z = Geo.findSpot(ctx, zone, spots, 6, 16, 3, true)
 		if x and z then
 			Pieces.tree(folder, Geo.at(zone, x, z, -0.3), rng:NextNumber(0.9, 1.3), rng)
 		end
 	end
-	for _ = 1, 6 do
-		local x, z = Geo.findSpot(zone, rng, spots, 3, 12, 1.6, false)
+	for _ = 1, Geo.count(ctx, 6) do
+		local x, z = Geo.findSpot(ctx, zone, spots, 3, 12, 1.6, false)
 		if x and z then
 			Pieces.bush(folder, Geo.at(zone, x, z), rng:NextNumber(1.8, 2.6), rng)
 		end
 	end
-	for _ = 1, 10 do
-		local x, z = Geo.findSpot(zone, rng, spots, 3, 10, 1.2, false)
+	for _ = 1, Geo.count(ctx, 10) do
+		local x, z = Geo.findSpot(ctx, zone, spots, 3, 10, 1.2, false)
 		if x and z then
 			Pieces.flowers(folder, Geo.at(zone, x, z), rng)
 		end
 	end
-	for _ = 1, 5 do
-		local x, z = Geo.findSpot(zone, rng, spots, 5, 16, 2, false)
+	for _ = 1, Geo.count(ctx, 5) do
+		local x, z = Geo.findSpot(ctx, zone, spots, 5, 16, 2, false)
 		if x and z then
 			Pieces.rocks(folder, Geo.at(zone, x, z), rng:NextNumber(2, 3.2), rng)
 		end
@@ -320,7 +323,7 @@ local theme: Theme = {
 		accent = Enum.Material.LeafyGrass,
 		trim = Enum.Material.Salt,
 		pattern = "along",
-		cell = 10,
+		cell = 12,
 	},
 	border = {
 		postColor = C.sailcloth,

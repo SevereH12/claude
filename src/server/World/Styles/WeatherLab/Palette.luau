@@ -44,7 +44,7 @@ Palette.terrain = {
 	{ material = Enum.Material.Rock, color = Color3.fromRGB(118, 124, 136) },
 	{ material = Enum.Material.Slate, color = Color3.fromRGB(86, 100, 122) },
 	{ material = Enum.Material.Grass, color = Color3.fromRGB(112, 168, 82) },
-	{ material = Enum.Material.LeafyGrass, color = Color3.fromRGB(88, 146, 70) },
+	{ material = Enum.Material.LeafyGrass, color = Color3.fromRGB(74, 128, 60) },
 	{ material = Enum.Material.Cobblestone, color = Color3.fromRGB(164, 154, 140) },
 	{ material = Enum.Material.Brick, color = Color3.fromRGB(176, 90, 70) },
 	{ material = Enum.Material.WoodPlanks, color = Color3.fromRGB(176, 130, 88) },
