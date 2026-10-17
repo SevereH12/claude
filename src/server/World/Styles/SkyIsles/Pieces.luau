@@ -1300,11 +1300,29 @@ function Pieces.landmass(
 		local t = ((i + rng:NextNumber(-0.45, 0.45)) / steps * perimeter) % perimeter
 		local localPoint, normal = rectPoint(t, hw, front, back, corner)
 		-- mostly small lobes with the odd big bulge: a natural, uneven coast
-		local big = rng:NextNumber() < 0.18
-		local radius = lobe * (if big then rng:NextNumber(1.25, 1.7) else rng:NextNumber(0.4, 0.9))
+		-- a few big bulges, many small nubs and some straight cliff facets
+		local roll = rng:NextNumber()
+		local big = roll < 0.1
+		local radius = lobe
+			* (if big then rng:NextNumber(1.6, 2) elseif roll < 0.55 then rng:NextNumber(0.3, 0.5) else rng:NextNumber(0.55, 0.9))
 		local push = lobe * (if big then rng:NextNumber(0, reach) else rng:NextNumber(-0.5, reach))
 		local world = frame:PointToWorldSpace(localPoint + normal * push)
-		if not options.accept or options.accept(world, radius) then
+		local facet = roll > 0.72
+		if facet then
+			-- a flat cliff face turned a little off the coast line
+			local length = lobe * rng:NextNumber(1.2, 2.2)
+			local deep = lobe * rng:NextNumber(0.5, 0.8)
+			if not options.accept or options.accept(world, length * 0.6) then
+				local h = thickness * rng:NextNumber(0.7, 1)
+				local n = frame:VectorToWorldSpace(normal)
+				local at = Vector3.new(world.X, topY - h / 2, world.Z)
+				terrain:FillBlock(
+					CFrame.lookAt(at, at + n) * CFrame.Angles(0, math.rad(rng:NextNumber(-22, 22)), 0),
+					Vector3.new(length, h, deep),
+					material
+				)
+			end
+		elseif not options.accept or options.accept(world, radius) then
 			local h = thickness * rng:NextNumber(0.6, 1)
 			terrain:FillCylinder(CFrame.new(world.X, topY - h / 2, world.Z), h, radius, material)
 		end
@@ -1326,6 +1344,85 @@ function Pieces.headland(
 	Kit.blob(ctx, ground, radius * 1.15, floor - 4, 10, shelf, 6)
 	ctx.terrain:FillCylinder(CFrame.new(center.X, floor - 5, center.Z), 10, radius * 0.8, top)
 	Kit.blob(ctx, ground, radius, floor, 8, top, 6)
+end
+
+-- A tilted rock slab: a rotated terrain block standing on the ground at
+-- `center` (only X/Z used), from `bottom` up to about `top`, turned `yaw`
+-- degrees off `outward` and leaning `tilt` degrees away along `outward`
+-- (so the top moves away from whatever `outward` points from). The slab's
+-- horizontal reach from `center` stays within halfWidth/halfDepth.
+function Pieces.slabRock(
+	ctx: Context,
+	center: Vector3,
+	outward: Vector3,
+	halfWidth: number,
+	halfDepth: number,
+	top: number,
+	bottom: number,
+	tilt: number,
+	yaw: number,
+	material: Enum.Material
+)
+	local out = flat(outward).Unit
+	local height = top - bottom
+	local middle = Vector3.new(center.X, (top + bottom) / 2, center.Z)
+	local frame = CFrame.lookAt(middle, middle + out)
+		* CFrame.Angles(0, math.rad(yaw), 0)
+		* CFrame.Angles(-math.rad(tilt), 0, 0)
+	ctx.terrain:FillBlock(frame, Vector3.new(halfWidth * 2, height, halfDepth * 2), material)
+end
+
+-- A sea-stack spire: a chain of terrain balls shrinking upward, rooted
+-- below `foot`, with a slight lean.
+function Pieces.spire(
+	ctx: Context,
+	foot: Vector3,
+	height: number,
+	radius: number,
+	lean: Vector3,
+	material: Enum.Material
+)
+	local r = radius
+	local y = 0
+	local drift = flat(lean)
+	ctx.terrain:FillCylinder(CFrame.new(foot - UP * 6), 14, radius * 1.15, material)
+	while y < height and r >= 3.5 do
+		local t = y / height
+		ctx.terrain:FillBall(foot + UP * y + drift * (t * t * 4), r, material)
+		y += r * 0.9
+		r = math.max(radius * (1 - t * 0.55), 3.5)
+		if y + r > height then
+			break
+		end
+	end
+end
+
+-- A natural arch: a chain of terrain balls along a half ellipse from a to
+-- b (ground points) rising `rise` studs, with legs flaring at the base.
+function Pieces.ballArch(
+	ctx: Context,
+	a: Vector3,
+	b: Vector3,
+	floor: number,
+	rise: number,
+	material: Enum.Material,
+	band: Enum.Material?
+)
+	local count = 11
+	for i = 0, count - 1 do
+		local t = i / (count - 1)
+		local angle = math.pi * t
+		local p = a:Lerp(b, (1 - math.cos(angle)) / 2)
+		local y = floor + math.sin(angle) * rise
+		local edge = math.abs(t - 0.5) * 2
+		local r = 3.5 + edge
+		local mat = if band and i % 3 == 1 then band else material
+		ctx.terrain:FillBall(Vector3.new(p.X, y, p.Z), r, mat)
+	end
+	for _, leg in { a, b } do
+		ctx.terrain:FillBall(Vector3.new(leg.X, floor - 1, leg.Z), 6.5, material)
+		ctx.terrain:FillBall(Vector3.new(leg.X, floor + 3, leg.Z), 5, material)
+	end
 end
 
 -- Tapering rocky underside below a rectangle of half extents hw x hd
@@ -1370,25 +1467,32 @@ function Pieces.underside(
 			end
 		end
 	end
-	-- hanging spikes
+	-- two or three off-centre hanging cones: chains of terrain balls that
+	-- shrink downward, finished with a sharp rock tip part
 	local tipY = topY - depth
-	for _, center in bottomCenters do
-		local radius = rng:NextNumber(3, 5)
-		local y = tipY + step * 1.5
-		for _ = 1, 4 do
-			local length = rng:NextNumber(5, 8)
-			ctx.terrain:FillCylinder(
-				CFrame.new(center.X, y - length / 2, center.Z),
-				length,
-				radius,
-				materials[#materials]
-			)
-			y -= length * 0.8
-			radius *= 0.68
-			if radius < 1.6 then
-				break
-			end
+	local cones = math.min(#bottomCenters, if hw * hd > 2500 then 3 else 2)
+	for k = 1, cones do
+		local center = bottomCenters[k]
+		local radius = rng:NextNumber(7, 10)
+		local y = tipY + step * 1.2
+		local drift = Vector3.new(rng:NextNumber(-1, 1), 0, rng:NextNumber(-1, 1))
+		local material = materials[#materials]
+		local p = Vector3.new(center.X, y, center.Z)
+		while radius >= 4 do
+			ctx.terrain:FillBall(p, radius, material)
+			p += drift * 0.8 - UP * radius * 0.95
+			radius *= 0.8
 		end
+		local folder = ctx.folders.base
+		local tipHeight = radius * 4
+		Pieces.wedge(
+			folder,
+			CFrame.new(p + UP * (radius * 0.6 - tipHeight / 2))
+				* CFrame.Angles(math.pi, rng:NextNumber(0, math.pi), 0),
+			Vector3.new(radius * 2.2, tipHeight, radius * 2.2),
+			Palette.TERRAIN[material] or C.skystoneDark,
+			material
+		)
 	end
 end
 

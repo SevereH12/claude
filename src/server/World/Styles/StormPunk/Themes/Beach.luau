@@ -218,13 +218,7 @@ local function lighthouse(parent: Instance, base: Vector3, toward: Vector3): Vec
 	Pieces.block(parent, f * CFrame.new(0, 4.5, -4.3), Vector3.new(2.4, 4, 0.8), C.soot, M.metal)
 	for _, wy in { 13, 27 } do
 		local r = 4.5 - (wy / 7) * 0.3
-		Pieces.block(
-			parent,
-			f * CFrame.new(0, wy, r),
-			Vector3.new(1.4, 2.2, 0.5),
-			L.warm,
-			M.neon
-		)
+		Pieces.block(parent, f * CFrame.new(0, wy, r), Vector3.new(1.4, 2.2, 0.5), L.warm, M.neon)
 	end
 	-- gallery and parapet
 	Pieces.column(parent, base + UP * y, 1, diameter + 3.6, C.iron)
@@ -246,13 +240,39 @@ end
 -- Striped bathing hut (8 parts): plinth, ceramic body with two stripes,
 -- gable roof, door and a finial.
 local function bathingHut(parent: Instance, frame: CFrame, stripe: Color3)
-	Pieces.block(parent, frame * CFrame.new(0, 0.4, 0), Vector3.new(5, 0.8, 5.4), C.timber, M.planks, true)
-	Pieces.block(parent, frame * CFrame.new(0, 3.1, 0), Vector3.new(4, 4.6, 4.4), C.ceramic, M.planks, true)
+	Pieces.block(
+		parent,
+		frame * CFrame.new(0, 0.4, 0),
+		Vector3.new(5, 0.8, 5.4),
+		C.timber,
+		M.planks,
+		true
+	)
+	Pieces.block(
+		parent,
+		frame * CFrame.new(0, 3.1, 0),
+		Vector3.new(4, 4.6, 4.4),
+		C.ceramic,
+		M.planks,
+		true
+	)
 	for _, x in { -1.1, 1.1 } do
-		Pieces.block(parent, frame * CFrame.new(x, 3.1, 0), Vector3.new(0.8, 4.62, 4.42), stripe, M.planks)
+		Pieces.block(
+			parent,
+			frame * CFrame.new(x, 3.1, 0),
+			Vector3.new(0.8, 4.62, 4.42),
+			stripe,
+			M.planks
+		)
 	end
 	Pieces.gable(parent, frame * CFrame.new(0, 5.4, 0), 3.4, 3.8, 1.8, C.copper, M.metal)
-	Pieces.block(parent, frame * CFrame.new(0, 2.4, -2.25), Vector3.new(1.6, 3.2, 0.2), T.copperDark, M.wood)
+	Pieces.block(
+		parent,
+		frame * CFrame.new(0, 2.4, -2.25),
+		Vector3.new(1.6, 3.2, 0.2),
+		T.copperDark,
+		M.wood
+	)
 	Pieces.ball(parent, (frame * CFrame.new(0, 7.6, 0)).Position, 0.7, C.brass)
 end
 
@@ -271,17 +291,9 @@ function Beach.dress(ctx: Context, zone: ZoneContext)
 	local rng = Geo.rng(ctx, key .. "-dress")
 	local layers = Beach.layers(zone)
 	local center = slot.frame.Position
+	local place = Zone.placer(ctx, zone, layers)
+	local V2 = Vector2.new
 
-	-- ground height at a slot-frame spot, if it is dry, settled land clear
-	-- of fields and decks
-	local function ground(x: number, z: number, clearance: number): Vector3?
-		local p = Geo.slotPoint(zone, x, z)
-		local top = Land.surfaceAt(layers, p, clearance)
-		if top and top > 0.5 and Geo.isClear(ctx, p, clearance) then
-			return Vector3.new(p.X, top, p.Z)
-		end
-		return nil
-	end
 	local function isWater(p: Vector3): boolean
 		return Land.surfaceAt(layers, p, -3) == nil and Land.surfaceAt(layers, p, 0) == nil
 	end
@@ -290,46 +302,41 @@ function Beach.dress(ctx: Context, zone: ZoneContext)
 	local hero = heroByZone[key]
 	if hero then
 		local p = Geo.slotPoint(zone, hero.x, hero.z)
-		local lantern =
-			lighthouse(parent, Vector3.new(p.X, math.max(F, 2) + hero.h, p.Z), center)
-		local corner = Geo.slotPoint(
-			zone,
-			math.sign(hero.x) * hw,
-			hd,
-			Zone.POST_HEIGHT - 1.35
-		)
+		local lantern = lighthouse(parent, Vector3.new(p.X, math.max(F, 2) + hero.h, p.Z), center)
+		local corner = Geo.slotPoint(zone, math.sign(hero.x) * hw, hd, Zone.POST_HEIGHT - 1.35)
 		Pieces.liveCable(ctx, lantern + UP * 1, corner, zone.color, 0.4, 6)
 	end
 
-	-- vignette: bathing huts with a lamp, crates and dune grass, on the
-	-- side away from the next zone
-	local hutX = hw + SIDE * 0.55
-	for i, z in { -hd * 0.2, hd * 0.05 } do
-		local p = ground(hutX, z, 3)
-		if p then
-			local frame = Geo.facing(p, Geo.slotPoint(zone, 0, z, p.Y - F))
-				* CFrame.Angles(0, math.rad(rng:NextNumber(-8, 8)), 0)
-			bathingHut(parent, frame, if i == 1 then C.patina else T.copperDark)
-			if i == 1 then
-				local lampAt = frame * CFrame.new(3.8, 0, -1.5)
-				Pieces.lamp(parent, lampAt.Position, 7, L.warm, 18, true)
-				Pieces.crate(parent, (frame * CFrame.new(-3.6, 0, -1)).Position, 2, 15, nil, true)
-				Pieces.tuft(parent, (frame * CFrame.new(-3, 0, 2.5)).Position, rng, C.sage)
-			else
-				Pieces.barrel(parent, (frame * CFrame.new(3.4, 0, 0.5)).Position, C.patina)
-				Pieces.tuft(parent, (frame * CFrame.new(2.6, 0, -2.6)).Position, rng, T.sageDark)
-			end
+	-- vignette: two bathing huts with a lamp, a crate, a barrel and dune
+	-- grass, preferably on the side away from the next zone
+	local huts = place.find({
+		V2(hw + SIDE * 0.6, -hd * 0.1),
+		V2(hw + SIDE * 0.6, hd * 0.3),
+		V2(hw * 0.4, hd + 10),
+		V2(-hw - SIDE * 0.6, hd * 0.2),
+	}, 9)
+	if huts then
+		local face = Vector3.new(center.X, huts.Y, center.Z)
+		local frame = Geo.facing(huts, face)
+		local side = frame.RightVector
+		for i, s in { -1, 1 } do
+			local at = huts + side * (s * 3.4)
+			local hut = Geo.facing(at, face) * CFrame.Angles(0, math.rad(rng:NextNumber(-8, 8)), 0)
+			bathingHut(parent, hut, if i == 1 then C.patina else T.copperDark)
 		end
+		Pieces.lamp(parent, (frame * CFrame.new(0, 0, -4)).Position, 7, L.warm, 18, true)
+		Pieces.crate(parent, (frame * CFrame.new(-7.6, 0, -1)).Position, 2, 15, nil, true)
+		Pieces.barrel(parent, (frame * CFrame.new(7.4, 0, 0.5)).Position, C.patina)
+		Pieces.tuft(parent, (frame * CFrame.new(-7, 0, 2.6)).Position, rng, C.sage)
+		Pieces.tuft(parent, (frame * CFrame.new(6.6, 0, -2.4)).Position, rng, T.sageDark)
 	end
 
 	-- vignette: the pier out from the back beach with a moored skiff; it
 	-- starts at the water's edge wherever the coast happens to be
-	do
-		local x = -hw * 0.55
-		local z0 = hd + 6
+	for _, x in { -hw * 0.55, hw * 0.1, -hw * 0.9 } do
 		local startZ: number? = nil
 		for k = 0, 30 do
-			local z = z0 + k * 2
+			local z = hd + 6 + k * 2
 			if isWater(Geo.slotPoint(zone, x, z)) then
 				startZ = z - 6
 				break
@@ -339,41 +346,57 @@ function Beach.dress(ctx: Context, zone: ZoneContext)
 			local a = Geo.slotPoint(zone, x, startZ :: number)
 			local b = Geo.slotPoint(zone, x, (startZ :: number) + 26)
 			if Geo.isClear(ctx, b, 6) and isWater(b) then
-				Pieces.pier(parent, Vector3.new(a.X, 0, a.Z), Vector3.new(b.X, 0, b.Z), 2.6, "PIER", SEA_FLOOR)
+				Pieces.pier(
+					parent,
+					Vector3.new(a.X, 0, a.Z),
+					Vector3.new(b.X, 0, b.Z),
+					2.6,
+					"PIER",
+					SEA_FLOOR
+				)
 				local along = (b - a).Unit
-				local side = along:Cross(UP)
-				local berth = Vector3.new(b.X, 0.1, b.Z) - along * 9 + side * 6.5
+				local berth = Vector3.new(b.X, 0.1, b.Z) - along * 9 + along:Cross(UP) * 6.5
 				if isWater(berth) then
 					Pieces.skiff(parent, CFrame.lookAt(berth, berth + along))
 				end
+				break
 			end
 		end
 	end
 
 	-- vignette: a driftwood beach with a stranded buoy and rocks
-	do
-		local p = ground(hw * 0.35, hd + BACK * 0.55, 2)
-		if p then
-			for k = 0, 1 do
-				local yaw = rng:NextNumber(0, math.pi)
-				local half = Vector3.new(math.cos(yaw), 0, math.sin(yaw)) * rng:NextNumber(2.5, 3.5)
-				local at = p + Vector3.new(k * 2.4, 0, k * 1.6)
-				Pieces.pipe(parent, at - half + UP * 0.4, at + half + UP * 0.6, 1.1 - k * 0.3, T.timberPale, M.wood)
-			end
-			Pieces.rocks(parent, p + Vector3.new(-3, 0, 2), 2.4, rng, T.rockDark)
-			buoy(parent, p + Vector3.new(3.5, 1, -2.5), C.copper)
-			Pieces.tuft(parent, p + Vector3.new(-1, 0, -3), rng, C.sage)
+	local drift = place.find({
+		V2(hw * 0.3, hd + BACK * 0.55),
+		V2(-hw * 0.2, hd + BACK * 0.5),
+		V2(-hw - SIDE * 0.5, hd * 0.6),
+	}, 6, nil, 3)
+	if drift then
+		for k = 0, 1 do
+			local yaw = rng:NextNumber(0, math.pi)
+			local half = Vector3.new(math.cos(yaw), 0, math.sin(yaw)) * rng:NextNumber(2.5, 3.5)
+			local at = drift + Vector3.new(k * 2.4, 0, k * 1.6)
+			Pieces.pipe(
+				parent,
+				at - half + UP * 0.4,
+				at + half + UP * 0.6,
+				1.1 - k * 0.3,
+				T.timberPale,
+				M.wood
+			)
 		end
+		Pieces.rocks(parent, drift + Vector3.new(-3, 0, 2), 2.4, rng, T.rockDark)
+		buoy(parent, drift + Vector3.new(3.5, 1, -2.5), C.copper)
+		Pieces.tuft(parent, drift + Vector3.new(-1, 0, -3), rng, C.sage)
 	end
 
 	-- buoys bobbing offshore (only on open water)
 	local placed = 0
-	for _ = 1, 12 do
+	for _ = 1, 14 do
 		if placed >= 3 then
 			break
 		end
 		local x = rng:NextNumber(-0.6, 0.6) * slot.width
-		local z = hd + BACK + rng:NextNumber(12, 26)
+		local z = hd + BACK + rng:NextNumber(10, 26)
 		local p = Geo.slotPoint(zone, x, z)
 		p = Vector3.new(p.X, 0.4, p.Z)
 		if isWater(p) and Geo.isClear(ctx, p, 3) then
@@ -383,16 +406,29 @@ function Beach.dress(ctx: Context, zone: ZoneContext)
 	end
 
 	-- palm groves leaning out to sea: two clumps on the back beach
-	for _, g in { { x = hw * 0.7, z = hd + 12 }, { x = -hw * 0.15, z = hd + 15 } } do
-		for k = 0, 1 do
-			local p = ground(g.x + k * 5, g.z + k * 3.5, 3)
-			if p then
-				local out = Vector3.new(p.X - center.X, 0, p.Z - center.Z).Unit
-				Pieces.palm(parent, p, out, rng)
-				if k == 0 then
-					Pieces.tuft(parent, p + out * 2.5, rng, C.sage)
-				end
+	for _ = 1, 2 do
+		local grove = place.find({
+			V2(hw * 0.7, hd + 12),
+			V2(-hw * 0.15, hd + 14),
+			V2(-hw * 0.75, hd + 11),
+			V2(hw + SIDE * 0.6, hd * 0.5),
+			V2(-hw - SIDE * 0.6, -hd * 0.3),
+		}, 6)
+		if grove then
+			local out = Vector3.new(grove.X - center.X, 0, grove.Z - center.Z).Unit
+			local side = out:Cross(UP)
+			Pieces.palm(parent, grove, out, rng)
+			local second = grove + side * 4.5 + out * 2
+			local top = Land.surfaceAt(layers, second, 1.5)
+			if top and math.abs(top - grove.Y) < 1 and Geo.isClear(ctx, second, 2) then
+				Pieces.palm(
+					parent,
+					Vector3.new(second.X, top, second.Z),
+					(out + side * 0.4).Unit,
+					rng
+				)
 			end
+			Pieces.tuft(parent, grove - side * 2.5, rng, C.sage)
 		end
 	end
 end

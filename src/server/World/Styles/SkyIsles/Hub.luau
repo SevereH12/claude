@@ -531,8 +531,16 @@ local function buildSpawn(ctx: Context, spawnAngle: number): Vector3
 	local rng = ctx.rng
 	local dir = direction(spawnAngle)
 	local position = dir * SPAWN_RADIUS + UP * floor
-	local forward = -dir
+	-- face between the altar and the first zone's gateway, so the first
+	-- frame shows the SELL pad on one side and the yellow trail, the
+	-- gateway and the first field below on the other
+	local firstGate = ctx.zones[1].slot.hubExit.Position * Vector3.new(1, 0, 1)
+	local toAltar = (-position * Vector3.new(1, 0, 1)).Unit
+	local toGate = ((firstGate - position) * Vector3.new(1, 0, 1)).Unit
+	local forward = (toAltar + toGate).Unit
 	local right = forward:Cross(UP)
+	-- the side of the spawn away from the first gate
+	local quiet = if toGate:Dot(right) > 0 then -right else right
 
 	Pieces.cylinder(
 		hub,
@@ -558,21 +566,23 @@ local function buildSpawn(ctx: Context, spawnAngle: number): Vector3
 	})
 	for k = 0, 3 do
 		local corner = position + direction(spawnAngle + math.rad(45 + k * 90)) * 8.6
-		local main = Pieces.cluster(hub, rng, corner, 3.4, C.cyan, 2)
-		if k == 0 then
-			Pieces.light(main, C.cyan, 18, 1)
+		if Pieces.offLanes(ctx, corner, 1.5, LANE_HALF) then
+			local main = Pieces.cluster(hub, rng, corner, 3.4, C.cyan, 2)
+			if k == 2 then
+				Pieces.light(main, C.cyan, 18, 1)
+			end
 		end
 	end
 
-	-- welcome board behind the spawn, facing the plaza
-	local boardFoot = position + dir * 10
-	local boardFrame = CFrame.lookAt(boardFoot + UP * 7.5, boardFoot + UP * 7.5 - dir)
+	-- welcome board off to the quiet side, turned to face the spawn
+	local boardFoot = position + (quiet * 0.8 - forward * 0.25).Unit * 16
+	local boardFrame = CFrame.lookAt(boardFoot + UP * 6.5, position + UP * 6.5)
 	for side = -1, 1, 2 do
 		local post = (boardFrame * CFrame.new(side * 7.4, 0, 0)).Position
 		Pieces.cylinder(
 			hub,
 			Vector3.new(post.X, floor, post.Z),
-			10.4,
+			9.4,
 			0.9,
 			C.wood,
 			Enum.Material.Wood,
@@ -580,7 +590,13 @@ local function buildSpawn(ctx: Context, spawnAngle: number): Vector3
 				CanCollide = true,
 			}
 		)
-		Pieces.diamond(hub, Vector3.new(post.X, floor + 10.9, post.Z), 1, C.gold)
+		Pieces.diamond(
+			hub,
+			Vector3.new(post.X, floor + 9.9, post.Z),
+			1,
+			C.gold,
+			Enum.Material.Metal
+		)
 	end
 	Pieces.board(
 		hub,
@@ -589,35 +605,81 @@ local function buildSpawn(ctx: Context, spawnAngle: number): Vector3
 		5.4,
 		"STORMSPIRE",
 		"Catch lightning on the isles, sell it at the altar",
-		Palette.SIGN
+		Palette.SIGN,
+		"STORMSPIRE",
+		"The storm temple of the sky isles"
 	)
 
-	-- compass signpost beside the spawn pointing at the altar and every lane
-	local post = position + right * 6.5 + forward * 1
-	local arrows = #ctx.zones + 2
-	local postHeight = math.max(12, 4 + arrows * 2.2)
-	Pieces.cylinder(hub, post, postHeight, 1, C.wood, Enum.Material.Wood, { CanCollide = true })
-	Pieces.diamond(hub, post + UP * (postHeight + 0.6), 1.4, C.gold)
-	local height = postHeight - 1
-	local function pointAt(target: Vector3, title: string, style: Kit.SignStyle)
-		local toward = (target - post) * Vector3.new(1, 0, 1)
-		if toward.Magnitude < 1 then
-			return
-		end
-		local d = toward.Unit
-		Pieces.arrow(hub, post + UP * height + d * 5.2, d, 8.4, 1.7, title, style)
-		height -= 2.2
-	end
-	pointAt(Vector3.zero, "SELL", Palette.SELL_SIGN)
+	-- directory board a few steps ahead: one row per destination, each in
+	-- its zone colour with an arrow saying which way to turn
+	local deskFoot = position + forward * 12 + quiet * 3
+	local deskFrame = CFrame.lookAt(deskFoot, Vector3.new(position.X, floor, position.Z))
+	local rows: { { title: string, target: Vector3, style: Kit.SignStyle } } = {
+		{ title = "SELL", target = Vector3.zero, style = Palette.SELL_SIGN },
+	}
 	for _, zone in ctx.zones do
 		local def = zone.def :: any
-		pointAt(
-			zone.slot.hubExit.Position,
-			string.upper(def.displayName),
-			Palette.signFor(zone.color, true)
+		table.insert(rows, {
+			title = string.upper(def.displayName),
+			target = zone.slot.hubExit.Position,
+			style = Palette.signFor(zone.color),
+		})
+	end
+	table.insert(rows, {
+		title = "COMING SOON",
+		target = ctx.teaser.slot.hubExit.Position,
+		style = Palette.signFor(TEASER_GLOW),
+	})
+	local rowHeight = 1.7
+	local top = 2.2 + #rows * rowHeight
+	for side = -1, 1, 2 do
+		Pieces.solid(
+			hub,
+			deskFrame * CFrame.new(side * 4.6, top / 2 + 0.3, 0),
+			Vector3.new(0.8, top + 0.6, 0.8),
+			C.plum,
+			Enum.Material.Slate
 		)
 	end
-	pointAt(ctx.teaser.slot.hubExit.Position, "COMING SOON", Palette.signFor(TEASER_GLOW, true))
+	Pieces.block(
+		hub,
+		deskFrame * CFrame.new(0, top + 0.9, 0),
+		Vector3.new(10.4, 0.8, 1.2),
+		C.gold,
+		Enum.Material.Metal
+	)
+	Pieces.block(
+		hub,
+		deskFrame * CFrame.new(0, (top + 1.6) / 2, 0.1),
+		Vector3.new(8.6, top - 1.2, 0.3),
+		C.plumDeep,
+		Enum.Material.Slate
+	)
+	local viewer = -deskFrame.LookVector
+	local viewerRight = viewer:Cross(UP)
+	for i, row in rows do
+		local toward = ((row.target - deskFoot) * Vector3.new(1, 0, 1)).Unit
+		local ahead = toward:Dot(viewer)
+		local lateral = toward:Dot(viewerRight)
+		local glyph = if ahead > 0.82
+			then "^ "
+			elseif ahead < -0.6 then "v "
+			elseif lateral > 0 then "> "
+			else "< "
+		local label = if lateral > 0 and ahead <= 0.82
+			then row.title .. "  >"
+			else glyph .. row.title
+		local y = top - (i - 0.5) * rowHeight
+		local plate = Pieces.block(
+			hub,
+			deskFrame * CFrame.new(0, y, -0.1),
+			Vector3.new(8, rowHeight - 0.25, 0.2),
+			row.style.boardColor,
+			Enum.Material.SmoothPlastic,
+			{ Name = "DirectoryRow" }
+		)
+		Kit.faceText(plate, Enum.NormalId.Front, label, nil, row.style)
+	end
 	return position
 end
 
@@ -788,11 +850,15 @@ function Hub.build(ctx: Context)
 	-- the SELL pad lines up with the star; its text reads for someone
 	-- walking in along the lane nearest the spawn's view
 	local view = math.round((spawnAngle + math.pi) / (math.pi / 4)) * (math.pi / 4)
+	-- step the spawn 11 degrees off its sector, toward the first lane, so
+	-- no canopy pillar stands between the spawn and the SELL pad
+	local sectorAngle = spawnAngle
+	spawnAngle -= math.rad(11)
 	local lawnSpots = buildLand(ctx, sectors)
 	buildAltar(ctx, sectors, direction(view))
 	buildLanes(ctx, lanes)
 	buildSpawn(ctx, spawnAngle)
-	buildSectors(ctx, sectors, spawnAngle, lawnSpots)
+	buildSectors(ctx, sectors, sectorAngle, lawnSpots)
 	buildTethers(ctx)
 end
 

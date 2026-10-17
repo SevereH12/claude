@@ -49,6 +49,7 @@ function Canyon.spec(zone: ZoneContext): ThemeSpec
 		depth = 62,
 		ridge = Enum.Material.Sandstone,
 		ridgeHeight = 14,
+		spires = Enum.Material.Sandstone,
 	}
 end
 

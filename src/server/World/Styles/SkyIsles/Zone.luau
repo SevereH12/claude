@@ -172,9 +172,9 @@ function Zone.ridge(
 	ctx: Context,
 	zone: ZoneContext,
 	land: Land,
-	material: Enum.Material,
-	height: number
+	spec: ThemeSpec
 )
+	local height = spec.ridgeHeight
 	local slot = zone.slot
 	local frame = slot.frame
 	local rng = ctx.rng
@@ -205,6 +205,8 @@ function Zone.ridge(
 			end
 		end
 	end
+	local shape = spec.ridgeShape or "slabs"
+	local spires = 0
 	for _, l in spots do
 		if rng:NextNumber() < 0.85 then
 			local footprintGap =
@@ -212,10 +214,44 @@ function Zone.ridge(
 			local radius = math.min(rng:NextNumber(5, 11), (footprintGap - 1.5) / 1.2)
 			local p = frame:PointToWorldSpace(l)
 			if radius >= 3 and accept(p, radius) then
-				local top = floor
-					+ 4 * math.max(1, math.round(height * rng:NextNumber(0.45, 1) / 4))
-				Kit.blob(ctx, Vector3.new(p.X, 0, p.Z), radius, top, top - floor + 10, material, 4)
+				local ground = Vector3.new(p.X, 0, p.Z)
+				local outward = Zone.outward(zone, p)
+				if shape == "dunes" then
+					-- low rounded dunes with a grassy crown
+					local top = floor + 4 * math.max(1, math.round(height * rng:NextNumber(0.5, 1) / 4))
+					Kit.blob(ctx, ground, radius, top, top - floor + 8, spec.ridge, 5)
+					if spec.ridgeCap then
+						Kit.blob(ctx, ground, radius * 0.6, top + 1, 3, spec.ridgeCap, 4)
+					end
+				else
+					-- jagged skyline: tilted slabs leaning away from the field
+					local top = floor + height * rng:NextNumber(0.45, 1.1)
+					Pieces.slabRock(
+						ctx,
+						ground,
+						outward,
+						radius * rng:NextNumber(0.7, 0.85),
+						radius * rng:NextNumber(0.4, 0.55),
+						top,
+						floor - 10,
+						rng:NextNumber(10, 25),
+						rng:NextNumber(-30, 30),
+						spec.ridge
+					)
+				end
 				table.insert(land.blocked, { center = p, radius = radius * 1.17 })
+				-- the odd sea-stack spire on the second row
+				if spec.spires and spires < 3 and footprintGap > 17 and rng:NextNumber() < 0.35 then
+					spires += 1
+					Pieces.spire(
+						ctx,
+						Vector3.new(p.X, floor, p.Z),
+						height * rng:NextNumber(1.8, 2.4),
+						math.min(radius, 6),
+						outward,
+						spec.spires
+					)
+				end
 			end
 		end
 	end
@@ -325,7 +361,7 @@ function Zone.ground(ctx: Context, zone: ZoneContext, spec: ThemeSpec): Land
 	})
 
 	-- the backdrop ridge behind the field
-	Zone.ridge(ctx, zone, land, spec.ridge, spec.ridgeHeight)
+	Zone.ridge(ctx, zone, land, spec)
 
 	-- the catch floor: terrain exactly at the floor, then the carpet on top
 	ctx.terrain:FillBlock(

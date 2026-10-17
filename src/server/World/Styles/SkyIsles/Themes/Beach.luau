@@ -30,10 +30,10 @@ function Beach.spec(zone: ZoneContext): ThemeSpec
 		rim = Enum.Material.Sand,
 		terrace = Enum.Material.Sand,
 		cliffs = {
-			Enum.Material.Rock,
+			Enum.Material.Limestone,
+			Enum.Material.Limestone,
 			Enum.Material.Rock,
 			Enum.Material.Slate,
-			Enum.Material.Basalt,
 		},
 		fieldTerrain = Enum.Material.Sand,
 		field = {
@@ -44,8 +44,11 @@ function Beach.spec(zone: ZoneContext): ThemeSpec
 		},
 		accent = C.cyan,
 		depth = 58,
-		ridge = Enum.Material.Rock,
-		ridgeHeight = 12,
+		ridge = Enum.Material.Sand,
+		ridgeHeight = 7,
+		ridgeShape = "dunes",
+		ridgeCap = Enum.Material.LeafyGrass,
+		spires = Enum.Material.Rock,
 	}
 end
 

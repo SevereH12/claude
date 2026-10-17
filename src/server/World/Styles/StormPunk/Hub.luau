@@ -296,10 +296,7 @@ local function grandCoil(parent: Instance, floor: number): Vector3
 	Pieces.column(parent, drumBase + UP * 7.8, 1.4, 13.2, C.patina)
 	for i = 0, 3 do
 		local d = Geo.dir(i * 90 + 45)
-		local cf = CFrame.lookAt(
-			drumBase + d * 5.95 + UP * 4.5,
-			drumBase + d * 10 + UP * 4.5
-		)
+		local cf = CFrame.lookAt(drumBase + d * 5.95 + UP * 4.5, drumBase + d * 10 + UP * 4.5)
 		Pieces.block(parent, cf, Vector3.new(1.4, 4.5, 0.3), C.volt, M.neon)
 	end
 	local deckY = floor + 10
@@ -345,7 +342,13 @@ local function grandCoil(parent: Instance, floor: number): Vector3
 	end
 	-- crown: brass deck, big copper torus, patina dome, orb and rod
 	local crownY = coilTop + 2
-	Kit.cylinder(parent, Vector3.new(0, coilTop - 1, 0), 1.6, 13, { Color = C.brass, Material = M.metal })
+	Kit.cylinder(
+		parent,
+		Vector3.new(0, coilTop - 1, 0),
+		1.6,
+		13,
+		{ Color = C.brass, Material = M.metal }
+	)
 	Pieces.torus(parent, Vector3.new(0, crownY, 0), 8, 4.5, 12, C.copper)
 	Pieces.ball(parent, Vector3.new(0, crownY + 0.4, 0), 11, C.patina)
 	Pieces.orb(parent, Vector3.new(0, crownY + 7.5, 0), 6, C.volt, 60, true)
@@ -470,7 +473,12 @@ local function voltExchange(parent: Instance, floor: number, bearing: number): {
 end
 
 -- Gateway arch at a hub exit, in the zone's colour. Returns a pillar top.
-local function bridgehead(parent: Instance, zone: ZoneContext, floor: number, color: Color3): Vector3
+local function bridgehead(
+	parent: Instance,
+	zone: ZoneContext,
+	floor: number,
+	color: Color3
+): Vector3
 	local exit = zone.slot.hubExit
 	local base = exit.Position - exit.LookVector * 3
 	local frame = CFrame.lookAt(base, base - exit.LookVector) -- text faces the hub
@@ -511,8 +519,13 @@ end
 
 local function kiosk(parent: Instance, frame: CFrame)
 	-- frame: on the floor, LookVector toward the hub centre (shop front)
-	local roof =
-		Pieces.building(parent, frame * CFrame.new(0, 0, 1.5), Vector3.new(9, 5, 5), C.timber, M.planks)
+	local roof = Pieces.building(
+		parent,
+		frame * CFrame.new(0, 0, 1.5),
+		Vector3.new(9, 5, 5),
+		C.timber,
+		M.planks
+	)
 	Pieces.block(
 		parent,
 		frame * CFrame.new(0, 1.3, -1.7),
@@ -550,14 +563,8 @@ end
 
 local function foundry(parent: Instance, frame: CFrame)
 	-- frame: on the floor, LookVector toward the hub
-	local roof = Pieces.building(
-		parent,
-		frame,
-		Vector3.new(16, 10, 12),
-		T.copperDark,
-		M.brick,
-		C.copper
-	)
+	local roof =
+		Pieces.building(parent, frame, Vector3.new(16, 10, 12), T.copperDark, M.brick, C.copper)
 	-- sawtooth roof
 	for i = 0, 2 do
 		local x = -5.4 + i * 5.4
@@ -647,15 +654,39 @@ local function weatherHut(parent: Instance, frame: CFrame)
 end
 
 local function bench(parent: Instance, frame: CFrame)
-	Pieces.block(parent, frame * CFrame.new(0, 1.2, 0), Vector3.new(5, 0.5, 1.6), C.timber, M.planks, true)
-	Pieces.block(parent, frame * CFrame.new(0, 2.2, 0.7), Vector3.new(5, 1.4, 0.3), C.timber, M.planks)
+	Pieces.block(
+		parent,
+		frame * CFrame.new(0, 1.2, 0),
+		Vector3.new(5, 0.5, 1.6),
+		C.timber,
+		M.planks,
+		true
+	)
+	Pieces.block(
+		parent,
+		frame * CFrame.new(0, 2.2, 0.7),
+		Vector3.new(5, 1.4, 0.3),
+		C.timber,
+		M.planks
+	)
 	Pieces.block(parent, frame * CFrame.new(0, 0.5, 0), Vector3.new(4.2, 1, 0.5), C.iron, M.metal)
 end
 
 local function garden(parent: Instance, ctx: Context, center: Vector3, frame: CFrame, rng: Random)
-	ctx.terrain:FillCylinder(CFrame.new(center.X, center.Y - 2, center.Z), 4, 6.5, TERRAIN.LeafyGrass)
+	ctx.terrain:FillCylinder(
+		CFrame.new(center.X, center.Y - 2, center.Z),
+		4,
+		6.5,
+		TERRAIN.LeafyGrass
+	)
 	Kit.cylinder(parent, center - UP * 0.6, 1.2, 14, { Color = C.brass, Material = M.metal })
-	Kit.cylinder(parent, center - UP * 0.5, 1.2, 13, { Color = C.sage, Material = Enum.Material.Grass })
+	Kit.cylinder(
+		parent,
+		center - UP * 0.5,
+		1.2,
+		13,
+		{ Color = C.sage, Material = Enum.Material.Grass }
+	)
 	for i = 1, 4 do
 		local a = i * 90 + rng:NextNumber(-15, 15)
 		local p = center + Geo.dir(a) * rng:NextNumber(2.5, 4.5) + UP * 0.6
@@ -790,7 +821,14 @@ function Hub.buildHub(ctx: Context)
 			-- planter beside it
 			local pc = Geo.polar(b, 33.5, floor)
 			local pf = Geo.facing(pc, Vector3.new(0, floor, 0))
-			Pieces.block(parent, pf * CFrame.new(0, 0.7, 0), Vector3.new(7, 1.4, 2.6), C.copper, M.metal, true)
+			Pieces.block(
+				parent,
+				pf * CFrame.new(0, 0.7, 0),
+				Vector3.new(7, 1.4, 2.6),
+				C.copper,
+				M.metal,
+				true
+			)
 			Pieces.block(
 				parent,
 				pf * CFrame.new(0, 1.45, 0),

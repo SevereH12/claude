@@ -83,7 +83,13 @@ function Canyon.ground(ctx: Context, zone: ZoneContext)
 	local outer = 12 + #steps * ledge
 	Land.fill(
 		ctx,
-		Land.organic(slot.frame, w + outer + 36, d + outer + 36, rng, { edge = 16, jitter = 10, bays = 2 }),
+		Land.organic(
+			slot.frame,
+			w + outer + 36,
+			d + outer + 36,
+			rng,
+			{ edge = 16, jitter = 10, bays = 2 }
+		),
 		SEA_FLOOR,
 		-3,
 		TERRAIN.Sand,
@@ -304,13 +310,38 @@ local function headframe(ctx: Context, parent: Instance, frame: CFrame)
 	end
 	local hub = (frame * CFrame.new(0, 12.4, 0)).Position
 	Pieces.pipe(parent, hub - frame.RightVector * 0.3, hub + frame.RightVector * 0.3, 4.4, C.copper)
-	Pieces.block(parent, frame * CFrame.new(0, 0.6, 0.5), Vector3.new(5, 1.2, 5), T.timberDark, M.planks, true)
-	Kit.cable(ctx, hub - UP * 2, (frame * CFrame.new(0, 1.2, 0.5)).Position, { Color = C.soot, Width = 0.2 })
+	Pieces.block(
+		parent,
+		frame * CFrame.new(0, 0.6, 0.5),
+		Vector3.new(5, 1.2, 5),
+		T.timberDark,
+		M.planks,
+		true
+	)
+	Kit.cable(
+		ctx,
+		hub - UP * 2,
+		(frame * CFrame.new(0, 1.2, 0.5)).Position,
+		{ Color = C.soot, Width = 0.2 }
+	)
 end
 
 local function oreCart(parent: Instance, frame: CFrame)
-	Pieces.block(parent, frame * CFrame.new(0, 1.6, 0), Vector3.new(2.6, 1.6, 3.6), T.copperDark, M.rusty, true)
-	Pieces.block(parent, frame * CFrame.new(0, 2.5, 0), Vector3.new(2.2, 0.6, 3.2), C.copper, Enum.Material.Rock)
+	Pieces.block(
+		parent,
+		frame * CFrame.new(0, 1.6, 0),
+		Vector3.new(2.6, 1.6, 3.6),
+		T.copperDark,
+		M.rusty,
+		true
+	)
+	Pieces.block(
+		parent,
+		frame * CFrame.new(0, 2.5, 0),
+		Vector3.new(2.2, 0.6, 3.2),
+		C.copper,
+		Enum.Material.Rock
+	)
 	for _, z in { -1.1, 1.1 } do
 		Pieces.pipe(
 			parent,
@@ -414,7 +445,7 @@ function Canyon.dress(ctx: Context, zone: ZoneContext)
 
 	-- a pipe running down the cliff from the rim
 	do
-		local rim = place.ground(hw * -0.2, hd + 3.5, 1)
+		local rim = place.ground(hw * -0.2, hd + 4.6, 1)
 		if rim then
 			local out = Geo.slotPoint(zone, hw * -0.2, hd + 9, -4.6)
 			local foot = Geo.slotPoint(zone, hw * -0.2, hd + 14, -4.6)

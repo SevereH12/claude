@@ -29,6 +29,9 @@ export type ThemeSpec = {
 	depth: number, -- how far the underside reaches below the floor
 	ridge: Enum.Material, -- backdrop ridge behind the field (rocks, walls, hills)
 	ridgeHeight: number,
+	ridgeShape: ("slabs" | "dunes")?, -- tilted rock slabs (default) or low dunes
+	ridgeCap: Enum.Material?, -- dunes: grassy cap on each dune
+	spires: Enum.Material?, -- a few tall sea-stack spires behind the ridge
 }
 
 export type Theme = {

@@ -55,19 +55,23 @@ Style.name = "StormPunk"
 Style.description =
 	"Voltcliff Works: copper, brass and patina factory islands strung with glowing cables."
 Style.palette = Palette.colors
+-- A rising ring of fields: each zone is the next neighbour round (45
+-- degrees on) and a little further out, so the floors 4, 20, 32... climb
+-- round the hub like a mountain of fields. 8 bearings: 7 zones + teaser.
 Style.layout = {
 	hubFloor = 12,
 	hubRadius = 52,
-	firstRadius = 148,
-	radiusStep = 54,
+	firstRadius = 184,
+	radiusStep = 24,
 	firstAngle = 100,
-	angleStep = 135,
+	angleStep = 45,
 	teaserWidth = 96,
 	teaserDepth = 88,
 	teaserFloorStep = 16,
 }
 
 function Style.atmosphere(ctx: Context)
+	Geo.validate(ctx)
 	Geo.init(ctx)
 	Atmosphere.apply(ctx)
 end
@@ -86,7 +90,8 @@ end
 
 function Style.buildConnector(ctx: Context, zone: ZoneContext)
 	if zone.slot.index == 1 then
-		-- every zone landmass is down now: re-lay the hub's upper terrain on top
+		-- every zone landmass is down now: re-lay the hub's upper terrain on
+		-- top and add the islets, crags and sea stacks clear of every skirt
 		Hub.restoreIsland(ctx)
 	end
 	Zone.buildConnector(ctx, zone, themeFor(zone).bridge)

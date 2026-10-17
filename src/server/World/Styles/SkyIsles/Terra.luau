@@ -61,7 +61,13 @@ function Terra.install(ctx: any)
 			})
 			real:FillWedge(cframe, size, material)
 		end,
-		FillCylinder = function(_, cframe: CFrame, height: number, radius: number, material: Enum.Material)
+		FillCylinder = function(
+			_,
+			cframe: CFrame,
+			height: number,
+			radius: number,
+			material: Enum.Material
+		)
 			table.insert(ops, {
 				kind = "Cylinder",
 				cframe = cframe,
@@ -156,7 +162,12 @@ end
 -- How many of `samples` points along the curve are inside land.
 function Terra.buried(
 	ctx: any,
-	p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3, samples: number): number
+	p0: Vector3,
+	p1: Vector3,
+	p2: Vector3,
+	p3: Vector3,
+	samples: number
+): number
 	local n = 0
 	for i = 1, samples - 1 do
 		if Terra.solidAt(ctx, Terra.bezier(p0, p1, p2, p3, i / samples), 0.5) then

@@ -187,7 +187,14 @@ function Zone.buildGate(ctx: Context, zone: ZoneContext): (Vector3, Vector3)
 		local foot = (g * CFrame.new(s * Zone.GATE_HALF, 0, 0)).Position
 		Pieces.column(parent, foot - UP, height + 1, 2.8, C.copper, M.metal, true)
 		Pieces.column(parent, foot - UP * 0.2, 2, 4, C.iron, M.metal)
-		Pieces.column(parent, foot + UP * (Zone.GATE_ATTACH_Y - 0.6), 1.4, 3.6, C.ceramic, M.ceramic)
+		Pieces.column(
+			parent,
+			foot + UP * (Zone.GATE_ATTACH_Y - 0.6),
+			1.4,
+			3.6,
+			C.ceramic,
+			M.ceramic
+		)
 		Pieces.ball(parent, foot + UP * (height + 1), 2.6, color, M.neon)
 		table.insert(attach, foot + UP * Zone.GATE_ATTACH_Y)
 	end
@@ -210,7 +217,13 @@ function Zone.buildGate(ctx: Context, zone: ZoneContext): (Vector3, Vector3)
 		if def then def.tagline else nil,
 		Palette.sign(color, true)
 	)
-	Pieces.jacobsLadder(ctx, parent, (g * CFrame.new(0, height - 0.6, 0)).Position, g.RightVector, 5)
+	Pieces.jacobsLadder(
+		ctx,
+		parent,
+		(g * CFrame.new(0, height - 0.6, 0)).Position,
+		g.RightVector,
+		5
+	)
 	-- threshold strip across the entrance
 	local a = (zone.slot.gate * CFrame.new(-Zone.GATE_HALF + 1.5, 0, -0.6)).Position
 	local b = (zone.slot.gate * CFrame.new(Zone.GATE_HALF - 1.5, 0, -0.6)).Position
@@ -284,13 +297,21 @@ function Zone.placer(ctx: Context, zone: ZoneContext, layers: { Land.Layer }): P
 		end
 		return nil
 	end
-	local function find(candidates: { Vector2 }, room: number, minTop: number?, maxTop: number?): Vector3?
+	local function find(
+		candidates: { Vector2 },
+		room: number,
+		minTop: number?,
+		maxTop: number?
+	): Vector3?
 		for _, c in candidates do
 			local p = ground(c.X, c.Y, math.min(room, 4))
 			if p and p.Y >= (minTop or -math.huge) and p.Y <= (maxTop or math.huge) then
 				local free = true
 				for _, u in used do
-					if (Vector3.new(p.X, 0, p.Z) - Vector3.new(u.p.X, 0, u.p.Z)).Magnitude < room + u.r then
+					if
+						(Vector3.new(p.X, 0, p.Z) - Vector3.new(u.p.X, 0, u.p.Z)).Magnitude
+						< room + u.r
+					then
 						free = false
 						break
 					end
@@ -403,7 +424,13 @@ end
 -- with a glowing strip in the zone colour inside it, so every field's
 -- outline reads from far away in its own colour.
 function Zone.floorFrame(zone: ZoneContext, brass: Color3, width: number)
-	local function ring(inset: number, w: number, color: Color3, material: Enum.Material, lift: number)
+	local function ring(
+		inset: number,
+		w: number,
+		color: Color3,
+		material: Enum.Material,
+		lift: number
+	)
 		local hw = zone.slot.width / 2 - inset - w / 2
 		local hd = zone.slot.depth / 2 - inset - w / 2
 		inlay(zone, 0, -hd, 2 * hw + w, w, color, material, lift)

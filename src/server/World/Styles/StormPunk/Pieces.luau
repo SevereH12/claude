@@ -420,14 +420,7 @@ function Pieces.building(
 		M.concrete,
 		true
 	)
-	Pieces.block(
-		parent,
-		frame * CFrame.new(0, plinth + size.Y / 2, 0),
-		size,
-		color,
-		material,
-		true
-	)
+	Pieces.block(parent, frame * CFrame.new(0, plinth + size.Y / 2, 0), size, color, material, true)
 	for _, c in { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } } do
 		Pieces.block(
 			parent,

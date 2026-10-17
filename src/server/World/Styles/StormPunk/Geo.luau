@@ -102,7 +102,9 @@ end
 function Geo.inExitLane(ctx: Context, position: Vector3, clearance: number): boolean
 	local R = ctx.layout.hubRadius
 	for _, b in Geo.exitBearings(ctx) do
-		if Geo.segmentDistance(position, Geo.polar(b, 26, 0), Geo.polar(b, R + 6, 0)) < clearance then
+		if
+			Geo.segmentDistance(position, Geo.polar(b, 26, 0), Geo.polar(b, R + 6, 0)) < clearance
+		then
 			return true
 		end
 	end
@@ -255,9 +257,14 @@ end
 
 -- The terrain guard every landmass uses (see Land.Guard): a circle (x, z,
 -- r) may rise to `top` unless that puts terrain above a connector deck,
--- into another zone's footprint above its floor, into `own`'s catch
--- footprint above its floor, or onto the hub plaza above the hub floor.
-function Geo.guard(ctx: Context, own: ZoneContext?): (number, number, number, number) -> boolean
+-- into another slot's footprint above its floor, into `own`'s footprint
+-- above its floor (unless `allowOwn`: the teaser's island is not a field),
+-- or onto the hub plaza above the hub floor.
+function Geo.guard(
+	ctx: Context,
+	own: ZoneContext?,
+	allowOwn: boolean?
+): (number, number, number, number) -> boolean
 	local hubR = ctx.layout.hubRadius + 6
 	local hubFloor = ctx.layout.hubFloor
 	return function(x: number, z: number, r: number, top: number): boolean
@@ -267,8 +274,15 @@ function Geo.guard(ctx: Context, own: ZoneContext?): (number, number, number, nu
 			return false
 		end
 		for _, other in Geo.allSlots(ctx) do
-			local margin = if other == own then r else r + 4
-			if top > other.slot.floor - 0.5 and Kit.inFootprint(other, p, margin) then
+			if other == own then
+				if
+					not allowOwn
+					and top > other.slot.floor + 0.3
+					and Kit.inFootprint(other, p, r)
+				then
+					return false
+				end
+			elseif top > other.slot.floor - 0.5 and Kit.inFootprint(other, p, r + 4) then
 				return false
 			end
 		end
