@@ -133,9 +133,30 @@ def main():
     img = Image.new("RGB", (W, H), TERRAIN_COLORS["Water"])
     draw = ImageDraw.Draw(img, "RGBA")
 
+    # the sea surface: land whose top is below it reads as shallows, not beach
+    water_top = -math.inf
+    for op in terrain:
+        if op.get("material") == "Water" and op["kind"] == "FillBlock":
+            water_top = max(water_top, op["cframe"][1] + op["size"][1] / 2)
+
+    def op_top(op):
+        if op["kind"] == "FillCylinder":
+            return op["cframe"][1] + op["height"] / 2
+        if op["kind"] == "FillBall":
+            return op["center"][1] + op["radius"]
+        if op["kind"] in ("FillBlock", "FillWedge"):
+            return max(c[1] for c in corners(op["cframe"], op["size"]))
+        return 0
+
+    def mix(a, b, t):
+        return tuple(int(a[i] * (1 - t) + b[i] * t) for i in range(3))
+
     # terrain ops in order (later fills overwrite earlier ones, like Roblox)
     for op in terrain:
         color = TERRAIN_COLORS.get(op.get("material", ""), (255, 0, 255))
+        if op.get("material") != "Water" and op_top(op) < water_top - 0.5:
+            depth = min(1.0, (water_top - op_top(op)) / 8)
+            color = mix(color, (60, 160, 175), 0.55 + 0.35 * depth)
         if op["kind"] == "FillCylinder":
             cx, cz, r = op["cframe"][0], op["cframe"][2], op["radius"]
             top = op["cframe"][1] + op["height"] / 2
