@@ -18,6 +18,11 @@ local Geo = {}
 
 -- Half-width of the clear corridor kept around every connector.
 Geo.CORRIDOR = 9
+Geo.SEA_FLOOR = -20
+-- The spiral visits 8 bearings; slot 9 would sit on slot 1's bearing and
+-- its straight connector would cross zone 1. StormPunk supports 7 zones
+-- plus the teaser.
+Geo.MAX_ZONES = 7
 
 -- Bearings (degrees clockwise from north) -----------------------------------
 
@@ -34,26 +39,39 @@ function Geo.bearingOf(position: Vector3): number
 	return math.deg(math.atan2(position.X, -position.Z)) % 360
 end
 
--- Bearings exactly between the spiral's exit bearings: hub props live on
--- these so a future zone's exit (always on a spiral bearing) is never blocked.
-function Geo.quietBearings(ctx: Context): { number }
+-- Signed smallest difference a - b in degrees (-180..180).
+function Geo.angleDiff(a: number, b: number): number
+	return ((a - b + 180) % 360) - 180
+end
+
+-- Every bearing the spiral will ever use for an exit (from the layout
+-- only, so zones added later always land on one of these).
+function Geo.exitBearings(ctx: Context): { number }
 	local layout = ctx.layout
-	local step = math.abs(layout.angleStep) % 360
-	local out = {}
-	local exits = {}
-	-- the spiral visits a fixed set of bearings; collect the first 16 of them
+	local out: { number } = {}
 	for i = 0, 15 do
-		table.insert(exits, (layout.firstAngle + i * step) % 360)
-	end
-	table.sort(exits)
-	local unique: { number } = {}
-	for _, a in exits do
-		if #unique == 0 or math.abs(a - unique[#unique]) > 1 then
-			table.insert(unique, a)
+		local a = (layout.firstAngle + i * layout.angleStep) % 360
+		local seen = false
+		for _, b in out do
+			if math.abs(Geo.angleDiff(a, b)) < 1 then
+				seen = true
+			end
+		end
+		if not seen then
+			table.insert(out, a)
 		end
 	end
-	for i, a in unique do
-		local nextA = unique[i % #unique + 1]
+	table.sort(out)
+	return out
+end
+
+-- Bearings exactly between the spiral's exit bearings: hub props live on
+-- these so a future zone's exit is never blocked.
+function Geo.quietBearings(ctx: Context): { number }
+	local exits = Geo.exitBearings(ctx)
+	local out = {}
+	for i, a in exits do
+		local nextA = exits[i % #exits + 1]
 		local gap = (nextA - a) % 360
 		if gap == 0 then
 			gap = 360
@@ -63,9 +81,38 @@ function Geo.quietBearings(ctx: Context): { number }
 	return out
 end
 
+-- The quiet bearing for the spawn and the sell station: across the hub
+-- from the first zones, so the spawn looks over the plaza toward zones 1-3
+-- (from the layout only: adding zones never moves it).
+function Geo.spawnBearing(ctx: Context): number
+	local layout = ctx.layout
+	local ideal = layout.firstAngle + 180 + 1.5 * layout.angleStep
+	local best, bestDiff = 0, math.huge
+	for _, b in Geo.quietBearings(ctx) do
+		local diff = math.abs(Geo.angleDiff(b, ideal))
+		if diff < bestDiff then
+			best, bestDiff = b, diff
+		end
+	end
+	return best
+end
+
+-- Is a hub point within `clearance` of any exit lane (future ones too)?
+-- Lanes run from the inner brass ring (r = 26) out to the hub rim.
+function Geo.inExitLane(ctx: Context, position: Vector3, clearance: number): boolean
+	local R = ctx.layout.hubRadius
+	for _, b in Geo.exitBearings(ctx) do
+		if Geo.segmentDistance(position, Geo.polar(b, 26, 0), Geo.polar(b, R + 6, 0)) < clearance then
+			return true
+		end
+	end
+	return false
+end
+
 -- Seeded randomness ------------------------------------------------------------
 
-local baseSeeds: { [Context]: number } = {}
+-- weak keys: an old build's Context (and its destroyed Map) can be collected
+local baseSeeds: { [Context]: number } = setmetatable({}, { __mode = "k" }) :: any
 
 local function hash(text: string): number
 	local h = 5381
@@ -74,6 +121,7 @@ local function hash(text: string): number
 	end
 	return h
 end
+Geo.hash = hash
 
 -- Call first (from atmosphere): takes one number from ctx.rng.
 function Geo.init(ctx: Context)
@@ -85,22 +133,6 @@ end
 function Geo.rng(ctx: Context, key: string): Random
 	Geo.init(ctx)
 	return Random.new((baseSeeds[ctx] + hash(key)) % 2147483647)
-end
-
--- Dressing density for a zone, from its own spiral index only (so adding a
--- zone never changes the ones before it): the first two zones get full
--- detail, later and further zones get progressively leaner dressing, like
--- a distance LOD. Scales scatter counts, lamp/pile spacing and fence posts.
-function Geo.detail(zone: ZoneContext): number
-	if zone.isTeaser then
-		return 0.6
-	end
-	return math.clamp(1 - (zone.slot.index - 2) * 0.15, 0.45, 1)
-end
-
--- Scaled whole count, at least `minimum`.
-function Geo.count(zone: ZoneContext, full: number, minimum: number?): number
-	return math.max(minimum or 0, math.floor(full * Geo.detail(zone) + 0.5))
 end
 
 function Geo.zoneKey(zone: ZoneContext): string
@@ -120,15 +152,53 @@ function Geo.segmentDistance(p: Vector3, a: Vector3, b: Vector3): number
 	return (Vector3.new(p.X, 0, p.Z) - closest).Magnitude
 end
 
+-- Closest approach of two ground segments (sampled).
+function Geo.segmentsDistance(a0: Vector3, a1: Vector3, b0: Vector3, b1: Vector3): (number, Vector3)
+	local best, at = math.huge, a0
+	for k = 0, 40 do
+		local p = a0:Lerp(a1, k / 40)
+		local d = Geo.segmentDistance(p, b0, b1)
+		if d < best then
+			best, at = d, p
+		end
+	end
+	return best, at
+end
+
 function Geo.allSlots(ctx: Context): { ZoneContext }
 	local all = table.clone(ctx.zones)
 	table.insert(all, ctx.teaser)
 	return all
 end
 
+-- Fails the build early, before anything is placed, if a connector would
+-- cross another slot's footprint (the spiral wrapping past 8 slots).
+function Geo.validate(ctx: Context)
+	if #ctx.zones > Geo.MAX_ZONES then
+		error(
+			`[StormPunk] {#ctx.zones} zones: StormPunk supports {Geo.MAX_ZONES} zones + the teaser (slot {Geo.MAX_ZONES + 2} would reuse slot 1's bearing)`,
+			0
+		)
+	end
+	for _, zone in Geo.allSlots(ctx) do
+		local a, b = zone.slot.hubExit.Position, zone.slot.gate.Position
+		for _, other in Geo.allSlots(ctx) do
+			if other ~= zone then
+				for k = 0, 40 do
+					if Kit.inFootprint(other, a:Lerp(b, k / 40), Geo.CORRIDOR - 4) then
+						error(
+							`[StormPunk] slot {zone.slot.index}'s connector crosses slot {other.slot.index}; StormPunk supports {Geo.MAX_ZONES} zones + the teaser`,
+							0
+						)
+					end
+				end
+			end
+		end
+	end
+end
+
 -- Is a spot (with a radius) clear of every zone footprint, every connector
--- corridor and (optionally) the hub plaza? `own` is the zone being
--- decorated: its footprint is also off limits (decoration stays outside).
+-- corridor and (optionally) the hub plaza? Decoration stays outside fields.
 function Geo.isClear(
 	ctx: Context,
 	position: Vector3,
@@ -183,37 +253,27 @@ function Geo.deckHeightAt(ctx: Context, position: Vector3, reach: number, span: 
 	return best
 end
 
--- Predicate for Land.clip: keeps a terrain circle unless its top (`top`)
--- would rise above a connector deck that runs over it, so every catwalk
--- meets flush ground at both ends instead of a step it can't climb.
-function Geo.belowDecks(ctx: Context, top: number): ({ x: number, z: number, r: number }) -> boolean
-	return function(c)
-		local deck = Geo.deckHeightAt(ctx, Vector3.new(c.x, 0, c.z), c.r + 7, c.r)
-		return deck == nil or top <= deck - 1
-	end
-end
-
--- Predicate for Land.clip on any raised landmass with its top at `top`:
--- drops circles that would rise above a connector deck or into another
--- zone's footprint above that zone's floor (`own` is the zone being built).
-function Geo.landSafe(
-	ctx: Context,
-	top: number,
-	own: ZoneContext?
-): ({ x: number, z: number, r: number }) -> boolean
-	local below = Geo.belowDecks(ctx, top)
-	return function(c)
-		if not below(c) then
+-- The terrain guard every landmass uses (see Land.Guard): a circle (x, z,
+-- r) may rise to `top` unless that puts terrain above a connector deck,
+-- into another zone's footprint above its floor, into `own`'s catch
+-- footprint above its floor, or onto the hub plaza above the hub floor.
+function Geo.guard(ctx: Context, own: ZoneContext?): (number, number, number, number) -> boolean
+	local hubR = ctx.layout.hubRadius + 6
+	local hubFloor = ctx.layout.hubFloor
+	return function(x: number, z: number, r: number, top: number): boolean
+		local p = Vector3.new(x, 0, z)
+		local deck = Geo.deckHeightAt(ctx, p, r + 7, r)
+		if deck and top > (deck :: number) - 1 then
 			return false
 		end
 		for _, other in Geo.allSlots(ctx) do
-			if
-				other ~= own
-				and top > other.slot.floor - 0.5
-				and Kit.inFootprint(other, Vector3.new(c.x, 0, c.z), c.r + 4)
-			then
+			local margin = if other == own then r else r + 4
+			if top > other.slot.floor - 0.5 and Kit.inFootprint(other, p, margin) then
 				return false
 			end
+		end
+		if top > hubFloor - 0.5 and p.Magnitude < hubR + r then
+			return false
 		end
 		return true
 	end
@@ -236,6 +296,11 @@ function Geo.edgePoint(zone: ZoneContext, u: number, v: number, out: number, y: 
 		z += math.sign(z) * out
 	end
 	return slot.frame:PointToWorldSpace(Vector3.new(x, y or 0, z))
+end
+
+-- A point in the slot frame (x across, z outward from the hub, y above floor).
+function Geo.slotPoint(zone: ZoneContext, x: number, z: number, y: number?): Vector3
+	return zone.slot.frame:PointToWorldSpace(Vector3.new(x, y or 0, z))
 end
 
 -- Yaw-only CFrame at a world point facing a target (ignores height).

@@ -1,12 +1,15 @@
 --!strict
 -- Lighting for StormPunk. Calm: warm golden afternoon over teal water, soft
--- bloom so lamps and lanterns glow (cozy). Storm (Lighting attributes the
--- client tweens to): dark slate and indigo so the cyan neon takes over.
+-- bloom so lamps and lanterns glow (cozy), light haze so the far heroes
+-- keep their silhouettes. Storm (Lighting attributes the client tweens to):
+-- dark slate and indigo so the cyan and zone-colour neon takes over.
+-- Also paints every terrain material StormPunk uses (Palette.terrain).
 
 local Lighting = game:GetService("Lighting")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local WorldTypes = require(ServerScriptService.Server.World.Types)
+local Palette = require(script.Parent.Palette)
 
 type Context = WorldTypes.Context
 
@@ -44,17 +47,18 @@ function Atmosphere.apply(ctx: Context)
 	Lighting:SetAttribute("StormCloudColor", Color3.fromRGB(38, 40, 58))
 
 	local atmosphere: Atmosphere = ensure(Lighting, "Atmosphere", "Atmosphere")
-	atmosphere.Density = 0.3
-	atmosphere.Offset = 0.12
+	atmosphere.Density = 0.26
+	atmosphere.Offset = 0.1
 	atmosphere.Color = Color3.fromRGB(232, 206, 182)
 	atmosphere.Decay = Color3.fromRGB(110, 150, 160)
-	atmosphere.Glare = 0.35
-	atmosphere.Haze = 1.3
+	atmosphere.Glare = 0.3
+	atmosphere.Haze = 0.9
 
+	-- neon (Brightness-boosted) blooms; sunlit ceramic does not
 	local bloom: BloomEffect = ensure(Lighting, "BloomEffect", "Bloom")
-	bloom.Intensity = 0.8
+	bloom.Intensity = 0.6
 	bloom.Size = 26
-	bloom.Threshold = 1.5
+	bloom.Threshold = 1.05
 
 	local grade: ColorCorrectionEffect = ensure(Lighting, "ColorCorrectionEffect", "StormGrade")
 	grade.Brightness = 0.02
@@ -72,11 +76,14 @@ function Atmosphere.apply(ctx: Context)
 	clouds.Color = Color3.fromRGB(255, 236, 220)
 
 	local terrain = ctx.terrain
-	terrain.WaterColor = Color3.fromRGB(28, 128, 132)
+	terrain.WaterColor = Palette.water
 	terrain.WaterTransparency = 0.55
 	terrain.WaterWaveSize = 0.18
 	terrain.WaterWaveSpeed = 10
 	terrain.WaterReflectance = 0.35
+	for material, color in Palette.terrain do
+		terrain:SetMaterialColor(material, color)
+	end
 end
 
 return Atmosphere
