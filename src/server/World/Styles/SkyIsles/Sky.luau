@@ -10,6 +10,7 @@ local World = ServerScriptService.Server.World
 local Kit = require(World.Kit)
 local Layout = require(World.Layout)
 local WorldTypes = require(World.Types)
+local Ground = require(script.Parent.Ground)
 local Palette = require(script.Parent.Palette)
 local Pieces = require(script.Parent.Pieces)
 
@@ -84,15 +85,6 @@ function Sky.atmosphere(_ctx: Context)
 	clouds.Cover = 0.5
 	clouds.Density = 0.42
 	clouds.Color = Color3.fromRGB(252, 242, 246)
-
-	terrain.WaterColor = Palette.WATER
-	terrain.WaterTransparency = 0.55
-	terrain.WaterWaveSize = 0.08
-	terrain.WaterWaveSpeed = 6
-	terrain.WaterReflectance = 0.3
-	for material, color in Palette.TERRAIN do
-		terrain:SetMaterialColor(material, color)
-	end
 end
 
 -- A drifting islet: a small floating island with a tapered underside, a
@@ -102,14 +94,17 @@ local function drifter(ctx: Context, center: Vector3, radius: number, kind: numb
 	local rng = ctx.rng
 	local high = center.Y > 0
 	local depth = radius * 2.4
-	Kit.floatingIsland(
+	local G = Palette.GROUND
+	local tones: Ground.Tones = if high
+		then { cap = G.grass, soil = G.soil, rocks = { G.rock, G.slate }, tip = G.slate }
+		else { cap = G.rock, soil = G.slate, rocks = { G.slate, G.basalt }, tip = G.basalt }
+	local tip = Ground.isle(
 		ctx,
-		center,
+		tones,
+		CFrame.new(center) * CFrame.Angles(0, rng:NextNumber(0, math.pi), 0),
 		radius,
-		center.Y,
 		depth,
-		if high then Enum.Material.Grass else Enum.Material.Rock,
-		Enum.Material.Rock
+		{ sides = 8, soil = 3, tiers = 0 }
 	)
 	if high then
 		if kind % 3 == 0 then
@@ -130,7 +125,7 @@ local function drifter(ctx: Context, center: Vector3, radius: number, kind: numb
 			Pieces.rocks(folder, rng, center - Vector3.new(radius * 0.3, 0, 0), radius * 0.35)
 		end
 	end
-	Pieces.cluster(folder, rng, center - UP * depth * 0.8, radius * 0.55, C.cyan, 3, true)
+	Pieces.cluster(folder, rng, tip + UP * 2, radius * 0.55, C.cyan, 3, true)
 end
 
 function Sky.base(ctx: Context)

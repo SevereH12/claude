@@ -9,9 +9,10 @@ local World = ServerScriptService.Server.World
 local Kit = require(World.Kit)
 local Layout = require(World.Layout)
 local WorldTypes = require(World.Types)
+local Blocks = require(World.Blocks)
+local Ground = require(script.Parent.Ground)
 local Palette = require(script.Parent.Palette)
 local SkyTypes = require(script.Parent.SkyTypes)
-local Terra = require(script.Parent.Terra)
 
 type Context = WorldTypes.Context
 type ZoneContext = WorldTypes.ZoneContext
@@ -516,14 +517,14 @@ function Pieces.resetChecks(ctx: Context)
 	(ctx :: any).skyChains = {}
 end
 
--- Sample every recorded chain against the terrain the style laid; warns and
+-- Sample every recorded chain against the ground the style laid; warns and
 -- notes the count on the Map folder (attribute SkyBuriedChains) if any is
 -- inside land, so a bad layout shows up in the build output.
 function Pieces.checkChains(ctx: Context)
 	local buried = 0
 	for _, chain in chainsOf(ctx) do
 		local down = UP * chain.sag
-		local n = Terra.buried(ctx, chain.a, chain.a - down, chain.b - down, chain.b, 24)
+		local n = Ground.buried(ctx, chain.a, chain.a - down, chain.b - down, chain.b, 24)
 		if n > 0 then
 			buried += 1
 			warn(
@@ -562,11 +563,11 @@ function Pieces.runeCable(
 end
 
 -- A waterfall pouring off a lip into the clouds. The lip is pushed out
--- along `outward` until nothing the style filled is underneath it (past
--- every coast lobe and shelf), and a water channel joins it back to the
--- source, so the water spills off the rim instead of out of the cliff.
--- Waterfalls are queued and built at the end of the build
--- (Pieces.flushWaterfalls), once every island's land is down.
+-- along `outward` until no ground is underneath it (past every coast lobe
+-- and headland), and a water channel joins it back to the source, so the
+-- water spills off the rim instead of out of the cliff. `lip` sits 0.6
+-- below the surface the water runs on. Waterfalls are queued and built at
+-- the end of the build (Pieces.flushWaterfalls), once every island is down.
 function Pieces.waterfall(ctx: Context, lip: Vector3, outward: Vector3, drop: number, width: number)
 	local store = ctx :: any
 	store.skyFalls = store.skyFalls or {}
@@ -593,7 +594,7 @@ function Pieces.buildWaterfall(
 	local mouth: Vector3? = nil
 	for s = 0, 40, 2 do
 		local p = lip + out * s
-		if Terra.clearBelow(ctx, p - UP * 0.5, 30, 1.5) then
+		if Ground.clearBelow(ctx, p - UP * 0.5, 30, 1.5) then
 			mouth = p + out * 1
 			break
 		end
@@ -602,19 +603,17 @@ function Pieces.buildWaterfall(
 		return false
 	end
 	local start = mouth :: Vector3
-	-- the spill channel: water laid over the land between source and mouth
+	-- the spill channel: a water strip over the land from source to mouth
 	local length = (start - lip).Magnitude
-	local s = 0
-	while s < length do
-		local q = lip + out * s
-		if Terra.solidAt(ctx, q - UP * 3, 0) then
-			ctx.terrain:FillBlock(
-				CFrame.lookAt(q - UP * 1, q - UP * 1 + out),
-				Vector3.new(4, 2, 4.5),
-				Enum.Material.Water
-			)
-		end
-		s += 4
+	if length > 0.5 then
+		local surface = (lip + start) / 2 + UP * 0.66
+		Ground.water(
+			ctx.folders.decor,
+			Palette.WATER,
+			CFrame.lookAt(surface, surface + out),
+			Vector2.new(width * 0.8, length),
+			"Spill"
+		)
 	end
 	local bottom = start + out * 6 - UP * drop
 	Pieces.beam(ctx, start, bottom, {
@@ -1297,168 +1296,41 @@ function Pieces.rocks(parent: Instance, rng: Random, bottom: Vector3, size: numb
 	if Pieces.overBudget(parent) then
 		return
 	end
-	Kit.rock(parent, bottom - UP * size * 0.15, size, rng, {
-		Color = color or C.skystone,
-		Material = Enum.Material.Rock,
-	})
+	Blocks.rock(
+		parent,
+		color or C.skystone,
+		bottom - UP * size * 0.1,
+		size * (0.9 + rng:NextNumber() * 0.2)
+	)
 end
 
--- Terrain: islands ---------------------------------------------------------------
+-- Ground landforms (block-built, in Map.Ground) -----------------------------------
 
--- Point on the outline of the local rectangle [-hw, hw] x [front, back]
--- at distance t along it, and the outward normal there. With `corner`,
--- points near a corner are pulled onto a rounded corner of that radius.
-local function rectPoint(
-	t: number,
-	hw: number,
-	front: number,
-	back: number,
-	corner: number
-): (Vector3, Vector3)
-	local w, d = hw * 2, back - front
-	local point, normal
-	if t < w then
-		point, normal = Vector3.new(-hw + t, 0, front), Vector3.new(0, 0, -1)
-	elseif t < w + d then
-		point, normal = Vector3.new(hw, 0, front + (t - w)), Vector3.new(1, 0, 0)
-	elseif t < 2 * w + d then
-		point, normal = Vector3.new(hw - (t - w - d), 0, back), Vector3.new(0, 0, 1)
-	else
-		point, normal = Vector3.new(-hw, 0, back - (t - 2 * w - d)), Vector3.new(-1, 0, 0)
-	end
-	if corner > 0 then
-		local cx = math.clamp(point.X, -hw + corner, hw - corner)
-		local cz = math.clamp(point.Z, front + corner, back - corner)
-		local offset = Vector3.new(point.X - cx, 0, point.Z - cz)
-		if math.abs(point.X - cx) > 0.01 and math.abs(point.Z - cz) > 0.01 then
-			local out = offset.Unit
-			return Vector3.new(cx, 0, cz) + out * corner, out
-		end
-	end
-	return point, normal
-end
-
-export type LandOptions = {
-	corner: number?, -- round the rectangle's corners with this radius
-	lobe: number, -- typical lobe radius along the coast
-	reach: number?, -- how far lobes may push out, in lobe radii (default 0.4)
-	accept: Accept?,
-}
-
--- Flat-topped landmass on a local rectangle (in `frame`'s ground plane)
--- with a lumpy outline: a (rounded) box plus jittered lobes along its
--- edge. Lobes that `accept` rejects are skipped.
-function Pieces.landmass(
-	ctx: Context,
-	frame: CFrame,
-	hw: number,
-	front: number,
-	back: number,
-	topY: number,
-	thickness: number,
-	material: Enum.Material,
-	options: LandOptions
-)
-	local rng = ctx.rng
-	local terrain = ctx.terrain
-	local corner = math.min(options.corner or 0, hw, (back - front) / 2)
-	local function fillBox(x: number, z: number, sx: number, sz: number)
-		local at = frame:PointToWorldSpace(Vector3.new(x, 0, z))
-		terrain:FillBlock(
-			CFrame.new(at.X, topY - thickness / 2, at.Z) * frame.Rotation,
-			Vector3.new(sx, thickness, sz),
-			material
-		)
-	end
-	local middle = (front + back) / 2
-	if corner > 0.5 then
-		fillBox(0, middle, hw * 2, back - front - corner * 2)
-		fillBox(0, middle, hw * 2 - corner * 2, back - front)
-		for _, c in
-			{
-				Vector3.new(-1, 0, front),
-				Vector3.new(1, 0, front),
-				Vector3.new(-1, 0, back),
-				Vector3.new(1, 0, back),
-			}
-		do
-			local z = if c.Z == front then front + corner else back - corner
-			local at = frame:PointToWorldSpace(Vector3.new(c.X * (hw - corner), 0, z))
-			terrain:FillCylinder(
-				CFrame.new(at.X, topY - thickness / 2, at.Z),
-				thickness,
-				corner,
-				material
-			)
-		end
-	else
-		fillBox(0, middle, hw * 2, back - front)
-	end
-	local lobe = options.lobe
-	local reach = options.reach or 0.4
-	local perimeter = 2 * (hw * 2 + (back - front))
-	local steps = math.max(6, math.floor(perimeter / lobe))
-	for i = 0, steps - 1 do
-		local t = ((i + rng:NextNumber(-0.45, 0.45)) / steps * perimeter) % perimeter
-		local localPoint, normal = rectPoint(t, hw, front, back, corner)
-		-- mostly small lobes with the odd big bulge: a natural, uneven coast
-		-- a few big bulges, many small nubs and some straight cliff facets
-		local roll = rng:NextNumber()
-		local big = roll < 0.1
-		local radius = lobe
-			* (
-				if big
-					then rng:NextNumber(1.6, 2)
-					elseif roll < 0.55 then rng:NextNumber(0.3, 0.5)
-					else rng:NextNumber(0.55, 0.9)
-			)
-		local push = lobe * (if big then rng:NextNumber(0, reach) else rng:NextNumber(-0.5, reach))
-		local world = frame:PointToWorldSpace(localPoint + normal * push)
-		local facet = roll > 0.72
-		if facet then
-			-- a flat cliff face turned a little off the coast line
-			local length = lobe * rng:NextNumber(1.2, 2.2)
-			local deep = lobe * rng:NextNumber(0.5, 0.8)
-			if not options.accept or options.accept(world, length * 0.6) then
-				local h = thickness * rng:NextNumber(0.7, 1)
-				local n = frame:VectorToWorldSpace(normal)
-				local at = Vector3.new(world.X, topY - h / 2, world.Z)
-				terrain:FillBlock(
-					CFrame.lookAt(at, at + n)
-						* CFrame.Angles(0, math.rad(rng:NextNumber(-22, 22)), 0),
-					Vector3.new(length, h, deep),
-					material
-				)
-			end
-		elseif not options.accept or options.accept(world, radius) then
-			local h = thickness * rng:NextNumber(0.6, 1)
-			terrain:FillCylinder(CFrame.new(world.X, topY - h / 2, world.Z), h, radius, material)
-		end
-	end
-end
-
--- A headland: a round lobe of land at `floor` (solid core plus a lumpy
--- edge) over a slightly wider rock shelf 4 studs lower. Use it to push an
--- island's coastline out where a landmark or prop needs room.
+-- A headland: a round lobe of land whose cap sits at `floor` (cap over
+-- soil over a short tapering underside) pushing an island's coast out
+-- where a landmark or prop needs room. Same tones as the island it joins,
+-- so the caps merge into one surface.
 function Pieces.headland(
 	ctx: Context,
 	center: Vector3,
 	radius: number,
 	floor: number,
-	top: Enum.Material,
-	shelf: Enum.Material
+	tones: Ground.Tones
 )
-	local ground = Vector3.new(center.X, 0, center.Z)
-	Kit.blob(ctx, ground, radius * 1.15, floor - 4, 10, shelf, 6)
-	ctx.terrain:FillCylinder(CFrame.new(center.X, floor - 5, center.Z), 10, radius * 0.8, top)
-	Kit.blob(ctx, ground, radius, floor, 8, top, 6)
+	local yaw = ctx.rng:NextNumber(0, math.pi)
+	Ground.isle(
+		ctx,
+		tones,
+		CFrame.new(center.X, floor, center.Z) * CFrame.Angles(0, yaw, 0),
+		radius,
+		radius + 8,
+		{ sides = 12, soil = 7, tiers = 1 }
+	)
 end
 
--- A tilted rock slab: a rotated terrain block standing on the ground at
--- `center` (only X/Z used), from `bottom` up to about `top`, turned `yaw`
--- degrees off `outward` and leaning `tilt` degrees away along `outward`
--- (so the top moves away from whatever `outward` points from). The slab's
--- horizontal reach from `center` stays within halfWidth/halfDepth.
+-- A tilted rock slab: a turned block standing on the ground at `center`
+-- (only X/Z used), from `bottom` up to about `top`, turned `yaw` degrees
+-- off `outward` and leaning `tilt` degrees away along `outward`.
 function Pieces.slabRock(
 	ctx: Context,
 	center: Vector3,
@@ -1469,7 +1341,7 @@ function Pieces.slabRock(
 	bottom: number,
 	tilt: number,
 	yaw: number,
-	material: Enum.Material
+	color: Color3
 )
 	local out = flat(outward).Unit
 	local height = top - bottom
@@ -1477,131 +1349,139 @@ function Pieces.slabRock(
 	local frame = CFrame.lookAt(middle, middle + out)
 		* CFrame.Angles(0, math.rad(yaw), 0)
 		* CFrame.Angles(-math.rad(tilt), 0, 0)
-	ctx.terrain:FillBlock(frame, Vector3.new(halfWidth * 2, height, halfDepth * 2), material)
+	Ground.box(ctx, color, frame, Vector3.new(halfWidth * 2, height, halfDepth * 2), "Slab")
 end
 
--- A sea-stack spire: a chain of terrain balls shrinking upward, rooted
--- below `foot`, with a slight lean.
+-- A rock spire: stacked blocks shrinking upward, each turned 45 degrees
+-- from the last and drifting along `lean`, rooted below `foot`.
 function Pieces.spire(
 	ctx: Context,
 	foot: Vector3,
 	height: number,
 	radius: number,
 	lean: Vector3,
-	material: Enum.Material
+	colors: { Color3 }
 )
-	local r = radius
-	local y = 0
+	local count = 4
 	local drift = flat(lean)
-	ctx.terrain:FillCylinder(CFrame.new(foot - UP * 6), 14, radius * 1.15, material)
-	while y < height and r >= 3.5 do
-		local t = y / height
-		ctx.terrain:FillBall(foot + UP * y + drift * (t * t * 4), r, material)
-		y += r * 0.9
-		r = math.max(radius * (1 - t * 0.55), 3.5)
-		if y + r > height then
-			break
-		end
+	local root = 6
+	local y = -root
+	for i = 1, count do
+		local t = (i - 1) / count
+		local h = (if i == 1 then height / count + root else height / count)
+		local w = radius * 2 * (1 - 0.2 * (i - 1))
+		local center = foot + drift * (t * t * 4) + UP * (y + h / 2)
+		Ground.box(
+			ctx,
+			colors[(i - 1) % #colors + 1],
+			CFrame.new(center) * CFrame.Angles(0, (i - 1) * math.pi / 4, 0),
+			Vector3.new(w, h, w),
+			"Spire"
+		)
+		y += h
 	end
 end
 
--- A natural arch: a chain of terrain balls along a half ellipse from a to
--- b (ground points) rising `rise` studs, with legs flaring at the base.
-function Pieces.ballArch(
+-- A stepped mound standing on the ground at `center`: a wide star of
+-- `color` from below the soil up to `top`, with an optional `crown` block
+-- on top. Dunes, hills and knolls.
+function Pieces.mound(
+	ctx: Context,
+	center: Vector3,
+	radius: number,
+	floor: number,
+	top: number,
+	color: Color3,
+	crown: Color3?
+)
+	local yaw = CFrame.Angles(0, ctx.rng:NextNumber(0, math.pi / 2), 0)
+	local base = top - (if crown then 1.4 else 0)
+	local bottom = floor - 8
+	Ground.star(
+		ctx,
+		color,
+		CFrame.new(center.X, base, center.Z) * yaw,
+		radius * 1.5,
+		base - bottom,
+		"Mound"
+	)
+	if crown then
+		Ground.box(
+			ctx,
+			crown,
+			CFrame.new(center.X, top - 0.8, center.Z) * yaw * CFrame.Angles(0, math.pi / 8, 0),
+			Vector3.new(radius * 0.95, 1.6, radius * 0.95),
+			"Crown"
+		)
+	end
+end
+
+-- A natural arch from a to b (ground points) whose span tops out `rise`
+-- studs above `floor`: two legs, a banded lintel and haunches under it.
+function Pieces.arch(
 	ctx: Context,
 	a: Vector3,
 	b: Vector3,
 	floor: number,
 	rise: number,
-	material: Enum.Material,
-	band: Enum.Material?
+	color: Color3,
+	band: Color3
 )
-	local count = 11
-	for i = 0, count - 1 do
-		local t = i / (count - 1)
-		local angle = math.pi * t
-		local p = a:Lerp(b, (1 - math.cos(angle)) / 2)
-		local y = floor + math.sin(angle) * rise
-		local edge = math.abs(t - 0.5) * 2
-		local r = 3.5 + edge
-		local mat = if band and i % 3 == 1 then band else material
-		ctx.terrain:FillBall(Vector3.new(p.X, y, p.Z), r, mat)
+	local p = Vector3.new(a.X, floor, a.Z)
+	local q = Vector3.new(b.X, floor, b.Z)
+	local length = (q - p).Magnitude
+	local frame = CFrame.lookAt(p, q)
+	local leg = 5
+	for _, s in { 0, length } do
+		Ground.box(
+			ctx,
+			color,
+			frame * CFrame.new(0, (rise - 2) / 2, -s),
+			Vector3.new(leg, rise + 2, leg),
+			"Arch"
+		)
 	end
-	for _, leg in { a, b } do
-		ctx.terrain:FillBall(Vector3.new(leg.X, floor - 1, leg.Z), 6.5, material)
-		ctx.terrain:FillBall(Vector3.new(leg.X, floor + 3, leg.Z), 5, material)
+	Ground.box(
+		ctx,
+		band,
+		frame * CFrame.new(0, rise, -length / 2),
+		Vector3.new(leg - 0.6, 4, length + leg),
+		"Arch"
+	)
+	-- haunches: upside-down wedges, tall end against each leg
+	local span = length - leg
+	local reach = math.min(5, span / 2 - 1)
+	if reach > 1 then
+		Ground.wedge(
+			ctx,
+			color,
+			frame * CFrame.new(0, rise - 4, -leg / 2 - reach / 2) * CFrame.Angles(0, 0, math.pi),
+			Vector3.new(leg - 1, 4, reach),
+			"Arch"
+		)
+		Ground.wedge(
+			ctx,
+			color,
+			frame
+				* CFrame.new(0, rise - 4, -length + leg / 2 + reach / 2)
+				* CFrame.Angles(0, math.pi, math.pi),
+			Vector3.new(leg - 1, 4, reach),
+			"Arch"
+		)
 	end
 end
 
--- Tapering rocky underside below a rectangle of half extents hw x hd
--- centred on `frame`, from topY down `depth` studs, plus hanging spikes.
--- Materials run from the top layer to the tip.
-function Pieces.underside(
-	ctx: Context,
-	frame: CFrame,
-	hw: number,
-	hd: number,
-	topY: number,
-	depth: number,
-	materials: { Enum.Material },
-	accept: Accept?
-)
-	local rng = ctx.rng
-	local layers = math.max(3, math.floor(depth / 11))
-	local step = depth / layers
-	local bottomCenters: { Vector3 } = {}
-	for i = layers, 1, -1 do
-		local f = (i - 0.5) / layers
-		local scale = math.max(0.12, 1 - f ^ 1.35)
-		local material = materials[math.clamp(math.ceil(f * #materials), 1, #materials)]
-		local shift =
-			Vector3.new(rng:NextNumber(-1, 1) * hw * 0.07, 0, rng:NextNumber(-1, 1) * hd * 0.07)
-		local layerFrame = frame * CFrame.new(shift)
-		local w = math.max(4, hw * scale)
-		local d = math.max(4, hd * scale)
-		Pieces.landmass(ctx, layerFrame, w, -d, d, topY - (i - 1) * step, step + 5, material, {
-			corner = math.min(w, d) * 0.5,
-			lobe = math.clamp(math.min(w, d) * 0.5, 5, 14),
-			accept = accept,
-		})
-		if i == layers - 1 then
-			for _ = 1, 4 do
-				table.insert(
-					bottomCenters,
-					layerFrame:PointToWorldSpace(
-						Vector3.new(rng:NextNumber(-0.7, 0.7) * w, 0, rng:NextNumber(-0.7, 0.7) * d)
-					)
-				)
-			end
-		end
-	end
-	-- two or three off-centre hanging cones: chains of terrain balls that
-	-- shrink downward, finished with a sharp rock tip part
-	local tipY = topY - depth
-	local cones = math.min(#bottomCenters, if hw * hd > 2500 then 3 else 2)
-	for k = 1, cones do
-		local center = bottomCenters[k]
-		local radius = rng:NextNumber(7, 10)
-		local y = tipY + step * 1.2
-		local drift = Vector3.new(rng:NextNumber(-1, 1), 0, rng:NextNumber(-1, 1))
-		local material = materials[#materials]
-		local p = Vector3.new(center.X, y, center.Z)
-		while radius >= 4 do
-			ctx.terrain:FillBall(p, radius, material)
-			p += drift * 0.8 - UP * radius * 0.95
-			radius *= 0.8
-		end
-		local folder = ctx.folders.base
-		local tipHeight = radius * 4
-		Pieces.wedge(
-			folder,
-			CFrame.new(p + UP * (radius * 0.6 - tipHeight / 2))
-				* CFrame.Angles(math.pi, rng:NextNumber(0, math.pi), 0),
-			Vector3.new(radius * 2.2, tipHeight, radius * 2.2),
-			Palette.TERRAIN[material] or C.skystoneDark,
-			material
-		)
-	end
+-- A flush turf tile (a flat square patch of grass, ochre or sand) on the
+-- ground at `center`: decoration, not collidable.
+function Pieces.turf(parent: Instance, center: Vector3, radius: number, color: Color3, yaw: number)
+	Pieces.block(
+		parent,
+		CFrame.new(center + UP * 0.05) * CFrame.Angles(0, math.rad(yaw), 0),
+		Vector3.new(radius * 1.5, 0.5, radius * 1.5),
+		color,
+		Enum.Material.SmoothPlastic,
+		{ CastShadow = false, Name = "Turf" }
+	)
 end
 
 -- Placement guards ----------------------------------------------------------------
@@ -1722,7 +1602,7 @@ end
 -- Catch floor carpet ---------------------------------------------------------------
 
 -- Patterns a zone's floor with flush bands or tiles. Their tops sit 0.18
--- above the terrain floor: under the warning circles and inside the
+-- above the ground floor: under the warning circles and inside the
 -- catch-floor rule (nothing above floor + 0.3). Not collidable.
 function Pieces.field(parent: Instance, zone: ZoneContext, pattern: FieldPattern)
 	local slot = zone.slot
@@ -1846,7 +1726,7 @@ function Pieces.field(parent: Instance, zone: ZoneContext, pattern: FieldPattern
 			frame * CFrame.new(c),
 			Vector3.new(CORNER, thickness, CORNER),
 			C.plumDeep,
-			Enum.Material.Slate,
+			Enum.Material.SmoothPlastic,
 			{ CastShadow = false, Name = "FieldCorner" }
 		)
 		-- a flat wedge (triangle in plan view) pointing into the field

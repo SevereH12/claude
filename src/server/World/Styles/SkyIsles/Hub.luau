@@ -1,8 +1,9 @@
 --!strict
 -- The Stormspire: the hub island at the heart of the archipelago.
---   * a compass-rose island: paved plaza, grassy lobes and lower terraces
---     between eight lanes (one per current or future zone slot), tapering
---     into an inverted mountain with glowing crystal stalactites
+--   * a compass-rose island of blocks: a paved sixteen-sided plaza with
+--     grassy lawns a step lower between eight lanes (one per current or
+--     future zone slot), tapering into an inverted mountain of stacked
+--     polygon strata with glowing crystals hanging from its ledges
 --   * the Charge Altar (sell station) under the Stormspire: a gold star
 --     dais and SELL pad beneath a pillared canopy, a tower above it and a
 --     giant floating storm crystal ringed with runes on top
@@ -14,6 +15,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local World = ServerScriptService.Server.World
 local Kit = require(World.Kit)
 local WorldTypes = require(World.Types)
+local Ground = require(script.Parent.Ground)
 local Palette = require(script.Parent.Palette)
 local Pieces = require(script.Parent.Pieces)
 
@@ -21,6 +23,7 @@ type Context = WorldTypes.Context
 type ZoneContext = WorldTypes.ZoneContext
 
 local C = Palette.C
+local G = Palette.GROUND
 local UP = Vector3.yAxis
 
 local LANE_HALF = 4.5 -- half width of a lane runner
@@ -69,81 +72,72 @@ local function buildLand(ctx: Context, sectors: { number }): { Vector3 }
 	local R = layout.hubRadius
 	local rng = ctx.rng
 	local hub = ctx.folders.hub
+	local CAP, OVER = Ground.CAP, Ground.OVERHANG
 
-	-- inverted mountain, darker toward the tip
-	local materials = {
-		Enum.Material.Rock,
-		Enum.Material.Rock,
-		Enum.Material.Slate,
-		Enum.Material.Slate,
-		Enum.Material.Basalt,
+	-- the plaza: a paved sixteen-sided disc over a skystone band
+	local plaza = CFrame.new(0, floor, 0)
+	Ground.poly(ctx, G.pavement, plaza, R + 2 + OVER, CAP, 16, "Plaza")
+	Ground.poly(ctx, G.rock, plaza * CFrame.new(0, -CAP, 0), R + 2, 7, 16, "Soil")
+
+	-- inverted mountain: polygon tiers shrinking downward in alternating
+	-- rock tones, ending in a long basalt spike
+	local tiers = {
+		{ apothem = 50, height = 10, sides = 12 },
+		{ apothem = 42, height = 11, sides = 12 },
+		{ apothem = 33, height = 12, sides = 12 },
+		{ apothem = 24, height = 13, sides = 10 },
+		{ apothem = 16, height = 14, sides = 8 },
+		{ apothem = 10, height = 14, sides = 8 },
 	}
-	local depth = 96
-	local layers = 8
-	local step = depth / layers
-	for i = layers, 1, -1 do
-		local f = (i - 0.5) / layers
-		local radius = math.max(6, (R + 10) * (1 - f ^ 1.3))
-		local jitter = Vector3.new(rng:NextNumber(-1, 1), 0, rng:NextNumber(-1, 1)) * R * 0.05
-		local material = materials[math.clamp(math.ceil(f * #materials), 1, #materials)]
-		Kit.blob(ctx, jitter, radius, floor - 6 - (i - 1) * step, step + 6, material, 7)
+	local tones = { G.rock, G.slate }
+	local y = floor - CAP - 7
+	local center = Vector3.zero
+	local ledges: { { apothem: number, inner: number, y: number } } = {}
+	for i, tier in tiers do
+		center = Vector3.new(rng:NextNumber(-1, 1), 0, rng:NextNumber(-1, 1)) * R * 0.03
+		Ground.poly(
+			ctx,
+			tones[(i - 1) % 2 + 1],
+			CFrame.new(center.X, y, center.Z) * CFrame.Angles(0, rng:NextNumber(0, math.pi), 0),
+			tier.apothem,
+			tier.height,
+			tier.sides,
+			"Rock"
+		)
+		y -= tier.height
+		local below = tiers[i + 1]
+		if below then
+			table.insert(ledges, { apothem = tier.apothem, inner = below.apothem, y = y })
+		end
 	end
-	-- the tip: a long spike with a glowing crystal cluster hanging off it
-	local tipY = floor - 6 - depth
-	local spikeRadius = 6
-	local y = tipY + step
-	for _ = 1, 4 do
-		ctx.terrain:FillCylinder(CFrame.new(0, y - 4, 0), 9, spikeRadius, Enum.Material.Basalt)
-		y -= 7
-		spikeRadius *= 0.7
-	end
-	local tipCrystal = Pieces.cluster(hub, rng, Vector3.new(0, y + 3, 0), 14, C.cyan, 5, true)
+	local tip = Ground.point(ctx, G.basalt, Vector3.new(center.X, y, center.Z), 11, 22, 0.4)
+	local tipCrystal = Pieces.cluster(hub, rng, tip + UP * 4, 14, C.cyan, 5, true)
 	Pieces.light(tipCrystal, C.cyan, 40, 2)
 
-	-- glowing crystals bursting from the cliffs, between lanes
+	-- glowing crystals hanging from the mountain's ledges, between lanes
 	for i = 1, #sectors, 3 do
+		local ledge = ledges[2]
 		local dir = direction(sectors[i])
-		local spot = dir * (R - 4) + UP * (floor - 30)
-		Pieces.cluster(hub, rng, spot, 12, C.cyan, 4)
+		local spot = dir * ((ledge.apothem + ledge.inner) / 2) + UP * ledge.y
+		Pieces.cluster(hub, rng, spot, 12, C.cyan, 4, true)
 	end
 
-	-- lower terraces and grassy lobes between the lanes
+	-- grassy lawns one step below the plaza, between the lanes
 	local lawnSpots: { Vector3 } = {}
 	for _, angle in sectors do
 		local dir = direction(angle)
-		local lowRadius = rng:NextNumber(11, 14)
-		local low = dir * (R + 13)
-		if Pieces.offLanes(ctx, low, lowRadius, 7) and Pieces.clearOf(ctx, low, lowRadius) then
-			Kit.blob(ctx, low, lowRadius, floor - 8, 10, Enum.Material.LeafyGrass, 5)
-		end
-		local midRadius = rng:NextNumber(12, 15)
-		local mid = dir * (R + 5) + Vector3.new(rng:NextNumber(-3, 3), 0, rng:NextNumber(-3, 3))
-		if Pieces.offLanes(ctx, mid, midRadius, 7) and Pieces.clearOf(ctx, mid, midRadius) then
-			Kit.blob(ctx, mid, midRadius, floor - 4, 10, Enum.Material.Grass, 5)
-		end
-	end
-
-	-- the plaza and its lawns
-	ctx.terrain:FillCylinder(CFrame.new(0, floor - 6, 0), 12, R + 2, Enum.Material.Pavement)
-	for _, angle in sectors do
-		local dir = direction(angle)
-		local radius = rng:NextNumber(12, 14)
-		local spot = dir * (R - 1)
+		local radius = rng:NextNumber(10, 12)
+		local spot = dir * (R + 1)
+		local reach = radius / math.cos(math.pi / 8) + OVER
 		if
-			Pieces.offLanes(ctx, spot, radius, LANE_HALF + 1) and Pieces.clearOf(ctx, spot, radius)
+			Pieces.offLanes(ctx, spot, reach, LANE_HALF + 1) and Pieces.clearOf(ctx, spot, reach)
 		then
-			ctx.terrain:FillCylinder(
-				CFrame.new(spot.X, floor - 5, spot.Z),
-				10,
-				radius,
-				Enum.Material.Grass
-			)
-			table.insert(lawnSpots, Vector3.new(spot.X, floor, spot.Z) + dir * (radius - 4))
+			local lawn = CFrame.new(spot.X, floor - 1, spot.Z) * CFrame.Angles(0, angle, 0)
+			Ground.poly(ctx, G.grass, lawn, radius + OVER, CAP, 8, "Lawn")
+			Ground.poly(ctx, G.soil, lawn * CFrame.new(0, -CAP, 0), radius, 6, 8, "Soil")
+			table.insert(lawnSpots, Vector3.new(spot.X, floor - 1, spot.Z) + dir * (radius - 4))
 		end
 	end
-	-- an inner ring of cobbles around the altar
-	ctx.terrain:FillCylinder(CFrame.new(0, floor - 2, 0), 4, 30, Enum.Material.Cobblestone)
-	ctx.terrain:FillCylinder(CFrame.new(0, floor - 2, 0), 4, 22, Enum.Material.Pavement)
 	return lawnSpots
 end
 
@@ -951,7 +945,8 @@ local function buildSectors(
 		Pieces.rocks(
 			hub,
 			rng,
-			spot + Vector3.new(rng:NextNumber(-4, 4), 0, rng:NextNumber(-4, 4)),
+			-- slide along the lawn (not out over its edge or onto the plaza)
+			spot + spot.Unit:Cross(UP) * rng:NextNumber(-4, 4),
 			2.2
 		)
 	end
@@ -961,14 +956,16 @@ local function buildSectors(
 		if poured < 2 and Pieces.offLanes(ctx, spot, 5, LANE_HALF) then
 			local out = spot * Vector3.new(1, 0, 1)
 			local outward = out.Unit
+			-- a pool on the lawn (lawn spots sit on the lawn's surface)
 			local pool = spot - outward * 1
-			ctx.terrain:FillCylinder(
-				CFrame.new(pool.X, floor - 2, pool.Z),
-				4,
-				3.6,
-				Enum.Material.Water
+			Ground.water(
+				hub,
+				Palette.WATER,
+				CFrame.lookAt(pool + UP * 0.06, pool + UP * 0.06 + outward),
+				Vector2.new(6.4, 6.4),
+				"Pool"
 			)
-			Pieces.waterfall(ctx, pool + outward * 4.5 - UP * 0.6, outward, 110, 3.4)
+			Pieces.waterfall(ctx, pool + outward * 3 - UP * 0.6, outward, 110, 3.4)
 			poured += 1
 		end
 	end

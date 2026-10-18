@@ -4,8 +4,10 @@
 -- bridges. Style guide: docs/styles/SkyIsles.md.
 --
 -- Modules:
---   Palette   colours, terrain colours, sign looks
---   Pieces    the style's building kit (shapes, crystals, bridges, islands)
+--   Palette   colours, ground colours, sign looks
+--   Ground    block-built ground (Map.Ground): polygons, islands, tapers,
+--             hanging points, plus "how high is the ground here?" queries
+--   Pieces    the style's building kit (shapes, crystals, bridges, landforms)
 --   Sky       lighting, storm look, cloud sea, drifting rocks
 --   Hub       the Stormspire: altar/sell station, spire, lanes, spawn
 --   Zone      island, field, border, gate and bridge shared by all themes
@@ -18,13 +20,13 @@
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local WorldTypes = require(ServerScriptService.Server.World.Types)
+local Ground = require(script.Ground)
 local Hub = require(script.Hub)
 local Palette = require(script.Palette)
 local Pieces = require(script.Pieces)
 local Sky = require(script.Sky)
 local SkyTypes = require(script.SkyTypes)
 local Teaser = require(script.Teaser)
-local Terra = require(script.Terra)
 local Zone = require(script.Zone)
 
 type Context = WorldTypes.Context
@@ -48,6 +50,8 @@ Style.name = "SkyIsles"
 Style.description =
 	"Sky archipelago: floating islands chained to the Stormspire above a sea of clouds, linked by rune bridges."
 Style.palette = (Palette.C :: any) :: { [string]: Color3 }
+-- every walkable surface is part-built in Map.Ground; no terrain is filled
+Style.ground = "Blocks"
 -- Slots land on the eight compass directions (135 degree steps), each a
 -- little further out than the last; seven zones plus the teaser fit.
 Style.layout = {
@@ -63,8 +67,8 @@ Style.layout = {
 }
 
 function Style.atmosphere(ctx: Context)
-	-- record every terrain fill so pieces can test "is this inside land?"
-	Terra.install(ctx)
+	-- log every ground part so pieces can test "is this inside land?"
+	Ground.install(ctx)
 	Pieces.resetChecks(ctx)
 	Sky.atmosphere(ctx)
 end

@@ -8,8 +8,8 @@
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local World = ServerScriptService.Server.World
-local Kit = require(World.Kit)
 local WorldTypes = require(World.Types)
+local Ground = require(script.Parent.Parent.Ground)
 local Palette = require(script.Parent.Parent.Palette)
 local Pieces = require(script.Parent.Parent.Pieces)
 local SkyTypes = require(script.Parent.Parent.SkyTypes)
@@ -21,6 +21,7 @@ type ThemeSpec = SkyTypes.ThemeSpec
 type Land = SkyTypes.Land
 
 local C = Palette.C
+local G = Palette.GROUND
 local UP = Vector3.yAxis
 
 local Default = {}
@@ -28,28 +29,22 @@ local Default = {}
 function Default.spec(zone: ZoneContext): ThemeSpec
 	local light, dark = Palette.complement(zone.color)
 	return {
-		rim = Enum.Material.Grass,
-		terrace = Enum.Material.LeafyGrass,
-		cliffs = {
-			Enum.Material.Rock,
-			Enum.Material.Rock,
-			Enum.Material.Slate,
-			Enum.Material.Basalt,
-		},
-		fieldTerrain = Enum.Material.Limestone,
+		rim = G.grass,
+		soil = G.soil,
+		cliffs = { G.rock, G.slate, G.basalt },
 		field = {
 			kind = "checker",
 			colors = { light, dark },
-			materials = { Enum.Material.Grass, Enum.Material.Grass },
+			materials = { Enum.Material.SmoothPlastic, Enum.Material.SmoothPlastic },
 			size = 22,
 		},
 		accent = zone.color,
 		depth = 54,
-		ridge = Enum.Material.LeafyGrass,
+		ridge = G.grassDeep,
 		ridgeHeight = 8,
 		ridgeShape = "dunes",
-		ridgeCap = Enum.Material.Grass,
-		spires = Enum.Material.Rock,
+		ridgeCap = G.grass,
+		spires = G.rock,
 	}
 end
 
@@ -145,11 +140,32 @@ function Default.dress(ctx: Context, zone: ZoneContext, spec: ThemeSpec, land: L
 	local toHub = slot.frame.LookVector
 
 	-- hero: obelisk on a grassy knoll behind the field
+	local tones = Zone.tones(spec)
 	local knollSpot, scale = Pieces.heroSpot(ctx, zone, 13, 14)
 	if knollSpot then
 		local knoll = knollSpot
-		Kit.blob(ctx, Vector3.new(knoll.X, 0, knoll.Z), 13 * scale, floor, 12, spec.rim, 6)
-		Kit.blob(ctx, Vector3.new(knoll.X, 0, knoll.Z) - toHub * 2, 8, floor + 2, 6, spec.rim, 5)
+		Pieces.headland(ctx, knoll, 13 * scale, floor, tones)
+		-- a stepped grassy knoll: two one-stud steps up to the obelisk
+		local mound = knoll - toHub * 2
+		local yaw = CFrame.Angles(0, math.atan2(toHub.X, toHub.Z), 0)
+		Ground.poly(
+			ctx,
+			spec.rim,
+			CFrame.new(mound.X, floor + 1, mound.Z) * yaw,
+			9,
+			1.5,
+			8,
+			"Knoll"
+		)
+		Ground.poly(
+			ctx,
+			spec.rim,
+			CFrame.new(mound.X, floor + 2, mound.Z) * yaw * CFrame.Angles(0, math.pi / 8, 0),
+			6.5,
+			1.5,
+			8,
+			"Knoll"
+		)
 		Default.obelisk(
 			ctx,
 			folder,
@@ -166,7 +182,7 @@ function Default.dress(ctx: Context, zone: ZoneContext, spec: ThemeSpec, land: L
 	-- a standing-stone rune circle on a headland to the left
 	local circle = at(-(land.halfW + 8), -hd * 0.35)
 	if Pieces.clearOf(ctx, circle, 17, zone) then
-		Pieces.headland(ctx, circle, 13, floor, spec.rim, Enum.Material.Rock)
+		Pieces.headland(ctx, circle, 13, floor, tones)
 		local center = Vector3.new(circle.X, floor, circle.Z)
 		for k = 1, 6 do
 			local angle = k / 6 * math.pi * 2
@@ -196,14 +212,26 @@ function Default.dress(ctx: Context, zone: ZoneContext, spec: ThemeSpec, land: L
 	-- a pond spilling a waterfall off a headland to the right
 	local pond = at(land.halfW + 6, -hd * 0.35)
 	if Pieces.clearOf(ctx, pond, 15, zone) then
-		Pieces.headland(ctx, pond, 12, floor, spec.rim, Enum.Material.Rock)
-		ctx.terrain:FillCylinder(CFrame.new(pond.X, floor - 2, pond.Z), 4, 5.5, Enum.Material.Water)
+		Pieces.headland(ctx, pond, 12, floor, tones)
 		local outward = slot.frame.RightVector
+		Ground.water(
+			folder,
+			Palette.WATER,
+			CFrame.lookAt(
+				Vector3.new(pond.X, floor + 0.06, pond.Z),
+				Vector3.new(pond.X, floor + 0.06, pond.Z) + outward
+			) * CFrame.Angles(0, math.pi / 4, 0),
+			Vector2.new(8.4, 8.4),
+			"Pond"
+		)
 		local lip = Vector3.new(pond.X, floor - 0.6, pond.Z) + outward * 11
-		ctx.terrain:FillBlock(
-			CFrame.lookAt(Vector3.new(pond.X, floor - 1, pond.Z):Lerp(lip, 0.5), lip),
-			Vector3.new(2.6, 2, 11),
-			Enum.Material.Water
+		local channel = Vector3.new(pond.X, floor + 0.06, pond.Z):Lerp(lip + UP * 0.66, 0.5)
+		Ground.water(
+			folder,
+			Palette.WATER,
+			CFrame.lookAt(channel, channel + outward),
+			Vector2.new(2.6, 11),
+			"Spill"
 		)
 		Pieces.waterfall(ctx, lip, outward, 80, 3)
 		for k = 1, 5 do
@@ -230,15 +258,7 @@ function Default.dress(ctx: Context, zone: ZoneContext, spec: ThemeSpec, land: L
 		end
 	end
 	for _, p in Zone.rimPoints(ctx, zone, land, 4, 5, 6) do
-		Kit.blob(
-			ctx,
-			Vector3.new(p.X, 0, p.Z),
-			rng:NextNumber(3.5, 5),
-			floor,
-			4,
-			Enum.Material.LeafyGrass,
-			4
-		)
+		Pieces.turf(folder, p, rng:NextNumber(3.5, 5), G.grassDeep, rng:NextNumber(0, 90))
 		Pieces.flowers(folder, rng, p, { C.coral, C.cream, C.gold }, 4)
 	end
 	for _, p in Zone.rimPoints(ctx, zone, land, 6, 2, 2) do
@@ -249,7 +269,9 @@ function Default.dress(ctx: Context, zone: ZoneContext, spec: ThemeSpec, land: L
 		end
 	end
 	for i, terrace in land.terraces do
-		if i % 2 == 0 then
+		if not Zone.unblocked(land, terrace.center, 2) then
+			continue
+		elseif i % 2 == 0 then
 			Pieces.cluster(folder, rng, terrace.center, rng:NextNumber(4, 6), zone.color, 3)
 		else
 			Pieces.bush(folder, rng, terrace.center, 3, C.meadow)

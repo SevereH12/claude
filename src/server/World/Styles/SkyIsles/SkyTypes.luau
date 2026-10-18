@@ -18,20 +18,20 @@ export type FieldPattern = {
 	widths: { number }?, -- bands: relative widths, cycled (strata look)
 }
 
--- How a theme's island is built (materials, field, shape).
+-- How a theme's island is built (colours, field, shape).
 export type ThemeSpec = {
-	rim: Enum.Material, -- plateau surface around the field
-	terrace: Enum.Material, -- lower ledges hanging off the sides
-	cliffs: { Enum.Material }, -- underside, top to bottom
-	fieldTerrain: Enum.Material, -- flat terrain under the field carpet
+	rim: Color3, -- cap of the plateau round the field, its lobes and headlands
+	soil: Color3, -- band under the cap
+	cliffs: { Color3 }, -- underside strata (alternated), the last one for hanging points
 	field: FieldPattern,
 	accent: Color3, -- crystals hanging under the island
 	depth: number, -- how far the underside reaches below the floor
-	ridge: Enum.Material, -- backdrop ridge behind the field (rocks, walls, hills)
+	shore: number?, -- extra rim on the sides and back (a broad beach)
+	ridge: Color3, -- backdrop ridge behind the field (rocks, walls, hills)
 	ridgeHeight: number,
-	ridgeShape: ("slabs" | "dunes")?, -- tilted rock slabs (default) or low dunes
-	ridgeCap: Enum.Material?, -- dunes: grassy cap on each dune
-	spires: Enum.Material?, -- a few tall sea-stack spires behind the ridge
+	ridgeShape: ("slabs" | "dunes")?, -- tilted rock slabs (default) or stepped mounds
+	ridgeCap: Color3?, -- dunes: crown on each mound
+	spires: Color3?, -- a couple of stacked rock spires on the ridge line
 }
 
 export type Theme = {
@@ -40,7 +40,8 @@ export type Theme = {
 }
 
 -- Where an island has guaranteed flat land (zone-local, at the floor):
--- x in [-halfW, halfW], z in [front, back]; plus extra terraces.
+-- x in [-halfW, halfW], z in [front, back] with chamfered corners; plus
+-- the coast lobes and headlands (all with their top at the floor).
 export type Land = {
 	halfW: number,
 	front: number, -- negative: the hub-facing edge of the land

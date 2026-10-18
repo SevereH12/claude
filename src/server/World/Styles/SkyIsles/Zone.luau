@@ -10,6 +10,7 @@ local World = ServerScriptService.Server.World
 local Kit = require(World.Kit)
 local Layout = require(World.Layout)
 local WorldTypes = require(World.Types)
+local Ground = require(script.Parent.Ground)
 local Palette = require(script.Parent.Palette)
 local Pieces = require(script.Parent.Pieces)
 local SkyTypes = require(script.Parent.SkyTypes)
@@ -23,9 +24,12 @@ local C = Palette.C
 local UP = Vector3.yAxis
 
 local RIM = 10 -- guaranteed flat land around the footprint
+local CHAMFER = 6 -- the plateau's corners are cut this far in
+local SOIL = 6 -- soil band under the plateau cap
 local GATE_HALF = 7 -- gate pillars sit this far either side of the bridge
 local BRIDGE_WIDTH = 10
-local ZONE_PARTS = 150 -- per-zone part budget for ground, field, border, gate and dressing
+local BRIDGE_LIFT = 0.2 -- bridge decks sit this far above the ground they land on
+local ZONE_PARTS = 150 -- per-zone part budget for field, border, gate and dressing (not ground)
 
 local Zone = {}
 
@@ -36,20 +40,36 @@ local function frontRim(ctx: Context, zone: ZoneContext): number
 	return math.clamp(gap, 2, RIM)
 end
 
--- The guaranteed flat land around a zone's footprint (before terraces
--- and ridge are added). Zone.ground fills it in and returns it; themes get
--- it passed in. (Kept out of module state on purpose: the land travels
--- with the build, not with the module.)
-function Zone.newLand(ctx: Context, zone: ZoneContext): Land
+-- The guaranteed flat land around a zone's footprint (before lobes and
+-- ridge are added): a chamfered rectangle, wider by spec.shore on the
+-- sides and back. Zone.ground builds it and returns it; themes get it
+-- passed in. (Kept out of module state on purpose: the land travels with
+-- the build, not with the module.)
+function Zone.newLand(ctx: Context, zone: ZoneContext, spec: ThemeSpec?): Land
 	local slot = zone.slot
+	local shore = if spec then spec.shore or 0 else 0
 	return {
-		halfW = slot.width / 2 + RIM,
+		halfW = slot.width / 2 + RIM + shore,
 		front = -slot.depth / 2 - frontRim(ctx, zone),
-		back = slot.depth / 2 + RIM,
+		back = slot.depth / 2 + RIM + shore,
 		terraces = {},
 		blocked = {},
 	}
 end
+
+-- The colours of a zone's island, from its theme.
+function Zone.tones(spec: ThemeSpec): Ground.Tones
+	local cliffs = spec.cliffs
+	return {
+		cap = spec.rim,
+		soil = spec.soil,
+		rocks = { cliffs[1], cliffs[math.min(2, #cliffs)] },
+		tip = cliffs[#cliffs],
+	}
+end
+
+-- How far bridge decks sit above the ground they land on.
+Zone.BRIDGE_LIFT = BRIDGE_LIFT
 
 -- Bridge landing length (covers the land in front of the gate).
 function Zone.landing(ctx: Context, zone: ZoneContext): number
@@ -64,9 +84,9 @@ function Zone.accept(ctx: Context, zone: ZoneContext): Pieces.Accept
 	end
 end
 
--- Is a point on this zone's guaranteed rim (the rounded ring of flat land
--- around the footprint), at least `gap` outside the footprint and at least
--- `inset` inside the land edge?
+-- Is a point on this zone's guaranteed rim (the chamfered ring of flat
+-- land around the footprint), at least `gap` outside the footprint and at
+-- least `inset` inside the land edge?
 function Zone.onRim(zone: ZoneContext, land: Land, p: Vector3, gap: number, inset: number?): boolean
 	local slot = zone.slot
 	local l = slot.frame:PointToObjectSpace(p)
@@ -81,14 +101,10 @@ function Zone.onRim(zone: ZoneContext, land: Land, p: Vector3, gap: number, inse
 	if ax > land.halfW - margin or l.Z < land.front + margin or l.Z > land.back - margin then
 		return false
 	end
-	if ax > hw and (l.Z > hd or l.Z < -hd) then
-		local radius = if l.Z > hd then land.back - hd else -hd - land.front
-		local cz = if l.Z > hd then hd else -hd
-		if Vector2.new(ax - hw, l.Z - cz).Magnitude > radius - margin then
-			return false
-		end
-	end
-	return true
+	-- the chamfered corners
+	local inX = land.halfW - ax
+	local inZ = if l.Z > 0 then land.back - l.Z else l.Z - land.front
+	return inX + inZ >= CHAMFER + margin * 1.42
 end
 
 -- Horizontal unit vector from the zone's footprint out toward p.
@@ -167,8 +183,9 @@ function Zone.unblocked(land: Land, p: Vector3, clearance: number): boolean
 end
 
 -- A ragged backdrop ridge along the back edge and the back of both sides,
--- so the field sits in a cove: rocks, canyon walls or hills by theme.
--- Every lump stays clear of the footprint.
+-- so the field sits in a cove: stepped mounds or tilted rock slabs by
+-- theme, standing on the land edge. Every lump stays clear of the
+-- footprint and of the coast lobes (which themes dress).
 function Zone.ridge(ctx: Context, zone: ZoneContext, land: Land, spec: ThemeSpec)
 	local height = spec.ridgeHeight
 	local slot = zone.slot
@@ -177,28 +194,19 @@ function Zone.ridge(ctx: Context, zone: ZoneContext, land: Land, spec: ThemeSpec
 	local floor = slot.floor
 	local hw, hd = slot.width / 2, slot.depth / 2
 	local accept = Zone.accept(ctx, zone)
+	local backOut = land.back - hd
+	local sideOut = land.halfW - hw
 	local spots: { Vector3 } = {}
-	-- main row just past the rim, and a second, broken row behind it
-	for row = 1, 2 do
-		local out = if row == 1 then 13 else 21
-		local x = -hw - 6 + rng:NextNumber(0, 6)
-		while x <= hw + 6 do
-			if row == 1 or rng:NextNumber() < 0.5 then
-				table.insert(spots, Vector3.new(x, 0, hd + out + rng:NextNumber(-2, 3)))
-			end
-			x += rng:NextNumber(8, 15)
-		end
-		for _, side in { -1, 1 } do
-			local z = hd * rng:NextNumber(0.05, 0.4)
-			while z <= hd + 4 do
-				if row == 1 or rng:NextNumber() < 0.5 then
-					table.insert(
-						spots,
-						Vector3.new(side * (hw + out + rng:NextNumber(-2, 3)), 0, z)
-					)
-				end
-				z += rng:NextNumber(8, 15)
-			end
+	local x = -hw - 4 + rng:NextNumber(0, 6)
+	while x <= hw + 4 do
+		table.insert(spots, Vector3.new(x, 0, hd + backOut + rng:NextNumber(-3, 0)))
+		x += rng:NextNumber(9, 14)
+	end
+	for _, side in { -1, 1 } do
+		local z = hd * rng:NextNumber(0.05, 0.4)
+		while z <= hd - 2 do
+			table.insert(spots, Vector3.new(side * (hw + sideOut + rng:NextNumber(-3, 0)), 0, z))
+			z += rng:NextNumber(9, 14)
 		end
 	end
 	local shape = spec.ridgeShape or "slabs"
@@ -207,25 +215,27 @@ function Zone.ridge(ctx: Context, zone: ZoneContext, land: Land, spec: ThemeSpec
 		if rng:NextNumber() < 0.85 then
 			local footprintGap =
 				math.sqrt(math.max(math.abs(l.X) - hw, 0) ^ 2 + math.max(math.abs(l.Z) - hd, 0) ^ 2)
-			local radius = math.min(rng:NextNumber(5, 11), (footprintGap - 1.5) / 1.2)
+			local radius = math.min(rng:NextNumber(5, 10), (footprintGap - 1.5) / 1.2)
 			local p = frame:PointToWorldSpace(l)
-			if radius >= 3 and accept(p, radius) then
-				local ground = Vector3.new(p.X, 0, p.Z)
+			local clearOfLobes = true
+			for _, lobe in land.terraces do
+				local d = Vector2.new(p.X - lobe.center.X, p.Z - lobe.center.Z).Magnitude
+				if d < lobe.radius * 0.6 + radius then
+					clearOfLobes = false
+				end
+			end
+			if radius >= 3 and clearOfLobes and accept(p, radius) then
 				local outward = Zone.outward(zone, p)
 				if shape == "dunes" then
-					-- low rounded dunes with a grassy crown
 					local top = floor
-						+ 4 * math.max(1, math.round(height * rng:NextNumber(0.5, 1) / 4))
-					Kit.blob(ctx, ground, radius, top, top - floor + 8, spec.ridge, 5)
-					if spec.ridgeCap then
-						Kit.blob(ctx, ground, radius * 0.6, top + 1, 3, spec.ridgeCap, 4)
-					end
+						+ 2 * math.max(1, math.round(height * rng:NextNumber(0.5, 1) / 2))
+					Pieces.mound(ctx, p, radius, floor, top, spec.ridge, spec.ridgeCap)
 				else
 					-- jagged skyline: tilted slabs leaning away from the field
 					local top = floor + height * rng:NextNumber(0.45, 1.1)
 					Pieces.slabRock(
 						ctx,
-						ground,
+						p,
 						outward,
 						radius * rng:NextNumber(0.7, 0.85),
 						radius * rng:NextNumber(0.4, 0.55),
@@ -237,16 +247,16 @@ function Zone.ridge(ctx: Context, zone: ZoneContext, land: Land, spec: ThemeSpec
 					)
 				end
 				table.insert(land.blocked, { center = p, radius = radius * 1.17 })
-				-- the odd sea-stack spire on the second row
-				if spec.spires and spires < 3 and footprintGap > 17 and rng:NextNumber() < 0.35 then
+				-- the odd rock spire standing up out of the ridge
+				if spec.spires and spires < 2 and rng:NextNumber() < 0.3 then
 					spires += 1
 					Pieces.spire(
 						ctx,
 						Vector3.new(p.X, floor, p.Z),
 						height * rng:NextNumber(1.8, 2.4),
-						math.min(radius, 6),
+						math.min(radius * 0.6, 4),
 						outward,
-						spec.spires
+						{ spec.spires, spec.ridge }
 					)
 				end
 			end
@@ -256,159 +266,120 @@ end
 
 -- Ground ---------------------------------------------------------------------------
 
+-- Coast lobes: polygons of land pushing the coastline out round the sides
+-- and back, so the plateau never reads as a plain rectangle. Each one is
+-- recorded in land.terraces (top at the floor) for the theme to dress.
+local function lobes(ctx: Context, zone: ZoneContext, land: Land, tones: Ground.Tones)
+	local slot = zone.slot
+	local frame = slot.frame
+	local rng = ctx.rng
+	local floor = slot.floor
+	local accept = Zone.accept(ctx, zone)
+	local want = math.clamp(math.round((slot.width + slot.depth) / 45), 4, 6)
+	local sideLength = land.back - land.front - 2 * CHAMFER
+	local backLength = land.halfW * 2 - 2 * CHAMFER
+	for _ = 1, want * 6 do
+		if #land.terraces >= want then
+			break
+		end
+		local radius = rng:NextNumber(8, 14)
+		local t = rng:NextNumber(0, 2 * sideLength + backLength)
+		local edge: Vector3
+		local normal: Vector3
+		if t < sideLength then
+			edge, normal =
+				Vector3.new(-land.halfW, 0, land.front + CHAMFER + t), Vector3.new(-1, 0, 0)
+		elseif t < 2 * sideLength then
+			edge, normal =
+				Vector3.new(land.halfW, 0, land.front + CHAMFER + t - sideLength),
+				Vector3.new(1, 0, 0)
+		else
+			edge, normal =
+				Vector3.new(-land.halfW + CHAMFER + t - 2 * sideLength, 0, land.back),
+				Vector3.new(0, 0, 1)
+		end
+		local l = edge + normal * radius * rng:NextNumber(-0.4, 0.15)
+		local p = frame:PointToWorldSpace(l)
+		local spaced = true
+		for _, other in land.terraces do
+			local d = Vector2.new(p.X - other.center.X, p.Z - other.center.Z).Magnitude
+			if d < (radius + other.radius) * 1.1 then
+				spaced = false
+			end
+		end
+		if spaced and accept(p, radius * 1.1) then
+			local top = CFrame.new(p)
+				* frame.Rotation
+				* CFrame.Angles(0, rng:NextNumber(0, math.pi), 0)
+			Ground.poly(ctx, tones.cap, top, radius + Ground.OVERHANG, Ground.CAP, 10, "Cap")
+			Ground.poly(
+				ctx,
+				tones.soil,
+				top * CFrame.new(0, -Ground.CAP, 0),
+				radius,
+				SOIL + 2,
+				10,
+				"Soil"
+			)
+			table.insert(land.terraces, { center = p, radius = radius, top = floor })
+		end
+	end
+end
+
 function Zone.ground(ctx: Context, zone: ZoneContext, spec: ThemeSpec): Land
 	local slot = zone.slot
 	local frame = slot.frame
-	local floor = slot.floor
 	local rng = ctx.rng
-	local hw, hd = slot.width / 2, slot.depth / 2
-	local front = -hd - frontRim(ctx, zone)
-	local accept = Zone.accept(ctx, zone)
-	local land = Zone.newLand(ctx, zone)
+	local land = Zone.newLand(ctx, zone, spec)
+	local tones = Zone.tones(spec)
 	zone.folder:SetAttribute("SkyPartBudget", ZONE_PARTS)
 
-	-- tapering underside with hanging spikes
-	Pieces.underside(
+	-- the plateau: a light cap over a soil band, its top exactly at the
+	-- floor across the whole footprint (the catch floor) and the rim
+	local sx, sz = land.halfW * 2, land.back - land.front
+	local top = frame * CFrame.new(0, 0, (land.front + land.back) / 2)
+	local over = Ground.OVERHANG
+	Ground.rect(
 		ctx,
-		frame,
-		hw + RIM * 0.5,
-		hd + RIM * 0.5,
-		floor - 8,
-		spec.depth,
-		spec.cliffs,
-		accept
+		tones.cap,
+		top,
+		sx + 2 * over,
+		sz + 2 * over,
+		Ground.CAP,
+		CHAMFER + 0.35,
+		"Cap"
 	)
+	local soilTop = top * CFrame.new(0, -Ground.CAP, 0)
+	Ground.rect(ctx, tones.soil, soilTop, sx, sz, SOIL, CHAMFER, "Soil")
 
-	-- a rocky shelf just under the rim: the first step of the cliff
-	Pieces.landmass(
-		ctx,
-		frame,
-		land.halfW + 3,
-		front - 2,
-		land.back + 3,
-		floor - 4,
-		8,
-		spec.cliffs[1],
-		{
-			corner = RIM + 3,
-			lobe = 12,
-			reach = 0.8,
-			accept = accept,
-		}
-	)
-
-	-- lower terraces hanging off the sides and back: layered cliffs
-	local terraceCount = math.max(3, math.floor((slot.width + slot.depth) / 50))
-	for i = 1, terraceCount * 4 do
-		if #land.terraces >= terraceCount then
-			break
-		end
-		local side = rng:NextInteger(1, 3) -- 1 left, 2 right, 3 back
-		local radius = rng:NextNumber(10, 16)
-		local out = land.halfW + 3 + radius * 0.3
-		local l: Vector3
-		if side == 3 then
-			l = Vector3.new(rng:NextNumber(-hw, hw), 0, land.back + 3 + radius * 0.3)
-		else
-			l = Vector3.new(if side == 1 then -out else out, 0, rng:NextNumber(-hd * 0.6, hd))
-		end
-		local p = frame:PointToWorldSpace(l)
-		local top = floor - (if i % 2 == 0 then 12 else 8)
-		if accept(p, radius) then
-			Kit.blob(ctx, Vector3.new(p.X, 0, p.Z), radius, top, 10, spec.terrace, 5)
-			table.insert(
-				land.terraces,
-				{ center = Vector3.new(p.X, top, p.Z), radius = radius, top = top }
-			)
-		end
-	end
-
-	-- two peninsulas of rim pushing out from the sides or back
-	local made = 0
-	for _ = 1, 8 do
-		if made >= 2 then
-			break
-		end
-		local radius = rng:NextNumber(12, 17)
-		local side = rng:NextInteger(1, 3)
-		local l: Vector3
-		if side == 3 then
-			l = Vector3.new(rng:NextNumber(-hw * 0.7, hw * 0.7), 0, land.back + radius * 0.25)
-		else
-			local out = land.halfW + radius * 0.25
-			l = Vector3.new(if side == 1 then -out else out, 0, rng:NextNumber(-hd * 0.4, hd * 0.8))
-		end
-		local p = frame:PointToWorldSpace(l)
-		if accept(p, radius * 1.2) then
-			made += 1
-			Kit.blob(ctx, Vector3.new(p.X, 0, p.Z), radius * 1.08, floor - 4, 8, spec.cliffs[1], 6)
-			Kit.blob(ctx, Vector3.new(p.X, 0, p.Z), radius, floor, 10, spec.rim, 6)
-			table.insert(
-				land.terraces,
-				{ center = Vector3.new(p.X, floor, p.Z), radius = radius, top = floor }
-			)
-		end
-	end
-
-	-- the plateau: guaranteed rounded rim plus a lumpy coastline
-	Pieces.landmass(ctx, frame, land.halfW, front, land.back, floor, 10, spec.rim, {
-		corner = RIM,
-		lobe = 10,
-		reach = 0.55,
-		accept = accept,
-	})
-
-	-- the backdrop ridge behind the field
+	-- the coast, then the backdrop ridge behind the field
+	lobes(ctx, zone, land, tones)
 	Zone.ridge(ctx, zone, land, spec)
 
-	-- the catch floor: terrain exactly at the floor, then the carpet on top
-	ctx.terrain:FillBlock(
-		CFrame.new(frame.Position.X, floor - 4, frame.Position.Z) * frame.Rotation,
-		Vector3.new(slot.width, 8, slot.depth),
-		spec.fieldTerrain
+	-- tapering underside: stepped strata down to hanging rock points
+	local hangs = Ground.taperRect(
+		ctx,
+		tones,
+		soilTop * CFrame.new(0, -SOIL, 0),
+		land.halfW,
+		sz / 2,
+		spec.depth - Ground.CAP - SOIL,
+		2
 	)
+
+	-- the catch floor carpet, flush on the plateau cap
 	Pieces.field(zone.folder, zone, spec.field)
 
-	-- every lower terrace gets a stone ramp back up to the rim, so a player
-	-- who drops onto one while chasing a strike can walk straight back
-	for _, terrace in land.terraces do
-		if terrace.top < floor then
-			local inward = -Zone.outward(zone, terrace.center)
-			local rise = floor - terrace.top
-			local from = terrace.center + inward * (terrace.radius * 0.35)
-			local to = Vector3.new(from.X, floor, from.Z) + inward * (rise * 2.1)
-			if
-				Zone.onRim(zone, land, to, 3, 1.5)
-				and Zone.unblocked(land, to, 2)
-				and Pieces.clearOf(ctx, to, 3, zone)
-			then
-				Kit.walkway(zone.folder, from + UP * 0.2, to + UP * 0.2, 4.5, 1.2, {
-					Name = "TerraceRamp",
-					Color = C.skystone,
-					Material = Enum.Material.Cobblestone,
-				})
-			end
+	-- crystals hanging from the underside's ledges
+	for i, spot in hangs do
+		if i <= 3 then
+			Pieces.cluster(zone.folder, rng, spot, rng:NextNumber(5, 8), spec.accent, 3, true)
 		end
-	end
-
-	-- crystals hanging under the island
-	for _ = 1, 3 do
-		local l = Vector3.new(rng:NextNumber(-0.4, 0.4) * hw, 0, rng:NextNumber(-0.4, 0.4) * hd)
-		local p = frame:PointToWorldSpace(l)
-		Pieces.cluster(
-			zone.folder,
-			rng,
-			Vector3.new(p.X, floor - spec.depth * rng:NextNumber(0.45, 0.6), p.Z),
-			rng:NextNumber(5, 8),
-			spec.accent,
-			3,
-			true
-		)
 	end
 
 	-- mooring bollards on the hub-side rim: the hub's iron tethers end here
 	for _, point in Zone.tetherPoints(ctx, zone) do
-		local foot = point - UP * 2.2
+		local foot = point - UP * 2.6
 		Pieces.cylinder(
 			zone.folder,
 			foot,
@@ -446,12 +417,20 @@ end
 
 function Zone.connector(ctx: Context, zone: ZoneContext)
 	local slot = zone.slot
-	Pieces.bridge(ctx, ctx.folders.connectors, slot.hubExit.Position, slot.gate.Position, {
-		glow = zone.color,
-		width = BRIDGE_WIDTH,
-		startFlat = 4,
-		endFlat = Zone.landing(ctx, zone),
-	})
+	-- the deck lies on the ground at both ends, a touch above it
+	local lift = UP * BRIDGE_LIFT
+	Pieces.bridge(
+		ctx,
+		ctx.folders.connectors,
+		slot.hubExit.Position + lift,
+		slot.gate.Position + lift,
+		{
+			glow = zone.color,
+			width = BRIDGE_WIDTH,
+			startFlat = 4,
+			endFlat = Zone.landing(ctx, zone),
+		}
+	)
 end
 
 -- Border -----------------------------------------------------------------------------

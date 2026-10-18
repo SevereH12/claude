@@ -8,8 +8,10 @@
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local World = ServerScriptService.Server.World
+local Blocks = require(World.Blocks)
 local Kit = require(World.Kit)
 local WorldTypes = require(World.Types)
+local Ground = require(script.Parent.Parent.Ground)
 local Palette = require(script.Parent.Parent.Palette)
 local Pieces = require(script.Parent.Parent.Pieces)
 local SkyTypes = require(script.Parent.Parent.SkyTypes)
@@ -21,21 +23,16 @@ type ThemeSpec = SkyTypes.ThemeSpec
 type Land = SkyTypes.Land
 
 local C = Palette.C
+local G = Palette.GROUND
 local UP = Vector3.yAxis
 
 local Beach = {}
 
 function Beach.spec(zone: ZoneContext): ThemeSpec
 	return {
-		rim = Enum.Material.Sand,
-		terrace = Enum.Material.Sand,
-		cliffs = {
-			Enum.Material.Limestone,
-			Enum.Material.Limestone,
-			Enum.Material.Rock,
-			Enum.Material.Slate,
-		},
-		fieldTerrain = Enum.Material.Sand,
+		rim = G.sand,
+		soil = G.sandWet,
+		cliffs = { G.rockLight, G.rock, G.slate },
 		field = {
 			kind = "rings",
 			colors = Palette.fieldTones(zone.color, C.fieldMint, C.fieldTeal),
@@ -44,11 +41,13 @@ function Beach.spec(zone: ZoneContext): ThemeSpec
 		},
 		accent = C.cyan,
 		depth = 58,
-		ridge = Enum.Material.Sand,
-		ridgeHeight = 7,
+		-- a broad beach: the sand reaches further on the sides and back
+		shore = 6,
+		ridge = G.dune,
+		ridgeHeight = 6,
 		ridgeShape = "dunes",
-		ridgeCap = Enum.Material.LeafyGrass,
-		spires = Enum.Material.Rock,
+		ridgeCap = G.grassDeep,
+		spires = G.rock,
 	}
 end
 
@@ -318,53 +317,26 @@ function Beach.dress(ctx: Context, zone: ZoneContext, spec: ThemeSpec, land: Lan
 	end
 
 	-- hero: lighthouse on a rocky point at the end of a sandy headland
-	-- a broad beach: the sand reaches 8 studs further on the two sides and
-	-- the back (never toward the hub), over a pale salt surf line at the lip
-	local accept = Zone.accept(ctx, zone)
-	Pieces.landmass(
-		ctx,
-		frame,
-		land.halfW + 11,
-		land.front,
-		land.back + 11,
-		floor - 1,
-		3,
-		Enum.Material.Salt,
-		{
-			corner = 22,
-			lobe = 7,
-			reach = 0.3,
-			accept = accept,
-		}
-	)
-	Pieces.landmass(
-		ctx,
-		frame,
-		land.halfW + 8,
-		land.front,
-		land.back + 8,
-		floor,
-		6,
-		Enum.Material.Sand,
-		{
-			corner = 18,
-			lobe = 8,
-			reach = 0.4,
-			accept = accept,
-		}
-	)
-	land.halfW += 6
-	land.back += 6
-
+	local tones = Zone.tones(spec)
 	local headlandSpot, scale = Pieces.heroSpot(ctx, zone, 20, 15)
 	if headlandSpot then
 		local headland = headlandSpot
 		local out = Zone.outward(zone, headland)
 		local side = out:Cross(UP)
-		Pieces.headland(ctx, headland, 17 * scale, floor, spec.rim, Enum.Material.Rock)
+		Pieces.headland(ctx, headland, 17 * scale, floor, tones)
+		-- the rock point: two stepped rock tiers rising out of the sand
 		local point = headland + out * 5.6
-		Kit.blob(ctx, Vector3.new(point.X, 0, point.Z), 9, floor + 4, 20, Enum.Material.Rock, 6)
-		Kit.blob(ctx, Vector3.new(point.X, 0, point.Z), 6, floor + 8, 8, Enum.Material.Rock, 5)
+		local yaw = CFrame.Angles(0, math.atan2(out.X, out.Z), 0)
+		Ground.poly(ctx, G.rock, CFrame.new(point.X, floor + 4, point.Z) * yaw, 8, 12, 8, "Rock")
+		Ground.poly(
+			ctx,
+			G.rockLight,
+			CFrame.new(point.X, floor + 8, point.Z) * yaw * CFrame.Angles(0, math.pi / 8, 0),
+			5.6,
+			4.5,
+			8,
+			"Rock"
+		)
 		Beach.lighthouse(ctx, folder, Vector3.new(point.X, floor + 8, point.Z), toHub, {
 			(frame.RightVector * 0.8 - frame.LookVector * 0.6).Unit,
 			(frame.RightVector * 0.2 - frame.LookVector).Unit,
@@ -377,7 +349,7 @@ function Beach.dress(ctx: Context, zone: ZoneContext, spec: ThemeSpec, land: Lan
 	local dockZ = -hd * 0.5
 	local dock = at(-(land.halfW + 6), dockZ)
 	if Pieces.clearOf(ctx, dock, 18, zone) then
-		Pieces.headland(ctx, dock, 13, floor, spec.rim, Enum.Material.Rock)
+		Pieces.headland(ctx, dock, 13, floor, tones)
 		local outward = -frame.RightVector
 		cabana(folder, at(-(land.halfW + 3), dockZ + 7), outward)
 		local pierStart = at(-(land.halfW + 12), dockZ - 4)
@@ -410,23 +382,27 @@ function Beach.dress(ctx: Context, zone: ZoneContext, spec: ThemeSpec, land: Lan
 		for _, v in spots do
 			local l = Vector3.new(u * (hw + 6.5), 0, v * slot.depth)
 			local p = frame:PointToWorldSpace(l)
-			if Pieces.clearOf(ctx, p, 4, zone) then
-				ctx.terrain:FillCylinder(
-					CFrame.new(p.X, floor - 2, p.Z),
-					4,
-					3.4,
-					Enum.Material.Water
+			if Pieces.clearOf(ctx, p, 4, zone) and Zone.unblocked(land, p, 4) then
+				Ground.water(
+					folder,
+					Palette.WATER,
+					CFrame.new(p + UP * 0.06) * frame.Rotation * CFrame.Angles(0, math.pi / 4, 0),
+					Vector2.new(5.6, 5.6),
+					"TidePool"
 				)
-				Pieces.rocks(folder, rng, p + frame.RightVector * u * 2.5, 1.6, C.skystone)
+				Pieces.rocks(folder, rng, p + frame.RightVector * u * 3.5, 1.6, C.skystone)
 				if spills < 2 and (u == 1 or v > -0.1) and v < 0 then
 					spills += 1
 					local outward = frame.RightVector * u
 					local lip =
 						frame:PointToWorldSpace(Vector3.new(u * (land.halfW + 1), -0.6, l.Z))
-					ctx.terrain:FillBlock(
-						CFrame.lookAt(Vector3.new(p.X, floor - 1, p.Z):Lerp(lip, 0.5), lip),
-						Vector3.new(2.6, 2, (lip - p).Magnitude),
-						Enum.Material.Water
+					local channel = Vector3.new(p.X, floor + 0.06, p.Z):Lerp(lip + UP * 0.66, 0.5)
+					Ground.water(
+						folder,
+						Palette.WATER,
+						CFrame.lookAt(channel, channel + outward),
+						Vector2.new(2.6, (lip - p).Magnitude),
+						"Spill"
 					)
 					Pieces.waterfall(ctx, lip, outward, 90, 3)
 				end
@@ -436,38 +412,22 @@ function Beach.dress(ctx: Context, zone: ZoneContext, spec: ThemeSpec, land: Lan
 
 	-- dune grass patches and boulders along the shore
 	for _, p in Zone.rimPoints(ctx, zone, land, 5, 5, 6) do
-		Kit.blob(
-			ctx,
-			Vector3.new(p.X, 0, p.Z),
-			rng:NextNumber(3.5, 5.5),
-			floor,
-			4,
-			Enum.Material.LeafyGrass,
-			4
-		)
+		Pieces.turf(folder, p, rng:NextNumber(3.5, 5.5), G.grassDeep, rng:NextNumber(0, 90))
 	end
 	for _ = 1, 6 do
 		local side = rng:NextNumber()
 		local edge = if side < 0.6
 			then at(
-				(if side < 0.3 then -1 else 1) * (land.halfW - 1),
+				(if side < 0.3 then -1 else 1) * (land.halfW - 3),
 				rng:NextNumber(-0.7, 0.2) * hd
 			)
-			else at(rng:NextNumber(-0.8, 0.8) * hw, land.back - 1)
+			else at(rng:NextNumber(-0.8, 0.8) * hw, land.back - 3)
 		if
-			Zone.onRim(zone, land, edge, 6, -2)
+			Zone.onRim(zone, land, edge, 6, 1)
 			and Zone.unblocked(land, edge, 2)
 			and Pieces.clearOf(ctx, edge, 5, zone)
 		then
-			for k = 1, rng:NextInteger(2, 3) do
-				local offset = Vector3.new(rng:NextNumber(-2.5, 2.5), 0, rng:NextNumber(-2.5, 2.5))
-				local radius = if k == 1 then rng:NextNumber(3, 4.2) else rng:NextNumber(1.6, 2.6)
-				ctx.terrain:FillBall(
-					Vector3.new(edge.X, floor + 0.5, edge.Z) + offset,
-					radius,
-					Enum.Material.Rock
-				)
-			end
+			Blocks.rock(folder, G.rock, edge, rng:NextNumber(5, 7))
 		end
 	end
 
@@ -526,9 +486,11 @@ function Beach.dress(ctx: Context, zone: ZoneContext, spec: ThemeSpec, land: Lan
 		end
 	end
 
-	-- crystals and palms on the lower beach terraces and headlands
+	-- crystals and palms on the coast lobes
 	for i, terrace in land.terraces do
-		if terrace.top < floor then
+		if not Zone.unblocked(land, terrace.center, 2) then
+			continue
+		elseif terrace.top < floor then
 			if i % 2 == 1 then
 				local main =
 					Pieces.cluster(folder, rng, terrace.center, rng:NextNumber(5, 7), C.cyan, 3)
