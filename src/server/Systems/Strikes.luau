@@ -11,6 +11,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local Net = require(ReplicatedStorage.Shared.Net)
+local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
 local Research = require(script.Parent.Research)
@@ -121,6 +122,10 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, owner
 		end
 		local root = catchingRoot(player)
 		local profile = PlayerData.get(player)
+		-- a player in a zone they haven't unlocked catches nothing there
+		if profile and not Progression.canEnter(profile, zone) then
+			continue
+		end
 		local radius = ResearchMath.catchRadius(Research.active(player, "RodTech"))
 		local distance = if root then distanceInside(root, position, radius) else nil
 		if profile and distance then
@@ -245,7 +250,11 @@ function Strikes.spawnFor(player: Player): boolean
 	local root = catchingRoot(player)
 	local zone = if root then Zones.at(root.Position) else nil
 	local zonePart = if zone then Zones.part(zone.id) else nil
-	if not root or not zone or not zonePart then
+	local profile = PlayerData.get(player)
+	if not root or not zone or not zonePart or not profile then
+		return false
+	end
+	if not Progression.canEnter(profile, zone) then
 		return false
 	end
 	local position = randomGroundPoint(

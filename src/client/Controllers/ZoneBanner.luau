@@ -1,16 +1,23 @@
 --!strict
 -- Big title card when you walk into a zone ("SHORELINE - everyone in the
--- circle catches"), and a short note when you leave it (speed boost).
+-- circle catches"), a short note when you leave it (speed boost), and why a
+-- zone is locked when you walk up to its gate. Other controllers use
+-- ZoneBanner.show for their own news ("MESA UNLOCKED").
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
+local Config = require(ReplicatedStorage.Shared.Config)
+local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
 local UI = require(script.Parent.Parent.Lib.UI)
+local State = require(script.Parent.State)
 
 local SHOW_TIME = 2.2
+local GATE_NEAR = 18 -- studs from a locked gate's barrier to explain the lock
+local GATE_FAR = 28 -- and this far away before it explains again
 local FADE = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 local player = Players.LocalPlayer
@@ -22,7 +29,7 @@ local title: TextLabel
 local subtitle: TextLabel
 local showToken = 0
 
-local function show(text: string, subtext: string, color: Color3)
+function ZoneBanner.show(text: string, subtext: string, color: Color3)
 	showToken += 1
 	local token = showToken
 	title.Text = text
@@ -70,6 +77,31 @@ function ZoneBanner.init()
 	UI.maxText(subtitle, 30)
 end
 
+-- When you walk up to the gate of a zone you can't enter yet, say why.
+local explained: { [string]: boolean } = {}
+local function nearLockedGate(position: Vector3)
+	local snapshot = State.current
+	local map = workspace:FindFirstChild("Map")
+	local gates = map and map:FindFirstChild("ZoneGates")
+	if not snapshot or not gates then
+		return
+	end
+	for _, gate in gates:GetChildren() do
+		local zone = Config.ZONES[gate.Name]
+		local barrier = gate:FindFirstChild("Barrier")
+		if zone and barrier and barrier:IsA("BasePart") then
+			local reason = Progression.lockReason(snapshot, zone)
+			local distance = (barrier.Position - position).Magnitude
+			if reason and distance < GATE_NEAR and not explained[zone.id] then
+				explained[zone.id] = true
+				ZoneBanner.show(`🔒 {string.upper(zone.displayName)}`, reason, UI.COLORS.red)
+			elseif distance > GATE_FAR then
+				explained[zone.id] = nil
+			end
+		end
+	end
+end
+
 function ZoneBanner.start()
 	local current: Types.ZoneDef? = nil
 	while true do
@@ -80,12 +112,17 @@ function ZoneBanner.start()
 			local zone = Zones.at(root.Position)
 			if zone ~= current then
 				if zone then
-					show(string.upper(zone.displayName), zone.tagline, zone.color)
+					ZoneBanner.show(string.upper(zone.displayName), zone.tagline, zone.color)
 				elseif current then
-					show("SPEED BOOST", "Running fast outside storm zones", UI.COLORS.calm)
+					ZoneBanner.show(
+						"SPEED BOOST",
+						"Running fast outside storm zones",
+						UI.COLORS.calm
+					)
 				end
 				current = zone
 			end
+			nearLockedGate(root.Position)
 		end
 	end
 end

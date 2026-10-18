@@ -12,6 +12,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
+local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local ResearchSites = require(ReplicatedStorage.Shared.Util.ResearchSites)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
@@ -111,7 +112,12 @@ local function onPost(player: Player, roleId: unknown, post: unknown)
 	end
 	local profile = PlayerData.get(player)
 	local save = if profile then profile.researchers[roleId] else nil
-	if not save or save.post == post then
+	if not profile or not save or save.post == post then
+		return
+	end
+	-- researchers can only be posted to zones the player has unlocked
+	local zone = Config.ZONES[post]
+	if zone and not Progression.canEnter(profile, zone) then
 		return
 	end
 	save.post = post

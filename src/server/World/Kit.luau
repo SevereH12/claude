@@ -479,6 +479,60 @@ function Kit.researchOffice(parent: Instance, pad: BasePart, height: number?): B
 	return area
 end
 
+local GATE_WIDTH = 16 -- wider than any connector deck
+local GATE_HEIGHT = 12 -- higher than a jump
+local GATE_SIGN: SignStyle = {
+	boardColor = Color3.fromRGB(28, 30, 40),
+	titleColor = Color3.fromRGB(255, 255, 255),
+	subtitleColor = Color3.fromRGB(255, 214, 60),
+	thickness = 0.5,
+}
+
+-- A locked zone's gate: a shimmering barrier across the end of the
+-- connector, 1 stud outside the zone at slot.gate, between two posts, with
+-- a sign saying what the zone needs. Model <ZoneId> with a "Barrier" part.
+-- Nothing in it collides or is hit by raycasts here; Controllers/ZoneGates
+-- makes the barrier solid on the client of each player who can't enter.
+function Kit.zoneGate(parent: Instance, zone: ZoneContext, requirement: string): Model
+	local def = zone.def :: any
+	local model = Instance.new("Model")
+	model.Name = def.id
+	model:SetAttribute("ZoneId", def.id)
+	local gate = zone.slot.gate * CFrame.new(0, 0, -1) -- looks toward the hub
+	local barrier = Kit.decor({
+		Name = "Barrier",
+		Size = Vector3.new(GATE_WIDTH, GATE_HEIGHT, 0.6),
+		CFrame = gate * CFrame.new(0, GATE_HEIGHT / 2, 0),
+		Color = zone.color,
+		Material = Enum.Material.ForceField,
+		Transparency = 0.2,
+		CastShadow = false,
+		Parent = model,
+	})
+	barrier:SetAttribute("ZoneId", def.id)
+	for _, side in { -1, 1 } do
+		Kit.decor({
+			Name = "Post",
+			Size = Vector3.new(0.8, GATE_HEIGHT + 1, 0.8),
+			CFrame = gate * CFrame.new(side * (GATE_WIDTH / 2 + 0.4), (GATE_HEIGHT + 1) / 2, 0),
+			Color = Color3.fromRGB(40, 44, 58),
+			Material = Enum.Material.Metal,
+			Parent = model,
+		})
+	end
+	Kit.sign(
+		model,
+		gate * CFrame.new(0, GATE_HEIGHT + 2.2, 0),
+		GATE_WIDTH - 2,
+		2.6,
+		`🔒 {string.upper(def.displayName)}`,
+		requirement,
+		GATE_SIGN
+	)
+	model.Parent = parent
+	return model
+end
+
 local CAMP_WOOD = Color3.fromRGB(122, 92, 62)
 local CAMP_DARK = Color3.fromRGB(74, 62, 52)
 local CAMP_CANVAS = Color3.fromRGB(226, 216, 192)

@@ -58,6 +58,7 @@ export type ZoneDef = {
 	chargeValue: number, -- Volts per caught charge
 	strikeInterval: number, -- average seconds between strikes during a storm
 	order: number, -- position along the zone spiral (1 = closest to the hub)
+	requiresBottle: number, -- bottle tier needed to catch here (Util/Progression)
 
 	-- World layout (see src/server/World). Zones are placed automatically on
 	-- a spiral around the hub in `order`; these only describe the zone itself.

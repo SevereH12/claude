@@ -5,8 +5,11 @@
 
 local Types = require(script.Parent.Types)
 
+-- Tier indexes are saved, so new tiers are only ever appended; inserting
+-- one means a PlayerData migration that moves saved tiers up (Vial did).
 local BOTTLES: { Types.BottleDef } = {
 	{ name = "Jar", capacity = 5, price = 0 },
+	{ name = "Vial", capacity = 10, price = 80 },
 	{ name = "Flask", capacity = 15, price = 250 },
 	{ name = "Battery Pack", capacity = 40, price = 1_500 },
 	{ name = "Storm Cell", capacity = 100, price = 8_000 },
@@ -76,6 +79,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		chargeValue = 5,
 		strikeInterval = 0.8,
 		order = 1,
+		requiresBottle = 1, -- open to everyone
 		theme = "Beach",
 		width = 112,
 		depth = 132,
@@ -90,6 +94,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		chargeValue = 20,
 		strikeInterval = 1.2,
 		order = 2,
+		requiresBottle = 3, -- the Flask
 		theme = "Canyon",
 		width = 96,
 		depth = 104,

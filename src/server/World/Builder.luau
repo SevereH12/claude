@@ -16,6 +16,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
+local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Kit = require(script.Parent.Kit)
 local Layout = require(script.Parent.Layout)
 local WorldTypes = require(script.Parent.Types)
@@ -244,6 +245,22 @@ function Builder.build(styleName: string?): Folder
 			style.buildCamp(ctx, zone)
 		else
 			Kit.researchCamp(ctx, zone)
+		end
+	end
+
+	-- Zone gates: a barrier at the gate of every zone with an entry rule.
+	-- It never collides on the server; each client makes its own copy solid
+	-- while it can't enter (Controllers/ZoneGates). The real lock is on the
+	-- server (Strikes, Movement, Research).
+	local gates = Instance.new("Model")
+	gates.Name = "ZoneGates"
+	gates.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
+	gates.Parent = map
+	for _, zone in zones do
+		local def = zone.def :: any
+		local requirement = Progression.requirement(def)
+		if requirement then
+			Kit.zoneGate(gates, zone, requirement)
 		end
 	end
 

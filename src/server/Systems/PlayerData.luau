@@ -18,7 +18,7 @@ local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local STORE_NAME = "StormBottler_PlayerData"
-local CURRENT_VERSION = 3
+local CURRENT_VERSION = 4
 -- A lock older than this belongs to a server that crashed; it may be taken.
 local LOCK_STALE_SECONDS = Config.AUTOSAVE_INTERVAL * 3
 local LOCKED_RETRIES = 5
@@ -63,6 +63,14 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 	end,
 	[2] = function(data: any): any
 		data.bootTier = 1
+		return data
+	end,
+	-- the Vial was inserted as bottle tier 2: everything from the old
+	-- tier 2 (Flask) up moves one place
+	[3] = function(data: any): any
+		if typeof(data.bottleTier) == "number" and data.bottleTier >= 2 then
+			data.bottleTier += 1
+		end
 		return data
 	end,
 }
@@ -115,6 +123,9 @@ local function migrate(data: any): Types.Profile
 	end
 	return data
 end
+
+-- Exposed for tools/harness tests of the migration steps.
+PlayerData.migrate = migrate
 
 -- Runs fn with pcall, retrying with exponential backoff.
 local function withRetry(attempts: number, fn: () -> ()): boolean

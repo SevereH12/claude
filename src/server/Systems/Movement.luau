@@ -1,16 +1,19 @@
 --!strict
 -- Walk speed: normal inside storm zones (catching should take skill, and
 -- boots add a little), fast everywhere else so walking to the Power Plant
--- isn't a chore.
+-- isn't a chore. Also the server's zone lock: anyone standing in a zone
+-- they haven't unlocked is put back just outside its gate.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
+local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
 local PlayerData = require(script.Parent.PlayerData)
 
 local CHECK_INTERVAL = 0.2
+local GATE_STEP_OUT = 6 -- studs outside a locked zone's gate to put players
 
 local Movement = {}
 
@@ -22,8 +25,21 @@ local function update(player: Player)
 		return
 	end
 	local profile = PlayerData.get(player)
-	local speed =
-		Formulas.walkSpeed(Zones.at(root.Position) ~= nil, if profile then profile.bootTier else 1)
+	local zone = Zones.at(root.Position)
+	if zone and profile and not Progression.canEnter(profile, zone) then
+		local part = Zones.part(zone.id)
+		if part then
+			-- the zone part faces the hub (-Z); its gate is the middle of that
+			-- edge at floor height (1 above the part's base)
+			local outside = part.CFrame
+				* CFrame.new(0, 1 - part.Size.Y / 2, -part.Size.Z / 2 - GATE_STEP_OUT)
+			local position = outside.Position + Vector3.new(0, 3.5, 0)
+			local body = character :: Model
+			body:PivotTo(CFrame.lookAt(position, position + part.CFrame.LookVector))
+		end
+		zone = nil
+	end
+	local speed = Formulas.walkSpeed(zone ~= nil, if profile then profile.bootTier else 1)
 	if humanoid.WalkSpeed ~= speed then
 		humanoid.WalkSpeed = speed
 	end

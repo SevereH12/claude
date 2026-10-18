@@ -4,6 +4,7 @@
 --   StormBottlerHUD (ScreenGui)
 --   ├── VoltsPanel   top centre: ⚡ Volts (counts up)
 --   ├── StormPill    under Volts: "⚡ STORM 1:12" / "☀ CALM  storm in 0:15"
+--   ├── GoalCard     under that: the closest next goal and Volts towards it
 --   ├── CityMeter    top right: server city meter (placeholder until that update)
 --   ├── ShopButton   left: opens the bottle shop
 --   └── BottleBar    bottom centre: shiny fill + "JAR 3 / 5"
@@ -15,6 +16,7 @@ local TweenService = game:GetService("TweenService")
 
 local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
+local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local Types = require(ReplicatedStorage.Shared.Types)
 local UI = require(script.Parent.Parent.Lib.UI)
@@ -38,6 +40,11 @@ local fillGradient: UIGradient
 local bottleLabel: TextLabel
 local bottleValue: TextLabel
 local tankLabel: TextLabel
+local goalCard: Frame
+local goalTitle: TextLabel
+local goalDetail: TextLabel
+local goalFill: Frame
+local goalAmount: TextLabel
 local displayedVolts: NumberValue
 local fullPulse: Tween?
 local lastChargeCount = -1
@@ -99,6 +106,66 @@ local function buildStormPill()
 		Parent = stormPill,
 	})
 	UI.maxText(stormLabel, 26)
+end
+
+local function buildGoalCard()
+	goalCard = UI.panel({
+		Name = "GoalCard",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 140),
+		Size = UDim2.fromScale(0.22, 0.085),
+		Visible = false,
+		Parent = screenGui,
+	})
+	UI.sizeLimits(goalCard, Vector2.new(210, 54), Vector2.new(330, 72))
+	goalTitle = UI.label({
+		Title = true,
+		Name = "Title",
+		Text = "",
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromScale(0.05, 0.06),
+		Size = UDim2.fromScale(0.9, 0.34),
+		Parent = goalCard,
+	})
+	UI.maxText(goalTitle, 22)
+	goalDetail = UI.label({
+		Name = "Detail",
+		Text = "",
+		TextColor3 = COLORS.subtext,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromScale(0.05, 0.38),
+		Size = UDim2.fromScale(0.9, 0.22),
+		Parent = goalCard,
+	})
+	UI.maxText(goalDetail, 16)
+	local bar = UI.make(Instance.new("Frame"), {
+		Name = "Bar",
+		Position = UDim2.fromScale(0.05, 0.66),
+		Size = UDim2.fromScale(0.9, 0.24),
+		BackgroundColor3 = COLORS.stroke,
+		Parent = goalCard,
+	})
+	UI.corner(bar, UDim.new(0.5, 0))
+	local clip = UI.make(Instance.new("CanvasGroup"), {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Parent = bar,
+	})
+	UI.corner(clip, UDim.new(0.5, 0))
+	goalFill = UI.make(Instance.new("Frame"), {
+		Name = "Fill",
+		Size = UDim2.fromScale(0, 1),
+		BackgroundColor3 = COLORS.volt,
+		BorderSizePixel = 0,
+		Parent = clip,
+	})
+	goalAmount = UI.label({
+		Name = "Amount",
+		Text = "",
+		Size = UDim2.fromScale(1, 1),
+		Parent = bar,
+	})
+	UI.maxText(goalAmount, 14)
 end
 
 local function buildCityMeter()
@@ -289,8 +356,30 @@ local function setFull(full: boolean)
 	end
 end
 
+local GOAL_TITLES: { [Progression.GoalKind]: string } = {
+	zone = "UNLOCK",
+	bottle = "NEXT BOTTLE:",
+	boots = "NEXT BOOTS:",
+}
+
+local function renderGoal(snapshot: Types.Snapshot)
+	local goal = Progression.nextGoals(snapshot)[1]
+	goalCard.Visible = goal ~= nil
+	if not goal then
+		return
+	end
+	goalTitle.Text = `{GOAL_TITLES[goal.kind]} {string.upper(goal.title)}`
+	goalDetail.Text = goal.detail
+	local fraction = if goal.price > 0 then math.clamp(snapshot.volts / goal.price, 0, 1) else 1
+	TweenService:Create(goalFill, UI.TWEEN.fast, { Size = UDim2.fromScale(fraction, 1) }):Play()
+	goalAmount.Text = if fraction >= 1
+		then "READY! Open the SHOP"
+		else `{Format.abbreviate(snapshot.volts)} / {Format.abbreviate(goal.price)} ⚡`
+end
+
 local function render(snapshot: Types.Snapshot)
 	TweenService:Create(displayedVolts, UI.TWEEN.countUp, { Value = snapshot.volts }):Play()
+	renderGoal(snapshot)
 
 	local bottle = Formulas.bottle(snapshot.bottleTier)
 	local fraction = math.clamp(snapshot.chargeCount / bottle.capacity, 0, 1)
@@ -333,6 +422,7 @@ function HUD.init()
 
 	buildVoltsPanel()
 	buildStormPill()
+	buildGoalCard()
 	buildCityMeter()
 	buildShopButton()
 	buildResearchButton()
