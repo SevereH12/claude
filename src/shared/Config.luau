@@ -13,6 +13,7 @@ local BOTTLES: { Types.BottleDef } = {
 	{ name = "Flask", capacity = 15, price = 250 },
 	{ name = "Battery Pack", capacity = 40, price = 1_500 },
 	{ name = "Storm Cell", capacity = 100, price = 8_000 },
+	{ name = "Tempest Tank", capacity = 250, price = 40_000 },
 }
 
 -- In-zone walk speed is WALK_SPEED_IN_ZONE + speedBonus. Keep every tier
@@ -24,6 +25,7 @@ local BOOTS: { Types.BootsDef } = {
 	{ name = "Squall Skippers", speedBonus = 3, price = 900 },
 	{ name = "Gale Striders", speedBonus = 4, price = 2_000 },
 	{ name = "Thunder Treads", speedBonus = 6, price = 10_000 },
+	{ name = "Coil Striders", speedBonus = 7, price = 35_000 },
 }
 
 local RESEARCHERS: { Types.ResearcherDef } = {
@@ -114,6 +116,21 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		theme = "Premium",
 		width = 100,
 		depth = 110,
+		floor = 12,
+	},
+	Works = {
+		id = "Works",
+		displayName = "Voltcliff Works",
+		tagline = "Everyone catches the coil storms, 60 Volts",
+		color = Color3.fromRGB(60, 200, 255), -- electric blue
+		mode = "Shared",
+		chargeValue = 60,
+		strikeInterval = 0.9,
+		order = 4,
+		requiresBottle = 5, -- the Storm Cell
+		theme = "StormPunk:Default", -- StormPunk's Generator Yard, borrowed into WeatherLab
+		width = 104,
+		depth = 116,
 		floor = 12,
 	},
 }

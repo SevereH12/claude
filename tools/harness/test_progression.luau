@@ -107,7 +107,11 @@ check(
 local withVial = Progression.nextGoals(progress(2))
 check(withVial[1].kind == "zone", "with a Vial, unlocking Mesa (a Flask away) is the top goal")
 check(withVial[1].price == Config.BOTTLES[3].price, "and it costs one Flask")
-for _, goal in Progression.nextGoals(progress(3)) do
+local topNeed = 0
+for _, zone in Config.ZONES do
+	topNeed = math.max(topNeed, zone.requiresBottle)
+end
+for _, goal in Progression.nextGoals(progress(topNeed)) do
 	check(goal.kind ~= "zone", "no zone goal once every zone is open")
 end
 local top = Progression.nextGoals(progress(#Config.BOTTLES, #Config.BOOTS))

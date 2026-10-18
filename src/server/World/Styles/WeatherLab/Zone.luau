@@ -272,7 +272,9 @@ function Zone.boardwalk(
 		local dir = Pieces.flatUnit(b - a)
 		local right = Vector3.new(-dir.Z, 0, dir.X)
 		local wide = width + 8
-		Kit.walkway(parent, a - dir * 0.3, b + dir * 0.3, wide, 1.2, {
+		-- 0.06 up: never level with the deck segments it overlaps (0 or 0.03)
+		local raise = Vector3.new(0, 0.06, 0)
+		Kit.walkway(parent, a - dir * 0.3 + raise, b + dir * 0.3 + raise, wide, 1.2, {
 			Name = "RestPlatform",
 			Color = Palette.plankLight,
 			Material = Enum.Material.WoodPlanks,
@@ -435,7 +437,9 @@ function Zone.trail(ctx: Context, parent: Instance, angle: number, color: Color3
 	end
 end
 
-function Zone.connector(ctx: Context, zone: ZoneContext)
+-- `front`: how far the island top reaches in front of the footprint
+-- (default: the theme's front margin); the flat landing rides it.
+function Zone.connector(ctx: Context, zone: ZoneContext, front: number?)
 	local def = zone.def :: any
 	local slot = zone.slot
 	local theme = Themes.get(def.theme)
@@ -449,7 +453,7 @@ function Zone.connector(ctx: Context, zone: ZoneContext)
 		subtitle = if def.premium
 			then `{Config.PREMIUM_VALUE_MULTIPLIER}X YOUR BEST ZONE`
 			else `{def.chargeValue} VOLTS PER BOLT`,
-		landing = theme.margins.front + 4,
+		landing = (front or theme.margins.front) + 4,
 		trim = theme.boardwalkTrim,
 	})
 end

@@ -19,7 +19,7 @@ done.
 
 | Done | id | Name | Borrowed look | Mode | Volts per charge | Strike interval | Size (w x d) | Floor | Needs bottle | New bottle (capacity / price) | New boots (bonus / price) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| [ ] | Works | Voltcliff Works | StormPunk zone island | Shared | 60 | 0.9 | 104 x 116 | 12 | Storm Cell | Tempest Tank 250 / 40,000 | Coil Striders +7 / 35,000 |
+| [x] | Works | Voltcliff Works | StormPunk zone island | Shared | 60 | 0.9 | 104 x 116 | 12 | Storm Cell | Tempest Tank 250 / 40,000 | Coil Striders +7 / 35,000 |
 | [ ] | Isles | Stormspire Isles | SkyIsles floating island | Single | 180 | 1.2 | 96 x 104 | 32 | Tempest Tank | Rune Cell 600 / 200,000 | Sky Treads +8 / 180,000 |
 
 Numbers are suggestions. If `Layout.plan` says a connector is too steep,
