@@ -56,6 +56,9 @@ export type ZoneContext = {
 export type Context = {
 	map: Folder,
 	folders: {
+		-- Walkable part-built ground (World/Blocks). Strikes raycast against
+		-- this folder and Terrain, so catch floors must live in one of them.
+		ground: Folder,
 		base: Folder,
 		hub: Folder,
 		zones: Folder,
@@ -76,6 +79,10 @@ export type StylePack = {
 	description: string,
 	palette: { [string]: Color3 },
 	layout: LayoutParams,
+	-- "Blocks" if all ground is parts in ctx.folders.ground and no terrain is
+	-- filled (the harness then checks that every catch floor is covered by
+	-- ground parts at floor height); nil/"Terrain" for terrain ground.
+	ground: string?,
 
 	-- Lighting, Atmosphere, Clouds, post effects, water colour. Called first.
 	-- Name the ColorCorrectionEffect "StormGrade" so storms can tint it.

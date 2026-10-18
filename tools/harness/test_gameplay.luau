@@ -176,6 +176,124 @@ for id, part in zoneParts do
 	)
 end
 
+-- block-built ground -----------------------------------------------------------
+-- Styles with ground = "Blocks" fill no terrain, and every catch floor is
+-- covered by collidable Map.Ground parts whose top is exactly at floor height.
+
+-- Highest point of `part` on the vertical line through (x, z), or nil.
+-- Blocks and upright cylinders only (catch floors are built from those).
+local function topAt(part, x, z)
+	local cf = part.CFrame
+	local a = cf:PointToObjectSpace(Vector3.new(x, 0, z))
+	local b = cf:VectorToObjectSpace(Vector3.new(0, 1, 0))
+	local half = part.Size / 2
+	local axes = { "X", "Y", "Z" }
+	if part.ClassName == "Part" and part.Shape.Name == "Cylinder" then
+		if math.abs(b.X) < 0.999 then
+			return nil
+		end
+		local radius = math.min(half.Y, half.Z)
+		if a.Y * a.Y + a.Z * a.Z > radius * radius then
+			return nil
+		end
+		axes = { "X" }
+	elseif part.ClassName ~= "Part" or part.Shape.Name ~= "Block" then
+		return nil
+	end
+	local lo, hi = -math.huge, math.huge
+	for _, axis in axes do
+		local p, d, h = a[axis], b[axis], half[axis]
+		if math.abs(d) < 1e-9 then
+			if math.abs(p) > h then
+				return nil
+			end
+		else
+			local t1, t2 = (-h - p) / d, (h - p) / d
+			if t1 > t2 then
+				t1, t2 = t2, t1
+			end
+			lo, hi = math.max(lo, t1), math.min(hi, t2)
+			if lo > hi then
+				return nil
+			end
+		end
+	end
+	return hi
+end
+
+if map and map:GetAttribute("Ground") == "Blocks" then
+	local fills = 0
+	for _, op in world.terrainOps do
+		if op.kind ~= "Clear" then
+			fills += 1
+		end
+	end
+	check(fills == 0, string.format("block-built ground fills no terrain (found %d fills)", fills))
+
+	local groundFolder = map:FindFirstChild("Ground")
+	local groundParts = {}
+	if groundFolder then
+		for _, inst in groundFolder:GetDescendants() do
+			if inst:IsA("BasePart") and inst.CanCollide and inst.Transparency < 0.98 then
+				table.insert(groundParts, {
+					part = inst,
+					center = inst.CFrame.Position,
+					reach = inst.Size.Magnitude / 2,
+				})
+			end
+		end
+	end
+	check(#groundParts > 0, "Map.Ground has collidable ground parts")
+
+	local STEP = 4
+	for id, part in zoneParts do
+		local floorY = part.CFrame.Position.Y - part.Size.Y / 2 + 1
+		local hw, hd = part.Size.X / 2 - BORDER_BAND, part.Size.Z / 2 - BORDER_BAND
+		local samples, bad = 0, {}
+		local nu, nv = math.ceil(2 * hw / STEP), math.ceil(2 * hd / STEP)
+		for i = 0, nu do
+			for k = 0, nv do
+				local p = part.CFrame:PointToWorldSpace(
+					Vector3.new(-hw + 2 * hw * i / nu, 0, -hd + 2 * hd * k / nv)
+				)
+				local best = nil
+				for _, g in groundParts do
+					local dx, dz = g.center.X - p.X, g.center.Z - p.Z
+					if dx * dx + dz * dz <= g.reach * g.reach then
+						local top = topAt(g.part, p.X, p.Z)
+						if top and (best == nil or top > best) then
+							best = top
+						end
+					end
+				end
+				samples += 1
+				if best == nil or math.abs(best - floorY) > 0.05 then
+					table.insert(
+						bad,
+						string.format(
+							"(%.0f, %.0f) %s",
+							p.X,
+							p.Z,
+							if best then string.format("top %.2f", best) else "no ground"
+						)
+					)
+				end
+			end
+		end
+		check(
+			#bad == 0,
+			string.format(
+				"%s catch floor is covered by Map.Ground at y=%.1f (%d of %d samples off: %s)",
+				id,
+				floorY,
+				#bad,
+				samples,
+				table.concat(bad, ", ", 1, math.min(#bad, 5))
+			)
+		)
+	end
+end
+
 -- teaser and budget ----------------------------------------------------------
 local zoneArt = map and map:FindFirstChild("ZoneArt")
 local teaser = zoneArt and zoneArt:FindFirstChild("ComingSoon")
