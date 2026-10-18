@@ -19,6 +19,7 @@ world:normalizeParts()
 
 local Config = world:require("ReplicatedStorage.Shared.Config")
 local Zones = world:require("ReplicatedStorage.Shared.Util.Zones")
+local ResearchSites = world:require("ReplicatedStorage.Shared.Util.ResearchSites")
 local Selling = world:require("ServerScriptService.Server.Systems.Selling")
 
 local failures = 0
@@ -124,6 +125,57 @@ end
 if #stations == 0 and pad then
 	local standing = pad.CFrame.Position + Vector3.new(0, pad.Size.Y / 2 + ROOT, 0)
 	check(Selling.isAtStation(standing), "standing on the legacy SellPad sells")
+end
+
+-- research camps and office ------------------------------------------------------
+local campsModel = map and map:FindFirstChild("ResearchCamps")
+check(campsModel ~= nil, "Map.ResearchCamps exists")
+for id in Config.ZONES do
+	local box = campsModel and campsModel:FindFirstChild(id)
+	check(box ~= nil and box:IsA("BasePart"), "a research camp box exists for " .. id)
+	if box then
+		check(box:GetAttribute("ZoneId") == id, id .. " camp box has its ZoneId attribute")
+		check(
+			box.Transparency >= 1 and not box.CanCollide and not box.CanQuery and not box.CanTouch,
+			id .. " camp box is invisible and non-blocking"
+		)
+		local deck = box.CFrame.Position - Vector3.new(0, box.Size.Y / 2 - 1, 0)
+		local standing = deck + Vector3.new(0, 1 + ROOT, 0)
+		check(ResearchSites.campAt(standing) == id, "standing on " .. id .. "'s camp deck is in its camp")
+		check(ResearchSites.camp(id) == box, "ResearchSites.camp finds " .. id)
+		check(Zones.at(standing) == nil, id .. " camp is outside every zone")
+		check(not Selling.isAtStation(standing), id .. " camp is not a sell station")
+		for zid, zpart in zoneParts do
+			-- the whole box, not just the middle: sample its corners and centre
+			local inside = false
+			for _, sx in { -1, 0, 1 } do
+				for _, sz in { -1, 0, 1 } do
+					local p = box.CFrame:PointToWorldSpace(
+						Vector3.new(sx * box.Size.X / 2, 0, sz * box.Size.Z / 2)
+					)
+					if Zones.contains(zpart, p) then
+						inside = true
+					end
+				end
+			end
+			check(not inside, id .. " camp box is outside zone " .. zid)
+		end
+	end
+end
+local offices = ResearchSites.offices()
+if map and map:GetAttribute("Style") == "WeatherLab" then
+	check(#offices > 0, "WeatherLab has a ResearchOffice")
+end
+for _, office in offices do
+	local standing = office.CFrame.Position - Vector3.new(0, office.Size.Y / 2 - 1, 0)
+		+ Vector3.new(0, 1 + ROOT, 0)
+	check(ResearchSites.inOffice(standing), "standing on " .. office:GetFullName() .. " is in the office")
+	check(Zones.at(standing) == nil, office:GetFullName() .. " is outside every zone")
+	check(not Selling.isAtStation(standing), office:GetFullName() .. " is not a sell station")
+	check(
+		office.Transparency >= 1 and not office.CanCollide,
+		office:GetFullName() .. " is invisible and non-blocking"
+	)
 end
 
 -- catch floors must stay clear -------------------------------------------

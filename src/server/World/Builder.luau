@@ -5,7 +5,8 @@
 --   3. create every zone's volume part (the gameplay contract; styles never do this)
 --   4. call the style pack: atmosphere -> base -> hub -> per zone (ground,
 --      connector, border, gate, theme) -> teaser
---   5. check the result has a SpawnLocation and a SellArea
+--   5. build each zone's Research Camp (box + style.buildCamp or Kit.researchCamp)
+--   6. check the result has a SpawnLocation and a SellArea (warn if no ResearchOffice)
 --
 -- Adding a zone = adding a Config.ZONES entry. It lands in the next slot,
 -- the teaser moves one slot further out, and nothing else moves.
@@ -29,6 +30,7 @@ local ZONE_HEIGHT = 46
 -- strike centres by STRIKE_RADIUS + 2), so only this outer band is free
 -- for border pieces.
 local BORDER_BAND = 2
+local CAMP_HEIGHT = 12
 local TEASER_COLOR = Color3.fromRGB(150, 150, 160)
 
 local Builder = {}
@@ -88,6 +90,21 @@ local function zoneVolume(parent: Instance, name: string, zone: ZoneContext): Ba
 		Name = name,
 		Size = Vector3.new(slot.width, ZONE_HEIGHT, slot.depth),
 		CFrame = slot.frame * CFrame.new(0, ZONE_HEIGHT / 2 - 1, 0),
+		Transparency = 1,
+		CanCollide = false,
+		CanQuery = false,
+		CanTouch = false,
+		CastShadow = false,
+		Parent = parent,
+	})
+end
+
+-- The camp's gameplay volume (Util/ResearchSites), set up like a SellArea.
+local function campBox(parent: Instance, name: string, zone: ZoneContext): BasePart
+	return Kit.part({
+		Name = name,
+		Size = Vector3.new(Layout.CAMP_WIDTH, CAMP_HEIGHT, Layout.CAMP_DEPTH),
+		CFrame = zone.slot.camp * CFrame.new(0, CAMP_HEIGHT / 2 - 1, 0),
 		Transparency = 1,
 		CanCollide = false,
 		CanQuery = false,
@@ -214,6 +231,22 @@ function Builder.build(styleName: string?): Folder
 	end
 	style.buildTeaser(ctx, teaser)
 
+	-- Research Camps: one invisible box per zone, then the art
+	local camps = Instance.new("Model")
+	camps.Name = "ResearchCamps"
+	camps.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
+	camps.Parent = map
+	for _, zone in zones do
+		local def = zone.def :: any
+		local box = campBox(camps, def.id, zone)
+		box:SetAttribute("ZoneId", def.id)
+		if style.buildCamp then
+			style.buildCamp(ctx, zone)
+		else
+			Kit.researchCamp(ctx, zone)
+		end
+	end
+
 	-- contracts the game relies on
 	local spawnCount, sellCount = 0, 0
 	for _, descendant in map:GetDescendants() do
@@ -231,6 +264,16 @@ function Builder.build(styleName: string?): Folder
 	end
 	if sellCount == 0 then
 		error(`[World] style "{name}" built no SellArea (use Kit.sellArea)`, 0)
+	end
+
+	local hasOffice = false
+	for _, tagged in CollectionService:GetTagged(Kit.OFFICE_TAG) do
+		if tagged:IsDescendantOf(map) then
+			hasOffice = true
+		end
+	end
+	if not hasOffice then
+		warn(`[World] style "{name}" built no ResearchOffice (use Kit.researchOffice)`)
 	end
 
 	print(`[World] built "{name}": {#zones} zones, {countParts(map)} parts`)

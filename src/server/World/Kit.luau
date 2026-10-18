@@ -10,6 +10,7 @@
 --     hit by raycasts, so it never interferes with strikes or selling.
 --   * Terrain helpers fill the world's Terrain; later fills overwrite earlier ones.
 
+local Blocks = require(script.Parent.Blocks)
 local WorldTypes = require(script.Parent.Types)
 
 type Context = WorldTypes.Context
@@ -18,6 +19,7 @@ type ZoneContext = WorldTypes.ZoneContext
 local Kit = {}
 
 Kit.SELL_TAG = "SellArea"
+Kit.OFFICE_TAG = "ResearchOffice"
 
 -- Built-in particle textures (no uploads needed).
 Kit.TEXTURES = table.freeze({
@@ -453,6 +455,169 @@ function Kit.sellArea(parent: Instance, pad: BasePart, height: number?): BasePar
 	})
 	area:AddTag(Kit.SELL_TAG)
 	return area
+end
+
+-- Invisible box over a pad that Util/ResearchSites treats as a Research
+-- Office. Same idea as sellArea: the pad is art, this box is what counts.
+function Kit.researchOffice(parent: Instance, pad: BasePart, height: number?): BasePart
+	local h = height or 12
+	local area = Kit.part({
+		Name = "ResearchOffice",
+		Size = Vector3.new(pad.Size.X + 4, h, pad.Size.Z + 4),
+		CFrame = pad.CFrame * CFrame.new(0, pad.Size.Y / 2 + h / 2 - 1, 0),
+		Transparency = 1,
+		CanCollide = false,
+		CanQuery = false,
+		CanTouch = false,
+		CastShadow = false,
+		Parent = parent,
+	})
+	area:AddTag(Kit.OFFICE_TAG)
+	return area
+end
+
+local CAMP_WOOD = Color3.fromRGB(122, 92, 62)
+local CAMP_DARK = Color3.fromRGB(74, 62, 52)
+local CAMP_CANVAS = Color3.fromRGB(226, 216, 192)
+local CAMP_METAL = Color3.fromRGB(150, 156, 164)
+local CAMP_PILE_FALLBACK = 14
+
+-- How far below `from` the nearest ground or base part is.
+local function dropBelow(ctx: Context, from: Vector3): number
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	params.FilterDescendantsInstances = { ctx.folders.ground, ctx.folders.base, ctx.terrain }
+	local ok, hit = pcall(function()
+		return workspace:Raycast(from, Vector3.new(0, -60, 0), params)
+	end)
+	if ok and hit then
+		return math.max(from.Y - hit.Position.Y + 1, 2)
+	end
+	return CAMP_PILE_FALLBACK
+end
+
+-- Default Research Camp: a pile-built deck at zone.slot.camp (joined to the
+-- gate landing), a canvas tent, an instrument mast with an anemometer and a
+-- "<ZONE> FIELD CAMP" sign in the zone colour. Neutral colours, 30 parts.
+function Kit.researchCamp(ctx: Context, zone: ZoneContext)
+	local def = zone.def
+	if not def then
+		return
+	end
+	local camp = zone.slot.camp
+	local W, D = 28, 14
+	local parent = Instance.new("Folder")
+	parent.Name = def.id .. "Camp"
+	parent.Parent = ctx.folders.decor
+	local function at(x: number, y: number, z: number): CFrame
+		return camp * CFrame.new(x, y, z)
+	end
+
+	-- deck (top at camp height) and the piles under it
+	Blocks.box(ctx.folders.ground, CAMP_WOOD, at(0, -0.5, 0), Vector3.new(W, 1, D))
+	for _, x in { -W / 2 + 1, 0, W / 2 - 1 } do
+		for _, z in { -D / 2 + 1, D / 2 - 1 } do
+			local drop = dropBelow(ctx, at(x, -1, z).Position)
+			Blocks.box(
+				ctx.folders.ground,
+				CAMP_DARK,
+				at(x, -1 - drop / 2, z),
+				Vector3.new(1, drop, 1)
+			)
+		end
+	end
+
+	-- canvas tent: two sloped canvas sheets over a ridge pole
+	local tentX, tentZ, tentW, tentL, tentH = 7, -1, 7, 8, 4.5
+	local tilt = math.atan2(tentH, tentW / 2)
+	local sheet = math.sqrt((tentW / 2) ^ 2 + tentH ^ 2)
+	for _, side in { -1, 1 } do
+		Kit.decor({
+			Name = "Canvas",
+			Size = Vector3.new(sheet, 0.3, tentL),
+			CFrame = at(tentX + side * tentW / 4, 0.5 + tentH / 2, tentZ)
+				* CFrame.Angles(0, 0, -side * tilt),
+			Color = CAMP_CANVAS,
+			Material = Enum.Material.Fabric,
+			Parent = parent,
+		})
+	end
+	Kit.decor({
+		Name = "Groundsheet",
+		Size = Vector3.new(tentW, 0.2, tentL),
+		CFrame = at(tentX, 0.1, tentZ),
+		Color = CAMP_DARK,
+		Material = Enum.Material.Fabric,
+		Parent = parent,
+	})
+	Kit.strut(
+		parent,
+		at(tentX, 0.5 + tentH, tentZ - tentL / 2 - 0.5).Position,
+		at(tentX, 0.5 + tentH, tentZ + tentL / 2 + 0.5).Position,
+		0.4,
+		{ Color = CAMP_WOOD, Material = Enum.Material.Wood, CanCollide = false }
+	)
+	for _, z in { -tentL / 2 - 0.5, tentL / 2 + 0.5 } do
+		Kit.cylinder(parent, at(tentX, 0, tentZ + z).Position, 0.5 + tentH, 0.4, {
+			Color = CAMP_WOOD,
+			Material = Enum.Material.Wood,
+			CanCollide = false,
+		})
+	end
+
+	-- instrument mast with an anemometer (three cups on a crossed arm)
+	local mastX, mastZ, mastH = -8, -3, 9
+	Kit.cylinder(parent, at(mastX, 0, mastZ).Position, mastH, 0.5, {
+		Color = CAMP_METAL,
+		Material = Enum.Material.Metal,
+	})
+	local top = at(mastX, mastH, mastZ).Position
+	Kit.cylinder(parent, top, 0.6, 0.3, { Color = CAMP_DARK, CanCollide = false })
+	for i = 1, 3 do
+		local a = math.rad(i * 120)
+		local tip = top + Vector3.new(math.cos(a) * 1.5, 0.4, math.sin(a) * 1.5)
+		Kit.strut(parent, top + Vector3.new(0, 0.4, 0), tip, 0.15, {
+			Color = CAMP_METAL,
+			Material = Enum.Material.Metal,
+			CanCollide = false,
+		})
+		Kit.ball(parent, tip, 0.8, { Color = CAMP_CANVAS, CanCollide = false })
+	end
+
+	-- instrument crates by the mast
+	Kit.decor({
+		Name = "Crate",
+		Size = Vector3.new(2.2, 1.6, 1.6),
+		CFrame = at(-4.5, 0.8, -3.5) * CFrame.Angles(0, math.rad(15), 0),
+		Color = CAMP_WOOD,
+		Material = Enum.Material.Wood,
+		Parent = parent,
+	})
+	Kit.decor({
+		Name = "Crate",
+		Size = Vector3.new(1.4, 1.2, 1.4),
+		CFrame = at(-4.3, 2.2, -3.4) * CFrame.Angles(0, math.rad(-20), 0),
+		Color = CAMP_DARK,
+		Material = Enum.Material.Wood,
+		Parent = parent,
+	})
+
+	-- sign on two posts at the back of the deck, facing the hub
+	local signZ = D / 2 - 1.5
+	for _, x in { -5, 5 } do
+		Kit.cylinder(parent, at(x, 0, signZ).Position, 6.2, 0.5, {
+			Color = CAMP_WOOD,
+			Material = Enum.Material.Wood,
+		})
+	end
+	Kit.sign(parent, at(0, 5.4, signZ - 0.5), 12, 2.6, `{string.upper(def.displayName)} FIELD CAMP`, nil, {
+		boardColor = zone.color,
+		boardMaterial = Enum.Material.SmoothPlastic,
+		titleColor = Color3.new(1, 1, 1),
+		strokeColor = Color3.fromRGB(30, 30, 36),
+		thickness = 0.5,
+		twoSided = true,
+	})
 end
 
 function Kit.spawn(

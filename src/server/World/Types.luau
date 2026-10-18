@@ -38,6 +38,10 @@ export type Slot = {
 	-- On the hub's rim (hubRadius) in this slot's direction, LookVector
 	-- pointing out toward the zone. Connectors run hubExit -> gate.
 	hubExit: CFrame,
+	-- Research Camp pad (Layout.CAMP_WIDTH x CAMP_DEPTH): CFrame at the middle
+	-- of its top surface, same orientation as frame (local X runs along the
+	-- hub-facing edge). Just outside the footprint, beside the gate landing.
+	camp: CFrame,
 }
 
 -- Per-zone build context handed to style functions.
@@ -110,6 +114,10 @@ export type StylePack = {
 	-- ring between the catch rectangle and the footprint edge, and outside it.
 	-- themes.Default is used for any theme the style doesn't have.
 	themes: { [string]: (ctx: Context, zone: ZoneContext) -> () },
+	-- Optional. Dress the zone's Research Camp (zone.slot.camp): a deck at
+	-- camp height in ctx.folders.ground, a tent, a mast and a sign. Falls
+	-- back to Kit.researchCamp.
+	buildCamp: ((ctx: Context, zone: ZoneContext) -> ())?,
 	-- The next empty slot: a blocked bridge/path and a "COMING SOON" sign.
 	buildTeaser: (ctx: Context, zone: ZoneContext) -> (),
 }

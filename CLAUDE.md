@@ -80,6 +80,12 @@ a style pack decides how everything looks:
 - `World/Types.luau`: the StylePack interface and slot/zone contexts.
 - `World/Styles/Blockout.luau`: the reference style pack to copy.
 
+Research sites (`Util/ResearchSites` is the only code that finds them): every
+zone gets a Research Camp from the framework (`Slot.camp` pad, box at
+`Map.ResearchCamps.<ZoneId>`, `buildCamp` or `Kit.researchCamp`), and the hub
+has a `ResearchOffice`-tagged box over a marked pad (`Kit.researchOffice`;
+WeatherLab: the observatory dome). Both sit outside every zone and are walkable.
+
 Map rules: catch floors are flat and clear (nothing above floor + 0.3 inside
 a zone except its outer 2-stud band); in a Blocks style every catch floor is
 covered by `Map.Ground` parts whose top is exactly at floor height; selling

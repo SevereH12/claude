@@ -12,7 +12,15 @@ type Slot = WorldTypes.Slot
 local MAX_CONNECTOR_SLOPE = math.rad(28) -- steeper than this is unpleasant to walk
 local MIN_CONNECTOR_LENGTH = 8
 
+local CAMP_GAP = 5 -- camp pad starts this far outside the footprint edge
+local CAMP_SIDE = 5 -- and starts this far along the edge: flush with the gate landing
+local CAMP_CLEARANCE = 6
+
 local Layout = {}
+
+-- Research Camp pad: wide along the hub-facing edge, shallow away from it.
+Layout.CAMP_WIDTH = 28
+Layout.CAMP_DEPTH = 14
 
 -- Unit vector on the ground for an angle measured clockwise from north (-Z).
 function Layout.direction(angle: number): Vector3
@@ -31,6 +39,12 @@ function Layout.slot(
 	local direction = Layout.direction(angle)
 	local center = direction * radius + Vector3.new(0, floor, 0)
 	local frame = CFrame.lookAt(center, Vector3.new(0, floor, 0))
+	local camp = frame
+		* CFrame.new(
+			CAMP_SIDE + Layout.CAMP_WIDTH / 2,
+			0,
+			-depth / 2 - CAMP_GAP - Layout.CAMP_DEPTH / 2
+		)
 	local exitPoint = direction * params.hubRadius + Vector3.new(0, params.hubFloor, 0)
 	return {
 		index = index,
@@ -41,7 +55,18 @@ function Layout.slot(
 		frame = frame,
 		gate = frame * CFrame.new(0, 0, -depth / 2),
 		hubExit = CFrame.lookAt(exitPoint, exitPoint + direction),
+		camp = camp,
 	}
+end
+
+-- A slot-shaped footprint for a slot's camp pad, so the footprint tests
+-- (overlaps, distanceFromHub) can be reused for it.
+function Layout.campFootprint(slot: Slot): Slot
+	local footprint = table.clone(slot)
+	footprint.frame = slot.camp
+	footprint.width = Layout.CAMP_WIDTH
+	footprint.depth = Layout.CAMP_DEPTH
+	return footprint
 end
 
 -- Corners of a slot's footprint on the ground plane (x, z), grown by margin.
@@ -143,9 +168,23 @@ function Layout.plan(
 				0
 			)
 		end
+		local camp = Layout.campFootprint(slot)
+		if Layout.distanceFromHub(camp) < params.hubRadius + 4 then
+			error(`[Layout] {label}'s research camp cuts into the hub; raise firstRadius`, 0)
+		end
 		for j = i + 1, #all do
 			if Layout.overlaps(slot, all[j], 12) then
 				error(`[Layout] slots {i} and {j} overlap; increase angleStep or radiusStep`, 0)
+			end
+		end
+		for j, other in all do
+			local otherCamp = Layout.campFootprint(other)
+			-- the camp may touch its own landing but not its own zone
+			if j ~= i and Layout.overlaps(camp, other, CAMP_CLEARANCE) then
+				error(`[Layout] {label}'s research camp overlaps slot {j}; increase angleStep`, 0)
+			end
+			if j > i and Layout.overlaps(camp, otherCamp, CAMP_CLEARANCE) then
+				error(`[Layout] research camps of slots {i} and {j} overlap; increase angleStep`, 0)
 			end
 		end
 	end

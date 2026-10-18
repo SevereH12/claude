@@ -11,7 +11,7 @@ only stand where there is HEADROOM above. Water is not walkable.
 
 Checks (exit 1 if any fail):
   * every zone's catch floor is reachable on foot from spawn
-  * every sell area is reachable on foot from spawn
+  * every sell area, research office and research camp is reachable on foot from spawn
   * each catch floor is flat: >= 90% of its cells within 1.5 studs of the floor
   * each catch floor is open: >= 90% of its cells are standable
 Writes out_prefix_walk.png (reachable cells green, catch floors outlined).
@@ -164,6 +164,8 @@ def main():
 
     zones = [p for p in parts if ".Zones." in p["path"]]
     sells = [p for p in parts if p["name"] == "SellArea"]
+    # research offices and camps must be reachable like sell areas
+    sites = [p for p in parts if p["name"] == "ResearchOffice" or ".ResearchCamps." in p["path"]]
     spawns = [p for p in parts if p["class"] == "SpawnLocation"]
     if not spawns:
         print("FAIL: no SpawnLocation")
@@ -357,6 +359,14 @@ def main():
         report.append(f"{sa['path']}: {'reachable' if ok else 'NOT reachable'} (pad top ~{bottom:.1f})")
         if not ok:
             failures.append(f"{sa['path']}: sell area not reachable on foot from spawn")
+
+    for rs in sites:
+        cf, size = rs["cframe"], rs["size"]
+        bottom = cf[1] - size[1] / 2 + 1
+        ok = reachable_near(cf[0], cf[2], bottom, 3.0)
+        report.append(f"{rs['path']}: {'reachable' if ok else 'NOT reachable'} (pad top ~{bottom:.1f})")
+        if not ok:
+            failures.append(f"{rs['path']}: research site not reachable on foot from spawn")
 
     reach_count = len(reached_cells)
     report.append(f"walkable cells reached from spawn: {reach_count} ({reach_count * CELL * CELL:.0f} sq studs)")
