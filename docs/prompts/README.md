@@ -8,9 +8,10 @@ and stops if it isn't. To run one, say: "Do `docs/prompts/<file>`".
 2. `2-progression.md`: two upgrade lines (bottles and boots), zone gates
    by bottle tier, a next-goal tracker, and the extra in-between tiers.
 3. `3-premium-zone.md`: a zone only Roblox Premium members can enter.
-4. `4-next-zone.md`: adds the next new zone from its plan, with a new map
-   theme, values, a new bottle and new boots. **Run it once per zone** (it
-   ticks off the plan as it goes).
+4. `4-next-zone.md`: turns one of the two unused maps (StormPunk, then
+   SkyIsles) into a new zone with new values, a new bottle and new boots.
+   It reviews the borrowed map first and the result before pushing.
+   **Run it twice**, once per map (it ticks off its plan).
 5. `5-retention.md`: retention and progression stats on the Creator
    Dashboard, including where players are when they leave. It can run any
    time after prompt 2.
@@ -24,9 +25,10 @@ Researchers (all five parts done) live in `researchers/`.
 - Read `CLAUDE.md` and the files the prompt lists. For anything else, grep
   for the lines you need instead of opening whole files.
 - Don't open or edit files the prompt doesn't list. `WeatherLab` is the
-  live world style. Never edit the alternate styles (`StormPunk`,
-  `SkyIsles`). If one of them fails a check because of a new zone, report
-  it instead of fixing it.
+  live world style. Don't edit the alternate styles (`StormPunk`,
+  `SkyIsles`), except for small, backwards-compatible changes in prompt 4.
+  Otherwise, if one of them fails a check because of a new zone, report it
+  instead of fixing it.
 - Plan once, then write each file in one pass. No refactors, renames or docs
   beyond what the prompt asks for.
 - Changing the profile shape means bumping `CURRENT_VERSION` in
