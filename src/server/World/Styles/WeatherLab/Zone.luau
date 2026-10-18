@@ -291,7 +291,6 @@ function Zone.boardwalk(
 	local postEvery = if detail < 1 and p.length >= 110 then 4 else 2
 	local lampGap = if p.length < 110 then 30 elseif detail < 1 then 90 else 60
 	local postCount = 0
-	local litLanterns = 0
 	local nextLantern = 24
 	local lanternSide = 1
 	for i, s in list do
@@ -312,9 +311,7 @@ function Zone.boardwalk(
 				if s >= nextLantern and side == lanternSide and s < p.length - 10 then
 					nextLantern = s + lampGap
 					lanternSide = -lanternSide
-					-- only the first lamp on each walk casts real light
-					Pieces.lampPost(parent, bottom, 5.5, -right * side, litLanterns == 0)
-					litLanterns += 1
+					Pieces.lampPost(parent, bottom, 5.5, -right * side)
 					ropePoint = bottom + Vector3.new(0, 2.7, 0)
 				else
 					ropePoint = railPost(parent, bottom, opts.color, postCount % 2 == 1)
