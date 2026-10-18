@@ -36,8 +36,11 @@ the glowing border rope, the boardwalk post caps (a light trail from the hub
 to the zone), the plaza trail, the fingerpost arm and the gate title.
 
 Terrain colours are tuned to the palette with `Terrain:SetMaterialColor`
-(warm pale Sand, creamy Salt, terracotta Sandstone, cream Limestone, kelp
-Grass, blue-grey Slate) and the sea is a clear teal.
+(warm pale Sand, creamy Salt, sea-glass teal Mud for the "wet sand"
+beach-towel stripes, terracotta Sandstone, cream Limestone, kelp Grass,
+blue-grey Slate) and the sea is a clear teal. (The harness renderer draws
+fixed material colours, so Shoreline's teal Mud stripes show dark brown
+there; in Studio they are teal.)
 
 ## Materials
 
@@ -50,7 +53,7 @@ Grass, blue-grey Slate) and the sea is a clear teal.
   lantern room, charge tanks and the greenhouse.
 - Neon only for light: `spark` cyan electricity, warm window glow and the
   zone-coloured trail caps.
-- Terrain: Sand beaches and shallows, Salt beach-towel stripes, Sandstone /
+- Terrain: Sand beaches and shallows, teal Mud beach-towel stripes, Sandstone /
   Limestone / Rock mesa strata, Grass and LeafyGrass meadows, Cobblestone
   plaza with Brick edging, Brick quay walls, Slate and Rock outcrops, Water.
 
@@ -92,12 +95,15 @@ Grass, blue-grey Slate) and the sea is a clear teal.
   square, red and white bands, a cyan storm lens in a glass lantern room,
   a weather vane and lightning rod on top (~75 studs tall, the landmark
   every field can see).
-- **Sell station (the Volt Exchange)**: at the lighthouse door. A big
-  yellow pad framed in navy with glowing edges and "SELL" painted on it, a
-  striped arch carrying a giant SELL board, two glass charge tanks full of
-  cyan lightning wired up the tower to the lens. It faces the spawn, so it
-  is the first thing a player sees.
-- **Spawn**: a cream compass deck on the plaza facing the sell station.
+- **Sell station (the Volt Exchange)**: at the lighthouse door, square to
+  the spawn's line of sight. A 24x24 yellow pad in a 2-stud navy frame
+  with glowing edges and "SELL" painted on it, a 25-stud striped arch
+  whose giant SELL board sits ~30 studs up (it shows over the cottages
+  from every boardwalk arch), and two glass charge tanks full of cyan
+  lightning wired up the tower to the lens, standing beside the pad.
+- **Spawn**: a cream compass deck 52 studs out, facing straight down the
+  pad to the lighthouse; the spawn gap has no cottage and its lamp stands
+  aside, so nothing blocks the view.
 - **Wayfinding**: a fingerpost beside the spawn with one arm per zone (zone
   colour, pointed toward it); a dashed glowing trail in each zone's colour
   set into the cobbles from the lighthouse to that zone's boardwalk; a
@@ -111,12 +117,17 @@ Grass, blue-grey Slate) and the sea is a clear teal.
 - **Coast**: terraced grass bank, sand beach, shallows, all following one
   shared wobble. The coast dips into a little bay wherever a boardwalk
   leaves and stops well short of every zone island, so each boardwalk
-  crosses open water. A brick-walled round harbour with a jetty and moored
-  boats; marker buoys placed out on real open water; sea-stack islets.
-- **Plaza**: brick kerb, cobbles and cream rings round the lighthouse, with
-  eight cream paving plinths under the bunting posts. They are aligned so
-  every boardwalk spoke (current and future, every 22.5 degrees) runs down
-  a cobbled ray and its cream path and zone-coloured dashes stay readable.
+  crosses open water. The harbour is a basin bitten out of the coast (a
+  `Geo.bite`, so the land is never built there) with an L-shaped brick
+  mole that follows the shore and hooks across the mouth, ending in a
+  teal harbour light; a jetty with moored boats and a crane. Marker buoys
+  out on real open water; sea-stack islets built from leaning, offset
+  drums and wedge faces (never a stack of coins).
+- **Plaza**: an irregular cobbled square (no rings): wider toward the
+  harbour and the spawn, with a broken brick kerb, a big cream market
+  square on the harbour side, a smaller one at the lighthouse foot, and a
+  small cream square beside every boardwalk exit where the tapered cream
+  spoke ends.
 
 ## Zones
 
@@ -128,11 +139,18 @@ Every zone island is generic (any slot position, rotation, size, height):
   a circle round the hub, and land above water stays nearer its own
   footprint than any neighbour's, so islands never merge, however many
   zones are added.
+- **Ground shape**: coves are `Geo.bite` circles cut from every land
+  layer (always leaving a 7-stud strip round the footprint); each terrace
+  mixes the island's shared wobble with its own so headlands don't line
+  up; Canyon cliffs get wedge-faced scree (`Geo.talus`) and a broken
+  cap-rock lip of mixed sizes.
 - **Catch floor**: flat terrain painted in a bold two-tone pattern with a
-  contrasting trim around the field edge. Nothing stands on it.
-- **Border**: posts just outside the footprint edge every ~9 studs, each
-  with a glowing cap in the zone colour, joined by a glowing rope; striped
-  survey poles with windsocks at the corners.
+  contrasting trim around the field edge, framed by a raised 3-stud plank
+  kerb (open at the gate). Nothing stands on it.
+- **Border**: posts on the kerb every ~10 studs, each with a glowing cap in
+  the zone colour; one glowing rope spans two gaps (resting over the middle
+  post) to halve the Beam count; striped corner poles in the zone colour
+  with windsocks.
 - **Gate**: two striped lighthouse-style posts and a beam with the zone's
   name and tagline facing the boardwalk ("BACK TO THE HARBOUR" on the
   back), lanterns, a windsock, and a value plaque.
@@ -142,34 +160,44 @@ Every zone island is generic (any slot position, rotation, size, height):
 
 | Theme | Field pattern | Hero landmark (outside the field) | Edge dressing |
 | --- | --- | --- | --- |
-| `Beach` | Sand / Salt beach-towel stripes, plank trim | A giant red-and-white striped weather balloon on tethers above a launch deck | dune-grass fringe, a lagoon pool, a plank pier out to open water (T-head, lamp, striped tide gauge, tied rowboat, sea spray), beach huts, umbrellas, a tide-watch tower, palms, buoys, rocks, shells, driftwood |
+| `Beach` | Sand / sea-glass teal (Mud) beach-towel stripes 12 studs wide, plank trim and kerb | A giant red-and-white striped weather balloon on tethers above a launch deck | island with a NE rock headland, a long curving sand spit, a cove and a sandstone dune bluff behind the field; props in vignettes with open sand between: a cabana row of three huts with surfboards, the tide-watch tower with its umbrella-and-deck-chair cluster, two palm groves, the plank pier out to open water (T-head, lamp, tide gauge, tied rowboat, sea spray), a lagoon; buoys, rocks, shells, driftwood |
 | `Canyon` | Sandstone / Limestone checkerboard, brick trim | The Anvil Observatory: a white dome with a telescope on a striped rock spire | cream cap-rock lip, layered cliff bands and hoodoos, a wooden water tower, a farm windmill, adobe weather huts, dry-scrub and rock-pavement patches, windsocks, cacti, tumbleweeds, rocks |
-| `Default` | Mowed lawn: Grass / dark LeafyGrass stripes, salt-white line trim, set in rough LeafyGrass meadow so it pops | A radar mast with a big white radome and a red beacon | grass banks with mossy stones on the edge, a greenhouse, an instrument shelter, hay bales, round trees, flowers, rocks |
+| `Default` | Rotates by spiral slot so fallback zones never match: Grass/Limestone stripes with brick trim, LeafyGrass/Salt checker with plank trim, Grass/Ground cross stripes with cream trim, Sand/Grass checker with slate trim; set in rough LeafyGrass meadow | A radar mast with a big white radome and a red beacon | grass banks with mossy stones on the edge, a greenhouse, an instrument shelter, hay bales, round trees, flowers, rocks |
 
 ## Teaser (Coming Soon)
 
-A misty rock island in the next slot. The next field is already staked
-out on top: survey pegs with orange flags and yellow caution tape, and
-the ground half ploughed into stripes (the last stripe only half done),
-so it reads as "a field is coming" from the hub. A survey camp (tent,
-crates, scaffold with a work light) and a grey "?" balloon stand on it.
+A misty rocky crescent (a wide bay bitten out of the back) in the next
+slot. Only a site is marked out on top: survey pegs with orange flags
+and yellow caution tape and just two half-ploughed stripes, so it reads
+as "not built yet". A survey camp (tent, crates, scaffold with a work
+light), a grey balloon with a big neon yellow "?" facing the hub, and a
+wide slow mist emitter (rate 4).
 The boardwalk to it stops half-way: bare stilts stick out of the water
 past a striped barrier, caution rope, and a big "COMING SOON" board.
 
 ## Stacking and budget
 
 - A new zone needs only its `Config.ZONES` entry (and a theme module for a
-  new look; unknown themes use `Default`). The spiral (135 degrees, +38
+  new look; unknown themes use `Default`). The spiral (first ring 178 studs, 135 degrees, +38
   studs per slot) places it; its island shape, channel to its
   neighbours, hub bay, boardwalk, border, gate, sign and light trail all
   follow from the slot.
-- Detail budget: with up to two zones everything is at full detail. Each
-  extra zone thins the scattered small props (palms, umbrellas, tufts,
-  shells, cacti, flowers, rocks, buoys) and widens the border post
-  spacing a little (`Geo.detail`), and boardwalk rail posts stand every
-  ~14 studs. Measured: 2 zones ~1,960 parts, 3 zones ~2,270, 4 zones
-  ~2,470. Seven zones come to ~3,860, so past four zones the 2,500-part
-  budget needs raising (or StreamingEnabled).
+- Part budget (`Geo.markHub/allowance/room`): the hub is counted before
+  the first zone, the teaser keeps a 200-part reserve and every zone gets
+  an equal share of a 2,400-part cap for its island art, border, gate and
+  boardwalk. Themes build their hero landmark first and ask `Geo.room`
+  before each optional piece (huts, pier, tower, greenhouse, every
+  scattered prop), so the first zones are fully dressed while a 7-zone
+  world gets a lighter dressing. `Geo.detail` additionally thins props,
+  widens border spacing, uses longer deck segments and sparser rail
+  posts, stilts, lamps and trail dashes on long boardwalks, and drops a
+  hub tree per gap. Only the first lamp on each boardwalk, the hub lamps,
+  the gate lamps and a few key lights cast real light.
+- Measured with the harness (extra zones 100x110, floors +8 each):
+  2 zones 1,873 parts / 134 beams / 24 lights; 4 zones ~2,060 / 145 / 32;
+  7 zones ~2,470 / 229 / 44 (all gameplay and walk checks pass);
+  8 zones ~2,580, so past seven zones turn on StreamingEnabled and raise
+  the part cap (`PART_CAP` in `Geo.luau`).
 - Props find real ground with `Geo.heightAt` / `Geo.groundAt` (every
   terrace outline is remembered on the build context) and open water
   with `Geo.seaward`, so buoys, boats and rocks follow the organic coast.
@@ -184,3 +212,10 @@ past a striped barrier, caution rope, and a big "COMING SOON" board.
 
 The gates and signs print `Config.ZONES[id].displayName` and `tagline`, so
 renaming a zone in Config renames it everywhere.
+
+## Revision notes (review round 2)
+
+- Coastlines: `Geo.wave` is overdriven and clipped, so outlines have long near-straight runs between bites; `Geo.fan` varies its edge bumps about 0.5x-2x round the coast instead of equal scallops.
+- Shoreline stripes are flush SmoothPlastic inlays (7 studs, saturated sea-glass teal `64,200,196`) with cream piping, top at floor + 0.05, so the colour no longer depends on terrain tinting.
+- Mesa gets a tall stepped butte behind the field (floor + 6 / 16 / 26 / 28 cap) and a long low sand terrace on one side; both are skipped by `Geo.clearOf` if a future zone, the teaser or the hub would be too close.
+- Teaser: the deck runs 70% of the way, ending at tall caution-striped gate posts with a lit neon crossbar; the "?" balloon floats at y >= 68, above the lighthouse lens.

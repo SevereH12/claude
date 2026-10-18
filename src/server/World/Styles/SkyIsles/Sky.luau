@@ -145,7 +145,13 @@ function Sky.base(ctx: Context)
 		Vector3.new(2048, 2, 2048),
 		C.cloud,
 		Enum.Material.SmoothPlastic,
-		{ Name = "CloudSea", CastShadow = false, CanQuery = false, CanTouch = false }
+		{
+			Name = "CloudSea",
+			CastShadow = false,
+			CanCollide = false,
+			CanQuery = false,
+			CanTouch = false,
+		}
 	)
 	for _, corner in
 		{
@@ -163,6 +169,7 @@ function Sky.base(ctx: Context)
 			{
 				Name = "CloudPuffs",
 				Transparency = 1,
+				CanCollide = false,
 				CastShadow = false,
 				CanQuery = false,
 				CanTouch = false,
@@ -226,41 +233,6 @@ function Sky.base(ctx: Context)
 			end
 		end
 		return true
-	end
-	-- distant cloud banks: big soft balls ringing the archipelago below
-	-- the horizon line, kept out from under every current and future isle
-	local rngClouds = ctx.rng
-	local banks = 0
-	for k = 1, 60 do
-		if banks >= 18 then
-			break
-		end
-		local angle = k * 2.39996 + rngClouds:NextNumber(-0.3, 0.3)
-		local distance = rngClouds:NextNumber(330, 470)
-		local size = rngClouds:NextNumber(120, 240)
-		local center = Vector3.new(math.cos(angle) * distance, 0, math.sin(angle) * distance)
-		if clear(center, size * 0.45) then
-			banks += 1
-			local far = math.clamp((distance - 330) / 140, 0, 1)
-			local color = C.cloud
-				:Lerp(C.creamWarm, rngClouds:NextNumber(0, 0.4))
-				:Lerp(C.twilightLight, 0.25 + far * 0.35)
-			Pieces.block(
-				base,
-				CFrame.new(center + UP * (rngClouds:NextNumber(-170, -135) - size * 0.2)),
-				Vector3.new(size, size * rngClouds:NextNumber(0.45, 0.6), size),
-				color,
-				Enum.Material.SmoothPlastic,
-				{
-					Name = "CloudBank",
-					Shape = Enum.PartType.Ball,
-					Transparency = rngClouds:NextNumber(0.15, 0.35),
-					CastShadow = false,
-					CanQuery = false,
-					CanTouch = false,
-				}
-			)
-		end
 	end
 	local placed = 0
 	local rng = ctx.rng

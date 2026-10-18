@@ -29,6 +29,8 @@ local function ground(ctx: Context, zone: ZoneContext)
 	local floor = zone.slot.floor
 	local hw, hd = zone.slot.width / 2, zone.slot.depth / 2
 	local m = MARGINS
+	-- a deep cove bitten into one side (cut from every land layer)
+	Geo.bite(ctx, Geo.key(zone), Geo.at(zone, hw + m.side + 4, hd * 0.6, 0), 16)
 	Geo.terrace(ctx, zone, m, 26, -4, -18, Enum.Material.Sand, 10, 1, 0.9)
 	Geo.terrace(ctx, zone, m, 19, math.min(1.5, floor - 2), -16, Enum.Material.Sand, 8, 1, 1)
 	Geo.cliffs(ctx, zone, m, 1.5, floor, {
@@ -38,8 +40,13 @@ local function ground(ctx: Context, zone: ZoneContext)
 		Enum.Material.Sandstone,
 	}, 16, 4, 8)
 	Geo.terrace(ctx, zone, m, 0, floor, -16, Enum.Material.Sandstone, 10, 0)
-	-- a cream cap-rock lip round the plateau edge
-	Geo.rim(ctx, zone, floor, Enum.Material.Limestone, 3, 0.9)
+	-- a broken cream cap-rock lip round the plateau edge (sizes vary and
+	-- about a third are missing so the edge never reads as a scallop)
+	Geo.rim(ctx, zone, floor, Enum.Material.Limestone, 4.5, 0.62)
+	-- wedge-faced scree slopes at the foot of the cliffs
+	if floor >= 10 then
+		Geo.talus(ctx, zone, floor, 1, floor * 0.55, 11, Enum.Material.Sandstone, 0.5)
+	end
 	-- lower mesa steps breaking out of the outline on two sides
 	if floor >= 12 then
 		local lx, lz = -hw - m.side - 8, hd * 0.25
@@ -48,6 +55,70 @@ local function ground(ctx: Context, zone: ZoneContext)
 		local rx, rz = hw + m.side + 5, -hd * 0.45
 		Geo.lobe(ctx, zone, rx, rz, 10, 18, floor - 10, Enum.Material.Rock, 1)
 		Geo.lobe(ctx, zone, rx - 2, rz, 8, 14, floor - 5, Enum.Material.Sandstone, 0.5)
+	end
+	-- a deep cove bitten into one side, and a big off-axis headland at a
+	-- back corner, so the plateau is never a square
+	do
+		local bx, bz = -hw - m.side + 4, hd + m.back + 6
+		Geo.lobe(ctx, zone, bx, bz, 13, 22, floor - 4, Enum.Material.Sandstone, 1.5)
+		Geo.lobe(ctx, zone, bx - 4, bz + 6, 9, 15, floor - 9, Enum.Material.Rock, 1)
+	end
+	-- a tall asymmetric butte behind the field and a long low terrace
+	-- reaching out on one side, so the island's silhouette is never the
+	-- field's square
+	do
+		local bp = Geo.at(zone, hw * 0.45, hd + m.back + 12, 0)
+		if Geo.clearOf(ctx, zone, bp, 30, 14) then
+			Geo.lobe(
+				ctx,
+				zone,
+				hw * 0.45,
+				hd + m.back + 12,
+				20,
+				28,
+				floor + 6,
+				Enum.Material.Sandstone,
+				1.5
+			)
+			Geo.lobe(
+				ctx,
+				zone,
+				hw * 0.3,
+				hd + m.back + 16,
+				14,
+				20,
+				floor + 16,
+				Enum.Material.Rock,
+				1
+			)
+			Geo.lobe(
+				ctx,
+				zone,
+				hw * 0.22,
+				hd + m.back + 18,
+				10,
+				15,
+				floor + 26,
+				Enum.Material.Sandstone,
+				1
+			)
+			Geo.lobe(
+				ctx,
+				zone,
+				hw * 0.22,
+				hd + m.back + 18,
+				8,
+				12,
+				floor + 28,
+				Enum.Material.Limestone,
+				0
+			)
+		end
+		local sx, sz = -hw - m.side - 34, -hd * 0.3
+		if Geo.clearOf(ctx, zone, Geo.at(zone, sx, sz, 0), 24, 14) then
+			Geo.lobe(ctx, zone, sx, sz, 16, 24, floor - 14, Enum.Material.Sand, 1)
+			Geo.lobe(ctx, zone, sx + 8, sz + 4, 12, 18, floor - 9, Enum.Material.Sandstone, 1)
+		end
 	end
 	-- dry scrub and bare rock pavement patches on the plateau rim
 	for i = 1, 10 do
@@ -66,7 +137,7 @@ local function ground(ctx: Context, zone: ZoneContext)
 		{ hw + m.side + 16, -hd * 0.1, 10 },
 		{ -hw - m.side - 14, hd * 0.35, 14 },
 		{ -hw * 0.55, hd + m.back + 14, 8 },
-		{ hw * 0.7, hd + m.back + 10, 16 },
+		{ hw * 0.7, hd + m.back + 18, 16 },
 		{ -hw - m.side - 10, -hd * 0.65, 6 },
 	}
 	for _, h in hoodoos do
@@ -433,6 +504,7 @@ local function dress(ctx: Context, zone: ZoneContext)
 	Geo.claim(spots, 0, -hd - 8, 9)
 	Geo.claim(spots, 0, hd + 15, 10)
 	Geo.claim(spots, 0, hd + 6, 7)
+	Geo.claim(spots, hw + MARGINS.side + 4, hd * 0.6, 17) -- the cove
 
 	observatory(ctx, zone)
 
@@ -446,6 +518,9 @@ local function dress(ctx: Context, zone: ZoneContext)
 		{ hw + 7, hd + 13, 7, 6, 5 },
 	}
 	for _, h in huts do
+		if not Geo.room(ctx, zone, 30) then
+			break
+		end
 		Geo.claim(spots, h[1], h[2], 5.5)
 		local cf = Geo.faceField(zone, h[1], h[2])
 		adobe(folder, cf, h[3], h[4], h[5])
@@ -454,7 +529,9 @@ local function dress(ctx: Context, zone: ZoneContext)
 	end
 	local tx, tz = -hw * 0.62, hd + 13
 	Geo.claim(spots, tx, tz, 6)
-	waterTower(folder, Geo.at(zone, tx, tz))
+	if Geo.room(ctx, zone, 30) then
+		waterTower(folder, Geo.at(zone, tx, tz))
+	end
 
 	local lampX, lampZ = -hw - 6, hd * 0.1
 	Pieces.lampPost(folder, Geo.at(zone, lampX, lampZ), 6, zone.slot.frame.RightVector)
@@ -478,12 +555,18 @@ local function dress(ctx: Context, zone: ZoneContext)
 
 	-- cacti, tumbleweeds, desert flowers and rocks around the rim
 	for _ = 1, Geo.count(ctx, 14) do
+		if not Geo.room(ctx, zone, 6) then
+			break
+		end
 		local x, z = Geo.findSpot(ctx, zone, spots, 4, 14, 1.8, true)
 		if x and z then
 			Pieces.cactus(folder, Geo.at(zone, x, z, -0.3), rng:NextNumber(4, 7.5), rng)
 		end
 	end
 	for _ = 1, Geo.count(ctx, 5) do
+		if not Geo.room(ctx, zone, 6) then
+			break
+		end
 		local x, z = Geo.findSpot(ctx, zone, spots, 4, 14, 1.2, false)
 		if x and z then
 			local weed = Pieces.ball(
@@ -498,12 +581,18 @@ local function dress(ctx: Context, zone: ZoneContext)
 		end
 	end
 	for _ = 1, Geo.count(ctx, 8) do
+		if not Geo.room(ctx, zone, 6) then
+			break
+		end
 		local x, z = Geo.findSpot(ctx, zone, spots, 3, 12, 1.2, false)
 		if x and z then
 			Pieces.flowers(folder, Geo.at(zone, x, z), rng)
 		end
 	end
 	for _ = 1, Geo.count(ctx, 7) do
+		if not Geo.room(ctx, zone, 6) then
+			break
+		end
 		local x, z = Geo.findSpot(ctx, zone, spots, 4, 15, 2.5, false)
 		if x and z then
 			Pieces.rocks(

@@ -49,6 +49,7 @@ Palette.terrain = {
 	{ material = Enum.Material.Brick, color = Color3.fromRGB(176, 90, 70) },
 	{ material = Enum.Material.WoodPlanks, color = Color3.fromRGB(176, 130, 88) },
 	{ material = Enum.Material.Ground, color = Color3.fromRGB(140, 106, 74) },
+	{ material = Enum.Material.Mud, color = Color3.fromRGB(86, 178, 172) },
 	{ material = Enum.Material.Basalt, color = Color3.fromRGB(60, 66, 80) },
 }
 

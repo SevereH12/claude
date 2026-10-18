@@ -94,8 +94,8 @@ degrees.
   and a column of light pours from a gold crystal down onto the pad. Above
   the canopy a tapering star tower with glowing window slits rises to about
   110 studs, rune stones drift around it, and a giant floating storm
-  crystal on four prongs is ringed by three rune rings and crackling arcs.
-  Heavy iron tethers run from the tower to every island (the teaser's hangs
+  crystal (a fat 10x22 glass octahedron with a neon heart) on four prongs, with four large rune stones orbiting below, is ringed by three rune rings and crackling arcs.
+  A snapped iron tether hangs from the tower toward the teaser (it hangs
   snapped).
 - **Spawn:** a rune circle on the plaza beside the first zone's lane,
   facing the altar, with a compass signpost (arrows to SELL, every zone and
@@ -119,7 +119,9 @@ Shared by all themes (`Zone.luau`), so any slot, size or rotation works:
   Nothing rises inside the footprint, and every lump is checked against the
   hub, other zones' footprints and every bridge corridor.
 - **Catch floor:** terrain sits exactly at the floor. The pattern is a carpet
-  of flush part bands or tiles (top at floor+0.2, under the warning circles,
+  of flush part rings, checks or bands framed by a chunky 4-stud rim of
+  alternating zone-colour tiles with clipped dark corners and a cream inner
+  line (top at floor+0.2, under the warning circles,
   can't be collided with), plus a glowing edge line in the zone colour.
 - **Border:** rune posts on the footprint edge with crystal caps in the zone
   colour, linked by glowing sagging rune cables. Every fourth post is a
@@ -135,8 +137,8 @@ Shared by all themes (`Zone.luau`), so any slot, size or rotation works:
 
 | Theme | Field | Edge dressing | Hero landmark |
 | --- | --- | --- | --- |
-| Beach (Shoreline) | seaglass and teal bands (cool, so yellow circles pop) | golden sand rim, rocky ridge behind, palms leaning off the field, parasols, dune grass, shoreline boulders, tide pools spilling waterfalls into the clouds, shells and driftwood, a cabana, a pier and a moored sky-skiff on a headland | **Sky Lighthouse**: striped tower on a rock point at the end of a sandy headland, cyan storm-lamp throwing two light beams |
-| Canyon (Mesa) | twilight-violet strata stripes, wide and narrow (complementary to orange) | ember rim over an ochre shelf, banded sandstone walls behind, corner strata buttes with crystals, a natural arch, hoodoos, cacti, a crystal mine-cart headland, lantern posts | **Crystal Butte**: a 35-stud layered butte crowned with a giant amber crystal, a lightning rod and a rune ring |
+| Beach (Shoreline) | concentric ripple rings of pale mint and deep teal (cool and high contrast, so yellow circles pop) | golden sand rim, rocky ridge behind, palms leaning off the field, parasols, dune grass, shoreline boulders, tide pools spilling waterfalls into the clouds, shells and driftwood, a cabana, a pier and a moored sky-skiff on a headland | **Sky Lighthouse**: striped tower on a rock point at the end of a sandy headland, cyan storm-lamp throwing two light beams |
+| Canyon (Mesa) | bold 16-stud checker of lilac and plum (complementary to orange) | ember rim over an ochre shelf, banded sandstone walls behind, corner strata buttes with crystals, a natural arch, hoodoos, cacti, a crystal mine-cart headland, lantern posts | **Crystal Butte**: a 35-stud layered butte crowned with a giant amber crystal, a lightning rod and a rune ring |
 | Default (any new theme) | checkerboard in the complementary hue of the zone colour | grassy rim, rolling hills behind, a standing-stone rune circle headland, a pond headland with a waterfall, crystal trees, meadows of flowers, lanterns | **Rune Obelisk**: tiered obelisk on a knoll with a floating crystal and rune rings in the zone colour |
 
 A theme reused by a zone whose colour is close to the theme's field hue
@@ -146,7 +148,7 @@ switches its field to that colour's complement automatically
 ### Teaser
 
 The next slot is an unfinished, storm-veiled island: dark basalt with rock
-boulders, violet crystals, a dormant crystal in a scaffold, crates and a
+boulders, violet crystals, a 28-stud violet crystal spire in a three-level scaffold (the isle's silhouette from spawn), a lower slate terrace, crates and a
 survey flag under rolling violet mist; a half-built rune bridge stops at a
 glowing (solid) rune barrier with a **COMING SOON** board, loose bridge
 stones drift in the gap, and a stub reaches out from the island side.

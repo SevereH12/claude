@@ -32,6 +32,9 @@ export type FieldLook = {
 export type Theme = {
 	margins: Margins,
 	field: FieldLook,
+	-- optional per-zone field (e.g. Default rotates patterns by slot so
+	-- several fallback zones never look identical)
+	fieldFor: ((zone: ZoneContext) -> FieldLook)?,
 	border: BorderLook,
 	-- terrain under and around the footprint (the field is painted after)
 	ground: (ctx: Context, zone: ZoneContext) -> (),

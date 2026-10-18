@@ -187,7 +187,7 @@ function Pieces.lantern(
 		Pieces.box(parent, CFrame.new(position), Vector3.new(0.9, 1.3, 0.9), glowColor),
 		glowColor
 	)
-	if withLight ~= false then
+	if withLight == true then
 		Kit.light(core, color or Palette.lamp, range or 18, 1.4)
 	end
 	return core

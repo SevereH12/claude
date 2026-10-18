@@ -258,25 +258,34 @@ local function dress(ctx: Context, zone: ZoneContext)
 
 	local gx, gz = hw + 9, hd * 0.3
 	Geo.claim(spots, gx, gz, 7)
-	greenhouse(folder, Geo.faceField(zone, gx, gz), rng)
+	if Geo.room(ctx, zone, 30) then
+		greenhouse(folder, Geo.faceField(zone, gx, gz), rng)
+	end
 	local sx, sz = -hw - 7, -hd * 0.2
 	Geo.claim(spots, sx, sz, 3)
-	shelter(folder, Geo.faceField(zone, sx, sz))
+	if Geo.room(ctx, zone, 15) then
+		shelter(folder, Geo.faceField(zone, sx, sz))
+	end
 	local lx, lz = -hw - 9, hd * 0.45
 	Geo.claim(spots, lx, lz, 6)
-	Pieces.cottage(folder, Geo.faceField(zone, lx, lz), {
-		width = 8,
-		depth = 6,
-		height = 4.8,
-		roof = "clay",
-		trim = C.seafoam,
-		name = "FIELD LAB",
-		chimney = false,
-		instrument = "vane",
-	}, rng)
+	if Geo.room(ctx, zone, 30) then
+		Pieces.cottage(folder, Geo.faceField(zone, lx, lz), {
+			width = 8,
+			depth = 6,
+			height = 4.8,
+			roof = "clay",
+			trim = C.seafoam,
+			name = "FIELD LAB",
+			chimney = false,
+			instrument = "vane",
+		}, rng)
+	end
 
 	-- hay bales
 	for i = 1, Geo.count(ctx, 4) do
+		if not Geo.room(ctx, zone, 6) then
+			break
+		end
 		local x, z = Geo.findSpot(ctx, zone, spots, 4, 12, 2, true)
 		if x and z then
 			local cf = Geo.cf(zone, x, z, 1.3, rng:NextNumber(0, 180))
@@ -291,24 +300,36 @@ local function dress(ctx: Context, zone: ZoneContext)
 		end
 	end
 	for _ = 1, Geo.count(ctx, 7) do
+		if not Geo.room(ctx, zone, 6) then
+			break
+		end
 		local x, z = Geo.findSpot(ctx, zone, spots, 6, 16, 3, true)
 		if x and z then
 			Pieces.tree(folder, Geo.at(zone, x, z, -0.3), rng:NextNumber(0.9, 1.3), rng)
 		end
 	end
 	for _ = 1, Geo.count(ctx, 6) do
+		if not Geo.room(ctx, zone, 6) then
+			break
+		end
 		local x, z = Geo.findSpot(ctx, zone, spots, 3, 12, 1.6, false)
 		if x and z then
 			Pieces.bush(folder, Geo.at(zone, x, z), rng:NextNumber(1.8, 2.6), rng)
 		end
 	end
 	for _ = 1, Geo.count(ctx, 10) do
+		if not Geo.room(ctx, zone, 6) then
+			break
+		end
 		local x, z = Geo.findSpot(ctx, zone, spots, 3, 10, 1.2, false)
 		if x and z then
 			Pieces.flowers(folder, Geo.at(zone, x, z), rng)
 		end
 	end
 	for _ = 1, Geo.count(ctx, 5) do
+		if not Geo.room(ctx, zone, 6) then
+			break
+		end
 		local x, z = Geo.findSpot(ctx, zone, spots, 5, 16, 2, false)
 		if x and z then
 			Pieces.rocks(folder, Geo.at(zone, x, z), rng:NextNumber(2, 3.2), rng)
@@ -316,12 +337,48 @@ local function dress(ctx: Context, zone: ZoneContext)
 	end
 end
 
+-- Field looks rotated by spiral slot, so a 3rd, 4th or 5th fallback zone
+-- each gets its own bold two-tone pattern and trim.
+local FIELDS: { WLTypes.FieldLook } = {
+	{
+		base = Enum.Material.Grass,
+		accent = Enum.Material.Limestone,
+		trim = Enum.Material.Brick,
+		pattern = "along",
+		cell = 12,
+	},
+	{
+		base = Enum.Material.LeafyGrass,
+		accent = Enum.Material.Salt,
+		trim = Enum.Material.WoodPlanks,
+		pattern = "checker",
+		cell = 14,
+	},
+	{
+		base = Enum.Material.Grass,
+		accent = Enum.Material.Ground,
+		trim = Enum.Material.Limestone,
+		pattern = "across",
+		cell = 12,
+	},
+	{
+		base = Enum.Material.Sand,
+		accent = Enum.Material.Grass,
+		trim = Enum.Material.Slate,
+		pattern = "checker",
+		cell = 16,
+	},
+}
+
 local theme: Theme = {
 	margins = MARGINS,
+	fieldFor = function(zone: ZoneContext): WLTypes.FieldLook
+		return FIELDS[(zone.slot.index - 1) % #FIELDS + 1]
+	end,
 	field = {
 		base = Enum.Material.Grass,
 		accent = Enum.Material.LeafyGrass,
-		trim = Enum.Material.Salt,
+		trim = Enum.Material.Limestone,
 		pattern = "along",
 		cell = 12,
 	},

@@ -10,7 +10,7 @@ type ZoneContext = WorldTypes.ZoneContext
 
 -- The carpet of flush bands/tiles that patterns a catch floor.
 export type FieldPattern = {
-	kind: "bands" | "checker",
+	kind: "bands" | "checker" | "rings",
 	colors: { Color3 }, -- alternated
 	materials: { Enum.Material }, -- alternated with colors
 	size: number, -- target band or tile size in studs

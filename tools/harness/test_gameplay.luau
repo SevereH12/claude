@@ -179,7 +179,7 @@ end
 -- teaser and budget ----------------------------------------------------------
 local zoneArt = map and map:FindFirstChild("ZoneArt")
 local teaser = zoneArt and zoneArt:FindFirstChild("ComingSoon")
-if map and map:GetAttribute("Style") ~= "Legacy" then -- the old map predates teasers
+if map then
 	check(teaser ~= nil and #teaser:GetDescendants() > 0, "a Coming Soon teaser was built")
 end
 local partCount = 0

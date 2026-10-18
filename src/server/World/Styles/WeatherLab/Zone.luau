@@ -28,8 +28,10 @@ local START_FLAT = 7
 function Zone.ground(ctx: Context, zone: ZoneContext)
 	local def = zone.def
 	local theme = Themes.get(if def then def.theme else "Default")
+	Geo.markHub(ctx)
 	theme.ground(ctx, zone)
-	Geo.field(ctx, zone, theme.field)
+	local look = if theme.fieldFor then theme.fieldFor(zone) else theme.field
+	Geo.field(ctx, zone, look)
 end
 
 -- Boardwalk -------------------------------------------------------------------------
@@ -109,9 +111,16 @@ local function profile(from: Vector3, to: Vector3, landing: number): Profile
 end
 
 -- Sample distances along the walk: every ~7 studs plus every profile break.
-local function samples(p: Profile, limit: number): { number }
+-- Longer walks (and busier worlds, via the detail budget) use longer
+-- deck segments and sparser posts, stilts and lamps.
+local function segmentLength(length: number, detail: number): number
+	local seg = if length < 110 then 7 else math.min(12, 7 + (length - 110) / 25)
+	return if detail < 1 then math.max(seg, 11) else seg
+end
+
+local function samples(p: Profile, limit: number, detail: number): { number }
 	local list = table.clone(p.breaks)
-	local n = math.max(1, math.ceil(p.length / 7))
+	local n = math.max(1, math.ceil(p.length / segmentLength(p.length, detail)))
 	for i = 1, n - 1 do
 		table.insert(list, p.length * i / n)
 	end
@@ -129,7 +138,7 @@ local function samples(p: Profile, limit: number): { number }
 end
 
 -- A rail post with a glowing cap in the trail colour. Returns the rope point.
-local function railPost(parent: Instance, bottom: Vector3, color: Color3): Vector3
+local function railPost(parent: Instance, bottom: Vector3, color: Color3, cap: boolean?): Vector3
 	Pieces.box(
 		parent,
 		CFrame.new(bottom + Vector3.new(0, 1.6, 0)),
@@ -137,7 +146,9 @@ local function railPost(parent: Instance, bottom: Vector3, color: Color3): Vecto
 		C.piling,
 		Enum.Material.Wood
 	)
-	Pieces.glow(Pieces.ball(parent, bottom + Vector3.new(0, 3.45, 0), 0.8, color), color)
+	if cap ~= false then
+		Pieces.glow(Pieces.ball(parent, bottom + Vector3.new(0, 3.45, 0), 0.8, color), color)
+	end
 	return bottom + Vector3.new(0, 2.7, 0)
 end
 
@@ -197,7 +208,8 @@ function Zone.boardwalk(
 	local rng = ctx.rng
 	local p = profile(from, to, opts.landing)
 	local limit = if opts.stopAt then p.length * opts.stopAt else p.length
-	local list = samples(p, limit)
+	local detail = Geo.detail(ctx)
+	local list = samples(p, limit, detail)
 	local width = Zone.DECK_WIDTH
 	local platform = p.platform
 	local function onPlatform(s: number): boolean
@@ -265,6 +277,11 @@ function Zone.boardwalk(
 
 	-- rail posts, ropes, stilts and lanterns at each sample
 	local last: { [number]: Vector3 } = {}
+	local stiltEvery = if p.length < 110 then 2 elseif detail < 1 then 4 else 3
+	local postEvery = if detail < 1 and p.length >= 110 then 4 else 2
+	local lampGap = if p.length < 110 then 30 elseif detail < 1 then 90 else 60
+	local postCount = 0
+	local litLanterns = 0
 	local nextLantern = 24
 	local lanternSide = 1
 	for i, s in list do
@@ -277,17 +294,20 @@ function Zone.boardwalk(
 			or (platform and (math.abs(s - platform.from) < 0.2 or math.abs(s - platform.to) < 0.2))
 		then
 			last = {}
-		elseif not endpoint and (i % 2 == 1 or i == #list) then
+		elseif not endpoint and (i % postEvery == 1 or i == #list) then
+			postCount += 1
 			for _, side in { -1, 1 } do
 				local bottom = point + right * side * (width / 2 - 0.3)
 				local ropePoint
 				if s >= nextLantern and side == lanternSide and s < p.length - 10 then
-					nextLantern = s + 30
+					nextLantern = s + lampGap
 					lanternSide = -lanternSide
-					Pieces.lampPost(parent, bottom, 5.5, -right * side)
+					-- only the first lamp on each walk casts real light
+					Pieces.lampPost(parent, bottom, 5.5, -right * side, litLanterns == 0)
+					litLanterns += 1
 					ropePoint = bottom + Vector3.new(0, 2.7, 0)
 				else
-					ropePoint = railPost(parent, bottom, opts.color)
+					ropePoint = railPost(parent, bottom, opts.color, postCount % 2 == 1)
 				end
 				local previous = last[side]
 				if previous then
@@ -298,7 +318,7 @@ function Zone.boardwalk(
 		end
 		-- stilts every other sample where the deck is over water
 		if
-			i % 2 == 0
+			i % stiltEvery == 0
 			and s > START_FLAT
 			and s < p.length - opts.landing + 4
 			and not onPlatform(s)
@@ -358,8 +378,11 @@ function Zone.trail(ctx: Context, parent: Instance, angle: number, color: Color3
 			material
 		)
 	end
-	path(19, 45, 6, Enum.Material.Limestone)
-	path(45, layout.hubRadius + 5, 10, Enum.Material.Cobblestone)
+	-- the cream spoke tapers toward the lighthouse and ends in the flagstone
+	-- square by the exit (Hub) instead of a ring
+	path(24, 34, 3, Enum.Material.Limestone)
+	path(34, 46, 5, Enum.Material.Limestone)
+	path(46, layout.hubRadius + 5, 10, Enum.Material.Cobblestone)
 	-- glowing dashes set into the cobbles
 	local r = 15
 	while r < layout.hubRadius - 2 do
@@ -373,7 +396,7 @@ function Zone.trail(ctx: Context, parent: Instance, angle: number, color: Color3
 			false
 		)
 		Pieces.glow(dash, color)
-		r += 5.5
+		r += if Geo.detail(ctx) < 1 then 9 else 5.5
 	end
 end
 
@@ -405,18 +428,47 @@ function Zone.border(ctx: Context, zone: ZoneContext)
 	local folder = zone.folder
 	type Post = { top: Vector3?, corner: boolean }
 	local posts: { Post } = {}
-	local spacing = 9 / math.sqrt(Geo.detail(ctx))
+	-- a raised 3-stud plank kerb frames the field just outside the
+	-- footprint (open at the gate), so every field reads as a bounded tile
+	local kerbW, kerbH = 2.8, 0.9
+	local kerbColor = look.postColor:Lerp(C.driftwood, 0.5)
+	local function kerb(x0: number, x1: number, z0: number, z1: number)
+		Pieces.box(
+			folder,
+			Geo.cf(zone, (x0 + x1) / 2, (z0 + z1) / 2, kerbH / 2 - 0.2),
+			Vector3.new(x1 - x0, kerbH + 0.4, z1 - z0),
+			kerbColor,
+			Enum.Material.WoodPlanks
+		)
+	end
+	local ox, oz = hw + 0.2, hd + 0.2
+	kerb(-ox - kerbW, ox + kerbW, oz, oz + kerbW)
+	kerb(-ox - kerbW, -ox, -oz, oz)
+	kerb(ox, ox + kerbW, -oz, oz)
+	kerb(-ox - kerbW, -gapHalf, -oz - kerbW, -oz)
+	kerb(gapHalf, ox + kerbW, -oz - kerbW, -oz)
+	local spacing = math.min(10 / Geo.detail(ctx), 22)
 	for _, cf in Kit.perimeter(zone, spacing, inset) do
 		local l = Geo.toLocal(zone, cf.Position)
 		local corner = math.abs(math.abs(l.X) - (hw - inset)) < 0.5
 			and math.abs(math.abs(l.Z) - (hd - inset)) < 0.5
 		local inGate = l.Z < -hd and math.abs(l.X) < gapHalf
-		local bottom = cf.Position
+		local bottom = cf.Position + Vector3.new(0, kerbH - 0.2, 0)
 		if inGate then
 			table.insert(posts, { top = nil, corner = false })
 		elseif corner then
-			local top = Pieces.stripedPole(folder, bottom, 9, 1, { C.beacon, C.sailcloth }, 5)
-			Pieces.windsock(folder, top - Vector3.new(0, 0.6, 0), zone.color, 4.5)
+			local full = Geo.detail(ctx) >= 1
+			local top = Pieces.stripedPole(
+				folder,
+				bottom,
+				9,
+				1,
+				{ zone.color, C.sailcloth },
+				if full then 5 else 2
+			)
+			if full or l.Z > 0 then
+				Pieces.windsock(folder, top - Vector3.new(0, 0.6, 0), zone.color, 4.5)
+			end
 			Pieces.glow(
 				Pieces.ball(folder, top + Vector3.new(0, 0.4, 0), 1, zone.color),
 				zone.color
@@ -459,8 +511,18 @@ function Zone.border(ctx: Context, zone: ZoneContext)
 			)
 		end
 	end
-	for i, post in posts do
-		local nextPost = posts[i % #posts + 1]
+	-- one rope spans two post gaps (it rests over the middle post), which
+	-- halves the Beam count; corners always anchor a rope end
+	local i = 1
+	while i <= #posts do
+		local post = posts[i]
+		local step = 2
+		local mid = posts[i % #posts + 1]
+		if not mid.top or mid.corner or i == #posts then
+			step = 1
+		end
+		local nextPost = posts[(i + step - 1) % #posts + 1]
+		i += step
 		if post.top and nextPost.top then
 			Kit.cable(ctx, post.top :: Vector3, nextPost.top :: Vector3, {
 				Color = zone.color,
@@ -489,7 +551,7 @@ function Zone.gate(ctx: Context, zone: ZoneContext)
 			11,
 			2,
 			{ C.beacon, C.sailcloth },
-			5
+			if Geo.detail(ctx) < 1 then 3 else 5
 		)
 		Pieces.cyl(folder, top, 0.4, 2.8, C.ink, Enum.Material.Metal)
 		local lamp = Pieces.glow(

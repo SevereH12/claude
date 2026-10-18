@@ -1741,10 +1741,14 @@ function Pieces.field(parent: Instance, zone: ZoneContext, pattern: FieldPattern
 			{ CastShadow = false, Name = "FieldTile" }
 		)
 	end
+	-- chunky stepped frame: a 4-stud rim of alternating zone-colour tiles,
+	-- with clipped corners; the pattern fills the inside
+	local F = 4
+	local IW, ID = W - 2 * F, D - 2 * F
 	if pattern.kind == "bands" then
 		local acrossX = pattern.axis == "x"
-		local length = if acrossX then W else D
-		local span = if acrossX then D else W
+		local length = if acrossX then IW else ID
+		local span = if acrossX then ID else IW
 		local widths = pattern.widths or { 1 }
 		local n = math.max(2, math.round(length / pattern.size))
 		local total = 0
@@ -1762,35 +1766,118 @@ function Pieces.field(parent: Instance, zone: ZoneContext, pattern: FieldPattern
 			end
 			position += w
 		end
+	elseif pattern.kind == "rings" then
+		-- concentric rectangular bands, ripple-like, readable from afar
+		local hw, hd = IW / 2, ID / 2
+		local s = pattern.size
+		local index = 1
+		while hw > s * 1.5 and hd > s * 1.5 do
+			tile(frame * CFrame.new(0, y, -hd + s / 2), Vector3.new(hw * 2, thickness, s), index)
+			tile(frame * CFrame.new(0, y, hd - s / 2), Vector3.new(hw * 2, thickness, s), index)
+			tile(
+				frame * CFrame.new(-hw + s / 2, y, 0),
+				Vector3.new(s, thickness, hd * 2 - 2 * s),
+				index
+			)
+			tile(
+				frame * CFrame.new(hw - s / 2, y, 0),
+				Vector3.new(s, thickness, hd * 2 - 2 * s),
+				index
+			)
+			hw -= s
+			hd -= s
+			index += 1
+		end
+		tile(frame * CFrame.new(0, y, 0), Vector3.new(hw * 2, thickness, hd * 2), index)
 	else
-		local nx = math.max(2, math.round(W / pattern.size))
-		local nz = math.max(2, math.round(D / pattern.size))
-		local sx, sz = W / nx, D / nz
+		local nx = math.max(2, math.round(IW / pattern.size))
+		local nz = math.max(2, math.round(ID / pattern.size))
+		local sx, sz = IW / nx, ID / nz
 		for i = 0, nx - 1 do
 			for j = 0, nz - 1 do
 				tile(
-					frame * CFrame.new(-W / 2 + (i + 0.5) * sx, y, -D / 2 + (j + 0.5) * sz),
+					frame * CFrame.new(-IW / 2 + (i + 0.5) * sx, y, -ID / 2 + (j + 0.5) * sz),
 					Vector3.new(sx, thickness, sz),
 					(i + j) % 2 + 1
 				)
 			end
 		end
 	end
-	-- glowing edge line in the zone colour, just inside the footprint edge
-	local line = 0.7
-	local lineY = 0.28 - 0.2
+	-- the frame: stepped tiles in two zone tones along each edge
+	local dark = zone.color:Lerp(Color3.new(0, 0, 0), 0.35)
+	local frameY = 0.2 - thickness / 2
+	local CORNER = 8
+	local function frameRun(along: number, fixed: number, alongX: boolean)
+		local length = along - 2 * CORNER
+		local n = math.max(1, math.round(length / 8))
+		local seg = length / n
+		for k = 0, n - 1 do
+			local m = -length / 2 + (k + 0.5) * seg
+			local cf = if alongX then CFrame.new(m, frameY, fixed) else CFrame.new(fixed, frameY, m)
+			local size = if alongX
+				then Vector3.new(seg, thickness, F)
+				else Vector3.new(F, thickness, seg)
+			Pieces.block(
+				parent,
+				frame * cf,
+				size,
+				if k % 2 == 0 then zone.color else dark,
+				Enum.Material.SmoothPlastic,
+				{ CastShadow = false, Name = "FieldFrame" }
+			)
+		end
+	end
+	frameRun(W, -D / 2 + F / 2, true)
+	frameRun(W, D / 2 - F / 2, true)
+	frameRun(D, -W / 2 + F / 2, false)
+	frameRun(D, W / 2 - F / 2, false)
+	-- clipped corners: a dark square block with a zone-colour triangle cut
+	for _, sign in
+		{
+			Vector3.new(1, 0, 1),
+			Vector3.new(-1, 0, 1),
+			Vector3.new(1, 0, -1),
+			Vector3.new(-1, 0, -1),
+		}
+	do
+		local c = Vector3.new(sign.X * (W / 2 - CORNER / 2), frameY, sign.Z * (D / 2 - CORNER / 2))
+		Pieces.block(
+			parent,
+			frame * CFrame.new(c),
+			Vector3.new(CORNER, thickness, CORNER),
+			C.plumDeep,
+			Enum.Material.Slate,
+			{ CastShadow = false, Name = "FieldCorner" }
+		)
+		-- a flat wedge (triangle in plan view) pointing into the field
+		local yaw = math.atan2(-sign.X, -sign.Z)
+		Pieces.wedge(
+			parent,
+			frame
+				* CFrame.new(c + Vector3.new(0, 0.03, 0))
+				* CFrame.Angles(0, yaw + math.pi / 4, 0)
+				* CFrame.Angles(0, 0, math.pi / 2),
+			Vector3.new(thickness, CORNER * 0.7, CORNER * 0.7),
+			zone.color,
+			Enum.Material.Neon,
+			{ CastShadow = false, Name = "FieldCornerGlow" }
+		)
+	end
+	-- glowing line on the frame's inner edge
+	local line = 0.6
+	local lineY = 0.24 - 0.2
 	local edges: { { cframe: CFrame, size: Vector3 } } = {
-		{ cframe = CFrame.new(0, lineY, -D / 2 + 1), size = Vector3.new(W - 2, 0.4, line) },
-		{ cframe = CFrame.new(0, lineY, D / 2 - 1), size = Vector3.new(W - 2, 0.4, line) },
-		{ cframe = CFrame.new(-W / 2 + 1, lineY, 0), size = Vector3.new(line, 0.4, D - 2) },
-		{ cframe = CFrame.new(W / 2 - 1, lineY, 0), size = Vector3.new(line, 0.4, D - 2) },
+		{ cframe = CFrame.new(0, lineY, -ID / 2), size = Vector3.new(IW, 0.4, line) },
+		{ cframe = CFrame.new(0, lineY, ID / 2), size = Vector3.new(IW, 0.4, line) },
+		{ cframe = CFrame.new(-IW / 2, lineY, 0), size = Vector3.new(line, 0.4, ID) },
+		{ cframe = CFrame.new(IW / 2, lineY, 0), size = Vector3.new(line, 0.4, ID) },
 	}
 	for _, edge in edges do
 		Pieces.block(
 			parent,
 			frame * edge.cframe,
 			edge.size,
-			zone.color,
+			C.cream,
 			Enum.Material.Neon,
 			{ CastShadow = false, Name = "FieldEdge" }
 		)

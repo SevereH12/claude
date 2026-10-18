@@ -52,11 +52,10 @@ Rules:
 ## The map (world framework)
 
 `Lib/MapBuilder.build(style?)` is the entry point (the updater plugin and the
-Map system call it). It builds the world in `Config.WORLD_STYLE`:
-- `"Legacy"`: the old hand-placed map (`Lib/LegacyMapBuilder.luau`), kept live
-  until a new style ships.
-- anything else: `src/server/World/Builder.luau` with the style pack
-  `src/server/World/Styles/<Style>` (a module, or a folder with `init.luau`).
+Map system call it). It builds the world with `src/server/World/Builder.luau`
+and the style pack `src/server/World/Styles/<Config.WORLD_STYLE>` (a module,
+or a folder with `init.luau`). The live style is `WeatherLab`; `StormPunk` and
+`SkyIsles` are kept as alternates (see `docs/world-styles.md`).
 
 The framework decides where things go and guarantees the gameplay contracts;
 a style pack decides how everything looks:

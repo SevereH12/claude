@@ -19,6 +19,8 @@ local C = Palette.C
 local UP = Vector3.yAxis
 
 local GLOW = Color3.fromRGB(176, 160, 226)
+local SPIRE = Color3.fromRGB(150, 96, 230)
+local SPIRE_CORE = Color3.fromRGB(196, 140, 255)
 local BUILT = 0.42 -- share of the bridge that is built from the hub side
 
 local Teaser = {}
@@ -46,25 +48,27 @@ function Teaser.build(ctx: Context, zone: ZoneContext)
 		reach = 0.45,
 		accept = accept,
 	})
-	Kit.blob(
+	-- a lower basalt terrace skirting the isle, so it steps like a zone isle
+	Pieces.landmass(
 		ctx,
-		Vector3.new(frame.Position.X, 0, frame.Position.Z),
-		math.min(hw, hd) * 0.5,
-		floor,
-		4,
-		Enum.Material.Rock,
-		6
+		frame * CFrame.new(4, 0, 6),
+		hw * 0.86,
+		-hd * 0.9,
+		hd * 0.8,
+		floor - 8,
+		8,
+		Enum.Material.Slate,
+		{
+			corner = 14,
+			lobe = 8,
+			reach = 0.5,
+			accept = accept,
+		}
 	)
 	for k = 1, 5 do
 		local angle = k / 5 * math.pi * 2 + rng:NextNumber(-0.3, 0.3)
 		local l = Vector3.new(math.cos(angle), 0, math.sin(angle)) * rng:NextNumber(18, 26)
 		if l.Z > -20 then
-			local p = frame:PointToWorldSpace(l)
-			ctx.terrain:FillBall(
-				Vector3.new(p.X, floor + 1, p.Z),
-				rng:NextNumber(4, 7),
-				Enum.Material.Rock
-			)
 			local crystal = Pieces.cluster(
 				folder,
 				rng,
@@ -81,8 +85,9 @@ function Teaser.build(ctx: Context, zone: ZoneContext)
 
 	-- dormant crystal in a scaffold at the centre
 	local center = Vector3.new(frame.Position.X, floor, frame.Position.Z)
-	local crystal = Pieces.bigShard(folder, center, 16, 6, C.twilightDeep, C.plumDeep, 20, 0)
-	crystal.Transparency = 0.15
+	local crystal = Pieces.bigShard(folder, center, 28, 9, SPIRE, SPIRE_CORE, 20, 0)
+	crystal.Transparency = 0.2
+	Pieces.light(crystal, SPIRE_CORE, 30, 1.4)
 	local corners: { Vector3 } = {}
 	for _, corner in
 		{
@@ -92,17 +97,17 @@ function Teaser.build(ctx: Context, zone: ZoneContext)
 			Vector3.new(-1, 0, 1),
 		}
 	do
-		local foot = center + frame:VectorToWorldSpace(corner * 6)
+		local foot = center + frame:VectorToWorldSpace(corner * 7)
 		Pieces.solid(
 			folder,
-			CFrame.new(foot + UP * 7),
-			Vector3.new(0.8, 14, 0.8),
+			CFrame.new(foot + UP * 11),
+			Vector3.new(0.8, 22, 0.8),
 			C.woodLight,
 			Enum.Material.Wood
 		)
 		table.insert(corners, foot)
 	end
-	for _, h in { 6, 12 } do
+	for _, h in { 6, 13, 20 } do
 		for k = 1, 4 do
 			Pieces.plank(
 				folder,

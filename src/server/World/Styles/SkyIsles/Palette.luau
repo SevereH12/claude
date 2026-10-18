@@ -43,6 +43,11 @@ local C = {
 	iron = Color3.fromRGB(50, 44, 62),
 	cloud = Color3.fromRGB(238, 230, 242),
 	ink = Color3.fromRGB(34, 24, 50),
+	-- bold two-tone field pairs (30%+ luminance apart)
+	fieldMint = Color3.fromRGB(164, 238, 206),
+	fieldTeal = Color3.fromRGB(28, 104, 110),
+	fieldLilac = Color3.fromRGB(214, 192, 246),
+	fieldPlum = Color3.fromRGB(78, 52, 118),
 }
 Palette.C = C
 
@@ -79,7 +84,7 @@ function Palette.complement(color: Color3): (Color3, Color3)
 		-- grey zone colours: use a calm sky-blue field
 		hue = 0.6
 	end
-	return Color3.fromHSV(hue, 0.42, 0.66), Color3.fromHSV(hue, 0.5, 0.5)
+	return Color3.fromHSV(hue, 0.3, 0.92), Color3.fromHSV(hue, 0.6, 0.45)
 end
 
 -- The two field tones to lay under warning circles drawn in `color`: the

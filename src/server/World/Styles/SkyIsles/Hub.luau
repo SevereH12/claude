@@ -16,7 +16,6 @@ local Kit = require(World.Kit)
 local WorldTypes = require(World.Types)
 local Palette = require(script.Parent.Palette)
 local Pieces = require(script.Parent.Pieces)
-local Zone = require(script.Parent.Zone)
 
 type Context = WorldTypes.Context
 type ZoneContext = WorldTypes.ZoneContext
@@ -387,22 +386,22 @@ local function buildAltar(ctx: Context, sectors: { number }, facing: Vector3)
 	end
 
 	-- rune stones drifting around the tower
-	for k = 1, 6 do
-		local angle = k / 6 * math.pi * 2 + 0.3
-		local stoneAt = direction(angle) * rng:NextNumber(17, 21)
+	for k = 1, 4 do
+		local angle = k / 4 * math.pi * 2 + math.pi / 4
+		local stoneAt = direction(angle) * rng:NextNumber(19, 22)
 			+ UP * (y + rng:NextNumber(10, 34))
 		local stone = Pieces.block(
 			hub,
 			CFrame.new(stoneAt)
 				* CFrame.Angles(rng:NextNumber(-0.4, 0.4), angle, rng:NextNumber(-0.3, 0.3)),
-			Vector3.new(3.2, 4.4, 1.4),
+			Vector3.new(5, 7, 2),
 			C.skystone,
 			Enum.Material.Cobblestone
 		)
 		Pieces.block(
 			hub,
-			stone.CFrame * CFrame.new(0, 0, -0.72),
-			Vector3.new(1, 2.4, 0.1),
+			stone.CFrame * CFrame.new(0, 0, -1.02),
+			Vector3.new(1.6, 4, 0.1),
 			if k % 2 == 0 then C.gold else C.cyan,
 			Enum.Material.Neon
 		)
@@ -419,18 +418,62 @@ local function buildAltar(ctx: Context, sectors: { number }, facing: Vector3)
 		Pieces.diamond(hub, b, 1.6, C.cyan)
 		table.insert(prongTips, b)
 	end
-	local crystal = Pieces.bigShard(hub, crystalCenter, 16, 7.5, C.cyan, C.cream, 0, 0)
-	Pieces.bigShard(hub, crystalCenter + UP * 0.05, 11, 7.5, C.cyan, C.cream, 0, 180)
+	-- a fat octahedral storm crystal: a square glass core with crossed
+	-- gable caps above and below (two wedges each way), neon heart inside
+	local mid = crystalCenter + UP * 9
+	local W, CORE, CAP = 10, 6, 8
+	local crystal = Pieces.block(
+		hub,
+		CFrame.new(mid) * CFrame.Angles(0, math.rad(45), 0),
+		Vector3.new(W, CORE, W),
+		C.cyan,
+		Enum.Material.Glass,
+		{ Transparency = 0.25, Reflectance = 0.15, CastShadow = false, Name = "StormCrystal" }
+	)
+	for _, flip in { 1, -1 } do
+		for k = 0, 3 do
+			local yaw = math.rad(45 + k * 90)
+			local dir = Vector3.new(math.cos(yaw), 0, math.sin(yaw))
+			local at = mid + UP * flip * (CORE / 2 + CAP / 2) + dir * (W / 4)
+			local cf = CFrame.lookAt(at, at + dir)
+			if flip < 0 then
+				cf *= CFrame.Angles(0, 0, math.pi)
+			end
+			Pieces.wedge(
+				hub,
+				cf,
+				Vector3.new(if k % 2 == 0 then W else W * 0.98, CAP, W / 2),
+				C.cyan,
+				Enum.Material.Glass,
+				{ Transparency = 0.25, Reflectance = 0.15, CastShadow = false }
+			)
+		end
+	end
+	Pieces.block(
+		hub,
+		CFrame.new(mid) * CFrame.Angles(0, math.rad(45), 0),
+		Vector3.new(4.5, CORE + CAP * 1.5, 4.5),
+		C.cream,
+		Enum.Material.Neon,
+		{ CastShadow = false }
+	)
 	Pieces.light(crystal, C.cyan, 60, 2.2)
 	Pieces.sparkles(crystal, C.cyan, 8, 1.6)
-	Pieces.stormRing(ctx, crystalCenter + UP * 3, 10, Vector3.new(1, 0.25, 0).Unit, Vector3.zAxis, {
-		color = C.cyan,
-		width = 0.55,
-		glow = 1,
-	})
 	Pieces.stormRing(
 		ctx,
-		crystalCenter + UP * 2,
+		crystalCenter + UP * 10,
+		10,
+		Vector3.new(1, 0.25, 0).Unit,
+		Vector3.zAxis,
+		{
+			color = C.cyan,
+			width = 0.55,
+			glow = 1,
+		}
+	)
+	Pieces.stormRing(
+		ctx,
+		crystalCenter + UP * 9,
 		12.5,
 		Vector3.xAxis,
 		Vector3.new(0, 0.4, 1).Unit,
@@ -442,7 +485,7 @@ local function buildAltar(ctx: Context, sectors: { number }, facing: Vector3)
 	)
 	Pieces.stormRing(
 		ctx,
-		crystalCenter + UP * 1,
+		crystalCenter + UP * 8,
 		15,
 		Vector3.new(1, -0.3, 0.3).Unit,
 		Vector3.new(0, 0.5, 1).Unit,
@@ -947,21 +990,6 @@ local function buildTethers(ctx: Context)
 			C.iron,
 			Enum.Material.Metal
 		)
-	end
-	for _, zone in ctx.zones do
-		local dir = zone.slot.hubExit.LookVector
-		local right = dir:Cross(UP)
-		for _, point in Zone.tetherPoints(ctx, zone) do
-			-- the high isles float free: a chain climbing to them would
-			-- run up through their own cliffs
-			if point.Y > towerY - 14 then
-				continue
-			end
-			local side = if (point - Vector3.zero):Dot(right) > 0 then 1 else -1
-			local start = dir * 8.5 + right * side * 2 + UP * towerY
-			bracket(start, dir)
-			Pieces.chain(ctx, start, point, (point - start).Magnitude * 0.035)
-		end
 	end
 	-- the teaser's tether hangs snapped
 	local dir = ctx.teaser.slot.hubExit.LookVector

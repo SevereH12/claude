@@ -110,7 +110,9 @@ slot's own frame (`Kit.footprintPoint`, `Kit.perimeter`).
 - **Connector**: a riveted catwalk on copper piles, brass handrails, lamp
   posts with cyan lanterns, glowing cables between lamps, and the zone's
   light trail down the middle. Any length or slope works; piles and lamps
-  are spaced along whatever length the slot gives.
+  are spaced along whatever length the slot gives. A connector to a
+  low (sea-level) zone gets a channel of sea carved under it so it never
+  stands on dry sand.
 
 ### Beach -> Shoreline ("Tidewire Beach", tagline "Everyone in the circle catches")
 - Ground: flat sand field at the floor height, sloping beaches, an uneven

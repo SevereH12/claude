@@ -21,8 +21,8 @@ local C = Palette.colors
 
 local Hub = {}
 
-local SELL_DISTANCE = 22 -- pad centre from the lighthouse
-local SPAWN_DISTANCE = 39
+local SELL_DISTANCE = 27 -- pad centre from the lighthouse
+local SPAWN_DISTANCE = 52
 local RING_RADIUS = 54 -- village buildings
 
 -- Directions -------------------------------------------------------------------
@@ -159,6 +159,18 @@ end
 
 -- Base: sea and hub island ---------------------------------------------------------
 
+-- The harbour mole: from the coast beside the basin outward, then a hook
+-- part-way across the mouth. Pairs of points at sea level.
+local function moleSegments(ctx: Context, coveA: number): { { Vector3 } }
+	local R = ctx.layout.hubRadius
+	local dir = Geo.dir(coveA)
+	local right = Vector3.new(-dir.Z, 0, dir.X)
+	local root = dir * (R + 12) + right * 17
+	local elbow = dir * (R + 40) + right * 15
+	local tip = dir * (R + 44) + right * 4
+	return { { root, elbow }, { elbow, tip } }
+end
+
 function Hub.buildBase(ctx: Context)
 	local terrain = ctx.terrain
 	local floor = ctx.layout.hubFloor
@@ -173,6 +185,12 @@ function Hub.buildBase(ctx: Context)
 	-- short of every zone island, so the boardwalks cross open water
 	local shape = Geo.wave(ctx.rng)
 	local exits = exitAngles(ctx)
+	local corridors = corridorAngles(ctx)
+	local gaps = gapAngles(corridors)
+	local spawnA = spawnAngle(ctx, gaps)
+	local coveA = coveAngle(ctx, gaps, spawnA)
+	-- the harbour basin is bitten out of every land layer
+	Geo.bite(ctx, "Hub", Geo.polar(coveA, R + 10, 0), 14)
 	local function layer(
 		base: number,
 		amp: number,
@@ -187,50 +205,55 @@ function Hub.buildBase(ctx: Context)
 			local r = base + amp * (shape(theta) * 0.7 + own(theta) * 0.3)
 			local deg = math.deg(theta)
 			for _, e in exits do
-				local t = math.clamp(Geo.angleDiff(deg, e) / 24, 0, 1)
+				local t = math.clamp(Geo.angleDiff(deg, e) / 34, 0, 1)
 				r -= math.max(r - bay, 0) * (1 - t * t * (3 - 2 * t))
 			end
 			local cap = zoneCap(ctx, Geo.dir(deg), pad)
-			return math.min(r, math.max(cap, R + 6))
+			r = math.min(r, math.max(cap, R + 6))
+			if topY > 0 then
+				r = math.max(Geo.clipBites(ctx, "Hub", Vector3.zero, Geo.dir(deg), r), R + 4)
+			end
+			return r
 		end
 		Geo.fan(ctx, CFrame.new(), radius, 80, topY, -20, material, jag)
 		Geo.register(ctx, "Hub", CFrame.new(), radius, topY)
 	end
-	layer(R + 33, 10, R + 22, 8, -4, Enum.Material.Sand, 1)
-	layer(R + 22, 9, R + 11, 24, 2.5, Enum.Material.Sand, 0.8)
-	layer(R + 13, 5, R + 8, 26, floor - 2.5, Enum.Material.LeafyGrass, 1)
-	layer(R + 8, 4, R + 6, 28, floor, Enum.Material.Grass, 0)
-	-- plaza: brick kerb, cobbles, cream and brick rings round the lighthouse
-	local rings: { { radius: number, material: Enum.Material } } = {
-		{ radius = 47.5, material = Enum.Material.Brick },
-		{ radius = 45, material = Enum.Material.Cobblestone },
-		{ radius = 31, material = Enum.Material.Limestone },
-		{ radius = 27, material = Enum.Material.Cobblestone },
-		{ radius = 19, material = Enum.Material.Brick },
-		{ radius = 15, material = Enum.Material.Limestone },
-	}
-	for _, ring in rings do
-		terrain:FillCylinder(CFrame.new(0, floor - 2, 0), 4, ring.radius, ring.material)
-		if ring.radius == 45 then
-			-- a cream sunburst inlaid in the outer ring; the boardwalk spokes
-			-- (every 22.5 degrees from the first zone) run down cobbled rays
-			for k = 1, 15, 2 do
-				local a = ctx.layout.firstAngle + k * 22.5
-				local dir = Geo.dir(a)
-				for _, seg in { { 33, 38.5, 9 }, { 38.5, 44, 12.5 } } do
-					local mid = dir * ((seg[1] + seg[2]) / 2) + Vector3.new(0, floor - 2, 0)
-					terrain:FillBlock(
-						CFrame.lookAt(mid, mid + dir),
-						Vector3.new(seg[3], 4, seg[2] - seg[1]),
-						Enum.Material.Limestone
-					)
-				end
-			end
-		end
+	layer(R + 33, 10, R + 12, 22, -4, Enum.Material.Sand, 1)
+	layer(R + 22, 9, R + 7, 34, 2.5, Enum.Material.Sand, 0.8)
+	layer(R + 13, 5, R + 5, 36, floor - 2.5, Enum.Material.LeafyGrass, 1)
+	layer(R + 8, 4, R + 4, 38, floor, Enum.Material.Grass, 0)
+	-- plaza: an irregular cobbled square, wider toward the harbour, with a
+	-- broken brick kerb; cream flagstone squares sit off-centre where the
+	-- paths meet (no rings, so it never reads as a target from above)
+	local plazaWave = Geo.wave(ctx.rng)
+	local coveRad = math.rad(coveA)
+	local spawnRad = math.rad(spawnA)
+	local function plazaRadius(theta: number): number
+		local harbour = math.max(0, math.cos(theta - coveRad)) ^ 2
+		local spawnSide = math.max(0, math.cos(theta - spawnRad)) ^ 4
+		return 35 + 5 * plazaWave(theta) + 13 * harbour + 6 * spawnSide
+	end
+	Geo.fan(ctx, CFrame.new(), function(theta: number): number
+		return plazaRadius(theta) + 2.5
+	end, 72, floor, floor - 4, Enum.Material.Brick, 0)
+	Geo.fan(ctx, CFrame.new(), plazaRadius, 72, floor, floor - 4, Enum.Material.Cobblestone, 0)
+	-- cream flagstone squares: one wide market square on the harbour side,
+	-- a smaller one at the lighthouse foot toward the spawn, and one by
+	-- each boardwalk exit (the spokes taper into them)
+	local function square(at: Vector3, size: number, yaw: number, material: Enum.Material)
+		terrain:FillBlock(
+			CFrame.new(at.X, floor - 2, at.Z) * CFrame.Angles(0, math.rad(yaw), 0),
+			Vector3.new(size, 4, size),
+			material
+		)
+	end
+	square(Geo.polar(coveA + 8, 30, 0), 22, coveA + 17, Enum.Material.Limestone)
+	square(Geo.polar(coveA + 8, 30, 0), 12, coveA + 17, Enum.Material.Brick)
+	square(Geo.polar(spawnA - 25, 15, 0), 14, spawnA + 30, Enum.Material.Limestone)
+	for _, e in exitAngles(ctx) do
+		square(Geo.polar(e + 9, 27, 0), 9, e + 25, Enum.Material.Limestone)
 	end
 	-- a few slate outcrops on the shore, away from every boardwalk
-	local corridors = corridorAngles(ctx)
-	local gaps = gapAngles(corridors)
 	for i, g in gaps do
 		if i % 2 == 0 then
 			local p = Geo.polar(g.angle + ctx.rng:NextNumber(-6, 6), R + 20, -1)
@@ -238,19 +261,16 @@ function Hub.buildBase(ctx: Context)
 		end
 	end
 
-	-- harbour cove with brick quay walls and a mouth to the sea
-	local spawnA = spawnAngle(ctx, gaps)
-	local coveA = coveAngle(ctx, gaps, spawnA)
-	local cove = Geo.polar(coveA, R + 26, 0)
-	local dir = Geo.dir(coveA)
-	terrain:FillCylinder(CFrame.new(cove.X, 1, cove.Z), 14, 17, Enum.Material.Brick)
-	terrain:FillCylinder(CFrame.new(cove.X, 10, cove.Z), 20, 14, Enum.Material.Air)
-	terrain:FillCylinder(CFrame.new(cove.X, -8, cove.Z), 16, 14, Enum.Material.Water)
-	local mouth = cove + dir * 22
-	local mouthCf =
-		CFrame.lookAt(Vector3.new(mouth.X, 0, mouth.Z), Vector3.new(mouth.X, 0, mouth.Z) + dir)
-	terrain:FillBlock(mouthCf * CFrame.new(0, 10, 0), Vector3.new(10, 20, 30), Enum.Material.Air)
-	terrain:FillBlock(mouthCf * CFrame.new(0, -8, 0), Vector3.new(10, 16, 30), Enum.Material.Water)
+	-- an L-shaped brick mole hugging one side of the basin and hooking
+	-- across the mouth (its light is placed by the harbour dressing)
+	for _, seg in moleSegments(ctx, coveA) do
+		local m = (seg[1] + seg[2]) / 2
+		terrain:FillBlock(
+			CFrame.lookAt(Vector3.new(m.X, -2, m.Z), Vector3.new(seg[2].X, -2, seg[2].Z)),
+			Vector3.new(5, 9, (seg[2] - seg[1]).Magnitude + 4),
+			Enum.Material.Brick
+		)
+	end
 
 	-- sea-stack islets in the bay, clear of every zone island
 	local placed = 0
@@ -466,13 +486,13 @@ local function sellStation(
 	Pieces.box(
 		parent,
 		cf * CFrame.new(0, 0.1, 0),
-		Vector3.new(21, 0.8, 21),
+		Vector3.new(28, 0.8, 28),
 		C.ink,
 		Enum.Material.SmoothPlastic
 	)
 	local pad = Kit.part({
 		Name = "SellPad",
-		Size = Vector3.new(16, 1, 16),
+		Size = Vector3.new(24, 1, 24),
 		CFrame = cf * CFrame.new(0, 0.5, 0),
 		Color = C.slicker,
 		Material = Enum.Material.SmoothPlastic,
@@ -483,7 +503,12 @@ local function sellStation(
 	Kit.sellArea(parent, pad, 12)
 	-- glowing cyan edge around the pad
 	for _, e in
-		{ { 0, 8.7, 17.8, 0.7 }, { 0, -8.7, 17.8, 0.7 }, { 8.7, 0, 0.7, 16 }, { -8.7, 0, 0.7, 16 } }
+		{
+			{ 0, 12.7, 25.8, 0.7 },
+			{ 0, -12.7, 25.8, 0.7 },
+			{ 12.7, 0, 0.7, 24 },
+			{ -12.7, 0, 0.7, 24 },
+		}
 	do
 		local strip = Pieces.box(
 			parent,
@@ -498,15 +523,15 @@ local function sellStation(
 	-- striped arch with the giant SELL board
 	local tops = {}
 	for _, side in { -1, 1 } do
-		local bottom = center + right * side * 11.6
-		Pieces.cyl(parent, bottom, 1.2, 3, Palette.stone, Enum.Material.Cobblestone)
+		local bottom = center + right * side * 15.6
+		Pieces.cyl(parent, bottom, 1.2, 3.4, Palette.stone, Enum.Material.Cobblestone)
 		local top = Pieces.stripedPole(
 			parent,
 			bottom + Vector3.new(0, 1.2, 0),
-			15,
-			1.8,
+			23,
+			2.2,
 			{ C.beacon, C.sailcloth },
-			6
+			8
 		)
 		local globe = Pieces.glow(
 			Pieces.ball(parent, top + Vector3.new(0, 1.6, 0), 1.8, C.slicker),
@@ -519,18 +544,18 @@ local function sellStation(
 	local crossbar = Pieces.box(
 		parent,
 		CFrame.lookAt(beamCenter, beamCenter + dir),
-		Vector3.new(25, 1, 1),
+		Vector3.new(33, 1.2, 1.2),
 		C.piling,
 		Enum.Material.Wood,
 		false
 	)
-	Kit.spotLight(crossbar, C.slicker, 26, 2.2, 70, Enum.NormalId.Bottom)
-	local boardCenter = beamCenter + Vector3.new(0, 3.2, 0)
+	Kit.spotLight(crossbar, C.slicker, 32, 2.2, 70, Enum.NormalId.Bottom)
+	local boardCenter = beamCenter + Vector3.new(0, 4.2, 0)
 	Pieces.signBoard(
 		parent,
 		CFrame.lookAt(boardCenter, boardCenter + dir),
-		17,
-		5.2,
+		24,
+		7.2,
 		"SELL",
 		"Bottled lightning for Volts",
 		Palette.SELL_SIGN,
@@ -539,8 +564,8 @@ local function sellStation(
 	)
 	-- neon lightning bolt on top of the board
 	local boltCf = CFrame.lookAt(
-		boardCenter + Vector3.new(0, 4.6, 0),
-		boardCenter + Vector3.new(0, 4.6, 0) + dir
+		boardCenter + Vector3.new(0, 5.8, 0),
+		boardCenter + Vector3.new(0, 5.8, 0) + dir
 	)
 	for _, b in { { -0.5, 0.9, 25 }, { 0.5, -0.9, 25 }, { 0, 0, -50 } } do
 		local part = Pieces.box(
@@ -555,7 +580,7 @@ local function sellStation(
 	end
 	-- charge tanks wired up to the lighthouse lens
 	for i, side in { -1, 1 } do
-		local bottom = dir * 12 + right * side * 10 + Vector3.new(0, floor, 0)
+		local bottom = dir * 9 + right * side * 15 + Vector3.new(0, floor, 0)
 		Pieces.cyl(parent, bottom, 1, 4.6, C.harbor, Enum.Material.Metal)
 		local glass = Pieces.cyl(
 			parent,
@@ -666,14 +691,16 @@ local function village(
 	parent: Instance,
 	floor: number,
 	gaps: { { angle: number, half: number } },
-	coveA: number
+	coveA: number,
+	spawnA: number
 )
 	local rng = ctx.rng
 	local cottage = 0
 	local domes = 0
 	for i, g in gaps do
 		local maxHalf = RING_RADIUS * math.sin(math.rad(g.half)) - 8
-		if Geo.angleDiff(g.angle, coveA) > 1 and maxHalf >= 6 then
+		local isSpawn = Geo.angleDiff(g.angle, spawnA) < 1
+		if Geo.angleDiff(g.angle, coveA) > 1 and maxHalf >= 6 and not isSpawn then
 			local at = Geo.polar(g.angle, RING_RADIUS, floor)
 			local cf = CFrame.lookAt(at, Vector3.new(0, floor, 0))
 			if (i % 4 == 1) and domes < 2 then
@@ -742,7 +769,9 @@ local function village(
 				end
 			end
 			-- round trees between the houses and the shore
-			for _, off in { -1, 1 } do
+			-- (one tree per gap once the world has many zones)
+			local sides: { number } = if Geo.detail(ctx) < 1 then { (i % 2) * 2 - 1 } else { -1, 1 }
+			for _, off in sides do
 				local a = g.angle + off * g.half * 0.42
 				local r = RING_RADIUS + rng:NextNumber(9, 14)
 				Pieces.tree(parent, Geo.polar(a, r, floor - 0.3), rng:NextNumber(0.9, 1.25), rng)
@@ -763,8 +792,13 @@ local function plaza(
 	local lampTops = {}
 	for _, g in gaps do
 		local d = Geo.dir(g.angle)
+		-- the spawn axis keeps a clear view of the sell arch: its lamp
+		-- stands to one side
+		if Geo.angleDiff(g.angle, spawnA) < 1 then
+			d = Geo.dir(g.angle + 22)
+		end
 		local bottom = d * 44 + Vector3.new(0, floor, 0)
-		Pieces.lampPost(parent, bottom, 7, -d)
+		Pieces.lampPost(parent, bottom, 7, -d, true)
 		table.insert(lampTops, bottom + Vector3.new(0, 6.8, 0))
 	end
 	for i, top in lampTops do
@@ -889,11 +923,17 @@ local function harbour(ctx: Context, parent: Instance, floor: number, coveA: num
 	Kit.cable(ctx, armEnd, hook, { Color = C.ink, Width = 0.12 })
 	Pieces.crate(parent, CFrame.new(hook - Vector3.new(0, 2, 0)), 2)
 	for i = 1, 3 do
-		local p = Geo.polar(coveA - 12 + i * 2.5, R + 3 + (i % 2) * 2.5, floor)
+		local p = Geo.polar(coveA - 14 + i * 2.5, R + (i % 2) * 2, floor)
 		Pieces.crate(parent, CFrame.new(p) * CFrame.Angles(0, i * 0.5, 0), 1.8 + (i % 2) * 0.4)
 	end
-	Pieces.barrel(parent, Geo.polar(coveA - 18, R + 2, floor), C.beacon)
-	Pieces.barrel(parent, Geo.polar(coveA - 20, R + 4, floor), C.seafoam)
+	-- light at the end of the mole
+	local tip = moleSegments(ctx, coveA)[2][2]
+	local foot = Vector3.new(tip.X, 2.5, tip.Z)
+	Pieces.cyl(parent, foot, 1, 3, Palette.stone, Enum.Material.Cobblestone)
+	Pieces.stripedPole(parent, foot + Vector3.new(0, 1, 0), 6, 1.4, { C.seafoam, C.sailcloth }, 3)
+	Pieces.glow(Pieces.ball(parent, foot + Vector3.new(0, 7.7, 0), 1.4, C.seafoam), C.seafoam)
+	Pieces.barrel(parent, Geo.polar(coveA - 18, R, floor), C.beacon)
+	Pieces.barrel(parent, Geo.polar(coveA - 20, R + 1, floor), C.seafoam)
 end
 
 -- Shore dressing: rocks and buoys around the island, away from boardwalks.
@@ -911,7 +951,7 @@ local function shore(ctx: Context, parent: Instance, corridors: { number }, cove
 	end
 	local count = 0
 	for _ = 1, 60 do
-		if count >= 10 then
+		if count >= Geo.count(ctx, 10) then
 			break
 		end
 		local a = rng:NextNumber(0, 360)
@@ -959,7 +999,7 @@ function Hub.buildHub(ctx: Context)
 	sellStation(ctx, parent, floor, dir, lens)
 	spawnDeck(parent, floor, dir)
 	fingerpost(ctx, parent, floor, dir)
-	village(ctx, parent, floor, gaps, coveA)
+	village(ctx, parent, floor, gaps, coveA, spawnA)
 	plaza(ctx, parent, floor, gaps, spawnA)
 	harbour(ctx, parent, floor, coveA)
 	shore(ctx, ctx.folders.decor, corridors, coveA)

@@ -14,9 +14,6 @@ local MapBuilder = {}
 function MapBuilder.build(styleName: string?): Folder
 	local Config = require(ReplicatedStorage.Shared.Config)
 	local name = styleName or Config.WORLD_STYLE
-	if name == "Legacy" then
-		return require(ServerScriptService.Server.Lib.LegacyMapBuilder).build()
-	end
 	local Builder = require(ServerScriptService.Server.World.Builder)
 	return Builder.build(name)
 end

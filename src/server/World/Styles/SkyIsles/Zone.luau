@@ -472,12 +472,12 @@ function Zone.border(ctx: Context, zone: ZoneContext)
 		if inGate then
 			tops[i] = nil
 		elseif isCorner then
-			local top, cap =
+			local _, cap =
 				Pieces.runePost(folder, cframe.Position, 7.5, zone.color, cframe.LookVector, true)
 			Pieces.shard(folder, cframe.Position + UP * 7.1, 3.2, 1.1, zone.color, 45, 0)
 			Pieces.light(cap, zone.color, 18, 1.2)
 			tops[i] = cframe.Position + UP * 3.4
-			corners[i] = top ~= nil
+			corners[i] = true
 		else
 			local top = Pieces.runePost(folder, cframe.Position, 4.6, zone.color, cframe.LookVector)
 			tops[i] = top

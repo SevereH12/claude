@@ -149,6 +149,37 @@ end
 
 -- A free zone-local spot in the rim (see rimPoint) that keeps clear of the
 -- boardwalk landing in front of the gate. Claims it. Returns nil if none.
+-- A free spot within `spread` studs of (cx, cz), at least `minOut` studs
+-- outside the footprint and on the top terrace: for grouping props into
+-- little vignettes instead of spreading them evenly.
+function Geo.nearSpot(
+	ctx: Context,
+	zone: ZoneContext,
+	spots: Spots,
+	cx: number,
+	cz: number,
+	spread: number,
+	r: number,
+	minOut: number
+): (number?, number?)
+	local rng = ctx.rng
+	local key = Geo.key(zone)
+	local floor = zone.slot.floor
+	for _ = 1, 24 do
+		local a = rng:NextNumber(0, math.pi * 2)
+		local d = spread * math.sqrt(rng:NextNumber())
+		local x, z = cx + math.cos(a) * d, cz + math.sin(a) * d
+		if Geo.outside(zone, x, z) >= minOut + r and Geo.free(spots, x, z, r) then
+			local h = Geo.heightAt(ctx, key, Geo.at(zone, x, z, 0))
+			if h ~= nil and h >= floor - 0.5 then
+				Geo.claim(spots, x, z, r)
+				return x, z
+			end
+		end
+	end
+	return nil, nil
+end
+
 function Geo.findSpot(
 	ctx: Context,
 	zone: ZoneContext,
@@ -192,7 +223,8 @@ function Geo.wave(rng: Random): Wave
 		for i, k in ks do
 			s += amps[i] * math.sin(k * theta + phases[i])
 		end
-		return math.clamp(s * scale, -1, 1)
+		-- overdriven then clipped: long near-straight runs between bites
+		return math.clamp(s * scale * 1.5, -1, 1)
 	end
 end
 
@@ -218,6 +250,9 @@ function Geo.fan(
 	local origin = frame.Position
 	local rotation = frame.Rotation
 	local spread = math.tan(math.pi / samples) * 2.5
+	-- edge-bump size drifts slowly round the coast (about 0.5x to 2x) so
+	-- the outline is not a chain of equal scallops
+	local sizeWave = Geo.wave(rng)
 	for i = 0, samples - 1 do
 		local theta = (i + rng:NextNumber(-0.15, 0.15)) / samples * math.pi * 2
 		local dir = rotation:VectorToWorldSpace(Vector3.new(math.sin(theta), 0, -math.cos(theta)))
@@ -230,8 +265,9 @@ function Geo.fan(
 			Vector3.new(width, height, r),
 			material
 		)
-		local edgeR = width * 0.55 + 1
-		local edge = origin + dir * (r - edgeR * 0.5)
+		local k = 1.25 + 0.75 * sizeWave(theta)
+		local edgeR = math.min((width * 0.55 + 1) * k, r * 0.6)
+		local edge = origin + dir * (r - edgeR * (0.5 + 0.3 * math.max(k - 1, 0)))
 		local top = topY - rng:NextNumber(0, jag or 0)
 		terrain:FillCylinder(
 			CFrame.new(edge.X, (top + bottomY) / 2, edge.Z),
@@ -266,14 +302,107 @@ end
 -- Keys are names ("Hub", a zone id, "ComingSoon"). The state lives on the
 -- build context, so every module (and every rebuild) sees the right one.
 type Layer = { frame: CFrame, radius: (theta: number) -> number, top: number }
-type State = { registry: { [string]: { Layer } }, waves: { [string]: Wave } }
+type State = {
+	registry: { [string]: { Layer } },
+	waves: { [string]: Wave },
+	hubParts: number?,
+	bites: { [string]: { { c: Vector3, r: number } } },
+}
 
 local function state(ctx: Context): State
 	local holder = ctx :: any
 	if not holder.weatherLab then
-		holder.weatherLab = { registry = {}, waves = {} }
+		holder.weatherLab = { registry = {}, waves = {}, hubParts = nil, bites = {} }
 	end
 	return holder.weatherLab :: State
+end
+
+-- Part budget -------------------------------------------------------------------
+-- The whole map stays under PART_CAP however many zones there are: the
+-- hub is counted once (before the first zone), the teaser keeps a fixed
+-- reserve and every zone gets an equal share of the rest for its island
+-- dressing, boardwalk, border and gate. Themes build their hero landmark
+-- and essentials first and ask Geo.room before each optional prop, so
+-- the 1st-2nd zones get full detail and later zones a lighter dressing.
+local PART_CAP = 2400
+local TEASER_RESERVE = 200
+
+local function countParts(root: Instance): number
+	local n = 0
+	for _, d in root:GetDescendants() do
+		if d:IsA("BasePart") then
+			n += 1
+		end
+	end
+	return n
+end
+
+-- Call once before the first zone is built: remembers the hub's cost.
+function Geo.markHub(ctx: Context)
+	local st = state(ctx)
+	if st.hubParts == nil then
+		st.hubParts = countParts(ctx.map)
+	end
+end
+
+-- Parts each zone may use (all of its ZoneArt and its connector).
+function Geo.allowance(ctx: Context): number
+	local hub = state(ctx).hubParts or 480
+	return math.floor((PART_CAP - TEASER_RESERVE - hub) / math.max(#ctx.zones, 1))
+end
+
+function Geo.used(ctx: Context, zone: ZoneContext): number
+	local n = countParts(zone.folder)
+	local connector = ctx.folders.connectors:FindFirstChild(zone.folder.Name)
+	if connector then
+		n += countParts(connector)
+	end
+	return n
+end
+
+-- Is there budget left in this zone for `cost` more parts?
+function Geo.room(ctx: Context, zone: ZoneContext, cost: number): boolean
+	if zone.isTeaser then
+		return true
+	end
+	return Geo.used(ctx, zone) + cost <= Geo.allowance(ctx)
+end
+
+-- Coves: a "bite" is a circle (world x/z) cut out of every above-water
+-- terrace registered under `key` afterwards. Rays from the island centre
+-- stop where they enter the circle, so the coast gets a notch open to
+-- the sea, with the shallows left as its floor. (Cutting with Air after
+-- the fact would leave odd voxels; this never builds the land at all.)
+function Geo.bite(ctx: Context, key: string, center: Vector3, radius: number)
+	local bites = state(ctx).bites
+	local list = bites[key]
+	if not list then
+		list = {}
+		bites[key] = list
+	end
+	table.insert(list, { c = Vector3.new(center.X, 0, center.Z), r = radius })
+end
+
+-- Clips a ray (world origin o, unit ground direction d, length r) at the
+-- first bite of `key` it enters.
+function Geo.clipBites(ctx: Context, key: string, o: Vector3, d: Vector3, r: number): number
+	local list = state(ctx).bites[key]
+	if not list then
+		return r
+	end
+	local origin = Vector3.new(o.X, 0, o.Z)
+	for _, b in list do
+		local m = b.c - origin
+		local along = m:Dot(d)
+		local perp2 = m:Dot(m) - along * along
+		if perp2 < b.r * b.r then
+			local enter = along - math.sqrt(b.r * b.r - perp2)
+			if enter > 0 and enter < r then
+				r = enter
+			end
+		end
+	end
+	return r
 end
 
 -- Registry key for a zone (or the teaser).
@@ -375,7 +504,7 @@ function Geo.rim(
 	for i = 0, samples - 1 do
 		if rng:NextNumber() < coverage then
 			local theta = (i + rng:NextNumber(-0.35, 0.35)) / samples * math.pi * 2
-			local w = width * rng:NextNumber(0.6, 1.35)
+			local w = width * rng:NextNumber(0.6, 1.8)
 			local r = layer.radius(theta) - w * rng:NextNumber(0.35, 0.8)
 			local p =
 				frame:PointToWorldSpace(Vector3.new(math.sin(theta) * r, 0, -math.cos(theta) * r))
@@ -407,7 +536,7 @@ end
 
 -- Islands never reach closer than this to the hub centre, so the bay
 -- round the hub stays open water.
-local HUB_CLEARANCE = 26
+local HUB_CLEARANCE = 30
 -- Land above water stays at least this much nearer its own footprint than
 -- any neighbour's, so neighbouring islands never merge.
 local CHANNEL = 14
@@ -419,6 +548,26 @@ local function slotDistance(slot: WorldTypes.Slot, p: Vector3): number
 	local dz = math.max(math.abs(l.Z) - slot.depth / 2, 0)
 	return math.sqrt(dx * dx + dz * dz)
 end
+-- True when a disc of radius r at world point p keeps `margin` studs from
+-- every other zone footprint, the teaser and the hub.
+function Geo.clearOf(
+	ctx: Context,
+	zone: ZoneContext,
+	p: Vector3,
+	r: number,
+	margin: number
+): boolean
+	for _, other in ctx.zones do
+		if other.slot ~= zone.slot and slotDistance(other.slot, p) < r + margin then
+			return false
+		end
+	end
+	if ctx.teaser.slot ~= zone.slot and slotDistance(ctx.teaser.slot, p) < r + margin then
+		return false
+	end
+	return Vector3.new(p.X, 0, p.Z).Magnitude > ctx.layout.hubRadius + r + margin
+end
+
 local LANDING_HALF = 16 -- gate-side stretch kept straight for the boardwalk
 
 -- A terrace around a zone: its footprint plus the margins (always covered,
@@ -452,6 +601,7 @@ function Geo.terrace(
 	local rotation = frame.Rotation
 	local shared = Geo.zoneWave(ctx, zone)
 	local own = Geo.wave(rng)
+	local key = Geo.key(zone)
 	local w = wild or 0
 	local amp = if w > 0 then (grow * 0.9 + bump * 1.6) * w else bump * 1.5
 	-- coves along the gate side of the top terraces
@@ -510,7 +660,7 @@ function Geo.terrace(
 	end
 	local function radius(theta: number): number
 		local dx, dz = math.sin(theta), -math.cos(theta)
-		local n = shared(theta) * 0.7 + own(theta) * 0.3
+		local n = shared(theta) * 0.45 + own(theta) * 0.55
 		local extend = if w > 0 then math.max(0, grow + amp * n) else grow + amp * (0.5 + 0.5 * n)
 		local base = rayToRoundRect(a, b, corner, dx, dz)
 		local dir = rotation:VectorToWorldSpace(Vector3.new(dx, 0, dz))
@@ -519,6 +669,18 @@ function Geo.terrace(
 			r = channel(dir, base, r)
 		end
 		r = math.max(r, base)
+		if topY > 0 then
+			-- a cove may cut into the top terrace but always leaves a
+			-- 7-stud strip of land round the footprint (props ask heightAt,
+			-- which sees the clipped outline)
+			local zc = (z0 + z1) / 2
+			local tx = if math.abs(dx) > 1e-6 then (hw + 7) / math.abs(dx) else math.huge
+			local tz = if math.abs(dz) > 1e-6
+				then ((if dz > 0 then hd + 7 else -hd - 7) - zc) / dz
+				else math.huge
+			local floorR = if zone.isTeaser then 0 else math.min(r, tx, tz)
+			r = math.max(Geo.clipBites(ctx, key, centre, dir, r), floorR)
+		end
 		if recede > 0 and dz < 0 then
 			local lx = dx * base
 			local away = math.clamp((math.abs(lx) - LANDING_HALF) / 8, 0, 1)
@@ -563,6 +725,53 @@ function Geo.cliffs(
 			1.5,
 			0.45
 		)
+	end
+end
+
+-- Wedge-faced scree slopes round the foot of a registered terrace (the
+-- one whose top is `topY`): each wedge leans on the cliff face and slopes
+-- outward, from baseY up to baseY + height, reaching `reach` studs out.
+-- `coverage` (0..1) skips some so the foot stays ragged.
+function Geo.talus(
+	ctx: Context,
+	zone: ZoneContext,
+	topY: number,
+	baseY: number,
+	height: number,
+	reach: number,
+	material: Enum.Material,
+	coverage: number
+)
+	local layers: { Layer } = state(ctx).registry[Geo.key(zone)] or {}
+	local layer: Layer? = nil
+	for _, l in layers do
+		if math.abs(l.top - topY) < 0.01 then
+			layer = l
+		end
+	end
+	if not layer then
+		return
+	end
+	local rng = ctx.rng
+	local frame = layer.frame
+	local samples = math.max(16, math.floor(layer.radius(0) * math.pi * 2 / 9))
+	for i = 0, samples - 1 do
+		if rng:NextNumber() < coverage then
+			local theta = (i + rng:NextNumber(-0.3, 0.3)) / samples * math.pi * 2
+			local out = Vector3.new(math.sin(theta), 0, -math.cos(theta))
+			local h = height * rng:NextNumber(0.6, 1.1)
+			local d = reach * rng:NextNumber(0.7, 1.2)
+			local r = layer.radius(theta) + d / 2 - 1.5
+			local local0 = out * r
+			local p = frame:PointToWorldSpace(local0)
+			local o = frame:VectorToWorldSpace(out)
+			local c = Vector3.new(p.X, baseY + h / 2, p.Z)
+			ctx.terrain:FillWedge(
+				CFrame.lookAt(c, c + o),
+				Vector3.new(rng:NextNumber(8, 12), h, d),
+				material
+			)
+		end
 	end
 end
 
@@ -716,24 +925,56 @@ function Geo.stack(
 	materials: { Enum.Material },
 	capMaterial: Enum.Material?
 )
+	-- Each band is a leaning main drum plus an off-centre buttress drum and,
+	-- every other band, a slanted wedge face, so the silhouette reads as
+	-- weathered rock rather than a stack of coins.
 	local rng = ctx.rng
+	local terrain = ctx.terrain
 	local y = base.Y
 	local band = 0
 	local r = radius
 	local wobble = Vector3.zero
+	local lean = rng:NextNumber(0, math.pi * 2)
 	while y < topY - 0.5 do
 		local h = math.min(rng:NextNumber(3.5, 6), topY - y)
 		band += 1
 		local material = materials[(band - 1) % #materials + 1]
 		local c = base + wobble
-		ctx.terrain:FillCylinder(CFrame.new(c.X, y + h / 2, c.Z), h + 0.5, r, material)
+		local tilt = CFrame.Angles(rng:NextNumber(-0.14, 0.14), 0, rng:NextNumber(-0.14, 0.14))
+		terrain:FillCylinder(CFrame.new(c.X, y + h / 2, c.Z) * tilt, h + 0.5, r, material)
+		local a = lean + rng:NextNumber(-1.2, 1.2)
+		local off = Vector3.new(math.cos(a), 0, math.sin(a)) * r * rng:NextNumber(0.45, 0.7)
+		local hb = h * rng:NextNumber(0.5, 0.95)
+		terrain:FillCylinder(
+			CFrame.new(c.X + off.X, y + hb / 2, c.Z + off.Z) * tilt,
+			hb + 0.5,
+			r * rng:NextNumber(0.5, 0.75),
+			material
+		)
+		if band % 2 == 0 then
+			local face = CFrame.new(c.X - off.X * 0.8, y + h / 2, c.Z - off.Z * 0.8)
+				* CFrame.Angles(0, -a + math.pi / 2, 0)
+			terrain:FillWedge(face, Vector3.new(r * 1.2, h, r * 1.1), material)
+		end
 		y += h
-		r = math.max(radius * 0.55, r * rng:NextNumber(0.9, 0.99))
-		wobble += Vector3.new(rng:NextNumber(-0.6, 0.6), 0, rng:NextNumber(-0.6, 0.6))
+		r = math.max(radius * 0.5, r * rng:NextNumber(0.84, 0.97))
+		wobble += Vector3.new(rng:NextNumber(-1.4, 1.4), 0, rng:NextNumber(-1.4, 1.4))
 	end
 	if capMaterial then
 		local c = base + wobble
-		ctx.terrain:FillCylinder(CFrame.new(c.X, topY - 1.5, c.Z), 3, r * 1.35, capMaterial)
+		terrain:FillCylinder(
+			CFrame.new(c.X, topY - 1.5, c.Z) * CFrame.Angles(rng:NextNumber(-0.2, 0.2), 0, 0.15),
+			3,
+			r * 1.35,
+			capMaterial
+		)
+		local a = lean + math.pi
+		terrain:FillCylinder(
+			CFrame.new(c.X + math.cos(a) * r * 0.6, topY - 0.8, c.Z + math.sin(a) * r * 0.6),
+			2.4,
+			r * 0.8,
+			capMaterial
+		)
 	end
 end
 

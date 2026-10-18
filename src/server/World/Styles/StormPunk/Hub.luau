@@ -310,7 +310,41 @@ local function dressTerrace(ctx: Context, shapes: IslandShapes)
 	end
 end
 
+-- A channel of sea under every low connector (zone floor near sea level),
+-- so its catwalk crosses water rather than standing on dry sand where the
+-- hub beach and the zone's beach merge. Stops short of the field.
+local function carveChannels(ctx: Context)
+	for _, zone in ctx.zones do
+		local slot = zone.slot
+		if slot.floor <= 8 then
+			local a = slot.hubExit.Position
+			local b = slot.gate.Position
+			local flat = Vector3.new(b.X - a.X, 0, b.Z - a.Z)
+			local dir = flat.Unit
+			local r0 = ctx.layout.hubRadius + 24
+			local start = Vector3.new(0, 0, 0) + Geo.dir(Geo.bearingOf(a)) * r0
+			local finish = Vector3.new(b.X, 0, b.Z) - dir * 10
+			local run = (finish - start).Magnitude
+			if run > 6 then
+				local mid = (start + finish) / 2
+				local cf = CFrame.lookAt(mid, mid + dir)
+				ctx.terrain:FillBlock(
+					cf + Vector3.new(0, 2.5, 0),
+					Vector3.new(14, 11, run),
+					Enum.Material.Air
+				)
+				ctx.terrain:FillBlock(
+					cf + Vector3.new(0, -1.5, 0),
+					Vector3.new(14, 3, run),
+					Enum.Material.Water
+				)
+			end
+		end
+	end
+end
+
 function Hub.restoreIsland(ctx: Context)
+	carveChannels(ctx)
 	local shapes = buildHubIsland(ctx, true)
 	dressTerrace(ctx, shapes)
 	buildIslets(ctx)
