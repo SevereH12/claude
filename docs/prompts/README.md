@@ -15,6 +15,8 @@ and stops if it isn't. To run one, say: "Do `docs/prompts/<file>`".
 5. `5-retention.md`: retention and progression stats on the Creator
    Dashboard, including where players are when they leave. It can run any
    time after prompt 2.
+6. `6-ui-devices.md`: makes every screen fit and work on PC, phone
+   (portrait and landscape), iPad and console. Run it last.
 
 Researchers (all five parts done) live in `researchers/`.
 
