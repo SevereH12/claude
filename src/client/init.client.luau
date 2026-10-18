@@ -18,9 +18,14 @@ if Controllers then
 	end
 end
 
-for _, controller in loaded do
+-- one controller failing to set up must not stop the others (the shop
+-- once stayed blank that way), so each init is caught and reported
+for name, controller in loaded do
 	if typeof(controller.init) == "function" then
-		controller.init()
+		local ok, err = pcall(controller.init)
+		if not ok then
+			warn(`[StormBottler] {name}.init failed: {err}`)
+		end
 	end
 end
 

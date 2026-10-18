@@ -14,6 +14,7 @@ local UI = require(script.Parent.Parent.Lib.UI)
 local State = require(script.Parent.State)
 
 local COLORS = UI.COLORS
+local ROW_HEIGHT = 76 -- pixels; the list scrolls when the rows don't fit
 
 -- What a row shows, whichever kind of item it is.
 type Item = { name: string, price: number, badge: string, detail: string }
@@ -75,12 +76,10 @@ local function buildRow(tab: Tab, tier: number, item: Item)
 	local frame = UI.make(Instance.new("Frame"), {
 		Name = item.name,
 		LayoutOrder = tier,
-		Size = UDim2.new(1, -12, 0, 0),
+		Size = UDim2.new(1, -12, 0, ROW_HEIGHT),
 		BackgroundColor3 = COLORS.panelDark,
 		Parent = tab.list,
 	})
-	-- height follows width so rows keep their shape on any screen
-	UI.make(Instance.new("UIAspectRatioConstraint"), { AspectRatio = 4.2, Parent = frame })
 	UI.corner(frame, UDim.new(0.2, 0))
 	UI.stroke(frame, 3)
 

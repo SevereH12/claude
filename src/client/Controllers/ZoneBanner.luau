@@ -18,6 +18,9 @@ local State = require(script.Parent.State)
 local SHOW_TIME = 2.2
 local GATE_NEAR = 18 -- studs from a locked gate's barrier to explain the lock
 local GATE_FAR = 28 -- and this far away before it explains again
+-- The HUD stacks Volts, the storm pill and the goal card at the top centre,
+-- ending 212 px down at most (their size limits); the banner starts below.
+local TOP = 228
 local FADE = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 local player = Players.LocalPlayer
@@ -55,8 +58,8 @@ function ZoneBanner.init()
 	})
 	banner = UI.make(Instance.new("CanvasGroup"), {
 		Name = "Banner",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.27),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, TOP),
 		Size = UDim2.fromScale(0.5, 0.13),
 		BackgroundTransparency = 1,
 		Visible = false,
