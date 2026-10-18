@@ -1,12 +1,10 @@
 --!strict
--- Test commands for the game's owner. The client recognises the secret chat
--- command (Controllers/DevCommands) and sends DevCommand; everything is
--- decided here. The repo and the client code are public, so the command
--- name isn't the lock: it only works in Studio play tests or, in a live
--- server, for the user who owns the place.
---
---   /v2eon6gx4y        set your Volts to 1 trillion (as good as infinite)
---   /v2eon6gx4y <n>    set your Volts to n (/v2eon6gx4y 0 resets them)
+-- TEMPORARY test tool: the client's TEST button (Controllers/DevCommands)
+-- sends DevCommand and this sets that player's Volts. The repo and client
+-- code are public, so this is the lock: it only obeys in Studio play tests
+-- or, in a live server, the user who owns the place. To remove it: delete
+-- this file and Controllers/DevCommands.luau, and take "DevCommand" out of
+-- Shared/Remotes.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")

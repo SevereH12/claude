@@ -1,66 +1,52 @@
 --!strict
--- The secret test command, typed in chat (see Systems/DevCommands for what
--- it does and who may use it). It's a TextChatCommand, so the message is
--- never sent to anyone, and it's left out of the "/" autocomplete list.
+-- TEMPORARY test button: sets your Volts to 1 trillion. Only shown in
+-- Studio or to the place's owner; the server (Systems/DevCommands) checks
+-- again. To remove it: delete this file and Systems/DevCommands.luau, and
+-- take "DevCommand" out of Shared/Remotes.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TextChatService = game:GetService("TextChatService")
+local RunService = game:GetService("RunService")
 
 local Net = require(ReplicatedStorage.Shared.Net)
-
-local VOLTS_COMMAND = "/v2eon6gx4y"
+local UI = require(script.Parent.Parent.Lib.UI)
 
 local DevCommands = {}
 
-local devRemote: RemoteEvent
-
-local function systemMessage(text: string)
-	pcall(function()
-		local channels = TextChatService:FindFirstChild("TextChannels")
-		local system = channels and channels:FindFirstChild("RBXSystem")
-		if system and system:IsA("TextChannel") then
-			system:DisplaySystemMessage(text)
-		end
-	end)
-end
-
--- "/cmd" or "/cmd 500": sends the request; the server checks it.
-local function run(text: string)
-	local arg = string.match(text, "^%S+%s+(%S+)")
-	local amount = if arg then tonumber(arg) else nil
-	if arg and not amount then
-		systemMessage("[Dev] Volts: use a number, e.g. " .. VOLTS_COMMAND .. " 500")
-		return
-	end
-	devRemote:FireServer("volts", amount)
-	systemMessage(`[Dev] setting Volts to {if amount then tostring(amount) else "1 trillion"}`)
+local function isOwner(): boolean
+	return RunService:IsStudio()
+		or (
+			game.CreatorType == Enum.CreatorType.User
+			and Players.LocalPlayer.UserId == game.CreatorId
+		)
 end
 
 function DevCommands.init()
-	devRemote = Net.get("DevCommand")
-end
-
-function DevCommands.start()
-	if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-		local command = Instance.new("TextChatCommand")
-		command.Name = "DevVolts"
-		command.PrimaryAlias = VOLTS_COMMAND
-		command.AutocompleteVisible = false
-		command.Triggered:Connect(function(_source: TextSource, text: string)
-			run(text)
-		end)
-		-- commands only register inside the TextChatCommands folder
-		command.Parent = TextChatService:WaitForChild("TextChatCommands", 10) or TextChatService
-	else
-		-- the old chat system: watch our own messages instead
-		Players.LocalPlayer.Chatted:Connect(function(message: string)
-			local first = string.match(message, "^%S+")
-			if first and string.lower(first) == VOLTS_COMMAND then
-				run(message)
-			end
-		end)
+	if not isOwner() then
+		return
 	end
+	local devRemote = Net.get("DevCommand")
+	local screenGui = UI.make(Instance.new("ScreenGui"), {
+		Name = "StormBottlerTest",
+		ResetOnSpawn = false,
+		Parent = Players.LocalPlayer:WaitForChild("PlayerGui"),
+	})
+	-- under the SHOP and RESEARCH buttons
+	local button = UI.button({
+		Name = "TestVolts",
+		Text = "TEST: 1T ⚡",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.fromScale(0.015, 0.69),
+		Size = UDim2.fromScale(0.1, 0.075),
+		BackgroundColor3 = UI.COLORS.volt,
+		Parent = screenGui,
+	})
+	UI.sizeLimits(button, Vector2.new(96, 46), Vector2.new(150, 62))
+	UI.maxText(button, 22)
+	button.Activated:Connect(function()
+		UI.pop(button)
+		devRemote:FireServer("volts")
+	end)
 end
 
 return DevCommands
