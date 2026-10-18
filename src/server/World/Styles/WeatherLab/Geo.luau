@@ -3,9 +3,9 @@
 -- the part budget and the ground registry. Land (the block builder)
 -- remembers the top of every flat piece of ground it lays, per island, so
 -- props can ask how high the ground is (heightAt/groundAt) or find open
--- water (seaward). Zone-local studs: x runs across the zone (right when facing the hub), z runs from
--- the centre toward the back edge (+) or the gate edge (-), y is above
--- the zone floor. Works for any slot position, rotation and size.
+-- water (seaward). Zone-local studs: x runs across the zone (right when
+-- facing the hub), z runs from the centre toward the back edge (+) or the
+-- gate edge (-), y is above the zone floor. Works for any slot position, rotation and size.
 
 local ServerScriptService = game:GetService("ServerScriptService")
 
@@ -334,7 +334,10 @@ function Geo.groundAt(ctx: Context, zone: ZoneContext, x: number, z: number): nu
 end
 
 -- Moves a zone-local spot straight away from the zone centre until it is
--- over water at least `clear` studs deep (or gives up). Returns x, z.
+-- over water at least `clear` studs deep, then on past the beach slopes
+-- (Land does not remember those), or gives up. Returns x, z.
+local SLOPE_CLEAR = 16
+
 function Geo.seaward(
 	ctx: Context,
 	zone: ZoneContext,
@@ -344,10 +347,10 @@ function Geo.seaward(
 ): (number, number)
 	local len = math.max(math.sqrt(x * x + z * z), 1)
 	local ux, uz = x / len, z / len
-	for _ = 1, 12 do
+	for _ = 1, 16 do
 		local h = Geo.heightAt(ctx, Geo.key(zone), Geo.at(zone, x, z, 0))
 		if h == nil or h <= -clear then
-			break
+			return x + ux * SLOPE_CLEAR, z + uz * SLOPE_CLEAR
 		end
 		x += ux * 5
 		z += uz * 5

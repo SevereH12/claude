@@ -365,26 +365,6 @@ function Land.stack(
 	end
 end
 
--- One band of an octagonal column: two blocks crossed at 45 degrees
--- standing on `bottom` (level, yaw included), one exact colour.
-function Land.octBand(
-	parent: Instance,
-	color: Color3,
-	bottom: CFrame,
-	apothem: number,
-	height: number
-)
-	for k = 0, 1 do
-		Blocks.box(
-			parent,
-			color,
-			bottom * CFrame.new(0, height / 2, 0) * CFrame.Angles(0, k * math.pi / 4, 0),
-			Vector3.new(2 * apothem, height, 2 * apothem),
-			exact(color, "Spire")
-		)
-	end
-end
-
 -- Islands ----------------------------------------------------------------------------
 
 export type IslandSpec = {

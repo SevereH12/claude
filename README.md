@@ -58,6 +58,8 @@ the map by hand and the updater will leave it alone.
 - `src/server` → ServerScriptService.Server
   - `Systems/`: PlayerData (saving), Map, StormCycle, Strikes, Bottles, Movement, Selling, Shop, Sync
   - `Lib/`: MapBuilder, RateLimit
+  - `World/`: the map framework and its three style packs (WeatherLab is live).
+    The ground is built from parts (`World/Blocks`), not Roblox Terrain.
 - `src/client` → StarterPlayerScripts.Client
   - `Controllers/`: State, Storm, StrikeFX, HUD, ShopUI, ZoneBanner
   - `Lib/`: UI helpers

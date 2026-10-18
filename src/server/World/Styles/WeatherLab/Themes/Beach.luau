@@ -88,10 +88,21 @@ local function ground(ctx: Context, zone: ZoneContext)
 		end
 	end
 	-- rock outcrops at the front corners of the plateau and a few sea rocks
+	-- on the sea bed out past the beach
 	for _, side in { -1, 1 } do
 		Pieces.rocks(zone.folder, Geo.at(zone, side * (hw + 13), -hd - 5), 5.5, rng)
-		local sea = Geo.at(zone, side * (hw + m.side + 22), hd * rng:NextNumber(-0.4, 0.4), 0)
-		Pieces.rocks(zone.folder, Vector3.new(sea.X, Land.SEA - 1, sea.Z), 4.5, rng)
+		local x, z =
+			Geo.seaward(ctx, zone, side * (hw + m.side + 22), hd * rng:NextNumber(-0.4, 0.4), 3)
+		local sea = Geo.at(zone, x, z)
+		Land.stack(
+			ctx,
+			zone.folder,
+			{ G.rock, G.slate },
+			Vector3.new(sea.X, Land.SEABED, sea.Z),
+			rng:NextNumber(5, 7),
+			Land.SEA + rng:NextNumber(1.5, 3),
+			3.5
+		)
 	end
 end
 

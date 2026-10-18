@@ -7,6 +7,7 @@
 
 local ServerScriptService = game:GetService("ServerScriptService")
 
+local Blocks = require(ServerScriptService.Server.World.Blocks)
 local Kit = require(ServerScriptService.Server.World.Kit)
 local Geo = require(script.Parent.Parent.Geo)
 local Land = require(script.Parent.Parent.Land)
@@ -116,19 +117,20 @@ local function ground(ctx: Context, zone: ZoneContext)
 			)
 		end
 	end
-	-- the observatory spire behind the field: octagonal bands of cream and
-	-- terracotta, its top wide enough for the observatory deck
-	-- (height, apothem, turn): flat faces toward the field where the
-	-- stair climbs past
-	local bands = { { 7.5, 8, 0 }, { 6.5, 7.4, 22.5 }, { 6.5, 7, 0 }, { 6.5, 8.6, 0 } }
+	-- the observatory spire behind the field: square stone bands of cream
+	-- and terracotta, the second turned 45 degrees, flat faces toward the
+	-- field where the stair climbs past and a top wide enough for the deck
+	-- (height, half width, turn)
+	local bands = { { 7.5, 8, 0 }, { 6.5, 6, 45 }, { 6.5, 7.2, 0 }, { 6.5, 8.6, 0 } }
 	local y = -1
 	for i, b in bands do
-		Land.octBand(
+		local tone = if i % 2 == 1 then G.limestone else G.sandstone
+		Blocks.box(
 			folder,
-			if i % 2 == 1 then G.limestone else G.sandstone,
-			Geo.cf(zone, 0, hd + 15, y, b[3]),
-			b[2],
-			b[1]
+			tone,
+			Geo.cf(zone, 0, hd + 15, y + b[1] / 2, b[3]),
+			Vector3.new(2 * b[2], b[1], 2 * b[2]),
+			{ Name = "Spire" }
 		)
 		y += b[1]
 	end
