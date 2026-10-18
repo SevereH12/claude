@@ -49,6 +49,29 @@ end
 check(Research.def("Nobody") == nil, "unknown role has no def")
 check(Research.perkValue("Nobody", 1) == 0, "unknown role perk is 0")
 
+check(Research.catchRadius(nil) == Config.STRIKE_RADIUS, "no Rod Tech: base radius")
+for level = 1, #Config.RESEARCH_LEVELS do
+	local perk = Research.perkValue("RodTech", level)
+	check(
+		Research.catchRadius(level) == Config.STRIKE_RADIUS + perk,
+		`catchRadius({level}) adds the perk`
+	)
+end
+check(Research.catchRadius(1) < Research.catchRadius(5), "Rod Tech reach grows with level")
+
+local lastLead = 0
+for level = 1, #Config.RESEARCH_LEVELS do
+	local lead = Research.forecastLead(level)
+	check(lead > lastLead, `forecast lead grows at level {level}`)
+	check(lead <= Config.FORECAST_MAX_LEAD, `forecast lead {level} within the public delay`)
+	lastLead = lead
+end
+check(Research.forecastLead(5) == Config.FORECAST_MAX_LEAD, "top Forecaster uses the full lead")
+check(Research.forecastLead(99) == Config.FORECAST_MAX_LEAD, "forecast lead clamps high levels")
+
+check(Research.assayChance(1) == 0.1, "Analyst level 1 assay chance")
+check(Research.assayChance(5) == 0.3, "Analyst level 5 assay chance")
+
 check(Research.isValidPost("Office"), "Office is a valid post")
 check(Research.isValidPost("Mesa"), "a zone is a valid post")
 check(not Research.isValidPost("Nowhere"), "unknown zone is invalid")

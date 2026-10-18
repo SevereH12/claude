@@ -2,11 +2,12 @@
 -- All lightning visuals and feedback. Purely cosmetic: the server already
 -- decided who caught what before any of this plays.
 --
+--   Forecast      -> faint dashed ring (your Forecaster), gone at the public warning
 --   StrikeWarning -> glowing ring + light pillar; inner disc fills until the bolt lands
 --   StrikeLanded  -> forked, flickering bolt; area lights up; sparks,
 --                    shockwave, scorch mark, thunder. Arcs into each
 --                    catcher's bottle. If we caught it: screen flash,
---                    camera shake, "+5" popup.
+--                    camera shake, "+5" popup ("x2 ASSAYED" if high grade).
 --   Sold          -> big "+Volts" popup
 --   (ambient)     -> the Power Plant's tesla coil crackles
 
@@ -20,8 +21,11 @@ local TweenService = game:GetService("TweenService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Net = require(ReplicatedStorage.Shared.Net)
+local Research = require(ReplicatedStorage.Shared.Util.Research)
 local Types = require(ReplicatedStorage.Shared.Types)
 local UI = require(script.Parent.Parent.Lib.UI)
+local Zones = require(ReplicatedStorage.Shared.Util.Zones)
+local State = require(script.Parent.State)
 
 local player = Players.LocalPlayer
 
@@ -31,6 +35,7 @@ local BOLT_HEIGHT = 160
 local BOLT_SEGMENTS = 9
 local FLASH_DISTANCE = 220 -- strikes closer than this light up your screen
 local FULL_MESSAGE_COOLDOWN = 3
+local FORECAST_DASHES = 24
 
 local FADE = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local SLOW_FADE = TweenInfo.new(4, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
@@ -40,6 +45,7 @@ local POPUP_RISE = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.
 type Warning = { anchor: BasePart, pillar: BasePart }
 
 local warnings: { [number]: Warning } = {}
+local forecasts: { [number]: { BasePart } } = {}
 local fxFolder: Folder
 local screenGui: ScreenGui
 local flashFrame: Frame
@@ -330,7 +336,73 @@ local function bottlePosition(userId: number): Vector3?
 	return nil
 end
 
+-- The level of your own researcher if they'd be working right now (posted to
+-- the zone you stand in, set up). Display only: the server decides for real.
+local function activeLevel(roleId: string): number?
+	local snapshot = State.current
+	local save = if snapshot then snapshot.researchers[roleId] else nil
+	if not snapshot or not save or save.post == "Office" then
+		return nil
+	end
+	local readyAt = snapshot.setupUntil[roleId]
+	if readyAt and workspace:GetServerTimeNow() < readyAt then
+		return nil
+	end
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local zone = if root and root:IsA("BasePart") then Zones.at(root.Position) else nil
+	if not zone or zone.id ~= save.post then
+		return nil
+	end
+	return save.level
+end
+
 -- Events --------------------------------------------------------------------
+
+-- Your Forecaster's early look: a faint dashed ring only you can see, gone
+-- when the public warning for the same strike appears.
+local function onForecast(forecast: Types.Forecast)
+	local timeLeft = forecast.warnsAt - workspace:GetServerTimeNow()
+	if timeLeft <= 0 or forecasts[forecast.id] then
+		return
+	end
+	local zone = Config.ZONES[forecast.zoneId]
+	local color = if zone then zone.color else UI.COLORS.volt
+	local dashes: { BasePart } = {}
+	for index = 0, FORECAST_DASHES - 1 do
+		local angle = (index / FORECAST_DASHES) * math.pi * 2
+		local offset = Vector3.new(math.cos(angle), 0, math.sin(angle)) * forecast.radius
+		local dash = effectPart({
+			Name = "ForecastDash",
+			Size = Vector3.new(0.5, 0.2, forecast.radius * math.pi / FORECAST_DASHES),
+			CFrame = CFrame.lookAt(
+				forecast.position + offset + Vector3.new(0, 0.4, 0),
+				forecast.position + Vector3.new(0, 0.4, 0)
+			) * CFrame.Angles(0, math.rad(90), 0),
+			Color = color,
+			Transparency = 0.6,
+			Parent = fxFolder,
+		})
+		Debris:AddItem(dash, timeLeft + 1)
+		table.insert(dashes, dash)
+	end
+	forecasts[forecast.id] = dashes
+end
+
+local function clearForecast(id: number)
+	local dashes = forecasts[id]
+	if not dashes then
+		return
+	end
+	forecasts[id] = nil
+	for _, dash in dashes do
+		local fade = TweenService:Create(dash, FADE, { Transparency = 1 })
+		fade.Completed:Once(function()
+			dash:Destroy()
+		end)
+		fade:Play()
+	end
+end
 
 local function onWarning(warning: Types.StrikeWarning)
 	local timeLeft = warning.landsAt - workspace:GetServerTimeNow()
@@ -340,6 +412,7 @@ local function onWarning(warning: Types.StrikeWarning)
 	local zone = Config.ZONES[warning.zoneId]
 	local color = if zone then zone.color else UI.COLORS.volt
 	local lifetime = timeLeft + 2 -- safety net if the landed event never arrives
+	clearForecast(warning.id)
 
 	local anchor = anchorAt(warning.position + Vector3.new(0, 0.4, 0), lifetime)
 	local ring = groundRing(anchor, {
@@ -367,6 +440,19 @@ local function onWarning(warning: Types.StrikeWarning)
 		TweenInfo.new(0.25, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
 		{ Transparency = 0.5 }
 	):Play()
+
+	-- your Rod Tech's reach: a faint outer ring around the warning
+	local rodTech = activeLevel("RodTech")
+	if rodTech then
+		local reach = Research.catchRadius(rodTech)
+		groundRing(anchor, {
+			Radius = reach,
+			InnerRadius = reach - 0.3,
+			Color3 = color,
+			Transparency = 0.8,
+			Parent = anchor,
+		})
+	end
 
 	-- a column of light so you can spot circles from across the zone
 	local pillar = effectPart({
@@ -408,6 +494,9 @@ local function onLanded(landed: Types.StrikeLanded)
 		cameraShake(0.3, 0.7)
 		popup(`+{Format.abbreviate(landed.value)} ⚡`, true, 0.42)
 		playSound(Config.SOUNDS.CATCH, screenGui, 1.2)
+		if table.find(landed.assayed, player.UserId) then
+			popup("x2 ASSAYED", true, 0.5, 0.06)
+		end
 	elseif table.find(landed.full, player.UserId) then
 		local now = os.clock()
 		if now - lastFullMessage > FULL_MESSAGE_COOLDOWN then
@@ -462,6 +551,7 @@ function StrikeFX.init()
 		Parent = screenGui,
 	})
 
+	Net.get("Forecast").OnClientEvent:Connect(onForecast)
 	Net.get("StrikeWarning").OnClientEvent:Connect(onWarning)
 	Net.get("StrikeLanded").OnClientEvent:Connect(onLanded)
 	Net.get("Sold").OnClientEvent:Connect(onSold)
