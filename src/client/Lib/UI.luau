@@ -82,8 +82,9 @@ function UI.sizeLimits(parent: Instance, min: Vector2, max: Vector2)
 	UI.make(Instance.new("UISizeConstraint"), { MinSize = min, MaxSize = max, Parent = parent })
 end
 
+-- `amount` pixels of padding on every side.
 function UI.padding(parent: Instance, amount: number)
-	local pad = UDim.new(amount, 0)
+	local pad = UDim.new(0, amount)
 	UI.make(Instance.new("UIPadding"), {
 		PaddingTop = pad,
 		PaddingBottom = pad,

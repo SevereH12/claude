@@ -233,6 +233,14 @@ local function balloonTick(player: Player, now: number)
 end
 
 function Research.start()
+	task.delay(5, function()
+		if #ResearchSites.offices() == 0 then
+			warn(
+				"[Research] no ResearchOffice in the map, so nobody can hire researchers. "
+					.. "Click Update Game to rebuild the map."
+			)
+		end
+	end)
 	while true do
 		task.wait(CHECK_INTERVAL)
 		local now = os.clock()

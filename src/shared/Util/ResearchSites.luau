@@ -12,6 +12,9 @@ local OFFICE_TAG = "ResearchOffice"
 
 local ResearchSites = {}
 
+-- A camp's deck top sits this far above its camp box's base height (Slot.camp).
+ResearchSites.CAMP_DECK_LIFT = 0.35
+
 function ResearchSites.camp(zoneId: string): BasePart?
 	local map = workspace:FindFirstChild("Map")
 	local container = map and map:FindFirstChild("ResearchCamps")

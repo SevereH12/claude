@@ -146,7 +146,8 @@ local function spotsFor(site: string): ({ CFrame }?, CFrame?)
 	if not camp then
 		return nil, nil
 	end
-	local floor = camp.CFrame * CFrame.new(0, 1 - camp.Size.Y / 2, 0)
+	-- the box's base is 1 below the camp height; the deck is lifted above that
+	local floor = camp.CFrame * CFrame.new(0, 1 + ResearchSites.CAMP_DECK_LIFT - camp.Size.Y / 2, 0)
 	local frames: { CFrame } = {}
 	for _, spot in CAMP_SPOTS do
 		table.insert(frames, floor * CFrame.new(spot.X, 0, spot.Y) * CFrame.Angles(0, math.pi, 0))

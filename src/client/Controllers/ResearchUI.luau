@@ -96,9 +96,13 @@ local function render(snapshot: Types.Snapshot)
 			card.next.Text = ""
 			card.fill.Size = UDim2.fromScale(0, 1)
 			card.barText.Text = "Not hired"
-			card.status.Text = if unlocked
-				then (if atOffice then "Ready to hire" else "Visit the Research Office to hire")
-				else `Hire {previous.name} first`
+			card.status.Text = if not unlocked
+				then `Hire {previous.name} first`
+				elseif snapshot.volts < def.price then `Need {Format.abbreviate(
+					def.price - snapshot.volts
+				)} more ⚡`
+				elseif atOffice then "Ready to hire"
+				else "Hire at the Research Center"
 			card.hire.Text = `{Format.abbreviate(def.price)} ⚡`
 			UI.setEnabled(
 				card.hire,
@@ -360,7 +364,7 @@ function ResearchUI.init()
 	screenGui = UI.make(Instance.new("ScreenGui"), {
 		Name = "StormBottlerResearch",
 		ResetOnSpawn = false,
-		DisplayOrder = 5,
+		DisplayOrder = 6, -- above the shop if both are open
 		Parent = Players.LocalPlayer:WaitForChild("PlayerGui"),
 	})
 	panel = UI.panel({
@@ -403,7 +407,7 @@ function ResearchUI.init()
 	close.Activated:Connect(ResearchUI.toggle)
 
 	local hint = UI.label({
-		Text = "Hire at the Research Office, then post them at a zone. They work while you play there.",
+		Text = "Hire at the Research Center (the island at the end of the north boardwalk), then post them at a zone.",
 		TextColor3 = COLORS.subtext,
 		Position = UDim2.fromScale(0.05, 0.135),
 		Size = UDim2.fromScale(0.9, 0.05),
@@ -443,9 +447,16 @@ function ResearchUI.start()
 		render(State.current)
 	end
 	State.Changed:Connect(render)
-	-- standing in the office and set-up countdowns change without a snapshot
+	-- standing in the office and set-up countdowns change without a snapshot;
+	-- stepping onto the Research Center doorstep opens the panel
+	local wasInOffice = false
 	while true do
 		task.wait(0.25)
+		local here = inOffice()
+		if here and not wasInOffice and not panel.Visible then
+			ResearchUI.toggle()
+		end
+		wasInOffice = here
 		if panel.Visible and State.current then
 			render(State.current)
 		end

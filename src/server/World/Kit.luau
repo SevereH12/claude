@@ -10,6 +10,9 @@
 --     hit by raycasts, so it never interferes with strikes or selling.
 --   * Terrain helpers fill the world's Terrain; later fills overwrite earlier ones.
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local ResearchSites = require(ReplicatedStorage.Shared.Util.ResearchSites)
 local Blocks = require(script.Parent.Blocks)
 local WorldTypes = require(script.Parent.Types)
 
@@ -481,7 +484,8 @@ local CAMP_DARK = Color3.fromRGB(74, 62, 52)
 local CAMP_CANVAS = Color3.fromRGB(226, 216, 192)
 local CAMP_METAL = Color3.fromRGB(150, 156, 164)
 local CAMP_PILE_FALLBACK = 14
-local CAMP_DECK_LIFT = 0.35 -- above the 0.2 boardwalk decks sit at, so they never share a plane
+-- above the 0.2 boardwalk decks sit at, so they never share a plane
+local CAMP_DECK_LIFT = ResearchSites.CAMP_DECK_LIFT
 
 -- How far below `from` the nearest ground or base part is.
 local function dropBelow(ctx: Context, from: Vector3): number
