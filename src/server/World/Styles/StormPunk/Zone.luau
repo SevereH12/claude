@@ -41,7 +41,7 @@ Zone.POST_SPACING = 22
 Zone.DECK_WIDTH = 10
 -- The field slab reaches this far past the footprint (the gate pillars and
 -- the last studs of the catwalk stand on it).
-Zone.MARGIN = 4
+Zone.MARGIN = 4.5
 
 export type BridgeStyle = {
 	deck: Color3,
@@ -440,6 +440,7 @@ function Zone.saddle(
 	local outer = (r0 + prev.slot.depth / 2 + r1 + zone.slot.depth / 2) / 2 + 6
 	local low = math.max(prev.slot.floor, 4) + 6
 	local high = math.max(zone.slot.floor, low) + 14
+	local detail = Geo.zoneDetail(zone)
 	return Land.ridge(
 		ctx.folders.ground,
 		Geo.polar(mid, inner, 0),
@@ -449,9 +450,9 @@ function Zone.saddle(
 		20,
 		rng,
 		colors,
-		cap,
+		if detail > 0 then cap else nil,
 		Geo.guard(ctx, zone),
-		Geo.count(Geo.zoneDetail(zone), 2, 3),
+		Geo.count(detail, 2, 3),
 		BOTTOM
 	)
 end

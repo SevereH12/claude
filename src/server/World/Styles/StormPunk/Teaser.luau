@@ -158,7 +158,7 @@ function Teaser.build(ctx: Context, zone: ZoneContext)
 			{ color = G.basalt, grow = 0.8 },
 		})
 	end
-	for i = 1, Geo.count(Geo.worldDetail(ctx), 2, 4) do
+	for i = 1, Geo.count(Geo.worldDetail(ctx), 1, 4) do
 		local a = math.rad(i * 90 + rng:NextNumber(-30, 30))
 		local p = center
 			+ slot.frame.RightVector * math.cos(a) * w * 0.4

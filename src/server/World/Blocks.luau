@@ -11,7 +11,8 @@
 --   * No unions, meshes, decals or textured materials: colour carries the
 --     look. Each part's colour is jittered by about +/-4% brightness, keyed
 --     off its position, so builds are identical every time and large flat
---     surfaces show their facets.
+--     surfaces show their facets. The pieces of one disc/ring share a shade,
+--     since they overlap on the same plane and mixed shades would flicker.
 --   * A `top` CFrame is the centre of the shape's top face; its rotation
 --     sets the shape's yaw. Keep it level.
 
@@ -141,6 +142,12 @@ local function rim(
 ): { BasePart }
 	local parts = {}
 	local length = 2 * radius * math.tan(math.pi / sides) + 0.05
+	-- one shade for the whole shape: the blocks overlap on the same plane,
+	-- and different shades there would flicker
+	local options = table.clone(props or {})
+	if options.Color == nil then
+		options.Color = Blocks.jitter(color, top.Position)
+	end
 	for i = 0, sides - 1 do
 		local angle = i * 2 * math.pi / sides
 		local cframe = top
@@ -148,7 +155,7 @@ local function rim(
 			* CFrame.new(0, -height / 2, -(radius - thickness / 2))
 		table.insert(
 			parts,
-			Blocks.part(parent, color, cframe, Vector3.new(length, height, thickness), props)
+			Blocks.part(parent, color, cframe, Vector3.new(length, height, thickness), options)
 		)
 	end
 	return parts
@@ -173,6 +180,9 @@ function Blocks.disc(
 		local coreRadius = math.min((radius - thickness) / math.cos(math.pi / sides) + 0.25, radius)
 		local options = table.clone(props or {})
 		options.Shape = Enum.PartType.Cylinder
+		if options.Color == nil then
+			options.Color = Blocks.jitter(color, top.Position)
+		end
 		table.insert(
 			parts,
 			Blocks.part(

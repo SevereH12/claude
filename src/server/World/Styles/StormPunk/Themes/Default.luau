@@ -100,15 +100,21 @@ function Default.ground(ctx: Context, zone: ZoneContext)
 	padByZone[key] = false
 	local base = Geo.slotPoint(zone, hero.x, hero.z)
 	local pad = if Geo.isClear(ctx, base, 10)
-		then Land.fit(Land.poly(base, 14.5, 12, Zone.yawOf(slot.frame)), F, guard, 0.8)
+		then Land.fit(
+			Land.poly(base, 14.5, Geo.sides(detail, 10, 12), Zone.yawOf(slot.frame)),
+			F,
+			guard,
+			0.8
+		)
 		else nil
 	if pad then
 		padByZone[key] = true
-		local built = Land.stack(parent, pad, F, BOTTOM, {
-			{ color = G.concrete, height = 1.5 },
-			{ color = G.slate, height = 4, grow = 0.5 },
-			{ color = G.basalt, grow = 1 },
-		}, island.key)
+		local bands: { Land.Band } = { { color = G.concrete, height = 1.5 } }
+		if detail > 0 then
+			table.insert(bands, { color = G.slate, height = 4, grow = 0.5 })
+		end
+		table.insert(bands, { color = G.basalt, grow = 1 })
+		local built = Land.stack(parent, pad, F, BOTTOM, bands, island.key)
 		table.move(built, 1, #built, #layers + 1, layers)
 	end
 	layersByZone[key] = layers

@@ -98,8 +98,10 @@ local function buildHubIsland(ctx: Context)
 
 	local beach = Land.poly(Vector3.zero, R + 33, 16, yaw)
 	local beaches = { beach }
-	for _, offset in { 180, 270 } do
-		table.insert(beaches, Land.poly(Geo.polar(sb + offset, R + 36, 0), 20, 12, yaw))
+	for i, offset in { 180, 270 } do
+		if i <= Geo.count(Geo.worldDetail(ctx), 0, 2) then
+			table.insert(beaches, Land.poly(Geo.polar(sb + offset, R + 36, 0), 20, 12, yaw))
+		end
 	end
 	for _, shape in beaches do
 		Land.prism(parent, G.sand, shape, BEACH, BOTTOM, Land.SHARED + UP * BEACH)
@@ -247,7 +249,7 @@ end
 local function buildSeaStacks(ctx: Context)
 	local rng = Geo.rng(ctx, "stacks")
 	local guard = Geo.guard(ctx, nil)
-	local wanted = Geo.count(Geo.worldDetail(ctx), 3, 8)
+	local wanted = Geo.count(Geo.worldDetail(ctx), 2, 8)
 	local count = 0
 	local tries = 0
 	while count < wanted and tries < 120 do

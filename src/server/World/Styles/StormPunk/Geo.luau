@@ -162,12 +162,9 @@ end
 -- with the zone count instead. Sized so 7 zones + the teaser stay under the
 -- 2,500-part cap (about 1,500 parts with 2 zones).
 
--- 1 for zones 1-2, 0.5 for zone 3, 0 from zone 4 on; the teaser is lean.
+-- 1 (full) for zones 1-2, 0 (lean) from zone 3 on and for the teaser.
 function Geo.zoneDetail(zone: ZoneContext): number
-	if zone.isTeaser then
-		return 0
-	end
-	return math.clamp(1 - (zone.slot.index - 2) * 0.5, 0, 1)
+	return if not zone.isTeaser and zone.slot.index <= 2 then 1 else 0
 end
 
 -- 1 with up to two zones, 0 at Geo.MAX_ZONES (hub scenery only).

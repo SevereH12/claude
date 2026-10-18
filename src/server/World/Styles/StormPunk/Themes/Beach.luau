@@ -134,7 +134,7 @@ function Beach.ground(ctx: Context, zone: ZoneContext)
 				base + spot.h,
 				{ G.basalt, G.slate },
 				nil,
-				3,
+				Geo.count(detail, 2, 3),
 				guard
 			)
 			for _, shape in columns do
