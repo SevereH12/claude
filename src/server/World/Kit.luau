@@ -484,10 +484,12 @@ local CAMP_PILE_FALLBACK = 14
 
 -- How far below `from` the nearest ground or base part is.
 local function dropBelow(ctx: Context, from: Vector3): number
-	local params = RaycastParams.new()
-	params.FilterType = Enum.RaycastFilterType.Include
-	params.FilterDescendantsInstances = { ctx.folders.ground, ctx.folders.base, ctx.terrain }
+	-- pcall: the offline test harness has no raycasting, so piles fall back
+	-- to a fixed length there
 	local ok, hit = pcall(function()
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Include
+		params.FilterDescendantsInstances = { ctx.folders.ground, ctx.folders.base, ctx.terrain }
 		return workspace:Raycast(from, Vector3.new(0, -60, 0), params)
 	end)
 	if ok and hit then
@@ -610,14 +612,22 @@ function Kit.researchCamp(ctx: Context, zone: ZoneContext)
 			Material = Enum.Material.Wood,
 		})
 	end
-	Kit.sign(parent, at(0, 5.4, signZ - 0.5), 12, 2.6, `{string.upper(def.displayName)} FIELD CAMP`, nil, {
-		boardColor = zone.color,
-		boardMaterial = Enum.Material.SmoothPlastic,
-		titleColor = Color3.new(1, 1, 1),
-		strokeColor = Color3.fromRGB(30, 30, 36),
-		thickness = 0.5,
-		twoSided = true,
-	})
+	Kit.sign(
+		parent,
+		at(0, 5.4, signZ - 0.5),
+		12,
+		2.6,
+		`{string.upper(def.displayName)} FIELD CAMP`,
+		nil,
+		{
+			boardColor = zone.color,
+			boardMaterial = Enum.Material.SmoothPlastic,
+			titleColor = Color3.new(1, 1, 1),
+			strokeColor = Color3.fromRGB(30, 30, 36),
+			thickness = 0.5,
+			twoSided = true,
+		}
+	)
 end
 
 function Kit.spawn(

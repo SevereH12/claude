@@ -706,15 +706,7 @@ local function researchOffice(
 		{ Name = "ResearchMark" }
 	)
 	Kit.researchOffice(parent, pad, 12)
-	Kit.sign(
-		parent,
-		cf * CFrame.new(0, 5.9, -r - 1.5),
-		5.4,
-		1.2,
-		"RESEARCH",
-		nil,
-		Palette.SIGN
-	)
+	Kit.sign(parent, cf * CFrame.new(0, 5.9, -r - 1.5), 5.4, 1.2, "RESEARCH", nil, Palette.SIGN)
 end
 
 type CottageLook = { name: string, roof: string, chimney: boolean, instrument: string? }

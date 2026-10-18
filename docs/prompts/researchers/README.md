@@ -30,7 +30,7 @@ checkout and stops if it isn't.
 
 Each part ticks its own box when it's done.
 
-- [ ] Part 1: Research Office and camps on the map (`part-1-map.md`)
+- [x] Part 1: Research Office and camps on the map (`part-1-map.md`)
 - [ ] Part 2: hiring, posting, levels and the Research panel (`part-2-hiring.md`)
 - [ ] Part 3: perks I, Forecaster, Rod Tech and Analyst (`part-3-perks-1.md`)
 - [ ] Part 4: perks II, Chemist and Storm Chaser (`part-4-perks-2.md`)
