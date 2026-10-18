@@ -16,7 +16,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 	Shoreline = {
 		id = "Shoreline",
 		displayName = "Shoreline",
-		tagline = "Everyone in the circle catches",
+		tagline = "Everyone catches the beach storms, 5 Volts",
 		color = Color3.fromRGB(255, 220, 80),
 		mode = "Shared",
 		chargeValue = 5,
@@ -30,7 +30,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 	Mesa = {
 		id = "Mesa",
 		displayName = "Mesa",
-		tagline = "One catcher per bolt - 4x Volts",
+		tagline = "Closest scientist takes the bolt, 20 Volts",
 		color = Color3.fromRGB(255, 120, 60),
 		mode = "Single",
 		chargeValue = 20,
@@ -45,7 +45,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 
 return table.freeze({
 	-- Which world style MapBuilder builds (src/server/World/Styles/<name>).
-	WORLD_STYLE = "Legacy",
+	WORLD_STYLE = "WeatherLab",
 
 	-- Saving
 	AUTOSAVE_INTERVAL = 60, -- seconds between autosaves per player

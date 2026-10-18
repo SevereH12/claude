@@ -37,9 +37,13 @@ also the colour of its warning circles.
 - Ceramic: `SmoothPlastic` in `ceramic` (insulators read as glazed china).
 - Energy: `Neon` in `volt` and the zone colours. Glass for lantern rooms.
 - Wood: `WoodPlanks` (decks), `Wood` (posts, crates).
-- Terrain: `Sand` beaches, `Limestone` and `Sandstone` mesa strata, `Slate`
-  and `Rock` cliffs, `Basalt` sea stacks, `Brick` and `Pavement` hub plaza,
-  `LeafyGrass` planters, `Water` sea.
+- Ground: no terrain. All land is chunky anchored `SmoothPlastic` blocks in
+  `Workspace.Map.Ground` (built with `World/Blocks` through `Land.luau`), and
+  colour carries the look (`Palette.ground`): sand beaches and aprons, wet
+  sand shore slopes, limestone and sandstone mesa strata, slate and basalt
+  cliffs and columns, light grass caps, a brick and pavement hub plaza. The
+  sea is one see-through teal water part at y = 0 over a solid seabed at
+  y = -3 (walkable: anyone who falls in wades to a shore slope).
 
 ## Shape language
 
@@ -47,9 +51,16 @@ also the colour of its warning circles.
   pylons, chimneys, the Thunder Spire) against low flat fields.
 - Stacked rings: insulators, coil tori and banded chimneys are always piles
   of discs, so every tower reads as "electric" at any distance.
-- Riveted rectangles for anything man-made (decks, boxes, plates) with
-  brass trim lines. Round, wobbly, layered shapes for anything natural:
-  coastlines, cliffs, terraces and sea stacks are never straight or circular.
+- Riveted rectangles for anything man-made (decks, boxes, plates, and the
+  stepped field platforms) with brass trim lines. Faceted polygons for
+  anything natural: islands are 10-16-sided blocks unioned from overlapping
+  lobes, cliffs are two-tone strata that step out as they go down, with a
+  light grass cap overhanging a little, and sea stacks and crags are
+  clusters of hexagonal basalt columns.
+- How the blocks are built: a regular polygon with 2k sides is k boxes,
+  each spanning two opposite faces (a 12-gon is 6 parts, a hex column 3).
+  Shapes that meet at the same height share one colour key, so overlapping
+  tops never flicker. Shore slopes are one wedge per face at 24 degrees.
 - Lots of detail up close (bulbs, rivets, bolts, tufts, debris) but no
   detail at all on the catch floors, which stay flat and patterned.
 
@@ -65,8 +76,12 @@ also the colour of its warning circles.
 
 ## Hub: Bottleworks Plaza
 
-- Round, terraced island at y = 12 with slate cliffs, a sand beach and
-  shallows. Brick plaza with a pavement core and flush copper rings.
+- Round terraced citadel of 16-gons turned so a face looks down every exit
+  and quiet bearing: a brick plaza at y = 12 on a slate band, a green
+  terrace at y = 8 on slate and basalt strata, a sand beach at y = 1 with a
+  shore slope all round (plus two lobes the crags stand on while the world
+  is small). Pavement core and a flush brass ring on the plaza; path strips
+  (0.2 up, darker edging) run out to every exit and carry the light trails.
 - **Hero landmark: the Grand Coil** in the middle, about 90 studs tall: a
   copper drum, a lattice tower with an insulator column, a tori crown and
   a cyan orb. Glowing cables run from its crown to the capacitors.
@@ -76,8 +91,9 @@ also the colour of its warning circles.
   towers glowing cyan, and an amber chevron border. It is the brightest,
   warmest thing in the hub.
 - Spawn: brass pad south of the Exchange, facing it. Every spawn sees SELL,
-  the coil, and signposts to the zones. Below it, a little harbour with a
-  pier and a moored storm skiff.
+  the coil, and signposts to the zones. Below it, a paved harbour path
+  (two ramps, 23 and 26 degrees, with a landing on the terrace) down to the
+  beach, a pier and a moored storm skiff.
 - Wayfinding: a light trail in each zone's colour runs from the coil ring
   to its bridge, with chevrons (the teaser's trail and lamps are grey: not
   open yet). A bridgehead arch with the zone's name
@@ -89,15 +105,16 @@ also the colour of its warning circles.
   bottle kiosk, a garden with benches, planters and lamps. A brass ring
   frames the pavement core, and a chained bollard promenade runs round the
   rim with gaps where trails leave.
-- Scenery: little basalt islets on quiet bearings, each with a Tesla
-  pylon, strung together with power lines around the hub, plus grass-capped
-  basalt sea stacks further out. Terrain costs no parts, so the big
-  silhouettes (cliffs, stacks, the Thunder Spire, the arch) are terrain.
+- Scenery: little grass-capped basalt islets on quiet bearings, each with a
+  Tesla pylon, strung together with power lines around the hub; clusters
+  of basalt columns standing in the sea further out; and three basalt
+  column crags behind the coil. Islets and stacks keep to open water
+  (clear of every island) and thin out as zones are added.
 
 ## Zones
 
-Every zone gets the same shared kit (riveted catwalk connector, insulator
-fence border, insulator arch gate) plus its theme. Themes work for any slot
+Every zone gets the same shared kit (block island, riveted catwalk
+connector, insulator fence border, insulator arch gate) plus its theme. Themes work for any slot
 position, rotation, size and height because everything is placed in the
 slot's own frame (`Kit.footprintPoint`, `Kit.perimeter`).
 
@@ -107,15 +124,25 @@ slot's own frame (`Kit.footprintPoint`, `Kit.perimeter`).
 - **Gate**: two banded copper pylons with insulator stacks, a brass arch
   beam, a dark sign board with the zone name in its colour and the tagline
   in white, and a Jacob's ladder of cyan arcs on top.
+- **Island** (`Zone.island`): the catch floor is a rectangular slab exactly
+  at the floor over the whole footprint + 4.5 studs (the gate pillars and
+  the catwalk's last studs stand on it). Under it the strata step out: a
+  field near sea level gets 1-stud walkable steps down to the beach, a
+  raised one gets two-tone cliff bands (optionally leaning to one side, or
+  with a grass-capped shelf). Round the foot is a sand apron at beach level,
+  and behind and beside it polygon beach lobes with shore slopes. Nothing
+  lands on the hub side, so low catwalks cross open water.
 - **Connector**: a riveted catwalk on copper piles, brass handrails, lamp
   posts with cyan lanterns, glowing cables between lamps, and the zone's
   light trail down the middle. Any length or slope works; piles and lamps
-  are spaced along whatever length the slot gives.
+  are spaced along whatever length the slot gives. Long spans hop across
+  grass-capped rock columns. Both ends meet the ground within a stud.
 
 ### Beach -> Shoreline ("Tidewire Beach", tagline "Everyone in the circle catches")
-- Ground: flat sand field at the floor height, sloping beaches, an uneven
-  coastline (bays and points, not even bumps) with shallows, grassy dunes,
-  and layered basalt and slate headlands.
+- Ground: sand field on limestone and sandstone steps, a wide back beach
+  and a side bump, grassy two-tier dunes, a slate-and-basalt headland with
+  a grass cap for the lighthouse, and basalt column clusters breaking the
+  coast.
 - Floor: two-tone tide stripes. Patina bands whose back edges are scalloped
   like rolling waves, over warm sand, inside a brass frame.
 - Hero: **the Tidewire Lighthouse** on a headland behind the field, with
@@ -125,19 +152,22 @@ slot's own frame (`Kit.footprintPoint`, `Kit.perimeter`).
   crates and barrels, buoys with lamps, driftwood, rocks and dune grass.
 
 ### Canyon -> Mesa ("Thunderhead Mesa", tagline "One catcher per bolt - 4x Volts")
-- Ground: a raised plateau over shifted terraces of striped sandstone,
-  limestone and rock cliffs (sandstone ledge, then a green ledge, then
-  sand), hoodoo pillars and a natural rock arch. High mesas keep at most
-  three terraces with taller cliffs, so they never sprawl into neighbours.
+- Ground: a raised plateau over sandstone and limestone strata that step
+  out a stud all round plus a wide ledge on one side and the back (the
+  other side drops sheer); the second ledge is green. A ridge of rock
+  columns behind, two-tone hoodoo columns, a natural arch (two hex legs and
+  a lintel block), talus rocks on the sand. At most 3-4 bands however high.
 - Floor: two-tone sage and cream checkerboard inside a brass frame.
-- Hero: **the Thunder Spire**, a tall layered rock pinnacle behind the mesa
+- Hero: **the Thunder Spire**, four twisting hex tiers behind the mesa
   topped with a brass lightning rod and a cyan orb, with cables down to
   the mesa rim.
 - Edge: a mine headframe, ore carts on rails, a windpump, copper "cactus"
   rods, pipes down the cliff, crates, rocks and scrub.
 
 ### Default (any future theme): "Generator Yard"
-- Ground: a slate and rock island with stepped cliffs.
+- Ground: a concrete yard on slate and basalt strata with a wide grassy
+  shelf, a basalt column crag behind, and a concrete pad flush with the
+  yard for the hero.
 - Floor: riveted plate grid with two-tone diamond plates and dark grout
   lines.
 - Hero: **the Dynamo Stack**, a banded smokestack beside a big generator
@@ -146,8 +176,9 @@ slot's own frame (`Kit.footprintPoint`, `Kit.perimeter`).
 
 ## Teaser: Coming Soon
 
-The next empty slot is a tall basalt island with scaffolding and a
-construction crane, as its own hero. A catwalk leaves the hub and stops
+The next empty slot is a tall basalt island (a sand beach with shore
+slopes, a rock-capped ledge, then a grass-capped top) with scaffolding and
+a construction crane, as its own hero, and column stacks around it. A catwalk leaves the hub and stops
 halfway at an amber and black barricade with a big "COMING SOON" sign.
 Bare piles carry on toward the island with a girder hanging off them.
 
@@ -165,16 +196,21 @@ there updates the world.
 
 - Every placement is in the slot's own frame, so any position, rotation,
   size or floor height works.
-- Raised terrain is clipped (`Geo.landSafe`) wherever it would rise above
-  a connector deck or into another zone's footprint above that zone's
-  floor. Catwalks always meet flush ground at both ends, both ways.
-- After all zone landmasses are down, the hub's upper terrain is laid again
-  so the plaza always wins where shores merge.
+- Every ground shape passes `Geo.guard` along its outline: a shape that
+  would rise above a connector deck or into another zone's footprint is
+  shrunk (`Land.fit`) or, for a stratum, keeps the band above's outline (a
+  sheer face). Catwalks always meet the ground within a stud at both ends.
+- Shores that meet do so at the same height and colour key, so merged
+  beaches are one surface. Scenery (crags, islets, stacks) is placed after
+  every zone island, in open water.
 - Each zone draws from its own seeded Random (one number from `ctx.rng` +
   the zone id), so adding a zone never reshuffles earlier zones' props.
-- Dressing density comes from the zone's own spiral index (zones 1-2 full,
-  then leaner, like a distance LOD). The current 2-zone map is about 1,800
-  parts. Each extra zone adds about 300-450.
+- Part budget (`Geo.zoneDetail`, `Geo.worldDetail`): a zone's optional
+  ground pieces depend only on its own spiral index (zones 1-2 full, later
+  zones lean: one beach lobe, fewer columns, a lighter hero pad), so adding
+  a zone never changes an earlier zone's ground or props; the hub's
+  scenery thins as zones are added. The 2-zone map is about 1,330 parts
+  (about 500 of them ground); a 7-zone test world is about 2,440.
 - Tested with 5 extra zones (unknown themes, a raised beach at y = 68, a
   132 x 132 Default zone at y = 84, a zone at y = 100): every floor is flat,
   reachable from spawn, and walkable back to spawn and the sell pad.

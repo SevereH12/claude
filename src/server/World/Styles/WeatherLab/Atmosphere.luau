@@ -6,7 +6,6 @@
 
 local Lighting = game:GetService("Lighting")
 
-local Palette = require(script.Parent.Palette)
 local WLTypes = require(script.Parent.WLTypes)
 
 type Context = WLTypes.Context
@@ -73,16 +72,6 @@ function Atmosphere.build(ctx: Context)
 	grade.Contrast = 0.08
 	grade.Saturation = 0.15
 	grade.TintColor = Color3.fromRGB(255, 247, 236)
-
-	local terrain = ctx.terrain
-	terrain.WaterColor = Palette.water
-	terrain.WaterTransparency = 0.35
-	terrain.WaterReflectance = 0.55
-	terrain.WaterWaveSize = 0.18
-	terrain.WaterWaveSpeed = 9
-	for _, entry in Palette.terrain do
-		terrain:SetMaterialColor(entry.material, entry.color)
-	end
 end
 
 return Atmosphere

@@ -8,8 +8,8 @@
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local World = ServerScriptService.Server.World
-local Kit = require(World.Kit)
 local WorldTypes = require(World.Types)
+local Ground = require(script.Parent.Parent.Ground)
 local Palette = require(script.Parent.Parent.Palette)
 local Pieces = require(script.Parent.Parent.Pieces)
 local SkyTypes = require(script.Parent.Parent.SkyTypes)
@@ -21,89 +21,135 @@ type ThemeSpec = SkyTypes.ThemeSpec
 type Land = SkyTypes.Land
 
 local C = Palette.C
+local G = Palette.GROUND
 local UP = Vector3.yAxis
 
 local Canyon = {}
 
 function Canyon.spec(zone: ZoneContext): ThemeSpec
 	return {
-		rim = Enum.Material.Sandstone,
-		terrace = Enum.Material.Ground,
-		cliffs = {
-			Enum.Material.Ground,
-			Enum.Material.Sandstone,
-			Enum.Material.Ground,
-			Enum.Material.Slate,
-			Enum.Material.Basalt,
-		},
-		fieldTerrain = Enum.Material.Ground,
+		rim = G.sandstoneLight,
+		soil = G.sandstone,
+		cliffs = { G.ochre, C.emberDark, G.basalt },
 		field = {
-			kind = "bands",
-			axis = "x",
-			colors = Palette.fieldTones(zone.color, C.twilightDeep, C.twilightLight),
-			materials = { Enum.Material.Sandstone, Enum.Material.Sandstone },
-			size = 10,
-			widths = { 1.3, 0.7 },
+			kind = "checker",
+			colors = Palette.fieldTones(zone.color, C.fieldLilac, C.fieldPlum),
+			materials = { Enum.Material.SmoothPlastic, Enum.Material.SmoothPlastic },
+			size = 16,
 		},
 		accent = C.gold,
 		depth = 62,
-		ridge = Enum.Material.Sandstone,
+		ridge = G.sandstone,
 		ridgeHeight = 14,
+		spires = G.ochre,
 	}
 end
 
--- Stacked strata: cylinders shrinking upward, alternating ember and ochre.
-local function strata(ctx: Context, center: Vector3, floor: number, radii: { number }, step: number)
-	local materials = { Enum.Material.Sandstone, Enum.Material.Ground }
-	-- root it into the island
-	ctx.terrain:FillCylinder(
-		CFrame.new(center.X, floor - 10, center.Z),
-		24,
-		radii[1],
-		Enum.Material.Sandstone
-	)
+-- Stacked strata: polygon tiers shrinking upward with their centres
+-- wandering, alternating ember and ochre, a wider slate caprock on top and
+-- a talus apron of wedges round the base (where `talus` accepts the foot
+-- of the slope). Returns the summit height.
+local function strata(
+	ctx: Context,
+	center: Vector3,
+	floor: number,
+	radii: { number },
+	step: number,
+	sides: number,
+	talus: ((Vector3) -> boolean)?
+): number
+	local rng = ctx.rng
+	local colors = { G.sandstone, G.ochre }
+	local jitter = radii[1] * 0.12
+	local tierCenter = center
 	for i, radius in radii do
-		local top = floor + i * step
-		ctx.terrain:FillCylinder(
-			CFrame.new(center.X, top - step / 2 - 1, center.Z),
-			step + 2,
+		if i > 1 then
+			tierCenter = center
+				+ Vector3.new(rng:NextNumber(-jitter, jitter), 0, rng:NextNumber(-jitter, jitter))
+		end
+		-- the first tier is rooted down into the island
+		local height = if i == 1 then step + 8 else step
+		Ground.poly(
+			ctx,
+			colors[(i - 1) % 2 + 1],
+			CFrame.new(tierCenter.X, floor + i * step, tierCenter.Z)
+				* CFrame.Angles(0, rng:NextNumber(0, math.pi), 0),
 			radius,
-			materials[(i - 1) % 2 + 1]
+			height,
+			sides,
+			"Strata"
 		)
 	end
+	local summit = floor + #radii * step
+	-- caprock: a wider, harder layer overhanging the top tier
+	Ground.poly(
+		ctx,
+		G.slate,
+		CFrame.new(tierCenter.X, summit + 2, tierCenter.Z)
+			* CFrame.Angles(0, rng:NextNumber(0, math.pi), 0),
+		radii[#radii] * 1.3,
+		2,
+		sides,
+		"Caprock"
+	)
+	if talus then
+		for k = 0, 3 do
+			local angle = k / 4 * math.pi * 2 + rng:NextNumber(-0.3, 0.3)
+			local dir = Vector3.new(math.cos(angle), 0, math.sin(angle))
+			local length = rng:NextNumber(6, 9)
+			local height = rng:NextNumber(5, 8)
+			local at = Vector3.new(center.X, floor + height / 2 - 0.5, center.Z)
+				+ dir * (radii[1] + length / 2 - 1)
+			-- the wedge's tall back faces the butte, its slope runs outward;
+			-- skipped where it would reach toward the field
+			if not talus(at + dir * (length / 2 + 2)) then
+				continue
+			end
+			Ground.wedge(
+				ctx,
+				G.ochre,
+				CFrame.lookAt(at, at + dir),
+				Vector3.new(rng:NextNumber(9, 13), height, length),
+				"Talus"
+			)
+		end
+	end
+	return summit + 2
 end
 
--- A hoodoo: stacked rock lumps with a flat cap stone.
+-- A hoodoo: three weathered balls shrinking upward under a slanted cap stone.
 local function hoodoo(parent: Instance, rng: Random, foot: Vector3, height: number)
+	if Pieces.overBudget(parent) then
+		return
+	end
 	local y = 0
-	local pieces: { { width: number, share: number, color: Color3 } } = {
-		{ width = 3, share = 0.34, color = C.ember },
-		{ width = 2.4, share = 0.26, color = C.emberLight },
-		{ width = 2, share = 0.24, color = C.ember },
-	}
-	for _, piece in pieces do
-		local width, share, color = piece.width, piece.share, piece.color
-		local h = height * share
+	local sizes = { 3.4, 2.7, 2.1 }
+	local colors = { C.ember, C.emberLight, C.ember }
+	for i, size in sizes do
+		local h = height * 0.3
 		Pieces.solid(
 			parent,
-			CFrame.new(foot + UP * (y + h / 2)) * CFrame.Angles(0, rng:NextNumber(0, math.pi), 0),
-			Vector3.new(width, h, width),
-			color,
-			Enum.Material.Sandstone
+			CFrame.new(foot + UP * (y + h / 2)),
+			Vector3.new(size, h * 1.15, size),
+			colors[i],
+			Enum.Material.SmoothPlastic,
+			{ Shape = Enum.PartType.Ball }
 		)
-		y += h
+		y += h * 0.9
 	end
-	Pieces.ball(parent, foot + UP * (y + 0.6), 2.6, C.emberLight, Enum.Material.Sandstone)
-	Pieces.solid(
+	Pieces.wedge(
 		parent,
-		CFrame.new(foot + UP * (y + 1.8)) * CFrame.Angles(0.08, rng:NextNumber(0, math.pi), 0.05),
-		Vector3.new(4.6, 1, 4),
+		CFrame.new(foot + UP * (y + 0.9)) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
+		Vector3.new(4.6, 1.6, 4),
 		C.emberDark,
-		Enum.Material.Sandstone
+		Enum.Material.SmoothPlastic
 	)
 end
 
 local function cactus(parent: Instance, rng: Random, foot: Vector3, height: number)
+	if Pieces.overBudget(parent) then
+		return
+	end
 	local green = C.seaglass:Lerp(C.meadowDark, 0.5)
 	Pieces.cylinder(parent, foot, height, 1.4, green, Enum.Material.Grass, { CanCollide = true })
 	Pieces.ball(parent, foot + UP * height, 1.4, green, Enum.Material.Grass)
@@ -201,7 +247,7 @@ local function lanternPost(
 	Pieces.lantern(parent, foot + UP * 6.2 + out * 2.2, color, range)
 end
 
-function Canyon.dress(ctx: Context, zone: ZoneContext, _spec: ThemeSpec, land: Land)
+function Canyon.dress(ctx: Context, zone: ZoneContext, spec: ThemeSpec, land: Land)
 	local slot = zone.slot
 	local frame = slot.frame
 	local folder = zone.folder
@@ -211,10 +257,17 @@ function Canyon.dress(ctx: Context, zone: ZoneContext, _spec: ThemeSpec, land: L
 	local toHub = frame.LookVector
 
 	-- hero: the Crystal Butte behind the field
-	local butte = frame:PointToWorldSpace(Vector3.new(0, 0, hd + 19))
-	if Pieces.clearOf(ctx, butte, 17, zone) then
-		strata(ctx, butte, floor, { 16, 14.5, 13, 11.5, 10 }, 7)
-		local summit = Vector3.new(butte.X, floor + 35, butte.Z)
+	local butteSpot, scale = Pieces.heroSpot(ctx, zone, 17, 19)
+	if butteSpot then
+		local butte = butteSpot
+		local radii = {}
+		for _, r in { 16, 13.5, 11.5, 10, 8.5 } do
+			table.insert(radii, r * scale)
+		end
+		local top = strata(ctx, butte, floor, radii, 7, 8, function(foot: Vector3): boolean
+			return Pieces.footprintDistance(zone, foot) > 8
+		end)
+		local summit = Vector3.new(butte.X, top, butte.Z)
 		local crystal = Pieces.bigShard(folder, summit - UP * 1, 18, 7, C.gold, zone.color, 15, 4)
 		Pieces.bigShard(folder, summit + toHub * 3.5 - UP * 1, 11, 4.5, C.gold, zone.color, 40, -24)
 		Pieces.bigShard(
@@ -233,7 +286,7 @@ function Canyon.dress(ctx: Context, zone: ZoneContext, _spec: ThemeSpec, land: L
 		local rodFoot = summit + frame.RightVector * -5 - UP * 0.5
 		Pieces.cylinder(folder, rodFoot, 14, 0.5, C.plumDeep, Enum.Material.Metal)
 		Pieces.ball(folder, rodFoot + UP * 14.2, 1.2, C.gold, Enum.Material.Metal)
-		Pieces.ring(ctx, summit + UP * 8, 9, Vector3.new(1, 0.2, 0).Unit, Vector3.zAxis, 12, {
+		Pieces.stormRing(ctx, summit + UP * 8, 9, Vector3.new(1, 0.2, 0).Unit, Vector3.zAxis, {
 			color = zone.color,
 			width = 0.4,
 			glow = 1,
@@ -250,9 +303,9 @@ function Canyon.dress(ctx: Context, zone: ZoneContext, _spec: ThemeSpec, land: L
 	for _, u in { -1, 1 } do
 		local p = frame:PointToWorldSpace(Vector3.new(u * (hw + 11), 0, hd * 0.55))
 		if Pieces.clearOf(ctx, p, 10, zone) then
-			strata(ctx, p, floor, { 9, 7.5, 6 }, 5)
+			local top = strata(ctx, p, floor, { 9, 7.5, 6 }, 5, 8)
 			local cap =
-				Pieces.cluster(folder, rng, Vector3.new(p.X, floor + 15, p.Z), 5, zone.color, 3)
+				Pieces.cluster(folder, rng, Vector3.new(p.X, top - 1, p.Z), 5, zone.color, 3)
 			if u == 1 then
 				Pieces.light(cap, zone.color, 20, 1.2)
 			end
@@ -276,7 +329,7 @@ function Canyon.dress(ctx: Context, zone: ZoneContext, _spec: ThemeSpec, land: L
 	end
 	local mine = at(-(land.halfW + 6), -hd * 0.15)
 	if Pieces.clearOf(ctx, mine, 17, zone) then
-		Pieces.headland(ctx, mine, 13, floor, Enum.Material.Sandstone, Enum.Material.Ground)
+		Pieces.headland(ctx, mine, 13, floor, Zone.tones(spec))
 		local trackStart = at(-(land.halfW + 4), -hd * 0.15 - 10)
 		local trackEnd = at(-(land.halfW + 4), -hd * 0.15 + 9)
 		mineCart(folder, rng, trackStart, trackEnd, zone.color)
@@ -285,51 +338,26 @@ function Canyon.dress(ctx: Context, zone: ZoneContext, _spec: ThemeSpec, land: L
 	end
 
 	-- a natural sandstone arch on the right-hand rim
-	local archA = at(hw + 9, -hd * 0.45 - 10)
-	local archB = at(hw + 9, -hd * 0.45 + 10)
-	if Pieces.clearOf(ctx, archA, 6, zone) and Pieces.clearOf(ctx, archB, 6, zone) then
-		for _, leg in { archA, archB } do
-			ctx.terrain:FillCylinder(
-				CFrame.new(leg.X, floor + 4, leg.Z),
-				24,
-				4.5,
-				Enum.Material.Sandstone
-			)
-		end
-		local middle = (archA + archB) / 2
-		ctx.terrain:FillBlock(
-			CFrame.lookAt(
-				Vector3.new(middle.X, floor + 17, middle.Z),
-				Vector3.new(archB.X, floor + 17, archB.Z)
-			),
-			Vector3.new(8, 6, 30),
-			Enum.Material.Sandstone
-		)
-		ctx.terrain:FillBlock(
-			CFrame.lookAt(
-				Vector3.new(middle.X, floor + 21, middle.Z),
-				Vector3.new(archB.X, floor + 21, archB.Z)
-			),
-			Vector3.new(6, 2, 22),
-			Enum.Material.Ground
-		)
+	local archA = at(hw + 6.5, -hd * 0.45 - 10)
+	local archB = at(hw + 6.5, -hd * 0.45 + 10)
+	if
+		Pieces.clearOf(ctx, archA, 7, zone)
+		and Pieces.clearOf(ctx, archB, 7, zone)
+		and Zone.unblocked(land, archA, 3)
+		and Zone.unblocked(land, archB, 3)
+	then
+		Pieces.arch(ctx, archA, archB, floor, 17, G.sandstone, G.ochre)
+		table.insert(land.blocked, { center = archA, radius = 4 })
+		table.insert(land.blocked, { center = archB, radius = 4 })
 	end
 
 	-- ochre patches in the red sand
 	for _, p in Zone.rimPoints(ctx, zone, land, 5, 5, 6) do
-		Kit.blob(
-			ctx,
-			Vector3.new(p.X, 0, p.Z),
-			rng:NextNumber(3.5, 5.5),
-			floor,
-			4,
-			Enum.Material.Ground,
-			4
-		)
+		Pieces.turf(folder, p, rng:NextNumber(3.5, 5.5), G.ochre, rng:NextNumber(0, 90))
 	end
 
 	-- rocks, dry brush and crystal shards on the rim and terraces
-	for _, p in Zone.rimPoints(ctx, zone, land, 12, 1.5, 1.5) do
+	for _, p in Zone.rimPoints(ctx, zone, land, 8, 1.5, 1.5) do
 		local roll = rng:NextNumber()
 		if roll < 0.45 then
 			Pieces.rocks(folder, rng, p, rng:NextNumber(1.6, 3.2), C.emberDark)
@@ -354,7 +382,9 @@ function Canyon.dress(ctx: Context, zone: ZoneContext, _spec: ThemeSpec, land: L
 		end
 	end
 	for i, terrace in land.terraces do
-		if i % 2 == 0 then
+		if not Zone.unblocked(land, terrace.center, 2) then
+			continue
+		elseif i % 2 == 0 then
 			hoodoo(folder, rng, terrace.center, rng:NextNumber(7, 10))
 		else
 			Pieces.cluster(folder, rng, terrace.center, rng:NextNumber(4, 6), zone.color, 3)

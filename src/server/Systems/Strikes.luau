@@ -41,10 +41,15 @@ local function randomGroundPoint(zonePart: BasePart): Vector3?
 	)
 	local top = zonePart.CFrame:PointToWorldSpace(offset)
 
-	-- the ground is terrain; ignore every part (posts, walls, trees, players)
+	-- the ground is Map.Ground parts or terrain; ignore everything else
+	-- (posts, walls, trees, players)
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Include
-	params.FilterDescendantsInstances = { workspace.Terrain }
+	local map = workspace:FindFirstChild("Map")
+	local ground = map and map:FindFirstChild("Ground")
+	params.FilterDescendantsInstances = if ground
+		then { workspace.Terrain, ground }
+		else { workspace.Terrain }
 	local result = workspace:Raycast(top, Vector3.new(0, -zonePart.Size.Y - 10, 0), params)
 	if not result or not Zones.contains(zonePart, result.Position + Vector3.new(0, 1, 0)) then
 		return nil

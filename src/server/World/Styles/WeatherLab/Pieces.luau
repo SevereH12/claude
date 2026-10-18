@@ -7,6 +7,7 @@
 
 local ServerScriptService = game:GetService("ServerScriptService")
 
+local Blocks = require(ServerScriptService.Server.World.Blocks)
 local Kit = require(ServerScriptService.Server.World.Kit)
 local Palette = require(script.Parent.Palette)
 local WLTypes = require(script.Parent.WLTypes)
@@ -187,7 +188,7 @@ function Pieces.lantern(
 		Pieces.box(parent, CFrame.new(position), Vector3.new(0.9, 1.3, 0.9), glowColor),
 		glowColor
 	)
-	if withLight ~= false then
+	if withLight == true then
 		Kit.light(core, color or Palette.lamp, range or 18, 1.4)
 	end
 	return core
@@ -768,10 +769,9 @@ end
 
 -- Cluster of slate-blue rocks.
 function Pieces.rocks(parent: Instance, bottom: Vector3, size: number, rng: Random, color: Color3?)
-	Kit.rock(parent, bottom - Vector3.new(0, size * 0.25, 0), size, rng, {
-		Color = (color or Palette.stone):Lerp(C.ink, rng:NextNumber(0, 0.18)),
-		Material = Enum.Material.Slate,
-	})
+	-- chunky tilted SmoothPlastic blocks, half set into the ground
+	local tone = (color or Palette.stone):Lerp(C.ink, rng:NextNumber(0, 0.18))
+	Blocks.rock(parent, tone, bottom - Vector3.new(0, size * 0.2, 0), size)
 end
 
 -- Props ---------------------------------------------------------------------------------

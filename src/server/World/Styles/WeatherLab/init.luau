@@ -3,12 +3,13 @@
 -- docs/styles/WeatherLab.md). A lighthouse harbour village is the hub;
 -- each zone is a field station on its own island in a different biome,
 -- reached by a winding plank boardwalk. Modules:
---   Palette     colours, terrain tints, sign styles
---   Geo         zone-local coordinates, contour-terrace islands, ground queries
+--   Palette     colours, ground block colours, sign styles
+--   Geo         zone-local coordinates, prop spots, part budget, ground registry
+--   Land        part-built ground: sea, islands, field plateaus, beaches
 --   Pieces      building pieces (lamps, cottages, domes, balloons, plants...)
 --   Atmosphere  calm and storm lighting
 --   Hub         sea, hub island, lighthouse, sell station, spawn, village
---   Zone        generic island ground, boardwalk, border and gate
+--   Zone        generic zone plateau, boardwalk, border and gate
 --   Themes/     Beach, Canyon, Default biome dressing
 --   Teaser      the Coming Soon slot
 
@@ -35,13 +36,15 @@ local Style: WorldTypes.StylePack = {
 	description = "Barometer Bay: a cozy seaside town of storm scientists. A lighthouse harbour hub "
 		.. "and island field stations in different biomes, linked by winding boardwalks.",
 	palette = Palette.colors,
+	-- all ground is SmoothPlastic blocks in Map.Ground (World/Blocks)
+	ground = "Blocks",
 	-- A 135-degree spiral uses 8 directions before it repeats, and each
 	-- full turn moves 3 slots (114 studs) further out, so later zones
 	-- clear earlier ones and no boardwalk ever crosses an island.
 	layout = {
 		hubFloor = 8,
 		hubRadius = 60,
-		firstRadius = 166,
+		firstRadius = 178,
 		radiusStep = 38,
 		firstAngle = 90,
 		angleStep = 135,

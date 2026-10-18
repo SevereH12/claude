@@ -52,11 +52,10 @@ Rules:
 ## The map (world framework)
 
 `Lib/MapBuilder.build(style?)` is the entry point (the updater plugin and the
-Map system call it). It builds the world in `Config.WORLD_STYLE`:
-- `"Legacy"`: the old hand-placed map (`Lib/LegacyMapBuilder.luau`), kept live
-  until a new style ships.
-- anything else: `src/server/World/Builder.luau` with the style pack
-  `src/server/World/Styles/<Style>` (a module, or a folder with `init.luau`).
+Map system call it). It builds the world with `src/server/World/Builder.luau`
+and the style pack `src/server/World/Styles/<Config.WORLD_STYLE>` (a module,
+or a folder with `init.luau`). The live style is `WeatherLab`; `StormPunk` and
+`SkyIsles` are kept as alternates (see `docs/world-styles.md`).
 
 The framework decides where things go and guarantees the gameplay contracts;
 a style pack decides how everything looks:
@@ -72,12 +71,20 @@ a style pack decides how everything looks:
   there is no SpawnLocation or no part tagged `SellArea`.
 - `World/Kit.luau`: shared building pieces (parts, struts, walkways, cables,
   signs, rocks, terrain landmasses, `Kit.sellArea`, `Kit.spawn`).
+- `World/Blocks.luau`: part-built ground (boxes, ramps, polygon discs and
+  rings, strata, rocks, the sea surface). All three styles set
+  `ground = "Blocks"`: their ground is SmoothPlastic parts in
+  `ctx.folders.ground` (`Workspace.Map.Ground`) and they fill no terrain.
+  Strikes raycast against `Map.Ground` and Terrain. Pieces that overlap on
+  the same plane must share one exact colour, or they flicker.
 - `World/Types.luau`: the StylePack interface and slot/zone contexts.
 - `World/Styles/Blockout.luau`: the reference style pack to copy.
 
 Map rules: catch floors are flat and clear (nothing above floor + 0.3 inside
-a zone except its outer 2-stud band); selling is a position check against
-`SellArea` boxes; the spawn is outside every zone; stay under 2,500 parts.
+a zone except its outer 2-stud band); in a Blocks style every catch floor is
+covered by `Map.Ground` parts whose top is exactly at floor height; selling
+is a position check against `SellArea` boxes; the spawn is outside every
+zone; stay under 2,500 parts.
 
 ## Testing without Studio
 
@@ -86,7 +93,8 @@ a zone except its outer 2-stud band); selling is a position check against
 - `lune run tools/harness/buildmap.luau map.json` builds the map with
   MapBuilder and fails if required pieces (zones, sell station, spawn) are missing.
 - `lune run tools/harness/test_gameplay.luau` checks gameplay contracts
-  (zone volumes, sell station detection, spawn placement).
+  (zone volumes, sell station detection, spawn placement, and for Blocks
+  styles: no terrain fills and catch floors covered at floor height).
 - `python3 tools/render_map.py map.json out` draws top-down and side views
   (needs Pillow) so map layout can be reviewed as images.
 - `tools/walkcheck.py map.json out` checks you can walk from spawn to every

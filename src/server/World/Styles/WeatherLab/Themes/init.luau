@@ -1,5 +1,5 @@
 --!strict
--- WeatherLab zone themes. A theme = island terrain, field pattern, border
+-- WeatherLab zone themes. A theme = island look and landforms, field pattern, border
 -- look and biome dressing. Add a theme by adding a module here and an
 -- entry below; any theme name without one falls back to Default.
 

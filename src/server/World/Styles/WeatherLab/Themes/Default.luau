@@ -1,13 +1,15 @@
 --!strict
--- Default theme ("Meadow Station"): a green island with mowed stripes, grass
--- banks over rocky cliffs, a greenhouse, an instrument shelter, hay bales,
--- round trees and flowers. Hero: a lattice radar mast with a big white
--- radome and a red beacon. Used for any zone theme WeatherLab doesn't have.
+-- Default theme ("Meadow Station"): a green island with mowed stripes, a
+-- rough meadow plateau over earth-and-rock cliffs, a grassy hill, a rocky
+-- point, a greenhouse, an instrument shelter, hay bales, round trees and
+-- flowers. Hero: a lattice radar mast with a big white radome and a red
+-- beacon. Used for any zone theme WeatherLab doesn't have.
 
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local Kit = require(ServerScriptService.Server.World.Kit)
 local Geo = require(script.Parent.Parent.Geo)
+local Land = require(script.Parent.Parent.Land)
 local Palette = require(script.Parent.Parent.Palette)
 local Pieces = require(script.Parent.Parent.Pieces)
 local WLTypes = require(script.Parent.Parent.WLTypes)
@@ -17,59 +19,61 @@ type ZoneContext = WLTypes.ZoneContext
 type Theme = WLTypes.Theme
 
 local C = Palette.colors
+local G = Palette.ground
 
 local MARGINS = { front = 12, side = 16, back = 24 }
+local ISLAND: WLTypes.IslandLook = {
+	cap = G.meadow,
+	strata = { G.earth, G.rock },
+	layer = 4,
+	inset = 1.5,
+	beach = G.beach,
+	beachTop = 1.5,
+	beachSide = 10,
+	beachBack = 12,
+	beachFront = -4,
+	chamfer = 12,
+	ramp = -1,
+}
 
 local Default = {}
 
 local function ground(ctx: Context, zone: ZoneContext)
 	local rng = ctx.rng
+	local key = Geo.key(zone)
 	local floor = zone.slot.floor
 	local hw, hd = zone.slot.width / 2, zone.slot.depth / 2
 	local m = MARGINS
-	Geo.terrace(ctx, zone, m, 22, -4, -18, Enum.Material.Sand, 10, 1, 0.9)
-	Geo.terrace(ctx, zone, m, 14, math.min(1.5, floor - 2), -16, Enum.Material.Sand, 8, 1, 1)
-	Geo.cliffs(ctx, zone, m, 1.5, floor - 2, { Enum.Material.Rock, Enum.Material.Slate }, 12, 5, 8)
-	Geo.terrace(ctx, zone, m, 4, floor - 1.5, -16, Enum.Material.Grass, 7, 1)
-	-- rough meadow round the mowed field, so the bright field pops
-	Geo.terrace(ctx, zone, m, 0, floor, -16, Enum.Material.LeafyGrass, 8, 0)
-	-- mossy stones breaking through along the bank edge
-	Geo.rim(ctx, zone, floor, Enum.Material.Slate, 2.6, 0.4)
-	-- a grassy hill on one back corner and a rocky point on the other side
-	Geo.lobe(
-		ctx,
-		zone,
-		-hw - m.side - 2,
-		hd + m.back - 4,
-		10,
-		17,
-		floor + 3,
-		Enum.Material.Grass,
-		1
-	)
-	Geo.lobe(
-		ctx,
-		zone,
-		hw + m.side + 6,
-		-hd * 0.3,
-		8,
-		15,
-		math.max(floor - 4, 2),
-		Enum.Material.Slate,
-		2
-	)
-	-- grassy knolls behind the field
-	for _, k in { { -hw * 0.6, hd + 15 }, { hw * 0.75, hd + 13 }, { -hw - 10, hd * 0.6 } } do
-		ctx.terrain:FillBall(
-			Geo.at(zone, k[1], k[2], -5),
-			rng:NextNumber(8, 10),
-			Enum.Material.Grass
+	-- a grassy hill on one back corner, over an earth bank
+	local hx, hz = -(hw + m.side + 2), hd + m.back - 4
+	if Geo.clearOf(ctx, zone, Geo.at(zone, hx, hz), 14, 10) then
+		Land.island(ctx, key, Geo.cf(zone, hx, hz, 3, 10), {
+			cap = G.grass,
+			strata = { G.earth, G.rock },
+			apothem = 12,
+			sides = 8,
+			layer = 40,
+			inset = 1,
+		})
+	end
+	-- a rocky point off the other side, its top half way down a cliff band
+	local px, pz = hw + m.side + 6, -hd * 0.3
+	if floor >= 6 and Geo.clearOf(ctx, zone, Geo.at(zone, px, pz), 14, 10) then
+		local top = Land.ledge(zone, ISLAND, 0.5)
+		Land.mesa(
+			ctx,
+			key,
+			{ G.rock, G.slate },
+			Geo.cf(zone, px, pz, top - floor, 25),
+			Vector2.new(16, 13),
+			5,
+			1.6,
+			math.min(ISLAND.beachTop, floor - Land.CAP)
 		)
 	end
 	-- mossy boulders on the side rims
 	for _, side in { -1, 1 } do
-		local p = Geo.at(zone, side * (hw + 12), -hd * 0.55, -2)
-		ctx.terrain:FillBall(p, 4.5, Enum.Material.Slate)
+		Pieces.rocks(zone.folder, Geo.at(zone, side * (hw + 12), -hd * 0.55), 4.5, rng)
 	end
 end
 
@@ -258,25 +262,34 @@ local function dress(ctx: Context, zone: ZoneContext)
 
 	local gx, gz = hw + 9, hd * 0.3
 	Geo.claim(spots, gx, gz, 7)
-	greenhouse(folder, Geo.faceField(zone, gx, gz), rng)
+	if Geo.room(ctx, zone, 30) then
+		greenhouse(folder, Geo.faceField(zone, gx, gz), rng)
+	end
 	local sx, sz = -hw - 7, -hd * 0.2
 	Geo.claim(spots, sx, sz, 3)
-	shelter(folder, Geo.faceField(zone, sx, sz))
+	if Geo.room(ctx, zone, 15) then
+		shelter(folder, Geo.faceField(zone, sx, sz))
+	end
 	local lx, lz = -hw - 9, hd * 0.45
 	Geo.claim(spots, lx, lz, 6)
-	Pieces.cottage(folder, Geo.faceField(zone, lx, lz), {
-		width = 8,
-		depth = 6,
-		height = 4.8,
-		roof = "clay",
-		trim = C.seafoam,
-		name = "FIELD LAB",
-		chimney = false,
-		instrument = "vane",
-	}, rng)
+	if Geo.room(ctx, zone, 30) then
+		Pieces.cottage(folder, Geo.faceField(zone, lx, lz), {
+			width = 8,
+			depth = 6,
+			height = 4.8,
+			roof = "clay",
+			trim = C.seafoam,
+			name = "FIELD LAB",
+			chimney = false,
+			instrument = "vane",
+		}, rng)
+	end
 
 	-- hay bales
 	for i = 1, Geo.count(ctx, 4) do
+		if not Geo.room(ctx, zone, 6) then
+			break
+		end
 		local x, z = Geo.findSpot(ctx, zone, spots, 4, 12, 2, true)
 		if x and z then
 			local cf = Geo.cf(zone, x, z, 1.3, rng:NextNumber(0, 180))
@@ -291,24 +304,36 @@ local function dress(ctx: Context, zone: ZoneContext)
 		end
 	end
 	for _ = 1, Geo.count(ctx, 7) do
+		if not Geo.room(ctx, zone, 6) then
+			break
+		end
 		local x, z = Geo.findSpot(ctx, zone, spots, 6, 16, 3, true)
 		if x and z then
 			Pieces.tree(folder, Geo.at(zone, x, z, -0.3), rng:NextNumber(0.9, 1.3), rng)
 		end
 	end
 	for _ = 1, Geo.count(ctx, 6) do
+		if not Geo.room(ctx, zone, 6) then
+			break
+		end
 		local x, z = Geo.findSpot(ctx, zone, spots, 3, 12, 1.6, false)
 		if x and z then
 			Pieces.bush(folder, Geo.at(zone, x, z), rng:NextNumber(1.8, 2.6), rng)
 		end
 	end
 	for _ = 1, Geo.count(ctx, 10) do
+		if not Geo.room(ctx, zone, 6) then
+			break
+		end
 		local x, z = Geo.findSpot(ctx, zone, spots, 3, 10, 1.2, false)
 		if x and z then
 			Pieces.flowers(folder, Geo.at(zone, x, z), rng)
 		end
 	end
 	for _ = 1, Geo.count(ctx, 5) do
+		if not Geo.room(ctx, zone, 6) then
+			break
+		end
 		local x, z = Geo.findSpot(ctx, zone, spots, 5, 16, 2, false)
 		if x and z then
 			Pieces.rocks(folder, Geo.at(zone, x, z), rng:NextNumber(2, 3.2), rng)
@@ -316,15 +341,22 @@ local function dress(ctx: Context, zone: ZoneContext)
 	end
 end
 
+-- Field looks rotated by spiral slot, so a 3rd, 4th or 5th fallback zone
+-- each gets its own bold two-tone pattern and trim.
+local FIELDS: { WLTypes.FieldLook } = {
+	{ base = G.grass, accent = G.limestone, trim = G.brick, pattern = "along", cell = 12 },
+	{ base = G.grass, accent = G.salt, trim = G.planks, pattern = "checker", cell = 20 },
+	{ base = G.grass, accent = G.earth, trim = G.limestone, pattern = "across", cell = 12 },
+	{ base = G.sand, accent = G.grass, trim = G.slate, pattern = "checker", cell = 20 },
+}
+
 local theme: Theme = {
 	margins = MARGINS,
-	field = {
-		base = Enum.Material.Grass,
-		accent = Enum.Material.LeafyGrass,
-		trim = Enum.Material.Salt,
-		pattern = "along",
-		cell = 12,
-	},
+	fieldFor = function(zone: ZoneContext): WLTypes.FieldLook
+		return FIELDS[(zone.slot.index - 1) % #FIELDS + 1]
+	end,
+	island = ISLAND,
+	field = FIELDS[1],
 	border = {
 		postColor = C.sailcloth,
 		postMaterial = Enum.Material.Wood,

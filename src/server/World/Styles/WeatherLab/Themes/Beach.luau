@@ -1,6 +1,7 @@
 --!strict
--- Beach theme ("Tidewatch Beach"): a sandy island with beach-towel striped
--- sand, dunes with beach grass, striped huts, umbrellas, palms, a tide
+-- Beach theme ("Tidewatch Beach"): a low sandy island (the field plateau
+-- one step above a wide beach) with beach-towel striped sand, a grassy
+-- rock bluff, a stepped sand spit, striped huts, umbrellas, palms, a tide
 -- watch tower and buoys. Hero: a giant red-and-white weather balloon
 -- tethered above a launch deck behind the field.
 
@@ -8,6 +9,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 local Kit = require(ServerScriptService.Server.World.Kit)
 local Geo = require(script.Parent.Parent.Geo)
+local Land = require(script.Parent.Parent.Land)
 local Palette = require(script.Parent.Parent.Palette)
 local Pieces = require(script.Parent.Parent.Pieces)
 local WLTypes = require(script.Parent.Parent.WLTypes)
@@ -17,74 +19,90 @@ type ZoneContext = WLTypes.ZoneContext
 type Theme = WLTypes.Theme
 
 local C = Palette.colors
+local G = Palette.ground
 
-local MARGINS = { front = 12, side = 17, back = 28 }
+local MARGINS = { front = 9, side = 17, back = 28 }
+local ISLAND: WLTypes.IslandLook = {
+	cap = G.sand,
+	strata = { G.sandstone, G.rock },
+	layer = 4,
+	inset = 1.4,
+	beach = G.beach,
+	beachTop = 3, -- one step below a floor-4 field
+	beachSide = 14,
+	beachBack = 16,
+	beachFront = -12,
+	chamfer = 18,
+}
 
 local Beach = {}
 
 local function ground(ctx: Context, zone: ZoneContext)
 	local rng = ctx.rng
+	local key = Geo.key(zone)
 	local floor = zone.slot.floor
 	local hw, hd = zone.slot.width / 2, zone.slot.depth / 2
 	local m = MARGINS
-	Geo.terrace(ctx, zone, m, 22, -4, -18, Enum.Material.Sand, 10, 1, 0.9)
-	Geo.terrace(ctx, zone, m, 11, math.min(1, floor - 2), -16, Enum.Material.Sand, 8, 1, 1)
-	Geo.cliffs(ctx, zone, m, 1, floor, { Enum.Material.Sandstone, Enum.Material.Rock }, 10, 4, 7)
-	Geo.terrace(ctx, zone, m, 0, floor, -16, Enum.Material.Sand, 7, 0)
-	-- a grassy rock headland on a back corner
-	local hx, hz = hw + m.side + 4, hd + m.back - 6
-	Geo.lobe(ctx, zone, hx, hz, 10, 17, floor + 2, Enum.Material.Rock, 2)
-	Geo.lobe(ctx, zone, hx + 2, hz + 1, 6, 11, floor + 6, Enum.Material.Slate, 2)
-	Geo.lobe(ctx, zone, hx + 2, hz + 1, 4, 8, floor + 6.5, Enum.Material.LeafyGrass, 1)
-
-	-- dunes along the back and back corners, capped with beach grass
-	local dunes = {
-		{ -hw * 0.8, hd + 17 },
-		{ -hw * 0.35, hd + 22 },
-		{ hw * 0.45, hd + 21 },
-		{ hw * 0.9, hd + 16 },
-		{ -hw - 15, hd * 0.55 },
-		{ hw + 15, hd * 0.6 },
-		{ -hw - 14, -hd * 0.2 },
-	}
-	for _, d in dunes do
-		local r = rng:NextNumber(9, 11)
-		local p = Geo.at(zone, d[1], d[2], -4)
-		ctx.terrain:FillBall(p, r, Enum.Material.Sand)
-		ctx.terrain:FillBall(
-			p + Vector3.new(rng:NextNumber(-2, 2), r - 2.5, rng:NextNumber(-2, 2)),
-			4.5,
-			Enum.Material.LeafyGrass
-		)
+	local beachTop = math.min(ISLAND.beachTop, floor - Land.CAP)
+	-- a grassy rock bluff rising over the back-right corner
+	local hx, hz = hw + m.side + 2, hd + m.back - 2
+	if Geo.clearOf(ctx, zone, Geo.at(zone, hx, hz), 18, 10) then
+		Land.island(ctx, key, Geo.cf(zone, hx, hz, 4, 20), {
+			cap = G.meadow,
+			strata = { G.rock, G.slate },
+			apothem = 15,
+			sides = 9,
+			layer = 6,
+			inset = 1.2,
+		})
 	end
-	-- a little lagoon cut into the back corner of the beach
-	local lagoon = Geo.at(zone, -hw - m.side + 2, hd + m.back - 2, 0)
-	Geo.pond(ctx, lagoon, 6, 11, floor - 0.6, 5)
-	-- dune grass fringing the upper beach
-	Geo.rim(ctx, zone, floor, Enum.Material.LeafyGrass, 2.6, 0.35)
-	-- beach-grass meadows on the side and back rims
-	for _ = 1, 6 do
-		local x, z = Geo.rimPoint(ctx, zone, 9, 17, true)
-		local p = Geo.at(zone, x, z, 0)
-		ctx.terrain:FillCylinder(
-			CFrame.new(p.X, floor - 1, p.Z),
-			2.4,
-			rng:NextNumber(4, 6.5),
-			Enum.Material.LeafyGrass
-		)
+	-- the beach bulges out on the long side and at the back
+	local bx = hw + m.side + ISLAND.beachSide
+	local bz = hd + m.back + ISLAND.beachBack
+	for _, lobe in { { -(bx - 3), hd * 0.05, 17, 10 }, { -hw * 0.35, bz - 3, 18, 10 } } do
+		if Geo.clearOf(ctx, zone, Geo.at(zone, lobe[1], lobe[2]), lobe[3] + 6, 10) then
+			Land.lobe(
+				ctx,
+				key,
+				ISLAND.beach,
+				ISLAND.beach,
+				Geo.cf(zone, lobe[1], lobe[2], beachTop - floor, lobe[4]),
+				lobe[3],
+				9
+			)
+		end
 	end
-	-- rock outcrops at the front corners and a few sea rocks
+	-- a sand spit stepping down off the back-left corner
+	for k = 0, 1 do
+		local sx, sz = -(hw + m.side + 13 + k * 12), hd * 0.6 + k * 11
+		local r = 11 - k * 3
+		if Geo.clearOf(ctx, zone, Geo.at(zone, sx, sz), r + 2, 10) then
+			Land.disc(
+				ctx,
+				key,
+				G.beach,
+				Geo.cf(zone, sx, sz, beachTop - floor - 0.6 * (k + 1), 15 + k * 20),
+				r,
+				8
+			)
+		end
+	end
+	-- rock outcrops at the front corners of the plateau and a few sea rocks
+	-- on the sea bed out past the beach
 	for _, side in { -1, 1 } do
-		local p = Geo.at(zone, side * (hw + 13), -hd - 6, -3)
-		ctx.terrain:FillBall(p, 6.5, Enum.Material.Slate)
-		ctx.terrain:FillBall(p + Vector3.new(3, 1.5, -2), 4, Enum.Material.Rock)
-		local sea = Geo.at(zone, side * (hw + m.side + 20), hd * rng:NextNumber(-0.4, 0.4), 0)
-		ctx.terrain:FillBall(Vector3.new(sea.X, -1, sea.Z), 5, Enum.Material.Slate)
-	end
-	-- tide pools on the side rims
-	for _, side in { -1, 1 } do
-		local p = Geo.at(zone, side * (hw + 10), hd * rng:NextNumber(-0.5, 0.1), 0)
-		ctx.terrain:FillCylinder(CFrame.new(p.X, floor - 1.4, p.Z), 2, 3.5, Enum.Material.Water)
+		Pieces.rocks(zone.folder, Geo.at(zone, side * (hw + 13), -hd - 5), 5.5, rng)
+		local x, z =
+			Geo.seaward(ctx, zone, side * (hw + m.side + 22), hd * rng:NextNumber(-0.4, 0.4), 3)
+		local sea = Geo.at(zone, x, z)
+		Land.stack(
+			ctx,
+			zone.folder,
+			{ G.rock, G.slate },
+			Vector3.new(sea.X, Land.SEABED, sea.Z),
+			rng:NextNumber(5, 7),
+			Land.SEA + rng:NextNumber(1.5, 3),
+			3.5
+		)
 	end
 end
 
@@ -270,7 +288,7 @@ local function pier(ctx: Context, zone: ZoneContext, spots: Geo.Spots)
 	local z = z0 + 3
 	while z <= z1 do
 		local overWater = (Geo.heightAt(ctx, Geo.key(zone), Geo.at(zone, x, z, 0)) or -99)
-			< floor - 1
+			< floor - 0.5
 		for _, side in { -1, 1 } do
 			local px = x + side * (width / 2 - 0.3)
 			if overWater then
@@ -471,42 +489,58 @@ local function dress(ctx: Context, zone: ZoneContext)
 		return Geo.groundAt(ctx, zone, x, z) - floor
 	end
 	local spots: Geo.Spots = {}
-	-- keep the gate landing and the lagoon free
+	-- keep the gate landing free
 	Geo.claim(spots, 0, -hd - 8, 9)
-	Geo.claim(spots, -hw - MARGINS.side + 2, hd + MARGINS.back - 2, 11)
 
 	balloonStation(ctx, zone, spots)
-	pier(ctx, zone, spots)
-
-	-- striped huts facing the field
-	local hutColors = { C.seafoam, C.slicker, C.beacon }
-	local hutSpots = { { hw + 10, -hd * 0.3 }, { hw + 10, hd * 0.25 }, { -hw - 10, hd * 0.05 } }
-	for i, spot in hutSpots do
-		Geo.claim(spots, spot[1], spot[2], 6)
-		hut(folder, Geo.faceField(zone, spot[1], spot[2]), hutColors[i])
-		-- surfboard leaning beside each hut
-		local board = Geo.faceField(zone, spot[1], spot[2])
-			* CFrame.new(4.4, 3, -1.5)
-			* CFrame.Angles(0.25, 0, 0.12)
-		Pieces.box(
-			folder,
-			board,
-			Vector3.new(1.7, 6.4, 0.35),
-			hutColors[(i % 3) + 1],
-			Enum.Material.SmoothPlastic,
-			false
-		)
+	if Geo.room(ctx, zone, 60) then
+		pier(ctx, zone, spots)
 	end
 
-	-- tide watch tower at a front corner, looking out to sea
-	local tx, tz = -hw - 9, -hd + 4
-	Geo.claim(spots, tx, tz, 6)
-	tideTower(ctx, folder, Geo.facing(Geo.at(zone, tx, tz), Geo.at(zone, tx - 20, tz - 12)))
+	-- Props are grouped into vignettes with open sand between them:
+	-- a cabana row on one side, the tide tower with its umbrellas and
+	-- deck chairs on the other, two palm groves at the back corners and
+	-- the pier (above) behind the field.
 
-	-- umbrellas with towels, deck chairs
+	-- cabana row: three striped huts shoulder to shoulder
+	local hutColors = { C.seafoam, C.slicker, C.beacon }
+	local cabanaX, cabanaZ = hw + 10, -hd * 0.12
+	for i, dz in { -8.5, 0, 8.5 } do
+		if i > 1 and not Geo.room(ctx, zone, 30) then
+			break
+		end
+		local hx, hz = cabanaX + (i % 2) * 1.5, cabanaZ + dz
+		Geo.claim(spots, hx, hz, 5)
+		local cf = Geo.facing(Geo.at(zone, hx, hz), Geo.at(zone, 0, hz))
+		hut(folder, cf, hutColors[i])
+		if i == 2 then
+			-- surfboards leaning on the middle hut
+			for k, off in { -1.1, 1.1 } do
+				Pieces.box(
+					folder,
+					cf * CFrame.new(off + 4.2, 3, -1.5) * CFrame.Angles(0.25, 0, 0.12),
+					Vector3.new(1.7, 6.4, 0.35),
+					hutColors[k + 1],
+					Enum.Material.SmoothPlastic,
+					false
+				)
+			end
+		end
+	end
+
+	-- tide watch tower at a front corner, looking out to sea, with the
+	-- umbrella cluster at its feet
+	local tx, tz = -hw - 9, -hd * 0.45
+	Geo.claim(spots, tx, tz, 6)
+	if Geo.room(ctx, zone, 30) then
+		tideTower(ctx, folder, Geo.facing(Geo.at(zone, tx, tz), Geo.at(zone, tx - 20, tz - 12)))
+	end
 	local umbrellaColors = { C.beacon, C.slicker, C.seafoam, C.sailcloth }
-	for i = 1, Geo.count(ctx, 6) do
-		local x, z = Geo.findSpot(ctx, zone, spots, 4, 12, 3.5, true)
+	for i = 1, Geo.count(ctx, 5) do
+		if not Geo.room(ctx, zone, 8) then
+			break
+		end
+		local x, z = Geo.nearSpot(ctx, zone, spots, -hw - 10, -hd * 0.1, 12, 3.4, 3)
 		if x and z then
 			local base = Geo.at(zone, x, z)
 			Pieces.umbrella(folder, base, umbrellaColors[i % #umbrellaColors + 1])
@@ -516,14 +550,6 @@ local function dress(ctx: Context, zone: ZoneContext)
 				towel,
 				Vector3.new(2.4, 0.12, 4.6),
 				umbrellaColors[(i + 1) % #umbrellaColors + 1],
-				Enum.Material.Fabric,
-				false
-			)
-			Pieces.box(
-				folder,
-				towel * CFrame.new(0, 0.02, 1.4),
-				Vector3.new(2.42, 0.12, 0.6),
-				C.sailcloth,
 				Enum.Material.Fabric,
 				false
 			)
@@ -549,16 +575,21 @@ local function dress(ctx: Context, zone: ZoneContext)
 		end
 	end
 
-	-- palms along the sides and back corners
-	for _ = 1, Geo.count(ctx, 7) do
-		local x, z = Geo.findSpot(ctx, zone, spots, 6, 18, 3, true)
+	-- two palm groves at the back corners
+	local groves = { { hw + 11, hd * 0.6 }, { -hw - 11, hd * 0.55 } }
+	for i = 1, Geo.count(ctx, 7) do
+		if not Geo.room(ctx, zone, 6) then
+			break
+		end
+		local g = groves[i % #groves + 1]
+		local x, z = Geo.nearSpot(ctx, zone, spots, g[1], g[2], 11, 3, 6)
 		if x and z then
 			Pieces.palm(folder, Geo.at(zone, x, z, -0.5), rng:NextNumber(11, 15), rng)
 		end
 	end
 
-	-- rowboat pulled up on the front beach
-	local bx, bz = hw + 12, -hd - 19
+	-- rowboat pulled up on the beach beside the plateau
+	local bx, bz = hw + MARGINS.side + 7, -hd * 0.7
 	local boatY = groundAt(bx, bz) + 0.4
 	Pieces.boat(
 		folder,
@@ -573,6 +604,9 @@ local function dress(ctx: Context, zone: ZoneContext)
 		hw + MARGINS.side + 24, hd + MARGINS.front + 22, hd + MARGINS.back + 24
 	local buoyCount = Geo.count(ctx, 10)
 	for i = 1, buoyCount do
+		if not Geo.room(ctx, zone, 6) then
+			break
+		end
 		local t = (i - 0.5) / buoyCount
 		local x, z
 		if t < 0.3 then
@@ -597,6 +631,9 @@ local function dress(ctx: Context, zone: ZoneContext)
 
 	-- driftwood, shells, beach grass and rocks
 	for _ = 1, Geo.count(ctx, 4) do
+		if not Geo.room(ctx, zone, 6) then
+			break
+		end
 		local x, z = Geo.findSpot(ctx, zone, spots, 14, 26, 2, false, true)
 		if x and z then
 			local a = Geo.at(zone, x, z, groundAt(x, z) + 0.4)
@@ -612,6 +649,9 @@ local function dress(ctx: Context, zone: ZoneContext)
 		end
 	end
 	for _ = 1, Geo.count(ctx, 12) do
+		if not Geo.room(ctx, zone, 6) then
+			break
+		end
 		local x, z = Geo.rimPoint(ctx, zone, 3, 14, false)
 		local p = Geo.at(zone, x, z, 0.15)
 		Pieces.ball(
@@ -624,12 +664,18 @@ local function dress(ctx: Context, zone: ZoneContext)
 		)
 	end
 	for _ = 1, Geo.count(ctx, 16) do
+		if not Geo.room(ctx, zone, 6) then
+			break
+		end
 		local x, z = Geo.findSpot(ctx, zone, spots, 3, 16, 1, true)
 		if x and z then
 			Pieces.tuft(folder, Geo.at(zone, x, z, 0), rng)
 		end
 	end
 	for _ = 1, Geo.count(ctx, 6) do
+		if not Geo.room(ctx, zone, 6) then
+			break
+		end
 		local x, z = Geo.findSpot(ctx, zone, spots, 5, 20, 2, false)
 		if x and z then
 			Pieces.rocks(folder, Geo.at(zone, x, z), rng:NextNumber(2, 3.5), rng)
@@ -639,12 +685,15 @@ end
 
 local theme: Theme = {
 	margins = MARGINS,
+	island = ISLAND,
+	-- beach-towel stripes: saturated sea-glass teal with cream piping
 	field = {
-		base = Enum.Material.Sand,
-		accent = Enum.Material.Salt,
-		trim = Enum.Material.WoodPlanks,
+		base = G.sand,
+		accent = G.seaGlass,
+		trim = G.planks,
 		pattern = "across",
 		cell = 12,
+		piping = C.sailcloth,
 	},
 	border = {
 		postColor = C.driftwood,

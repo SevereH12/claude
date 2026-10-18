@@ -9,6 +9,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local World = ServerScriptService.Server.World
 local Kit = require(World.Kit)
 local WorldTypes = require(World.Types)
+local Ground = require(script.Parent.Ground)
 local Palette = require(script.Parent.Palette)
 local Pieces = require(script.Parent.Pieces)
 
@@ -16,9 +17,12 @@ type Context = WorldTypes.Context
 type ZoneContext = WorldTypes.ZoneContext
 
 local C = Palette.C
+local G = Palette.GROUND
 local UP = Vector3.yAxis
 
 local GLOW = Color3.fromRGB(176, 160, 226)
+local SPIRE = Color3.fromRGB(150, 96, 230)
+local SPIRE_CORE = Color3.fromRGB(196, 140, 255)
 local BUILT = 0.42 -- share of the bridge that is built from the hub side
 
 local Teaser = {}
@@ -34,37 +38,39 @@ function Teaser.build(ctx: Context, zone: ZoneContext)
 		return Pieces.clearOf(ctx, p, r, zone, 4)
 	end
 
-	-- rough island: no field yet, just raw rock and boulders
-	Pieces.underside(ctx, frame, hw * 0.8, hd * 0.8, floor - 6, 44, {
-		Enum.Material.Rock,
-		Enum.Material.Slate,
-		Enum.Material.Basalt,
-	}, accept)
-	Pieces.landmass(ctx, frame, hw * 0.72, -hd, hd * 0.72, floor, 10, Enum.Material.Basalt, {
-		corner = 16,
-		lobe = 9,
-		reach = 0.45,
-		accept = accept,
+	-- rough island: no field yet, just raw storm rock, a lower terrace
+	-- skirting one side, a tapering underside and hanging points
+	local tones = {
+		cap = G.stormRock,
+		soil = G.basalt,
+		rocks = { G.slate, G.basalt },
+		tip = C.plumDeep,
+	}
+	local apothem = hd * 0.86
+	Ground.isle(ctx, tones, frame * CFrame.new(0, 0, -hd + apothem), apothem, 44, {
+		sides = 16,
+		soil = 6,
+		tiers = 3,
+		points = 2,
 	})
-	Kit.blob(
-		ctx,
-		Vector3.new(frame.Position.X, 0, frame.Position.Z),
-		math.min(hw, hd) * 0.5,
-		floor,
-		4,
-		Enum.Material.Rock,
-		6
-	)
+	local terrace = frame:PointToWorldSpace(Vector3.new(hw * 0.38, 0, hd * 0.38))
+	if accept(terrace, hw * 0.55) then
+		local terraceTop = CFrame.new(terrace.X, floor - 8, terrace.Z) * frame.Rotation
+		Ground.poly(ctx, G.slate, terraceTop, hw * 0.55 + Ground.OVERHANG, Ground.CAP, 12, "Cap")
+		Ground.poly(
+			ctx,
+			G.basalt,
+			terraceTop * CFrame.new(0, -Ground.CAP, 0),
+			hw * 0.55,
+			6,
+			12,
+			"Soil"
+		)
+	end
 	for k = 1, 5 do
 		local angle = k / 5 * math.pi * 2 + rng:NextNumber(-0.3, 0.3)
 		local l = Vector3.new(math.cos(angle), 0, math.sin(angle)) * rng:NextNumber(18, 26)
 		if l.Z > -20 then
-			local p = frame:PointToWorldSpace(l)
-			ctx.terrain:FillBall(
-				Vector3.new(p.X, floor + 1, p.Z),
-				rng:NextNumber(4, 7),
-				Enum.Material.Rock
-			)
 			local crystal = Pieces.cluster(
 				folder,
 				rng,
@@ -81,8 +87,9 @@ function Teaser.build(ctx: Context, zone: ZoneContext)
 
 	-- dormant crystal in a scaffold at the centre
 	local center = Vector3.new(frame.Position.X, floor, frame.Position.Z)
-	local crystal = Pieces.bigShard(folder, center, 16, 6, C.twilightDeep, C.plumDeep, 20, 0)
-	crystal.Transparency = 0.15
+	local crystal = Pieces.bigShard(folder, center, 28, 9, SPIRE, SPIRE_CORE, 20, 0)
+	crystal.Transparency = 0.2
+	Pieces.light(crystal, SPIRE_CORE, 30, 1.4)
 	local corners: { Vector3 } = {}
 	for _, corner in
 		{
@@ -92,17 +99,17 @@ function Teaser.build(ctx: Context, zone: ZoneContext)
 			Vector3.new(-1, 0, 1),
 		}
 	do
-		local foot = center + frame:VectorToWorldSpace(corner * 6)
+		local foot = center + frame:VectorToWorldSpace(corner * 7)
 		Pieces.solid(
 			folder,
-			CFrame.new(foot + UP * 7),
-			Vector3.new(0.8, 14, 0.8),
+			CFrame.new(foot + UP * 11),
+			Vector3.new(0.8, 22, 0.8),
 			C.woodLight,
 			Enum.Material.Wood
 		)
 		table.insert(corners, foot)
 	end
-	for _, h in { 6, 12 } do
+	for _, h in { 6, 13, 20 } do
 		for k = 1, 4 do
 			Pieces.plank(
 				folder,
@@ -165,9 +172,10 @@ function Teaser.build(ctx: Context, zone: ZoneContext)
 		}),
 	})
 
-	-- half-built bridge from the hub, ending at a rune barrier
-	local from = slot.hubExit.Position
-	local to = slot.gate.Position
+	-- half-built bridge from the hub, ending at a rune barrier (decks lie
+	-- a touch above the ground at both ends, like every bridge)
+	local from = slot.hubExit.Position + UP * 0.2
+	local to = slot.gate.Position + UP * 0.2
 	Pieces.bridge(ctx, ctx.folders.connectors, from, to, {
 		glow = GLOW,
 		width = 10,

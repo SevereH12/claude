@@ -18,7 +18,12 @@ local Geo = {}
 
 -- Half-width of the clear corridor kept around every connector.
 Geo.CORRIDOR = 9
-Geo.SEA_FLOOR = -20
+-- Sea levels: the see-through water surface, the solid seabed a few studs
+-- under it (walkable, so anyone who falls in wades back out up a shore
+-- slope) and the beach tops just above the water.
+Geo.WATER = 0
+Geo.SEA_FLOOR = -3
+Geo.BEACH = 1
 -- The spiral visits 8 bearings; slot 9 would sit on slot 1's bearing and
 -- its straight connector would cross zone 1. StormPunk supports 7 zones
 -- plus the teaser.
@@ -33,6 +38,12 @@ end
 
 function Geo.polar(angleDeg: number, radius: number, y: number): Vector3
 	return Geo.dir(angleDeg) * radius + Vector3.new(0, y, 0)
+end
+
+-- The yaw (radians, for CFrame.Angles) that points a shape's local -Z, and
+-- so one face of every Land polygon, along a bearing.
+function Geo.faceYaw(bearing: number): number
+	return -math.rad(bearing)
 end
 
 function Geo.bearingOf(position: Vector3): number
@@ -102,7 +113,9 @@ end
 function Geo.inExitLane(ctx: Context, position: Vector3, clearance: number): boolean
 	local R = ctx.layout.hubRadius
 	for _, b in Geo.exitBearings(ctx) do
-		if Geo.segmentDistance(position, Geo.polar(b, 26, 0), Geo.polar(b, R + 6, 0)) < clearance then
+		if
+			Geo.segmentDistance(position, Geo.polar(b, 26, 0), Geo.polar(b, R + 6, 0)) < clearance
+		then
 			return true
 		end
 	end
@@ -138,6 +151,36 @@ end
 function Geo.zoneKey(zone: ZoneContext): string
 	local def = zone.def
 	return if def then def.id else `slot{zone.slot.index}`
+end
+
+-- Part budget ---------------------------------------------------------------------
+-- The ground is part-built, so its optional pieces (beach lobes, column
+-- counts, polygon sides, scenery) are allocated here. A zone's ground detail
+-- depends only on its own spiral index (zones 1-2 full, later zones leaner,
+-- like a distance LOD), so adding a zone never changes an earlier zone's
+-- ground or the props standing on it. The hub's scattered scenery thins
+-- with the zone count instead. Sized so 7 zones + the teaser stay under the
+-- 2,500-part cap (about 1,500 parts with 2 zones).
+
+-- 1 (full) for zones 1-2, 0 (lean) from zone 3 on and for the teaser.
+function Geo.zoneDetail(zone: ZoneContext): number
+	return if not zone.isTeaser and zone.slot.index <= 2 then 1 else 0
+end
+
+-- 1 with up to two zones, 0 at Geo.MAX_ZONES (hub scenery only).
+function Geo.worldDetail(ctx: Context): number
+	return math.clamp((Geo.MAX_ZONES - #ctx.zones) / (Geo.MAX_ZONES - 2), 0, 1)
+end
+
+-- A whole number from `low` (detail 0) to `high` (detail 1).
+function Geo.count(detail: number, low: number, high: number): number
+	return math.floor(low + (high - low) * detail + 0.5)
+end
+
+-- An even polygon side count from `low` (detail 0) to `high` (detail 1).
+function Geo.sides(detail: number, low: number, high: number): number
+	local n = Geo.count(detail, low, high)
+	return n + n % 2
 end
 
 -- Space checks -------------------------------------------------------------------
@@ -253,11 +296,17 @@ function Geo.deckHeightAt(ctx: Context, position: Vector3, reach: number, span: 
 	return best
 end
 
--- The terrain guard every landmass uses (see Land.Guard): a circle (x, z,
--- r) may rise to `top` unless that puts terrain above a connector deck,
--- into another zone's footprint above its floor, into `own`'s catch
--- footprint above its floor, or onto the hub plaza above the hub floor.
-function Geo.guard(ctx: Context, own: ZoneContext?): (number, number, number, number) -> boolean
+-- The guard every ground block uses (see Land.Guard): a circle (x, z, r)
+-- may rise to `top` unless that puts ground above a connector deck,
+-- anywhere into another slot's footprint (+4: even below its floor, so a
+-- later zone never covers an earlier field), into `own`'s footprint above
+-- its floor (unless `allowOwn`: the teaser's island is not a field), or
+-- onto the hub plaza above the hub floor.
+function Geo.guard(
+	ctx: Context,
+	own: ZoneContext?,
+	allowOwn: boolean?
+): (number, number, number, number) -> boolean
 	local hubR = ctx.layout.hubRadius + 6
 	local hubFloor = ctx.layout.hubFloor
 	return function(x: number, z: number, r: number, top: number): boolean
@@ -267,8 +316,15 @@ function Geo.guard(ctx: Context, own: ZoneContext?): (number, number, number, nu
 			return false
 		end
 		for _, other in Geo.allSlots(ctx) do
-			local margin = if other == own then r else r + 4
-			if top > other.slot.floor - 0.5 and Kit.inFootprint(other, p, margin) then
+			if other == own then
+				if
+					not allowOwn
+					and top > other.slot.floor + 0.3
+					and Kit.inFootprint(other, p, r)
+				then
+					return false
+				end
+			elseif Kit.inFootprint(other, p, r + 4) then
 				return false
 			end
 		end

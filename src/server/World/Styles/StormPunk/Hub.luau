@@ -1,7 +1,8 @@
 --!strict
--- Bottleworks Plaza: the ocean, the hub island with its crags, scenery
--- islets with Tesla pylons, and the hub itself (Grand Coil, Volt Exchange
--- sell station, spawn, light trails, bridgeheads, arrow signs and props).
+-- Bottleworks Plaza: the sea, the block-built hub island with its crags,
+-- scenery islets with Tesla pylons and basalt sea stacks, and the hub itself
+-- (Grand Coil, Volt Exchange sell station, spawn, light trails, bridgeheads,
+-- arrow signs and props).
 --
 -- Every hub prop stands on a "quiet" bearing halfway between the spiral's
 -- exit bearings and is checked against every (future) exit lane, so zones
@@ -10,6 +11,7 @@
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local World = ServerScriptService.Server.World
+local Blocks = require(World.Blocks)
 local Kit = require(World.Kit)
 local WorldTypes = require(World.Types)
 local Geo = require(script.Parent.Geo)
@@ -24,9 +26,11 @@ local C = Palette.colors
 local T = Palette.tints
 local M = Palette.materials
 local L = Palette.light
-local TERRAIN = Enum.Material
+local G = Palette.ground
 
 local SEA_FLOOR = Geo.SEA_FLOOR
+local BEACH = Geo.BEACH
+local BOTTOM = SEA_FLOOR - 0.5
 local UP = Vector3.new(0, 1, 0)
 local TEASER_TRAIL = C.soot
 
@@ -41,158 +45,161 @@ local function bearingOf(zone: ZoneContext): number
 	return math.deg(zone.slot.angle) % 360
 end
 
--- Base: ocean, hub island ------------------------------------------------------------
+-- Base: sea, hub island ------------------------------------------------------------
 
-local function buildOcean(ctx: Context)
-	-- sea bed, then the water above it; every land fill afterwards replaces water
-	Kit.fillBox(ctx, CFrame.new(0, SEA_FLOOR - 6, 0), Vector3.new(2400, 12, 2400), TERRAIN.Sand)
-	Kit.fillBox(
-		ctx,
-		CFrame.new(0, SEA_FLOOR / 2, 0),
-		Vector3.new(2400, -SEA_FLOOR, 2400),
-		TERRAIN.Water
+type HubGround = {
+	layers: { Land.Layer },
+	plaza: Land.Shape,
+	ramp: { Vector3 }, -- the harbour path: plaza edge, beach foot
+}
+
+-- weak keys: an old build's Context (and its destroyed Map) can be collected
+local hubGrounds: { [Context]: HubGround } = setmetatable({}, { __mode = "k" }) :: any
+
+-- One see-through water surface and a solid seabed a few studs under it.
+local function buildSea(ctx: Context)
+	local size = Blocks.MAX_SIZE
+	Blocks.water(ctx.folders.base, Palette.water, Vector3.zero, Vector2.new(size, size), Geo.WATER)
+	Blocks.box(
+		ctx.folders.ground,
+		G.seabed,
+		CFrame.new(0, SEA_FLOOR - 1, 0),
+		Vector3.new(size, 2, size),
+		{ Name = "Seabed", CastShadow = false }
 	)
 end
 
--- `upperOnly` re-lays just the terrace, plaza and crags (same seed, same
--- shapes): used after the zone landmasses so the hub always wins where
--- shores merge.
-local function buildHubIsland(ctx: Context, upperOnly: boolean?)
-	local rng = Geo.rng(ctx, "hub-island")
+-- The hub island, a round terraced citadel: a brick plaza on a slate band,
+-- a green terrace on slate and basalt strata, a sand beach with a shore
+-- slope all round (and two lobes for the crags to stand on), a paved
+-- harbour path down from the spawn side and path strips out to every exit.
+-- The 16-gons turn a face down every exit and quiet bearing.
+local function buildHubIsland(ctx: Context)
+	local parent = ctx.folders.ground
 	local R = ctx.layout.hubRadius
-	local floor = ctx.layout.hubFloor
-	local origin = Vector3.zero
-	local guard = Geo.guard(ctx, nil)
+	local F = ctx.layout.hubFloor
 	local sb = Geo.spawnBearing(ctx)
+	local yaw = Geo.faceYaw(Geo.exitBearings(ctx)[1])
+	local key = Vector3.new(0, 0, 1)
+	local layers: { Land.Layer } = {}
+	local function keep(list: { Land.Layer })
+		table.move(list, 1, #list, #layers + 1, layers)
+	end
 
-	-- shallows and a beach with bays between its points, each layer shifted
-	-- a different way so the rings never read as a bullseye
-	local function shifted(amount: number): Vector3
-		return origin + Geo.dir(rng:NextNumber(0, 360)) * amount
-	end
-	local shallows = Land.blob(shifted(10), R + 42, rng, 12, 9)
-	local beach = Land.blob(shifted(7), R + 28, rng, 11, 7)
-	if not upperOnly then
-		Land.fill(ctx, shallows, SEA_FLOOR, -3, TERRAIN.Sand)
-		Land.fill(ctx, beach, SEA_FLOOR, 2, TERRAIN.Sand)
-	end
-	-- green terrace halfway up, leaning slate cliffs under it
-	local terrace = Land.blob(shifted(5), R + 17, rng, 10, 5)
-	Land.cliff(
-		ctx,
-		terrace,
-		SEA_FLOOR,
-		floor - 4,
-		TERRAIN.Slate,
-		{ TERRAIN.Rock },
-		TERRAIN.LeafyGrass,
-		rng,
-		{ lean = 6, foot = 0 }
-	)
-	-- plaza block with strata cliffs; its edge lobes stay off the harbour
-	-- ramp so the spawn spoke leads somewhere
-	local rampA, rampB = Geo.polar(sb, R - 4, 0), Geo.polar(sb, R + 34, 0)
-	local plaza = Land.clip(Land.blob(origin, R + 8, rng, 12, 3), function(c)
-		local p = Vector3.new(c.x, 0, c.z)
-		return p.Magnitude < R - 8 or Geo.segmentDistance(p, rampA, rampB) > c.r + 3
-	end)
-	Land.cliff(
-		ctx,
-		plaza,
-		SEA_FLOOR,
-		floor,
-		TERRAIN.Slate,
-		{ TERRAIN.Rock, TERRAIN.Basalt },
-		TERRAIN.Brick,
-		rng,
-		{ lean = 4, foot = floor - 8 }
-	)
-	if not upperOnly then
-		Land.talus(ctx, terrace, 2, rng, 16, TERRAIN.Rock, guard)
-	else
-		-- crags: a rock massif on three quiet bearings, the island's
-		-- silhouette and a backdrop behind the coil (clipped off decks and
-		-- the plaza); built once every zone landmass is down
-		local cragRng = Geo.rng(ctx, "hub-crags")
-		for k, offset in { 180, 225, 270 } do
-			local b = sb + offset
-			Land.ridge(
-				ctx,
-				Geo.polar(b, R + 12, 0),
-				Geo.polar(b, R + 32, 0),
-				22 + k * 3,
-				30 + k * 4,
-				15,
-				cragRng,
-				TERRAIN.Basalt,
-				{ TERRAIN.Slate, TERRAIN.Rock },
-				TERRAIN.LeafyGrass,
-				guard
-			)
+	local plaza = Land.poly(Vector3.zero, R + 5.5, 16, yaw)
+	keep(Land.stack(parent, plaza, F, F - 6, {
+		{ color = G.brick, height = 1.2 },
+		{ color = G.slate, grow = -0.6 },
+	}, key))
+	keep(Land.stack(parent, Land.poly(Vector3.zero, R + 18, 16, yaw), F - 4, BEACH - 1, {
+		{ color = G.slate, height = 4, cap = G.grass },
+		{ color = G.basalt, grow = 0.9 },
+	}, key))
+
+	local beach = Land.poly(Vector3.zero, R + 33, 16, yaw)
+	local beaches = { beach }
+	for i, offset in { 180, 270 } do
+		if i <= Geo.count(Geo.worldDetail(ctx), 0, 2) then
+			table.insert(beaches, Land.poly(Geo.polar(sb + offset, R + 36, 0), 20, 12, yaw))
 		end
 	end
+	for _, shape in beaches do
+		Land.prism(parent, G.sand, shape, BEACH, BOTTOM, Land.SHARED + UP * BEACH)
+		Land.register(ctx, shape)
+		table.insert(layers, { shape = shape, top = BEACH })
+	end
+	for _, shape in beaches do
+		Land.skirt(parent, G.wetSand, shape, BEACH, BOTTOM, beaches)
+	end
 
-	-- guaranteed plaza out past every exit, pavement core
-	ctx.terrain:FillCylinder(CFrame.new(0, floor - 2, 0), 4, R + 4, TERRAIN.Brick)
-	ctx.terrain:FillCylinder(CFrame.new(0, floor - 2, 0), 4, 27, TERRAIN.Pavement)
-	-- paved spokes toward every exit
+	-- the harbour path: plaza -> terrace -> beach, two paved ramps (23 and
+	-- 26 degrees) with a landing on the terrace
+	local top = Geo.polar(sb, R + 4.5, F)
+	local foot = Geo.polar(sb, R + 32.5, BEACH)
+	Blocks.ramp(parent, G.pavement, Geo.polar(sb, R + 14, F - 4), top, 10, { Name = "Path" })
+	Land.path(
+		parent,
+		Geo.polar(sb, R + 14, 0),
+		Geo.polar(sb, R + 18.4, 0),
+		10,
+		F - 4,
+		G.pavement,
+		G.edging
+	)
+	Blocks.ramp(parent, G.pavement, foot, Geo.polar(sb, R + 18.4, F - 4), 10, { Name = "Path" })
+
+	-- path strips toward every exit (the light trails run on them)
 	for _, zone in Geo.allSlots(ctx) do
 		local b = bearingOf(zone)
-		local a = Geo.polar(b, 24, floor - 2)
-		local z = Geo.polar(b, R + 4, floor - 2)
-		ctx.terrain:FillBlock(
-			CFrame.lookAt(a:Lerp(z, 0.5), z),
-			Vector3.new(10, 4, (z - a).Magnitude),
-			TERRAIN.Pavement
+		Land.path(
+			parent,
+			Geo.polar(b, 26.7, 0),
+			Geo.polar(b, R - 0.4, 0),
+			10,
+			F,
+			G.pavement,
+			G.edging
 		)
 	end
-	-- the spawn spoke is a real path: a paved ramp down to the harbour
-	local steps = 7
-	local run = 26
-	for i = 0, steps - 1 do
-		local r0 = R + 4 + i * run / steps
-		local top = floor - (i + 1) * (floor - 2) / steps
-		local a = Geo.polar(sb, r0, 0)
-		local z = Geo.polar(sb, r0 + run / steps + 1, 0)
-		ctx.terrain:FillBlock(
-			CFrame.lookAt(a:Lerp(z, 0.5), z) + UP * (top / 2),
-			Vector3.new(10, top, (z - a).Magnitude),
-			TERRAIN.Pavement
+	hubGrounds[ctx] = { layers = layers, plaza = plaza, ramp = { top, foot } }
+end
+
+-- Crags: basalt column ridges on three quiet bearings, the island's
+-- silhouette and a backdrop behind the coil, standing on the terrace and
+-- the beach lobes (built once every zone is down, so decks are known).
+local function buildCrags(ctx: Context): { Land.Shape }
+	local R = ctx.layout.hubRadius
+	local sb = Geo.spawnBearing(ctx)
+	local rng = Geo.rng(ctx, "hub-crags")
+	local guard = Geo.guard(ctx, nil)
+	local crags: { Land.Shape } = {}
+	for k, offset in { 180, 225, 270 } do
+		local b = sb + offset
+		local columns = Land.ridge(
+			ctx.folders.ground,
+			Geo.polar(b, R + 12, 0),
+			Geo.polar(b, R + 32, 0),
+			22 + k * 3,
+			30 + k * 4,
+			15,
+			rng,
+			{ G.basalt, G.slate },
+			G.grass,
+			guard,
+			Geo.count(Geo.worldDetail(ctx), 2, 3),
+			BEACH - 1
 		)
+		table.move(columns, 1, #columns, #crags + 1, crags)
 	end
+	return crags
 end
 
 -- Little basalt islets on quiet bearings, each carrying a Tesla pylon,
 -- strung together with power lines where they clear every deck. Built
--- after the zone landmasses, well clear of their skirts.
+-- after the zone islands, in open water clear of all of them.
 local function buildIslets(ctx: Context)
 	local rng = Geo.rng(ctx, "islets")
 	local folder = ctx.folders.decor
 	local R = ctx.layout.hubRadius
-	local guard = Geo.guard(ctx, nil)
 	local tips: { { bearing: number, a: Vector3, b: Vector3 } } = {}
 	local harbour = Geo.spawnBearing(ctx)
+	local budget = Geo.count(Geo.worldDetail(ctx), 1, 5)
 	for _, bearing in Geo.quietBearings(ctx) do
 		local radius = R + 60 + rng:NextNumber(-4, 8)
 		local center = Geo.polar(bearing, radius, 0)
-		local size = rng:NextNumber(10, 14)
+		local size = rng:NextNumber(8, 11)
 		if
-			math.abs(Geo.angleDiff(bearing, harbour)) > 1
+			#tips < budget
+			and math.abs(Geo.angleDiff(bearing, harbour)) > 1
 			and Geo.isClear(ctx, center, size + 40, { hub = false })
+			and Land.isOpenWater(ctx, center, size + 12)
 		then
-			Land.fill(ctx, Land.blob(center, size + 8, rng, 6, 2), SEA_FLOOR, -2, TERRAIN.Sand)
-			Land.cliff(
-				ctx,
-				Land.blob(center, size, rng, 6, 2),
-				SEA_FLOOR,
-				4,
-				TERRAIN.Basalt,
-				{ TERRAIN.Slate },
-				TERRAIN.LeafyGrass,
-				rng,
-				{ lean = 4, guard = guard }
-			)
-			Land.talus(ctx, Land.blob(center, size, rng, 5, 1), 0, rng, 3, TERRAIN.Basalt, guard)
+			local shape = Land.poly(center, size, 10, rng:NextNumber(0, math.pi))
+			Land.stack(ctx.folders.ground, shape, 4, BOTTOM, {
+				{ color = G.slate, height = 2, cap = G.grass },
+				{ color = G.basalt, grow = 0.8 },
+			})
+			Land.register(ctx, Land.grown(shape, 0.8))
 			local a, b =
 				Pieces.pylon(folder, center + UP * 4, rng:NextNumber(26, 32), bearing + 90, 3, 0.8)
 			table.insert(tips, { bearing = bearing, a = a, b = b })
@@ -237,47 +244,87 @@ local function buildIslets(ctx: Context)
 	end
 end
 
--- Free-standing basalt sea stacks: big silhouettes that cost no parts.
+-- Free-standing basalt sea stacks: clusters of hex columns in open water,
+-- fewer as the world fills up.
 local function buildSeaStacks(ctx: Context)
 	local rng = Geo.rng(ctx, "stacks")
 	local guard = Geo.guard(ctx, nil)
+	local wanted = Geo.count(Geo.worldDetail(ctx), 2, 8)
 	local count = 0
 	local tries = 0
-	while count < 10 and tries < 90 do
+	while count < wanted and tries < 120 do
 		tries += 1
-		local bearing = rng:NextNumber(0, 360)
-		local radius = rng:NextNumber(100, 340)
-		local base = Geo.polar(bearing, radius, SEA_FLOOR)
-		local r = rng:NextNumber(5, 9)
-		if Geo.isClear(ctx, base, r + 30, { hub = false }) then
-			count += 1
-			local height = -SEA_FLOOR + rng:NextNumber(10, 32)
-			Land.fill(ctx, Land.blob(base, r + 6, rng, 5, 2), SEA_FLOOR, -3, TERRAIN.Sand)
-			Land.pinnacle(
-				ctx,
-				base,
-				height,
-				r,
+		local base = Geo.polar(rng:NextNumber(0, 360), rng:NextNumber(100, 340), 0)
+		local r = rng:NextNumber(7, 11)
+		if
+			Geo.isClear(ctx, base, r + 30, { hub = false })
+			and Land.isOpenWater(ctx, base, r + 14)
+		then
+			local columns = Land.cluster(
+				ctx.folders.ground,
 				rng,
-				{ TERRAIN.Basalt, TERRAIN.Slate, TERRAIN.Basalt, TERRAIN.Rock },
-				r * 0.55,
-				TERRAIN.LeafyGrass,
+				base,
+				r,
+				BOTTOM,
+				Geo.WATER + rng:NextNumber(10, 30),
+				{ G.basalt, G.slate },
+				G.grass,
+				rng:NextInteger(2, 3),
 				guard
 			)
+			if #columns > 0 then
+				count += 1
+				for _, shape in columns do
+					Land.register(ctx, shape)
+				end
+			end
 		end
 	end
 end
 
--- After every zone landmass: re-lay the hub's upper terrain and add the
--- scenery that must stay clear of the zones' skirts.
-function Hub.restoreIsland(ctx: Context)
-	buildHubIsland(ctx, true)
+-- Shrub clumps on the green terrace: off the plaza's cliff, off the crags
+-- and the harbour path, out of every exit lane.
+local function dressTerrace(ctx: Context, crags: { Land.Shape })
+	local parent = ctx.folders.hub
+	local ground = hubGrounds[ctx]
+	if not ground then
+		return
+	end
+	local rng = Geo.rng(ctx, "hub-terrace")
+	local R = ctx.layout.hubRadius
+	local floor = ctx.layout.hubFloor
+	local sb = Geo.spawnBearing(ctx)
+	for k = 1, 10 do
+		local a = sb + 18 + k * 33 + rng:NextNumber(-8, 8)
+		for _, r in { R + 12, R + 15, R + 9 } do
+			local p = Geo.polar(a, r, floor - 4)
+			if
+				not Land.containsAny(crags, p, -4)
+				and not Land.contains(ground.plaza, p, -3)
+				and Land.surfaceAt(ground.layers, p, 2.5) == floor - 4
+				and Geo.segmentDistance(p, ground.ramp[1], ground.ramp[2]) > 9
+				and not Geo.inExitLane(ctx, p, 8)
+				and Geo.isClear(ctx, p, 3, { hub = false })
+			then
+				Pieces.shrub(parent, p, rng, if k % 2 == 0 then C.sage else T.sageDark)
+				Pieces.tuft(parent, p + Geo.dir(a + 90) * 2.5, rng, T.sageDark)
+				break
+			end
+		end
+	end
+end
+
+-- After every zone island (so decks and shores are known): the crags, the
+-- terrace shrubs, the islets and the sea stacks.
+function Hub.buildScenery(ctx: Context)
+	local crags = buildCrags(ctx)
+	dressTerrace(ctx, crags)
 	buildIslets(ctx)
 	buildSeaStacks(ctx)
 end
 
 function Hub.buildBase(ctx: Context)
-	buildOcean(ctx)
+	buildSea(ctx)
 	buildHubIsland(ctx)
 end
 
@@ -296,10 +343,7 @@ local function grandCoil(parent: Instance, floor: number): Vector3
 	Pieces.column(parent, drumBase + UP * 7.8, 1.4, 13.2, C.patina)
 	for i = 0, 3 do
 		local d = Geo.dir(i * 90 + 45)
-		local cf = CFrame.lookAt(
-			drumBase + d * 5.95 + UP * 4.5,
-			drumBase + d * 10 + UP * 4.5
-		)
+		local cf = CFrame.lookAt(drumBase + d * 5.95 + UP * 4.5, drumBase + d * 10 + UP * 4.5)
 		Pieces.block(parent, cf, Vector3.new(1.4, 4.5, 0.3), C.volt, M.neon)
 	end
 	local deckY = floor + 10
@@ -308,7 +352,7 @@ local function grandCoil(parent: Instance, floor: number): Vector3
 	-- the secondary: a fat copper column banded every ~9 studs
 	local coilTop = floor + 66
 	Pieces.column(parent, Vector3.new(0, deckY + 0.9, 0), coilTop - deckY - 0.9, 6.6, C.copper)
-	for k, y in { 20, 29, 38, 47, 56 } do
+	for k, y in { 20, 38, 47, 56 } do
 		Pieces.column(
 			parent,
 			Vector3.new(0, floor + y, 0),
@@ -318,7 +362,8 @@ local function grandCoil(parent: Instance, floor: number): Vector3
 			if k % 2 == 1 then M.metal else M.ceramic
 		)
 	end
-	local glowBand = Pieces.column(parent, Vector3.new(0, floor + 42, 0), 2.2, 7.4, C.volt, M.neon)
+	-- a glowing band low enough to sit in the spawn's first frame
+	local glowBand = Pieces.column(parent, Vector3.new(0, floor + 28, 0), 2.6, 7.4, C.volt, M.neon)
 	Pieces.glow(glowBand, C.volt, 26, 1.6)
 
 	-- lattice legs and two rings, thick enough to read from the zones
@@ -345,7 +390,13 @@ local function grandCoil(parent: Instance, floor: number): Vector3
 	end
 	-- crown: brass deck, big copper torus, patina dome, orb and rod
 	local crownY = coilTop + 2
-	Kit.cylinder(parent, Vector3.new(0, coilTop - 1, 0), 1.6, 13, { Color = C.brass, Material = M.metal })
+	Kit.cylinder(
+		parent,
+		Vector3.new(0, coilTop - 1, 0),
+		1.6,
+		13,
+		{ Color = C.brass, Material = M.metal }
+	)
 	Pieces.torus(parent, Vector3.new(0, crownY, 0), 8, 4.5, 12, C.copper)
 	Pieces.ball(parent, Vector3.new(0, crownY + 0.4, 0), 11, C.patina)
 	Pieces.orb(parent, Vector3.new(0, crownY + 7.5, 0), 6, C.volt, 60, true)
@@ -398,21 +449,21 @@ local function voltExchange(parent: Instance, floor: number, bearing: number): {
 	local legX = 10.5
 	for _, side in { -1, 1 } do
 		local foot = (frame * CFrame.new(side * legX, 0, signZ)).Position
-		Pieces.column(parent, foot, 25, 2.2, C.copper, M.metal, true)
+		Pieces.column(parent, foot, 23, 2.2, C.copper, M.metal, true)
 		Pieces.column(parent, foot, 1.6, 3.4, C.iron)
-		Pieces.column(parent, foot + UP * 24.6, 1.6, 3, C.ceramic, M.ceramic)
-		Pieces.ball(parent, foot + UP * 27.4, 1.8, C.hazard, M.neon)
+		Pieces.column(parent, foot + UP * 22.6, 1.6, 3, C.ceramic, M.ceramic)
+		Pieces.ball(parent, foot + UP * 25.4, 1.8, C.hazard, M.neon)
 	end
 	local header = Pieces.block(
 		parent,
-		toSpawn * CFrame.new(0, 24.5, -signZ),
+		toSpawn * CFrame.new(0, 22.4, -signZ),
 		Vector3.new(2 * legX + 2.4, 3, 1.4),
 		C.soot,
 		Enum.Material.SmoothPlastic
 	)
 	Kit.faceText(header, Enum.NormalId.Front, "VOLT EXCHANGE", nil, Palette.sign(C.brass))
 	Kit.faceText(header, Enum.NormalId.Back, "VOLT EXCHANGE", nil, Palette.sign(C.brass))
-	local signCF = toSpawn * CFrame.new(0, 17, -signZ)
+	local signCF = toSpawn * CFrame.new(0, 15.6, -signZ)
 	local signW = 2 * legX - 3
 	local board =
 		Pieces.framedSign(parent, signCF, signW, 8, "SELL", "charges for Volts", Palette.marquee())
@@ -433,7 +484,7 @@ local function voltExchange(parent: Instance, floor: number, bearing: number): {
 		end
 	end
 	-- lightning bolt emblem on top
-	local boltCF = signCF * CFrame.new(0, 9.6, 0)
+	local boltCF = signCF * CFrame.new(0, 10.6, 0)
 	for _, b in
 		{
 			{ -0.8, 1.6, -28, 1.4, 3.6 },
@@ -453,7 +504,7 @@ local function voltExchange(parent: Instance, floor: number, bearing: number): {
 	-- capacitor towers beside the pad, fed from the coil
 	local caps: { Vector3 } = {}
 	for _, side in { -1, 1 } do
-		local foot = (frame * CFrame.new(side * 11.5, 0, 1.5)).Position
+		local foot = (frame * CFrame.new(side * 14.8, 0, -5)).Position
 		Pieces.column(parent, foot, 1.6, 6, C.iron, M.metal, true)
 		local core = Pieces.column(parent, foot + UP * 1.6, 13, 1.8, C.volt, M.neon)
 		Pieces.sparks(core, C.volt, 5)
@@ -470,7 +521,12 @@ local function voltExchange(parent: Instance, floor: number, bearing: number): {
 end
 
 -- Gateway arch at a hub exit, in the zone's colour. Returns a pillar top.
-local function bridgehead(parent: Instance, zone: ZoneContext, floor: number, color: Color3): Vector3
+local function bridgehead(
+	parent: Instance,
+	zone: ZoneContext,
+	floor: number,
+	color: Color3
+): Vector3
 	local exit = zone.slot.hubExit
 	local base = exit.Position - exit.LookVector * 3
 	local frame = CFrame.lookAt(base, base - exit.LookVector) -- text faces the hub
@@ -499,11 +555,12 @@ local function lightTrail(parent: Instance, zone: ZoneContext, floor: number, hu
 	local b = bearingOf(zone)
 	local color = if zone.isTeaser then TEASER_TRAIL else zone.color
 	local chevrons = if zone.isTeaser then C.hazard else zone.color
-	local from = Geo.polar(b, 28, floor)
-	local to = Geo.polar(b, hubRadius + 2, floor)
+	-- on the path strip, 0.2 above the plaza
+	local from = Geo.polar(b, 28, floor + 0.2)
+	local to = Geo.polar(b, hubRadius + 2, floor + 0.2)
 	Pieces.trail(parent, from, to, 1.6, color, if zone.isTeaser then M.metal else M.neon)
 	for _, r in { 34, 44 } do
-		Pieces.chevron(parent, Geo.polar(b, r, floor), Geo.dir(b), 3.4, chevrons)
+		Pieces.chevron(parent, Geo.polar(b, r, floor + 0.2), Geo.dir(b), 3.4, chevrons)
 	end
 end
 
@@ -511,8 +568,13 @@ end
 
 local function kiosk(parent: Instance, frame: CFrame)
 	-- frame: on the floor, LookVector toward the hub centre (shop front)
-	local roof =
-		Pieces.building(parent, frame * CFrame.new(0, 0, 1.5), Vector3.new(9, 5, 5), C.timber, M.planks)
+	local roof = Pieces.building(
+		parent,
+		frame * CFrame.new(0, 0, 1.5),
+		Vector3.new(9, 5, 5),
+		C.timber,
+		M.planks
+	)
 	Pieces.block(
 		parent,
 		frame * CFrame.new(0, 1.3, -1.7),
@@ -550,14 +612,8 @@ end
 
 local function foundry(parent: Instance, frame: CFrame)
 	-- frame: on the floor, LookVector toward the hub
-	local roof = Pieces.building(
-		parent,
-		frame,
-		Vector3.new(16, 10, 12),
-		T.copperDark,
-		M.brick,
-		C.copper
-	)
+	local roof =
+		Pieces.building(parent, frame, Vector3.new(16, 10, 12), T.copperDark, M.brick, C.copper)
 	-- sawtooth roof
 	for i = 0, 2 do
 		local x = -5.4 + i * 5.4
@@ -647,15 +703,33 @@ local function weatherHut(parent: Instance, frame: CFrame)
 end
 
 local function bench(parent: Instance, frame: CFrame)
-	Pieces.block(parent, frame * CFrame.new(0, 1.2, 0), Vector3.new(5, 0.5, 1.6), C.timber, M.planks, true)
-	Pieces.block(parent, frame * CFrame.new(0, 2.2, 0.7), Vector3.new(5, 1.4, 0.3), C.timber, M.planks)
+	Pieces.block(
+		parent,
+		frame * CFrame.new(0, 1.2, 0),
+		Vector3.new(5, 0.5, 1.6),
+		C.timber,
+		M.planks,
+		true
+	)
+	Pieces.block(
+		parent,
+		frame * CFrame.new(0, 2.2, 0.7),
+		Vector3.new(5, 1.4, 0.3),
+		C.timber,
+		M.planks
+	)
 	Pieces.block(parent, frame * CFrame.new(0, 0.5, 0), Vector3.new(4.2, 1, 0.5), C.iron, M.metal)
 end
 
-local function garden(parent: Instance, ctx: Context, center: Vector3, frame: CFrame, rng: Random)
-	ctx.terrain:FillCylinder(CFrame.new(center.X, center.Y - 2, center.Z), 4, 6.5, TERRAIN.LeafyGrass)
+local function garden(parent: Instance, center: Vector3, frame: CFrame, rng: Random)
 	Kit.cylinder(parent, center - UP * 0.6, 1.2, 14, { Color = C.brass, Material = M.metal })
-	Kit.cylinder(parent, center - UP * 0.5, 1.2, 13, { Color = C.sage, Material = Enum.Material.Grass })
+	Kit.cylinder(
+		parent,
+		center - UP * 0.5,
+		1.2,
+		13,
+		{ Color = C.sage, Material = Enum.Material.Grass }
+	)
 	for i = 1, 4 do
 		local a = i * 90 + rng:NextNumber(-15, 15)
 		local p = center + Geo.dir(a) * rng:NextNumber(2.5, 4.5) + UP * 0.6
@@ -781,7 +855,7 @@ function Hub.buildHub(ctx: Context)
 			elseif slotIndex == 6 then
 				weatherHut(parent, frame)
 			else
-				garden(parent, ctx, Geo.polar(b, 40, floor), frame, rng)
+				garden(parent, Geo.polar(b, 40, floor), frame, rng)
 			end
 			-- inner lamp ring, alternating warm and cyan
 			lampIndex += 1
@@ -790,7 +864,14 @@ function Hub.buildHub(ctx: Context)
 			-- planter beside it
 			local pc = Geo.polar(b, 33.5, floor)
 			local pf = Geo.facing(pc, Vector3.new(0, floor, 0))
-			Pieces.block(parent, pf * CFrame.new(0, 0.7, 0), Vector3.new(7, 1.4, 2.6), C.copper, M.metal, true)
+			Pieces.block(
+				parent,
+				pf * CFrame.new(0, 0.7, 0),
+				Vector3.new(7, 1.4, 2.6),
+				C.copper,
+				M.metal,
+				true
+			)
 			Pieces.block(
 				parent,
 				pf * CFrame.new(0, 1.45, 0),
@@ -808,16 +889,17 @@ function Hub.buildHub(ctx: Context)
 		end
 	end
 
-	-- brass ring around the pavement core (flush, under the trails)
-	Kit.cylinder(parent, Vector3.new(0, floor - 0.3, 0), 0.34, 56, {
+	-- brass ring around the pavement core (flush on the brick, under the
+	-- path strips and trails)
+	Kit.cylinder(parent, Vector3.new(0, floor - 0.3, 0), 0.35, 56, {
 		Color = C.brass,
 		Material = M.metal,
 		CanCollide = false,
 		CastShadow = false,
 	})
-	Kit.cylinder(parent, Vector3.new(0, floor - 0.26, 0), 0.33, 53.4, {
-		Color = Palette.terrain[TERRAIN.Pavement],
-		Material = Enum.Material.Pavement,
+	Kit.cylinder(parent, Vector3.new(0, floor - 0.3, 0), 0.38, 53.4, {
+		Color = G.pavement,
+		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
 		CastShadow = false,
 	})
@@ -856,24 +938,15 @@ function Hub.buildHub(ctx: Context)
 		end
 	end
 
-	-- a little harbour at the foot of the spawn ramp: pier and moored skiff
+	-- a little harbour at the foot of the spawn ramp: pier (deck 0.8 over
+	-- the beach) and a skiff moored past the shore slope
 	do
-		local a = Geo.polar(sb, R + 24, 0)
-		local b = Geo.polar(sb, R + 44, 0)
-		Pieces.pier(parent, a, b, 2.6, "HARBOUR", SEA_FLOOR)
+		local a = Geo.polar(sb, R + 32.5, 0)
+		local b = Geo.polar(sb, R + 54, 0)
+		Pieces.pier(parent, a, b, BEACH + 0.8, "HARBOUR", SEA_FLOOR)
 		local along = Geo.dir(sb)
-		local berth = Geo.polar(sb, R + 37, 0) + along:Cross(UP) * 6.5
+		local berth = Geo.polar(sb, R + 48, 0) + along:Cross(UP) * 6.5
 		Pieces.skiff(parent, CFrame.lookAt(berth + UP * 0.1, berth + along + UP * 0.1))
-	end
-
-	-- shrubs on the green terrace below the plaza, in small clumps
-	for k = 1, 8 do
-		local a = sb + 22.5 + k * 40 + rng:NextNumber(-8, 8)
-		local p = Geo.polar(a, R + rng:NextNumber(9, 12), floor - 4)
-		if Geo.isClear(ctx, p, 3, { hub = false }) and not Geo.inExitLane(ctx, p, 8) then
-			Pieces.shrub(parent, p, rng, C.sage)
-			Pieces.tuft(parent, p + Geo.dir(a + 90) * 2.5, rng, T.sageDark)
-		end
 	end
 end
 

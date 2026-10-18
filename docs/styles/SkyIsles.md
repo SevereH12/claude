@@ -7,7 +7,13 @@ floor is a big, flat, two-tone field you can read from far away (Bee Swarm
 style), and the fields climb outward and upward around the spire.
 
 Code: `src/server/World/Styles/SkyIsles/` (`init.luau` is the StylePack;
-`Palette`, `Pieces`, `Sky`, `Hub`, `Zone`, `Teaser`, `Themes/*`).
+`Palette`, `Ground`, `Pieces`, `Sky`, `Hub`, `Zone`, `Teaser`, `Themes/*`).
+
+The style is block-built (`ground = "Blocks"`): every island, field bed,
+headland, ridge and hanging rock is a chunky SmoothPlastic part in
+`Map.Ground`, and no terrain is filled. It reads like a clean, hand-built
+diorama: colour carries the look, with no unions, meshes, decals or
+textured materials on the ground.
 
 ## Style guide
 
@@ -33,25 +39,40 @@ contrast with that zone colour (cool greens under yellow, violets under
 orange; the Default theme picks the complementary hue automatically), so
 the warning circles stand out.
 
-### Materials
+### Ground (blocks)
 
-- Terrain (recoloured per material in `Palette.TERRAIN`): Rock (lilac
-  skystone cliffs), Slate and Basalt (plum undersides getting darker toward
-  the tips), Pavement (hub plaza), Grass (hub lawns only, never a catch
-  floor, because grass blades would hide warning circles), Sand (beaches),
-  Sandstone and Ground (canyon strata), Limestone (pale ledges), Water
-  (tide pools).
-- Parts: Slate and Cobblestone for masonry, Marble for caps, Neon for
-  energy, Glass for crystal shells, Wood for palms and the skiff, Fabric for
-  banners and parasols, Grass/Ground for the field bands.
+`Ground.luau` builds all of it, and logs every ground part so the style can
+ask "is this inside land?" (waterfall lips, tether checks) or "how high is
+the ground here?" without reading parts back.
+
+- **Polygons.** Islands, lobes, lawns, tiers and headlands are regular
+  8 to 16-sided polygons. An even 2k-gon is exactly the union of k
+  rectangles turned pi/k apart, so a 12-gon costs only 6 parts. The pieces
+  of one layer share one exact colour (no jitter), so their coplanar
+  overlaps merge into one shape and never flicker.
+- **Layers.** Every island is a light **cap** 1 stud thick that overhangs
+  its darker **soil** band by 0.6 studs, over a stepped, tapering
+  **underside**: stacked polygon (or chamfered-rectangle) tiers shrinking
+  downward in two alternating rock tones, ending in **hanging points** (two
+  shrinking blocks turned 45 degrees apart and a cube balanced on its
+  corner).
+- **Colours** (`Palette.GROUND`): grass caps over plum soil, sand caps over
+  wet sand, ember caps over sandstone; cliffs in pale skystone, skystone and
+  slate (ochre and dark ember in the canyon); basalt or slate points.
+- **Water** is see-through, non-collidable `Blocks.water` sheets: pools on
+  lawns and beaches and spill channels that feed the beam waterfalls.
+- **Props** stay as they were (Slate and Cobblestone masonry, Marble caps,
+  Neon energy, Glass crystal shells, Wood, Fabric); rocks are `Blocks.rock`
+  clusters, and the field carpets, turf patches and hoodoos are
+  SmoothPlastic.
 
 ### Shape language
 
 - **Chunky and tapering.** Islands are wide on top and taper to a rocky
   point, with hanging rock and crystal stalactites. Towers taper too.
-- **Layered.** Every landmass has a flat top, a lower terrace or two and
-  raised outcrops, so the edge reads as stacked cliffs, never a plain
-  rectangle or circle.
+- **Layered.** Every landmass has a light cap over a soil band over rock
+  strata that step inward, with lobes and headlands breaking its outline,
+  so the edge reads as stacked cliffs, never a plain rectangle or circle.
 - **Eight-fold compass.** The hub is a compass rose: eight lanes, eight
   pillars, an eight-point star dais. Zones arrive on those lanes.
 - **Shards and rings.** Energy is shown with tilted crystal shards and
@@ -72,7 +93,7 @@ the warning circles stand out.
 
 ## Layout
 
-`hubFloor 12, hubRadius 56, firstRadius 168, radiusStep 28, firstAngle 90,
+`hubFloor 0, hubRadius 56, firstRadius 168, radiusStep 28, firstAngle 90,
 angleStep 135`. A 135 degree step puts slots on the eight compass
 directions (E, SW, N, SE, W, NE, S, NW), each a little further out and (by
 Config) higher than the last: a spiral staircase of floating fields. Seven
@@ -81,11 +102,14 @@ degrees.
 
 ## Hub: Stormspire
 
-- **Landmass:** a compass-rose island. The paved plaza (radius 56, y=12)
-  grows grassy lobes between the eight lanes, with lower terraces at y=8 and
-  y=4 hanging off them, and tapers into an inverted mountain about 90 studs
-  deep with glowing crystal stalactites underneath. Lanes stay clear out to
-  the rim so future bridges can attach anywhere.
+- **Landmass:** a compass-rose island. A paved sixteen-sided plaza
+  (apothem 58, y=0) over a skystone band, with grassy octagon lawns one
+  step (1 stud) lower between the eight lanes, two of them holding pools
+  that spill waterfalls into the clouds. Under it, six polygon tiers shrink
+  downward in alternating rock tones to a basalt spike about 105 studs
+  down, with glowing crystals hanging from the ledges and a big cluster at
+  the tip. Lanes stay clear out to the rim so future bridges can attach
+  anywhere; bridge decks lie 0.2 studs above the plaza.
 - **Hero landmark and sell station (one piece):** the Stormspire stands
   over the hub centre. Eight pillars hung with coral and cyan banners hold
   up a canopy over the **Charge Altar**, a gold star dais with a 20x20
@@ -94,8 +118,8 @@ degrees.
   and a column of light pours from a gold crystal down onto the pad. Above
   the canopy a tapering star tower with glowing window slits rises to about
   110 studs, rune stones drift around it, and a giant floating storm
-  crystal on four prongs is ringed by three rune rings and crackling arcs.
-  Heavy iron tethers run from the tower to every island (the teaser's hangs
+  crystal (a fat 10x22 glass octahedron with a neon heart) on four prongs, with four large rune stones orbiting below, is ringed by three rune rings and crackling arcs.
+  A snapped iron tether hangs from the tower toward the teaser (it hangs
   snapped).
 - **Spawn:** a rune circle on the plaza beside the first zone's lane,
   facing the altar, with a compass signpost (arrows to SELL, every zone and
@@ -111,16 +135,23 @@ degrees.
 
 Shared by all themes (`Zone.luau`), so any slot, size or rotation works:
 
-- **Ground:** a floating island built around the footprint: a rounded rim
-  of flat land (10 studs) with an uneven coast of mostly small lobes and the
-  odd big bulge, a rock shelf 4 studs lower, terraces 8 and 12 studs lower,
-  two peninsulas, a themed backdrop ridge behind the field (so it sits in a
-  cove), and a tapering underside with stalactites and hanging crystals.
-  Nothing rises inside the footprint, and every lump is checked against the
-  hub, other zones' footprints and every bridge corridor.
-- **Catch floor:** terrain sits exactly at the floor. The pattern is a carpet
-  of flush part bands or tiles (top at floor+0.2, under the warning circles,
-  can't be collided with), plus a glowing edge line in the zone colour.
+- **Ground:** a floating island built around the footprint: a plateau
+  (footprint plus a 10-stud rim, plus `spec.shore` on the sides and back,
+  corners chamfered 6 studs) whose cap top is exactly the floor, four to
+  six 10-gon coast lobes pushing the outline out round the sides and back,
+  a themed backdrop ridge on the land edge behind the field (so it sits in
+  a cove), and a tapering underside (a chamfered slab, a stepped slab, a
+  12-gon and an octagon) with two hanging points and three crystal
+  clusters hanging from its ledges. Nothing rises inside the footprint, and
+  every lobe and lump is checked against the hub, other zones' footprints
+  and every bridge corridor. All placement is slot-relative, so new
+  Config zones get the same island.
+- **Catch floor:** the plateau cap is one flat block surface exactly at
+  the floor across the whole footprint. The pattern is a carpet of flush
+  SmoothPlastic rings, checks or bands framed by a chunky 4-stud rim of
+  alternating zone-colour tiles with clipped dark corners and a cream inner
+  line (top at floor+0.2, under the warning circles, can't be collided
+  with), plus a glowing edge line in the zone colour.
 - **Border:** rune posts on the footprint edge with crystal caps in the zone
   colour, linked by glowing sagging rune cables. Every fourth post is a
   taller pylon with a light. There's a gap at the gate.
@@ -128,16 +159,16 @@ Shared by all themes (`Zone.luau`), so any slot, size or rotation works:
   on a framed board facing the hub, and lanterns.
 - **Connector:** a rune bridge: stone deck with curbs, a glowing centre
   inlay in the zone colour, posts with crystal lanterns, glowing rail
-  cables, and keystones hanging underneath. Flat landings at both ends, a
-  ramp between.
+  cables, and keystones hanging underneath. Flat landings at both ends
+  (lying 0.2 studs above the ground they land on), a ramp between.
 
 ### Themes
 
 | Theme | Field | Edge dressing | Hero landmark |
 | --- | --- | --- | --- |
-| Beach (Shoreline) | seaglass and teal bands (cool, so yellow circles pop) | golden sand rim, rocky ridge behind, palms leaning off the field, parasols, dune grass, shoreline boulders, tide pools spilling waterfalls into the clouds, shells and driftwood, a cabana, a pier and a moored sky-skiff on a headland | **Sky Lighthouse**: striped tower on a rock point at the end of a sandy headland, cyan storm-lamp throwing two light beams |
-| Canyon (Mesa) | twilight-violet strata stripes, wide and narrow (complementary to orange) | ember rim over an ochre shelf, banded sandstone walls behind, corner strata buttes with crystals, a natural arch, hoodoos, cacti, a crystal mine-cart headland, lantern posts | **Crystal Butte**: a 35-stud layered butte crowned with a giant amber crystal, a lightning rod and a rune ring |
-| Default (any new theme) | checkerboard in the complementary hue of the zone colour | grassy rim, rolling hills behind, a standing-stone rune circle headland, a pond headland with a waterfall, crystal trees, meadows of flowers, lanterns | **Rune Obelisk**: tiered obelisk on a knoll with a floating crystal and rune rings in the zone colour |
+| Beach (Shoreline) | concentric ripple rings of pale mint and deep teal (cool and high contrast, so yellow circles pop) | a broad sand rim (6 studs wider on the sides and back) over wet sand, stepped sand dunes with grass crowns behind, rock spires, palms leaning off the field, parasols, dune-grass turf, shoreline boulders, tide pools spilling waterfalls into the clouds, shells and driftwood, a cabana, a pier and a moored sky-skiff on a headland | **Sky Lighthouse**: striped tower on a two-tier rock point at the end of a sandy headland, cyan storm-lamp throwing two light beams |
+| Canyon (Mesa) | bold 16-stud checker of lilac and plum (complementary to orange) | ember rim over a sandstone band and ochre / dark-ember strata, tilted sandstone slabs behind, corner strata buttes with crystals, a block arch, hoodoos, cacti, ochre turf, a crystal mine-cart headland, lantern posts | **Crystal Butte**: a 35-stud stack of octagon strata under a slate caprock with a talus apron, crowned with a giant amber crystal, a lightning rod and a rune ring |
+| Default (any new theme) | checkerboard in the complementary hue of the zone colour | grassy rim over plum soil, stepped grassy mounds behind, a standing-stone rune circle headland, a pond headland with a waterfall, crystal trees, turf and flowers, lanterns | **Rune Obelisk**: tiered obelisk on a stepped knoll (two 1-stud steps) with a floating crystal and rune rings in the zone colour |
 
 A theme reused by a zone whose colour is close to the theme's field hue
 switches its field to that colour's complement automatically
@@ -145,22 +176,27 @@ switches its field to that colour's complement automatically
 
 ### Teaser
 
-The next slot is an unfinished, storm-veiled island: dark basalt with rock
-boulders, violet crystals, a dormant crystal in a scaffold, crates and a
-survey flag under rolling violet mist; a half-built rune bridge stops at a
+The next slot is an unfinished, storm-veiled island: a sixteen-sided storm
+rock isle over basalt with a three-tier underside and hanging points,
+violet crystals, a 28-stud violet crystal spire in a three-level scaffold
+(the isle's silhouette from spawn), a lower slate terrace 8 studs down,
+crates and a survey flag under rolling violet mist; a half-built rune bridge stops at a
 glowing (solid) rune barrier with a **COMING SOON** board, loose bridge
 stones drift in the gap, and a stub reaches out from the island side.
 
 ## Stacking and budgets
 
-- Tested with five extra Config zones (themes Volcano, Ice, Beach, Canyon,
-  Sky at floors 32 to 80): every zone lands on its compass lane, every lane
-  lights up with its own trail and gateway, all catch floors stay 100% flat,
-  open and reachable, and the teaser moves to the eighth lane.
-- The current world (2 zones + teaser) is about 1,510 parts, 42 lights,
-  9 particle emitters and about 200 beams. Each extra zone adds roughly
-  330 parts (zone) + 70 (bridge) + 30 (hub lane), so about four zones fit
-  under 2,500 parts; beyond that the budget has to grow.
+- Tested with four extra Config zones (themes Volcano and Ice, which fall
+  back to Default, plus Beach and Canyon, at floors 32 to 68): every zone
+  lands on its compass lane, every catch floor is covered by block ground
+  at exactly its floor height and stays 100% flat, open and reachable, and
+  the teaser moves out along the spiral.
+- The current world (2 zones + teaser) is about 1,900 parts, of which about
+  610 are ground (hub ~115, each zone ~200 with its theme's landforms,
+  teaser ~45, eight drifting islets ~90). Each extra zone adds roughly 460
+  parts (about 200 of them ground), so one more zone fits under 2,500
+  parts; beyond that the budget has to grow or the islands get cheaper
+  (octagon lobes, fewer drifters).
 - Lights (86) and particle emitters (24) are hard-capped per world; the
   counters live on the Map folder.
 

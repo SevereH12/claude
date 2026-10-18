@@ -1,6 +1,6 @@
 --!strict
--- SkyIsles palette: the ten core colours, their working shades, terrain
--- material colours and sign looks. Every SkyIsles piece takes its colours
+-- SkyIsles palette: the ten core colours, their working shades, ground
+-- colours and sign looks. Every SkyIsles piece takes its colours
 -- from here (docs/styles/SkyIsles.md explains what each one is for).
 
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -43,25 +43,32 @@ local C = {
 	iron = Color3.fromRGB(50, 44, 62),
 	cloud = Color3.fromRGB(238, 230, 242),
 	ink = Color3.fromRGB(34, 24, 50),
+	-- bold two-tone field pairs (30%+ luminance apart)
+	fieldMint = Color3.fromRGB(164, 238, 206),
+	fieldTeal = Color3.fromRGB(28, 104, 110),
+	fieldLilac = Color3.fromRGB(214, 192, 246),
+	fieldPlum = Color3.fromRGB(78, 52, 118),
 }
 Palette.C = C
 
--- Terrain material colours (Terrain:SetMaterialColor). Grass is only ever
--- used outside catch floors: its grass blades would hide warning circles.
-Palette.TERRAIN = {
-	[Enum.Material.Rock] = Color3.fromRGB(146, 132, 170),
-	[Enum.Material.Slate] = Color3.fromRGB(100, 86, 126),
-	[Enum.Material.Basalt] = Color3.fromRGB(66, 54, 88),
-	[Enum.Material.Pavement] = Color3.fromRGB(208, 198, 222),
-	[Enum.Material.Cobblestone] = Color3.fromRGB(170, 158, 192),
-	[Enum.Material.Grass] = Color3.fromRGB(110, 184, 84),
-	[Enum.Material.LeafyGrass] = Color3.fromRGB(78, 156, 76),
-	[Enum.Material.Sand] = Color3.fromRGB(244, 214, 150),
-	[Enum.Material.Sandstone] = Color3.fromRGB(210, 112, 72),
-	[Enum.Material.Ground] = Color3.fromRGB(232, 162, 96),
-	[Enum.Material.Limestone] = Color3.fromRGB(232, 218, 196),
-	[Enum.Material.Mud] = Color3.fromRGB(120, 92, 120),
-	[Enum.Material.Salt] = Color3.fromRGB(226, 220, 236),
+-- Ground colours (Ground.luau builds every island from flat-coloured
+-- blocks): light caps over darker soil over alternating rock strata.
+Palette.GROUND = {
+	grass = Color3.fromRGB(128, 198, 94), -- lawn and island caps
+	grassDeep = Color3.fromRGB(80, 158, 78), -- dune crowns, turf patches
+	soil = Color3.fromRGB(122, 94, 116), -- the band under a grass cap
+	sand = Color3.fromRGB(246, 218, 156), -- beach caps
+	sandWet = Color3.fromRGB(214, 176, 118), -- the band under a sand cap
+	dune = Color3.fromRGB(236, 202, 136),
+	rockLight = Color3.fromRGB(190, 180, 210), -- pale cliff strata
+	rock = Color3.fromRGB(146, 132, 170), -- skystone cliffs
+	slate = Color3.fromRGB(100, 86, 126), -- deep strata
+	basalt = Color3.fromRGB(66, 54, 88), -- hanging points
+	sandstone = Color3.fromRGB(210, 112, 72), -- canyon strata
+	sandstoneLight = Color3.fromRGB(232, 150, 92), -- canyon caps
+	ochre = Color3.fromRGB(232, 162, 96), -- canyon bands
+	pavement = Color3.fromRGB(212, 202, 226), -- hub plaza
+	stormRock = Color3.fromRGB(104, 90, 132), -- the uncharted isle
 }
 
 Palette.WATER = Color3.fromRGB(70, 190, 196)
@@ -79,7 +86,7 @@ function Palette.complement(color: Color3): (Color3, Color3)
 		-- grey zone colours: use a calm sky-blue field
 		hue = 0.6
 	end
-	return Color3.fromHSV(hue, 0.42, 0.66), Color3.fromHSV(hue, 0.5, 0.5)
+	return Color3.fromHSV(hue, 0.3, 0.92), Color3.fromHSV(hue, 0.6, 0.45)
 end
 
 -- The two field tones to lay under warning circles drawn in `color`: the

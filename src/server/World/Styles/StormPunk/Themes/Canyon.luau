@@ -1,10 +1,11 @@
 --!strict
--- Canyon theme ("Thunderhead Mesa"): a raised plateau over strongly
--- shifted terraces of striped sandstone and limestone (wide ledges on one
--- side, a sheer drop to the beach on the other), a rock ridge behind the
--- field, hoodoos, a natural arch, and the Thunder Spire (a rock pinnacle
--- crowned with a brass lightning rod). Field: deep sage and cream
--- checkerboard. Works for any slot and any floor height.
+-- Canyon theme ("Thunderhead Mesa"): a raised block plateau over shifted
+-- terraces of striped sandstone and limestone (wide ledges on one side and
+-- the back, a green ledge halfway, a sheer drop on the other side), a ridge
+-- of rock columns behind the field, hoodoos, a natural arch, and the
+-- Thunder Spire (a pinnacle of twisting hex tiers crowned with a brass
+-- lightning rod). Field: deep sage and cream checkerboard. Works for any
+-- slot and any floor height.
 
 local ServerScriptService = game:GetService("ServerScriptService")
 
@@ -24,12 +25,15 @@ local C = Palette.colors
 local T = Palette.tints
 local M = Palette.materials
 local L = Palette.light
-local TERRAIN = Enum.Material
+local G = Palette.ground
 local SEA_FLOOR = Geo.SEA_FLOOR
+local BOTTOM = SEA_FLOOR - 0.5
 local UP = Vector3.new(0, 1, 0)
 
-local STRATA = { TERRAIN.Limestone, TERRAIN.Rock, TERRAIN.Ground }
+local STRATA = { G.sandstone, G.limestone }
 local SPIRE_R = 12
+-- the spire's top, above the field (the rig sits on it)
+local SPIRE_TOP = 29.5
 
 local Canyon = {}
 
@@ -38,10 +42,11 @@ Canyon.bridge = {
 	deckMaterial = M.plate,
 	rail = C.brass,
 	pile = T.copperDark,
-	stack = TERRAIN.Sandstone,
+	stack = G.sandstone,
 } :: Zone.BridgeStyle
 
 local layersByZone: { [string]: { Land.Layer } } = {}
+local blockedByZone: { [string]: { Land.Shape } } = {}
 local spireByZone: { [string]: Vector3 } = {}
 
 function Canyon.layers(zone: ZoneContext): { Land.Layer }
@@ -62,193 +67,154 @@ function Canyon.ground(ctx: Context, zone: ZoneContext)
 	local slot = zone.slot
 	local F = slot.floor
 	local w, d = slot.width, slot.depth
+	local hw, hd = w / 2, d / 2
 	local key = Geo.zoneKey(zone)
 	local rng = Geo.rng(ctx, key .. "-ground")
 	local guard = Geo.guard(ctx, zone)
-	local layers: { Land.Layer } = {}
+	local detail = Geo.zoneDetail(zone)
+	local parent = ctx.folders.ground
 
-	-- up to three terraces stepping up toward the plateau: 6-stud steps
-	-- for low mesas, taller cliffs (multiples of 4) for high ones
-	local rise = 6
-	if (F - 4) / 6 > 3 then
-		rise = math.max(4, math.floor((F - 4) / 16 + 0.5) * 4)
-	end
-	local steps = {}
-	local y = F - rise
-	while y > 4 and #steps < 3 do
-		table.insert(steps, 1, y)
-		y -= rise
-	end
-	local ledge = if #steps >= 3 then 18 else 22
-	local outer = 12 + #steps * ledge
-	Land.fill(
-		ctx,
-		Land.organic(slot.frame, w + outer + 36, d + outer + 36, rng, { edge = 16, jitter = 10, bays = 2 }),
-		SEA_FLOOR,
-		-3,
-		TERRAIN.Sand,
-		0,
-		guard
-	)
-	local beach = Land.organic(slot.frame, w + outer + 20, d + outer + 20, rng, {
-		edge = 14,
-		jitter = 8,
-		bays = 2,
-		bayDepth = 14,
-		spits = 1,
-		spitLength = 24,
+	-- terraces: every stratum steps out a stud all round plus a wide ledge
+	-- on one side and the back (the other side drops sheer to the sand);
+	-- the second ledge is green
+	local side = if rng:NextNumber() < 0.5 then -1 else 1
+	local island = Zone.island(ctx, zone, {
+		field = G.limestone,
+		colors = STRATA,
+		grow = 1,
+		lean = Vector2.new(side * 7, 4),
+		capBand = 2,
+		side = 10,
+		back = 18,
 	})
-	Land.fill(ctx, beach, SEA_FLOOR, 2, TERRAIN.Sand, 0, guard)
+	local layers = island.layers
+	local blocked: { Land.Shape } = {}
 
-	-- terraces shift well off-centre: wide ledges on one side; on the
-	-- opposite side they are dropped so the plateau falls sheer to the sand
-	local shiftDir = Vector3.new(rng:NextNumber(-1, 1), 0, rng:NextNumber(0.2, 1)).Unit
-	local hw, hd = w / 2, d / 2
-	for i, top in steps do
-		local grow = 12 + (#steps - i + 1) * ledge
-		local shift = CFrame.new(shiftDir * grow * 0.3)
-		local frame = slot.frame * shift
-		local outline = Land.clip(
-			Land.organic(frame, w + grow, d + grow, rng, { edge = 8 + i, jitter = 7, bays = 1 }),
-			function(c)
-				-- the sheer side: nothing past the plateau edge opposite the shift
-				local l = slot.frame:PointToObjectSpace(Vector3.new(c.x, F, c.z))
-				local along = l.X * -shiftDir.X + l.Z * -shiftDir.Z
-				local limit = math.abs(shiftDir.X) * hw + math.abs(shiftDir.Z) * hd
-				return along < limit + 2
-			end
-		)
-		local terrace = Land.cliff(
-			ctx,
-			outline,
-			SEA_FLOOR,
-			top,
-			TERRAIN.Sandstone,
-			STRATA,
-			if i == 1 then TERRAIN.LeafyGrass else TERRAIN.Sandstone,
-			rng,
-			{ guard = guard, lean = 6, foot = 0 }
-		)
-		table.insert(layers, 1, { outline = terrace, top = top })
-	end
-	-- the plateau itself
-	local plateau = Land.cliff(
-		ctx,
-		Land.organic(slot.frame, w + 12, d + 12, rng, { edge = 6, jitter = 3 }),
-		SEA_FLOOR,
-		F,
-		TERRAIN.Sandstone,
-		STRATA,
-		TERRAIN.Limestone,
-		rng,
-		{ guard = guard, lean = 7, foot = 0 }
-	)
-	Land.flatRect(ctx, slot.frame, w + 4, d + 4, F, 8, TERRAIN.Limestone)
-	Land.talus(ctx, plateau, 2, rng, 10, TERRAIN.Sandstone, guard)
-
-	-- a broken ridge behind the field, standing 8-16 above it
-	local ridgeA = Geo.slotPoint(zone, -hw * 0.95, hd + 18)
-	local ridgeB = Geo.slotPoint(zone, hw * 0.1, hd + 22)
-	Land.ridge(
-		ctx,
-		ridgeA,
-		ridgeB,
+	-- a broken ridge of rock columns behind the field, 8-16 above it
+	local ridge = Land.ridge(
+		parent,
+		Geo.slotPoint(zone, -hw * 0.95, hd + 18),
+		Geo.slotPoint(zone, hw * 0.1, hd + 22),
 		F + 8,
 		F + 16,
 		16,
 		rng,
-		TERRAIN.Sandstone,
 		STRATA,
-		TERRAIN.Sandstone,
-		guard
+		nil,
+		guard,
+		Geo.count(detail, 2, 3),
+		BOTTOM
 	)
+	table.move(ridge, 1, #ridge, #blocked + 1, blocked)
+	local saddle = Zone.saddle(ctx, zone, STRATA, nil)
+	table.move(saddle, 1, #saddle, #blocked + 1, blocked)
 
-	-- hoodoos around the base
-	for _ = 1, 5 do
+	-- hoodoos around the base: two-tone columns
+	for _ = 1, Geo.count(detail, 1, 4) do
 		local p = Geo.slotPoint(
 			zone,
 			rng:NextNumber(-0.65, 0.65) * w,
 			rng:NextNumber(0.1, 0.5) * d + rng:NextNumber(30, 44)
 		)
-		local r = rng:NextNumber(3.5, 6)
-		if Geo.isClear(ctx, p, r + 2) then
-			Land.pinnacle(
-				ctx,
-				Vector3.new(p.X, SEA_FLOOR, p.Z),
-				F - SEA_FLOOR + rng:NextNumber(-10, 8),
+		local r = rng:NextNumber(3.5, 5.5)
+		if Geo.isClear(ctx, p, r + 2) and not Land.containsAny(blocked, p, -(r + 2)) then
+			local shape = Land.column(
+				parent,
+				p,
+				BOTTOM,
+				F + rng:NextNumber(-10, 8),
 				r,
-				rng,
-				{ TERRAIN.Sandstone, TERRAIN.Limestone, TERRAIN.Sandstone, TERRAIN.Rock },
-				r * 0.7,
+				STRATA,
 				nil,
+				rng:NextNumber(0, math.pi),
 				guard
 			)
+			if shape then
+				table.insert(blocked, Land.grown(shape, 1.5))
+			end
 		end
 	end
 
-	-- the Thunder Spire (terrain part of the hero), on the first clear spot
+	-- the Thunder Spire (the rock half of the hero), on the first clear spot
+	spireByZone[key] = nil
 	for _, s in spireSpots(zone) do
 		local spire = Geo.slotPoint(zone, s.X, s.Z)
 		if Geo.isClear(ctx, spire, SPIRE_R) then
-			spireByZone[key] = spire
-			Land.fill(
-				ctx,
-				Land.blob(spire, SPIRE_R + 10, rng, 6, 3),
-				SEA_FLOOR,
-				6,
-				TERRAIN.Sandstone,
-				0,
+			local shape = Land.spire(
+				parent,
+				spire,
+				BOTTOM,
+				F + SPIRE_TOP,
+				SPIRE_R * 0.85,
+				SPIRE_R * 0.45,
+				4,
+				{ G.sandstone, G.limestone, G.earth, G.limestone },
+				rng:NextNumber(0, math.pi),
 				guard
 			)
-			Land.pinnacle(
-				ctx,
-				Vector3.new(spire.X, SEA_FLOOR, spire.Z),
-				F - SEA_FLOOR + 30,
-				SPIRE_R,
-				rng,
-				{
-					TERRAIN.Sandstone,
-					TERRAIN.Limestone,
-					TERRAIN.Sandstone,
-					TERRAIN.Rock,
-					TERRAIN.Sandstone,
-				},
-				SPIRE_R * 0.55,
-				nil,
-				guard
-			)
-			break
+			if shape then
+				spireByZone[key] = spire
+				table.insert(blocked, Land.grown(shape, 3))
+				break
+			end
 		end
 	end
 
 	-- natural arch off whichever side is clear, feet on the sea bed
-	for _, side in { 1, -1 } do
-		local mid = Geo.slotPoint(zone, side * (hw + outer * 0.5 + 6), hd * 0.1)
-		local along = slot.frame.LookVector
-		local a = mid - along * 13
-		local b = mid + along * 13
-		if Geo.isClear(ctx, a, 6) and Geo.isClear(ctx, b, 6) then
-			Land.arch(
-				ctx,
-				Vector3.new(a.X, SEA_FLOOR, a.Z),
-				Vector3.new(b.X, SEA_FLOOR, b.Z),
-				F + 4 - SEA_FLOOR,
-				6,
-				rng,
-				{ TERRAIN.Sandstone, TERRAIN.Limestone, TERRAIN.Sandstone },
-				guard
-			)
-			break
+	if detail >= 0.5 then
+		local apron = island.apron
+		local center = slot.frame:PointToObjectSpace(apron.center + UP * F)
+		for _, s in { 1, -1 } do
+			local mid = Geo.slotPoint(zone, center.X + s * (apron.half.X + 9), hd * 0.1)
+			local along = slot.frame.LookVector
+			local a = mid - along * 13
+			local b = mid + along * 13
+			if
+				Geo.isClear(ctx, a, 6)
+				and Geo.isClear(ctx, b, 6)
+				and Land.arch(parent, a, b, BOTTOM, F + 4, 6, STRATA, guard)
+			then
+				for _, p in { a, b, mid } do
+					table.insert(blocked, Land.poly(p, 7, 6))
+				end
+				break
+			end
 		end
 	end
 
-	table.insert(layers, 1, { outline = plateau, top = F })
-	table.insert(layers, { outline = beach, top = 2 })
+	-- talus: block rocks fallen at the foot of the cliffs
+	local rocks = Geo.count(detail, 2, 5)
+	for _ = 1, 16 do
+		if rocks <= 0 then
+			break
+		end
+		local p = Geo.edgePoint(
+			zone,
+			rng:NextNumber(-0.5, 0.5),
+			rng:NextNumber(-0.3, 0.5),
+			rng:NextNumber(10, 30)
+		)
+		if
+			Land.surfaceAt(layers, p, 2) == Geo.BEACH
+			and Geo.isClear(ctx, p, 2)
+			and not Land.containsAny(blocked, p, -2)
+		then
+			rocks -= 1
+			Pieces.rocks(
+				zone.folder,
+				Vector3.new(p.X, Geo.BEACH, p.Z),
+				rng:NextNumber(2.5, 4),
+				T.rock
+			)
+		end
+	end
+
 	layersByZone[key] = layers
+	blockedByZone[key] = blocked
 
 	-- the field: deep sage tiles on cream limestone, framed in brass with
 	-- a glowing zone-colour strip
-	Zone.checker(zone, 16, T.sageDark, TERRAIN.Grass)
+	Zone.checker(zone, 16, T.sageDark, Enum.Material.SmoothPlastic)
 	Zone.floorFrame(zone, C.brass, 1.5)
 end
 
@@ -304,13 +270,38 @@ local function headframe(ctx: Context, parent: Instance, frame: CFrame)
 	end
 	local hub = (frame * CFrame.new(0, 12.4, 0)).Position
 	Pieces.pipe(parent, hub - frame.RightVector * 0.3, hub + frame.RightVector * 0.3, 4.4, C.copper)
-	Pieces.block(parent, frame * CFrame.new(0, 0.6, 0.5), Vector3.new(5, 1.2, 5), T.timberDark, M.planks, true)
-	Kit.cable(ctx, hub - UP * 2, (frame * CFrame.new(0, 1.2, 0.5)).Position, { Color = C.soot, Width = 0.2 })
+	Pieces.block(
+		parent,
+		frame * CFrame.new(0, 0.6, 0.5),
+		Vector3.new(5, 1.2, 5),
+		T.timberDark,
+		M.planks,
+		true
+	)
+	Kit.cable(
+		ctx,
+		hub - UP * 2,
+		(frame * CFrame.new(0, 1.2, 0.5)).Position,
+		{ Color = C.soot, Width = 0.2 }
+	)
 end
 
 local function oreCart(parent: Instance, frame: CFrame)
-	Pieces.block(parent, frame * CFrame.new(0, 1.6, 0), Vector3.new(2.6, 1.6, 3.6), T.copperDark, M.rusty, true)
-	Pieces.block(parent, frame * CFrame.new(0, 2.5, 0), Vector3.new(2.2, 0.6, 3.2), C.copper, Enum.Material.Rock)
+	Pieces.block(
+		parent,
+		frame * CFrame.new(0, 1.6, 0),
+		Vector3.new(2.6, 1.6, 3.6),
+		T.copperDark,
+		M.rusty,
+		true
+	)
+	Pieces.block(
+		parent,
+		frame * CFrame.new(0, 2.5, 0),
+		Vector3.new(2.2, 0.6, 3.2),
+		C.copper,
+		Enum.Material.Rock
+	)
 	for _, z in { -1.1, 1.1 } do
 		Pieces.pipe(
 			parent,
@@ -344,13 +335,13 @@ function Canyon.dress(ctx: Context, zone: ZoneContext)
 	local key = Geo.zoneKey(zone)
 	local rng = Geo.rng(ctx, key .. "-dress")
 	local center = slot.frame.Position
-	local place = Zone.placer(ctx, zone, Canyon.layers(zone))
+	local place = Zone.placer(ctx, zone, Canyon.layers(zone), blockedByZone[key])
 	local V2 = Vector2.new
 
 	-- hero: the Thunder Spire's lightning rod, wired to the mesa rim
 	local spire = spireByZone[key]
 	if spire then
-		local orb = spireRig(parent, Vector3.new(spire.X, F + 30 - 0.5, spire.Z), zone.color)
+		local orb = spireRig(parent, Vector3.new(spire.X, F + SPIRE_TOP, spire.Z), zone.color)
 		for _, u in { -1, 1 } do
 			local corner = Geo.slotPoint(zone, u * hw, hd, Zone.POST_HEIGHT - 1.35)
 			Pieces.liveCable(ctx, orb - UP * 9, corner, zone.color, 0.4, 5)
@@ -412,19 +403,17 @@ function Canyon.dress(ctx: Context, zone: ZoneContext)
 		end
 	end
 
-	-- a pipe running down the cliff from the rim
+	-- a pipe from the rim out over the cliff and down to the ledge below
 	do
-		local rim = place.ground(hw * -0.2, hd + 3.5, 1)
-		if rim then
-			local out = Geo.slotPoint(zone, hw * -0.2, hd + 9, -4.6)
-			local foot = Geo.slotPoint(zone, hw * -0.2, hd + 14, -4.6)
-			if Geo.isClear(ctx, foot, 1.5) then
-				local level = Vector3.new(out.X, rim.Y + 0.6, out.Z)
-				Pieces.pipe(parent, rim + UP * 0.6, level, 1.3, C.copper)
-				Pieces.pipe(parent, level, out, 1.3, C.copper)
-				Pieces.pipe(parent, out, foot, 1.3, C.copper)
-				Pieces.column(parent, level - UP * 0.8, 1.6, 1.9, C.brass)
-			end
+		local x = hw * -0.2
+		local rim = Geo.slotPoint(zone, x, hd + 3, 0.6)
+		local out = Geo.slotPoint(zone, x, hd + 12)
+		local below = Land.surfaceAt(Canyon.layers(zone), out, 1)
+		if below and below < F - 1 and Geo.isClear(ctx, out, 1.5) then
+			local level = Vector3.new(out.X, rim.Y, out.Z)
+			Pieces.pipe(parent, rim, level, 1.3, C.copper)
+			Pieces.pipe(parent, level, Vector3.new(out.X, below, out.Z), 1.3, C.copper)
+			Pieces.column(parent, rim - UP * 1.4, 1.6, 1.9, C.brass)
 		end
 	end
 end

@@ -1,568 +1,663 @@
 --!strict
--- Terrain landmasses for StormPunk: organic outlines with authored bays,
--- spits and points (never plain circles or rectangles), cliffs that lean
--- back band by band with strata, talus at their feet, sea stacks, ridges
--- and arches. An outline is computed once and can be filled many times at
--- different heights and materials, so strata follow the same coastline.
+-- Block-built land for StormPunk: islands, strata cliffs, shore slopes,
+-- basalt columns, ridges and arches made of chunky SmoothPlastic parts
+-- (World/Blocks) in ctx.folders.ground. No terrain anywhere.
 --
--- Every fill can take a Guard: a predicate that rejects a circle whose top
--- would rise into another zone's footprint or above a connector deck (see
--- Geo.guard). Terrain is clipped by construction; nothing is carved later.
+-- Shapes: a regular polygon with an even number of sides, built from
+-- sides/2 overlapping boxes that each span two opposite faces (a 12-gon
+-- costs 6 parts, a hex column 3), or a rectangle (1 part). A shape is
+-- computed once and built at several heights, grown or leaned, so strata
+-- follow the same outline. All boxes of one shape share one colour, and
+-- shapes that meet at the same height share a jitter key, so overlapping
+-- tops never flicker.
+--
+-- Every build can take a Guard (Geo.guard): a shape whose outline would
+-- rise above a connector deck or into another zone is shrunk or skipped.
 
 local ServerScriptService = game:GetService("ServerScriptService")
 
-local WorldTypes = require(ServerScriptService.Server.World.Types)
+local World = ServerScriptService.Server.World
+local Blocks = require(World.Blocks)
+local WorldTypes = require(World.Types)
 
 type Context = WorldTypes.Context
 
-export type Circle = { x: number, z: number, r: number }
-export type Box = { frame: CFrame, width: number, depth: number }
-export type Outline = {
-	box: Box?,
-	circles: { Circle },
+export type Shape = {
+	center: Vector3, -- y ignored
+	rotation: CFrame, -- yaw only
+	sides: number, -- even; 0 = rectangle
+	apothem: number, -- polygon: centre to the middle of a face
+	half: Vector2, -- rectangle: half-size along its local X and Z
 }
--- (x, z, radius, top) -> may terrain stand here?
+export type Layer = { shape: Shape, top: number }
+-- (x, z, radius, top) -> may ground stand here?
 export type Guard = (x: number, z: number, r: number, top: number) -> boolean
-
-export type OrganicOptions = {
-	edge: number, -- typical edge circle radius
-	jitter: number, -- how far points push out past the rectangle
-	bays: number?, -- bites taken out of the coast
-	bayDepth: number?,
-	spits: number?, -- tapering points reaching out
-	spitLength: number?,
-	-- keep features off these edges ("front" = the -Z / hub-facing edge)
-	calmFront: boolean?,
+-- One stratum of a stack, listed from the top down.
+export type Band = {
+	color: Color3,
+	height: number?, -- nil (or the last band): down to the stack's bottom
+	grow: number?, -- wider than the band above by this much (negative: overhang)
+	lean: Vector2?, -- rectangles: extra growth toward local +/-X and +/-Z
+	cap: Color3?, -- a 1-stud cap of this colour, overhanging a little
+	key: Vector3?, -- colour jitter key (see Land.SHARED)
 }
 
 local Land = {}
 
-local function smooth(u: number): number
-	-- 1 at u = 0 falling to 0 at |u| = 1
-	local a = math.clamp(math.abs(u), 0, 1)
-	local c = math.cos(a * math.pi / 2)
-	return c * c
-end
+local UP = Vector3.new(0, 1, 0)
 
--- Organic coast around a rectangle (`frame` gives centre and yaw). Edge
--- circles vary from half to double `edge`, follow a slow wave plus noise,
--- and the coast gets `bays` (bites) and `spits` (tapering points) at random
--- places along it. Coverage is guaranteed: every edge circle reaches the
--- core box, so there are never holes.
-function Land.organic(
-	frame: CFrame,
-	width: number,
-	depth: number,
-	rng: Random,
-	opts: OrganicOptions
-): Outline
-	local edge = opts.edge
-	local jitter = opts.jitter
-	local circles: { Circle } = {}
-	local hw, hd = width / 2, depth / 2
-	local perimeter = 2 * (width + depth)
-	local spacing = edge * 0.9
-	local steps = math.max(10, math.floor(perimeter / spacing))
-	spacing = perimeter / steps
-	local inset = edge * 0.8
-	local offset = rng:NextNumber(0, perimeter)
-	local phase1, phase2 = rng:NextNumber(0, math.pi * 2), rng:NextNumber(0, math.pi * 2)
-	local f1 = math.pi * 2 * rng:NextInteger(2, 3) / perimeter
-	local f2 = math.pi * 2 * rng:NextInteger(5, 8) / perimeter
+-- Shore slopes, comfortably under the 28-degree walkable limit.
+Land.SHORE_ANGLE = math.rad(24)
+-- Jitter key shared by every beach and apron top: beaches that merge at the
+-- same height are exactly one colour, so their overlaps never flicker.
+Land.SHARED = Vector3.zero
+Land.CAP = 1
+Land.OVERHANG = 0.4
 
-	-- t along the perimeter, starting at the front-left corner, clockwise
-	-- seen from above: front edge (-Z), right (+X), back (+Z), left (-X)
-	local function edgeAt(t: number): (number, number, number, number)
-		t %= perimeter
-		if t < width then
-			return -hw + t, -hd, 0, -1
-		elseif t < width + depth then
-			return hw, -hd + (t - width), 1, 0
-		elseif t < 2 * width + depth then
-			return hw - (t - width - depth), hd, 0, 1
-		end
-		return -hw, hd - (t - 2 * width - depth), -1, 0
-	end
-	local function pickT(): number
-		for _ = 1, 12 do
-			local t = rng:NextNumber(0, perimeter)
-			if not opts.calmFront or t > width + edge then
-				return t
-			end
-		end
-		return width + depth + rng:NextNumber(0, width)
-	end
+-- Shapes ----------------------------------------------------------------------------
 
-	local bays: { { t: number, half: number, depth: number } } = {}
-	for _ = 1, opts.bays or 0 do
-		table.insert(bays, {
-			t = pickT(),
-			half = math.max(edge * 1.6, perimeter * rng:NextNumber(0.04, 0.08)),
-			depth = (opts.bayDepth or edge * 1.1) * rng:NextNumber(0.7, 1),
-		})
-	end
-	local function bayPush(t: number): number
-		local push = 0
-		for _, bay in bays do
-			local d = (t - bay.t + perimeter / 2) % perimeter - perimeter / 2
-			push -= bay.depth * smooth(d / bay.half)
-		end
-		return push
-	end
-
-	for i = 0, steps - 1 do
-		local t = offset + i / steps * perimeter
-		local x, z, nx, nz = edgeAt(t)
-		local wave = 0.6 * math.sin(t * f1 + phase1) + 0.4 * math.sin(t * f2 + phase2)
-		local push = (wave * 0.6 + rng:NextNumber(-0.3, 0.3) + 0.3) * jitter + bayPush(t)
-		local size = 0.5 + 1.5 * math.clamp(wave * 0.5 + 0.5 + rng:NextNumber(-0.2, 0.2), 0, 1)
-		local r = edge * size
-		-- always reach the core box so the coast has no holes
-		r = math.max(r, push + inset + spacing * 0.45, edge * 0.5)
-		local p = frame:PointToWorldSpace(Vector3.new(x + nx * push, 0, z + nz * push))
-		table.insert(circles, { x = p.X, z = p.Z, r = r })
-	end
-	-- spits: chains of shrinking circles reaching out from the coast
-	for _ = 1, opts.spits or 0 do
-		local x, z, nx, nz = edgeAt(pickT())
-		local length = opts.spitLength or edge * 3
-		local links = 4
-		local bend = rng:NextNumber(-0.35, 0.35)
-		for k = 0, links - 1 do
-			local f = k / (links - 1)
-			local out = jitter * 0.5 + length * f
-			local side = bend * length * f * f
-			local px = x + nx * out - nz * side
-			local pz = z + nz * out + nx * side
-			local p = frame:PointToWorldSpace(Vector3.new(px, 0, pz))
-			table.insert(circles, { x = p.X, z = p.Z, r = edge * (1.15 - 0.7 * f) })
-		end
-	end
+function Land.poly(center: Vector3, apothem: number, sides: number, yaw: number?): Shape
+	local n = math.max(4, sides + sides % 2)
 	return {
-		box = {
-			frame = CFrame.new(frame.Position) * frame.Rotation,
-			width = math.max(width - 2 * inset, width * 0.4),
-			depth = math.max(depth - 2 * inset, depth * 0.4),
-		},
-		circles = circles,
+		center = Vector3.new(center.X, 0, center.Z),
+		rotation = CFrame.Angles(0, yaw or 0, 0),
+		sides = n,
+		apothem = apothem,
+		half = Vector2.zero,
 	}
 end
 
--- Irregular blob around a centre: an elongated core of two discs plus lobes
--- of very different sizes, so it never reads as a circle.
-function Land.blob(
-	center: Vector3,
-	radius: number,
-	rng: Random,
-	lobes: number,
-	wobble: number
-): Outline
-	local axis = rng:NextNumber(0, math.pi * 2)
-	local ax, az = math.sin(axis), -math.cos(axis)
-	local stretch = radius * rng:NextNumber(0.15, 0.3)
-	local circles: { Circle } = {
-		{ x = center.X + ax * stretch, z = center.Z + az * stretch, r = radius * 0.66 },
-		{ x = center.X - ax * stretch, z = center.Z - az * stretch, r = radius * 0.6 },
+-- A rectangle centred on `frame` (any yaw), `half` along its local X and Z.
+function Land.rect(frame: CFrame, half: Vector2): Shape
+	local p = frame.Position
+	return {
+		center = Vector3.new(p.X, 0, p.Z),
+		rotation = frame.Rotation,
+		sides = 0,
+		apothem = math.min(half.X, half.Y),
+		half = half,
 	}
-	local start = rng:NextNumber(0, math.pi * 2)
-	for i = 1, lobes do
-		local a = start + (i / lobes) * math.pi * 2 + rng:NextNumber(-0.3, 0.3)
-		local r = radius * rng:NextNumber(0.24, 0.55)
-		local reach = radius - r * rng:NextNumber(0.7, 1.05) + rng:NextNumber(-1, 1) * wobble
-		table.insert(circles, {
-			x = center.X + math.sin(a) * reach,
-			z = center.Z - math.cos(a) * reach,
-			r = r,
-		})
+end
+
+function Land.grown(shape: Shape, amount: number): Shape
+	local copy = table.clone(shape)
+	if shape.sides == 0 then
+		copy.half =
+			Vector2.new(math.max(shape.half.X + amount, 0.5), math.max(shape.half.Y + amount, 0.5))
+		copy.apothem = math.min(copy.half.X, copy.half.Y)
+	else
+		copy.apothem = math.max(shape.apothem + amount, 0.5)
 	end
-	return { box = nil, circles = circles }
+	return copy
 end
 
--- Box perimeter sample points (as small circles) for clipping.
-local function boxSamples(box: Box, grow: number): { Circle }
-	local out: { Circle } = {}
-	local hw, hd = box.width / 2 + grow, box.depth / 2 + grow
-	local n = 6
-	for i = 0, n do
-		local f = -1 + 2 * i / n
-		for _, p in
-			{
-				Vector3.new(f * hw, 0, -hd),
-				Vector3.new(f * hw, 0, hd),
-				Vector3.new(-hw, 0, f * hd),
-				Vector3.new(hw, 0, f * hd),
-			}
-		do
-			local w = box.frame:PointToWorldSpace(p)
-			table.insert(out, { x = w.X, z = w.Z, r = 2 })
+function Land.scaled(shape: Shape, factor: number): Shape
+	local copy = table.clone(shape)
+	copy.apothem = shape.apothem * factor
+	copy.half = shape.half * factor
+	return copy
+end
+
+-- A rectangle stretched toward one side: +lean.X widens its +X side (or
+-- -X when negative), +lean.Y its +Z side. Polygons are returned as they are.
+function Land.leaned(shape: Shape, lean: Vector2): Shape
+	if shape.sides ~= 0 then
+		return shape
+	end
+	local copy = table.clone(shape)
+	copy.center = shape.center
+		+ shape.rotation:VectorToWorldSpace(Vector3.new(lean.X / 2, 0, lean.Y / 2))
+	copy.half = shape.half + Vector2.new(math.abs(lean.X) / 2, math.abs(lean.Y) / 2)
+	copy.apothem = math.min(copy.half.X, copy.half.Y)
+	return copy
+end
+
+-- Centre to the farthest corner.
+function Land.radius(shape: Shape): number
+	if shape.sides == 0 then
+		return shape.half.Magnitude
+	end
+	return shape.apothem / math.cos(math.pi / shape.sides)
+end
+
+local function faceNormal(angle: number): Vector3
+	return Vector3.new(-math.sin(angle), 0, -math.cos(angle))
+end
+
+-- Corners in the shape's own frame, in order round the edge.
+local function localCorners(shape: Shape): { Vector3 }
+	if shape.sides == 0 then
+		local hx, hz = shape.half.X, shape.half.Y
+		return {
+			Vector3.new(-hx, 0, -hz),
+			Vector3.new(hx, 0, -hz),
+			Vector3.new(hx, 0, hz),
+			Vector3.new(-hx, 0, hz),
+		}
+	end
+	local out: { Vector3 } = {}
+	local r = Land.radius(shape)
+	for j = 0, shape.sides - 1 do
+		table.insert(out, faceNormal((j + 0.5) * 2 * math.pi / shape.sides) * r)
+	end
+	return out
+end
+
+-- World points round the edge (y = 0), about `spacing` studs apart.
+function Land.outline(shape: Shape, spacing: number): { Vector3 }
+	local corners = localCorners(shape)
+	local out: { Vector3 } = {}
+	for i, a in corners do
+		local b = corners[i % #corners + 1]
+		local steps = math.max(1, math.ceil((b - a).Magnitude / spacing))
+		for k = 0, steps - 1 do
+			table.insert(
+				out,
+				shape.center + shape.rotation:VectorToWorldSpace(a:Lerp(b, k / steps))
+			)
 		end
 	end
 	return out
 end
 
-local function shrinkBox(box: Box, keep: (Circle) -> boolean): Box?
-	for _, f in { 1, 0.85, 0.7, 0.55, 0.4, 0.25 } do
-		local candidate = { frame = box.frame, width = box.width * f, depth = box.depth * f }
-		local ok = true
-		for _, s in boxSamples(candidate, 0) do
-			if not keep(s) then
-				ok = false
-				break
-			end
-		end
-		if ok then
-			return candidate
-		end
-	end
-	return nil
-end
-
--- Copy of an outline keeping only the circles `keep` accepts; the core box
--- shrinks toward its centre until its edge is accepted too.
-function Land.clip(outline: Outline, keep: (Circle) -> boolean): Outline
-	local circles: { Circle } = {}
-	for _, c in outline.circles do
-		if keep(c) then
-			table.insert(circles, c)
-		end
-	end
-	local box = outline.box
-	return { box = if box then shrinkBox(box, keep) else nil, circles = circles }
-end
-
--- Copy of an outline with every circle (and the box) grown by `amount`
--- (negative shrinks; circles that vanish are dropped).
-function Land.grown(outline: Outline, amount: number): Outline
-	local circles: { Circle } = {}
-	for _, c in outline.circles do
-		if c.r + amount > 1 then
-			table.insert(circles, { x = c.x, z = c.z, r = c.r + amount })
-		end
-	end
-	local box = outline.box
-	local newBox: Box? = nil
-	if box and box.width + 2 * amount > 2 and box.depth + 2 * amount > 2 then
-		newBox = {
-			frame = box.frame,
-			width = box.width + 2 * amount,
-			depth = box.depth + 2 * amount,
-		}
-	end
-	return { box = newBox, circles = circles }
-end
-
-local function fillBox(
-	ctx: Context,
-	box: Box,
-	bottomY: number,
-	topY: number,
-	material: Enum.Material,
-	grow: number,
-	guard: Guard?
-)
-	local h = topY - bottomY
-	if guard then
-		for _, s in boxSamples(box, grow) do
-			if not guard(s.x, s.z, 1, topY) then
-				return
-			end
-		end
-	end
-	local p = box.frame.Position
-	ctx.terrain:FillBlock(
-		CFrame.new(p.X, (topY + bottomY) / 2, p.Z) * box.frame.Rotation,
-		Vector3.new(box.width + 2 * grow, h, box.depth + 2 * grow),
-		material
-	)
-end
-
--- Fills the outline between two heights. `grow` widens it.
-function Land.fill(
-	ctx: Context,
-	outline: Outline,
-	bottomY: number,
-	topY: number,
-	material: Enum.Material,
-	grow: number?,
-	guard: Guard?
-)
-	local g = grow or 0
-	local h = topY - bottomY
-	if h <= 0 then
-		return
-	end
-	local midY = (topY + bottomY) / 2
-	local box = outline.box
-	if box then
-		fillBox(ctx, box, bottomY, topY, material, g, guard)
-	end
-	for _, c in outline.circles do
-		if not guard or guard(c.x, c.z, c.r + g, topY) then
-			ctx.terrain:FillCylinder(CFrame.new(c.x, midY, c.z), h, c.r + g, material)
-		end
-	end
-end
-
--- Is a point (horizontally) inside the outline, shrunk by `shrink`?
-function Land.contains(outline: Outline, position: Vector3, shrink: number?): boolean
+-- Is a point (horizontally) inside the shape shrunk by `shrink` (negative:
+-- grown)?
+function Land.contains(shape: Shape, position: Vector3, shrink: number?): boolean
 	local m = shrink or 0
-	local box = outline.box
-	if box then
-		local l =
-			box.frame:PointToObjectSpace(Vector3.new(position.X, box.frame.Position.Y, position.Z))
-		if math.abs(l.X) <= box.width / 2 - m and math.abs(l.Z) <= box.depth / 2 - m then
-			return true
+	local d = shape.rotation:VectorToObjectSpace(
+		Vector3.new(position.X - shape.center.X, 0, position.Z - shape.center.Z)
+	)
+	if shape.sides == 0 then
+		return math.abs(d.X) <= shape.half.X - m and math.abs(d.Z) <= shape.half.Y - m
+	end
+	local limit = shape.apothem - m
+	if limit <= 0 then
+		return false
+	end
+	for j = 0, shape.sides - 1 do
+		if d:Dot(faceNormal(j * 2 * math.pi / shape.sides)) > limit then
+			return false
 		end
 	end
-	for _, c in outline.circles do
-		local dx, dz = position.X - c.x, position.Z - c.z
-		if c.r > m and dx * dx + dz * dz <= (c.r - m) * (c.r - m) then
+	return true
+end
+
+function Land.containsAny(shapes: { Shape }, position: Vector3, shrink: number?): boolean
+	for _, shape in shapes do
+		if Land.contains(shape, position, shrink) then
 			return true
 		end
 	end
 	return false
 end
 
-export type Layer = { outline: Outline, top: number }
-
--- Height of the highest layer under the point (layers listed highest
--- first), or nil. A point on the crumbly edge of a layer (inside it but
--- within `shrink` of its rim) is rejected rather than dropped to the layer
--- below, so props never end up buried inside a cliff.
+-- Height of the ground under a point from `layers`, or nil. With a positive
+-- `shrink` the spot must be settled: well inside a layer at that height and
+-- not hugging the foot of anything higher, so props never sink into a cliff
+-- or hang off an edge. A negative `shrink` grows every layer instead.
 function Land.surfaceAt(layers: { Layer }, position: Vector3, shrink: number?): number?
+	local m = shrink or 0
+	local grow = math.min(m, 0)
+	local best: number? = nil
 	for _, layer in layers do
-		if Land.contains(layer.outline, position, 0) then
-			if Land.contains(layer.outline, position, shrink) then
-				return layer.top
-			end
+		if
+			Land.contains(layer.shape, position, grow)
+			and (best == nil or layer.top > (best :: number))
+		then
+			best = layer.top
+		end
+	end
+	if best == nil or m <= 0 then
+		return best
+	end
+	local settled = false
+	for _, layer in layers do
+		if layer.top == best and Land.contains(layer.shape, position, m) then
+			settled = true
+		elseif layer.top > (best :: number) and Land.contains(layer.shape, position, -m) then
 			return nil
+		end
+	end
+	return if settled then best else nil
+end
+
+-- Guards -----------------------------------------------------------------------------
+
+-- May the whole shape rise to `top`? Its outline is sampled every few studs
+-- (every deck or footprint that reaches into it crosses its edge).
+function Land.allows(shape: Shape, top: number, guard: Guard?): boolean
+	if not guard then
+		return true
+	end
+	for _, p in Land.outline(shape, 7) do
+		if not guard(p.X, p.Z, 2, top) then
+			return false
+		end
+	end
+	return true
+end
+
+-- The shape, or the biggest shrunk copy of it (down to `minScale`) that the
+-- guard allows at `top`; nil if none fits.
+function Land.fit(shape: Shape, top: number, guard: Guard?, minScale: number?): Shape?
+	for _, f in { 1, 0.9, 0.8, 0.7, 0.6, 0.5 } do
+		if f < (minScale or 0.6) - 0.001 then
+			break
+		end
+		local candidate = Land.scaled(shape, f)
+		if Land.allows(candidate, top, guard) then
+			return candidate
 		end
 	end
 	return nil
 end
 
--- Exactly flat rectangle (any yaw) with its top at topY: catch floors.
-function Land.flatRect(
-	ctx: Context,
-	frame: CFrame,
-	width: number,
-	depth: number,
-	topY: number,
-	thickness: number,
-	material: Enum.Material
-)
-	local p = frame.Position
-	ctx.terrain:FillBlock(
-		CFrame.new(p.X, topY - thickness / 2, p.Z) * frame.Rotation,
-		Vector3.new(width, thickness, depth),
-		material
-	)
+-- Land registry: every island's outer shapes, so scenery added later
+-- (islets, sea stacks) keeps to open water.
+local registry: { [Context]: { Shape } } = setmetatable({}, { __mode = "k" }) :: any
+
+function Land.register(ctx: Context, shape: Shape)
+	local list = registry[ctx]
+	if not list then
+		list = {}
+		registry[ctx] = list
+	end
+	table.insert(list, shape)
 end
 
-export type CliffOptions = {
-	guard: Guard?,
-	lean: number?, -- how far the foot spreads beyond the top outline (studs)
-	foot: number?, -- below this height the cliff is one plain fill (default 0)
-	capDepth: number?,
-}
+function Land.registered(ctx: Context): { Shape }
+	return registry[ctx] or {}
+end
 
--- Strata cliff: the top outline (`outline`, flat at topY, capped with
--- `cap`) sits on bands that spread out a little further each step down,
--- by a different random amount per circle, so the face leans back with
--- irregular ledges instead of standing as a vertical striped wall. Band
--- heights are jittered per cliff (off the global 4-stud grid); every other
--- band uses the next material from `bands`. Returns the top outline.
-function Land.cliff(
-	ctx: Context,
-	outline: Outline,
-	bottomY: number,
-	topY: number,
-	body: Enum.Material,
-	bands: { Enum.Material },
-	cap: Enum.Material,
-	rng: Random,
-	options: CliffOptions?
-): Outline
-	local opts: CliffOptions = options or {}
-	local guard = opts.guard
-	local lean = opts.lean or 7
-	local foot = math.max(opts.foot or 0, bottomY)
-	local capDepth = opts.capDepth or 4
-	local n = #outline.circles
-	local growth: { number } = table.create(n, 0)
-	local boxGrowth = 0
+-- Is a point at least `margin` studs from every registered island?
+function Land.isOpenWater(ctx: Context, position: Vector3, margin: number): boolean
+	return not Land.containsAny(Land.registered(ctx), position, -margin)
+end
 
-	local function band(y0: number, y1: number, material: Enum.Material)
-		if y1 - y0 <= 0.05 then
-			return
+-- Building -----------------------------------------------------------------------------
+
+-- The shape as a solid prism from `bottom` up to `top`, one colour (jittered
+-- by `key`, default the shape's centre at that height).
+function Land.prism(
+	parent: Instance,
+	color: Color3,
+	shape: Shape,
+	top: number,
+	bottom: number,
+	key: Vector3?
+): { BasePart }
+	local parts: { BasePart } = {}
+	local height = top - bottom
+	if height <= 0.01 then
+		return parts
+	end
+	local paint = Blocks.jitter(color, key or Vector3.new(shape.center.X, top, shape.center.Z))
+	local base = CFrame.new(shape.center.X, top - height / 2, shape.center.Z) * shape.rotation
+	if shape.sides == 0 then
+		local part =
+			Blocks.box(parent, paint, base, Vector3.new(shape.half.X * 2, height, shape.half.Y * 2))
+		part.Color = paint
+		table.insert(parts, part)
+		return parts
+	end
+	local n = shape.sides
+	local faceLength = 2 * shape.apothem * math.tan(math.pi / n)
+	for i = 0, n / 2 - 1 do
+		local part = Blocks.box(
+			parent,
+			paint,
+			base * CFrame.Angles(0, i * 2 * math.pi / n, 0),
+			Vector3.new(faceLength, height, 2 * shape.apothem)
+		)
+		part.Color = paint
+		table.insert(parts, part)
+	end
+	return parts
+end
+
+-- Strata: `bands` from the top down under `top`, each one `grow` wider (or
+-- leaned) than the band above, the last reaching `bottom`. Where the guard
+-- refuses a wider band it keeps the band above's outline (a sheer face).
+-- `key` (shared by every lobe of one island) keeps equal-height tops one
+-- colour. Returns each band's outline and top, for Land.surfaceAt.
+function Land.stack(
+	parent: Instance,
+	base: Shape,
+	top: number,
+	bottom: number,
+	bands: { Band },
+	key: Vector3?,
+	guard: Guard?
+): { Layer }
+	local layers: { Layer } = {}
+	local shape = base
+	local y = top
+	for i, band in bands do
+		if y <= bottom + 0.01 then
+			break
 		end
-		local midY = (y0 + y1) / 2
-		for i, c in outline.circles do
-			local r = c.r + growth[i]
-			if not guard or guard(c.x, c.z, r, y1) then
-				ctx.terrain:FillCylinder(CFrame.new(c.x, midY, c.z), y1 - y0, r, material)
+		local h = if band.height and i < #bands
+			then math.min(band.height, y - bottom)
+			else y - bottom
+		local candidate = Land.grown(shape, band.grow or 0)
+		local lean = band.lean
+		if lean then
+			local leaned = Land.leaned(candidate, lean)
+			if Land.allows(leaned, y, guard) then
+				candidate = leaned
 			end
 		end
-		local box = outline.box
-		if box then
-			fillBox(ctx, box, y0, y1, material, boxGrowth, guard)
+		if i > 1 and not Land.allows(candidate, y, guard) then
+			candidate = shape
 		end
-	end
-
-	-- cap
-	local y = topY - capDepth
-	band(y, topY, cap)
-	-- strata bands, spreading as they go down
-	local i = 0
-	local first = rng:NextNumber(2.5, 5.5)
-	while y > foot + 0.5 do
-		i += 1
-		local h = if i == 1 then first else rng:NextNumber(3.2, 4.8)
-		local y0 = math.max(y - h, foot)
-		local total = 0
-		for k = 1, n do
-			growth[k] = math.min(growth[k] + rng:NextNumber(0.6, 1.5), lean)
-			total += growth[k]
+		shape = candidate
+		local bandKey = band.key or key
+		local function keyAt(height: number): Vector3?
+			return if bandKey then bandKey + UP * height else nil
 		end
-		boxGrowth = if n > 0 then total / n else boxGrowth + 1
-		local material = body
-		if #bands > 0 and i % 2 == 0 then
-			material = bands[((i // 2) - 1) % #bands + 1]
+		local cap = band.cap
+		if cap then
+			local capH = math.min(Land.CAP, h)
+			local capShape = Land.grown(shape, Land.OVERHANG)
+			Land.prism(parent, cap, capShape, y, y - capH, keyAt(y))
+			Land.prism(parent, band.color, shape, y - capH, y - h, keyAt(y - capH))
+			table.insert(layers, { shape = capShape, top = y })
+		else
+			Land.prism(parent, band.color, shape, y, y - h, keyAt(y))
+			table.insert(layers, { shape = shape, top = y })
 		end
-		band(y0, y, material)
-		y = y0
+		y -= h
 	end
-	-- underwater / buried part in one go
-	if y > bottomY then
-		band(bottomY, y, body)
-	end
-	return outline
+	return layers
 end
 
--- Fallen boulders at the foot of a cliff (terrain balls, no parts).
-function Land.talus(
-	ctx: Context,
-	outline: Outline,
-	footY: number,
-	rng: Random,
-	count: number,
-	material: Enum.Material,
+-- Walkable shore round a polygon: one wedge per face from `top` at the edge
+-- down to `bottom` at Land.SHORE_ANGLE. Each wedge is a little longer than
+-- its face so neighbours meet above the water. Faces whose slope would run
+-- onto other land (`cover`) are skipped. Returns the parts.
+function Land.skirt(
+	parent: Instance,
+	color: Color3,
+	shape: Shape,
+	top: number,
+	bottom: number,
+	cover: { Shape }?
+): { BasePart }
+	local parts: { BasePart } = {}
+	if shape.sides == 0 then
+		return parts
+	end
+	local rise = top - bottom
+	local run = rise / math.tan(Land.SHORE_ANGLE)
+	local n = shape.sides
+	local half = math.tan(math.pi / n)
+	local length = 2 * shape.apothem * half + run * half
+	local base = CFrame.new(shape.center.X, bottom + rise / 2, shape.center.Z) * shape.rotation
+	for j = 0, n - 1 do
+		-- the face frame looks out of face j; the wedge's tall end faces in
+		local face = base * CFrame.Angles(0, j * 2 * math.pi / n, 0)
+		local foot = shape.center + face.LookVector * (shape.apothem + run * 0.6)
+		if not (cover and Land.containsAny(cover, foot)) then
+			table.insert(
+				parts,
+				Blocks.wedge(
+					parent,
+					color,
+					face * CFrame.new(0, 0, -(shape.apothem + run / 2 - 0.2)),
+					Vector3.new(length, rise, run),
+					{ Name = "Shore" }
+				)
+			)
+		end
+	end
+	return parts
+end
+
+-- A basalt-style column: a hex prism from `bottom` to `top` in colors[1];
+-- with two colours its top third is a narrower band of colors[2], and with
+-- a cap a grass cap crowns it. nil (nothing built) if the guard refuses it.
+function Land.column(
+	parent: Instance,
+	at: Vector3,
+	bottom: number,
+	top: number,
+	apothem: number,
+	colors: { Color3 },
+	cap: Color3?,
+	yaw: number,
 	guard: Guard?
-)
-	local circles = outline.circles
-	if #circles == 0 then
-		return
+): Shape?
+	local shape = Land.poly(at, apothem, 6, yaw)
+	if top - bottom < 1 or not Land.allows(Land.grown(shape, 0.6), top, guard) then
+		return nil
 	end
-	for _ = 1, count do
-		local c = circles[rng:NextInteger(1, #circles)]
-		local a = rng:NextNumber(0, math.pi * 2)
-		local r = rng:NextNumber(2.5, 5)
-		local reach = c.r + rng:NextNumber(0.5, 3)
-		local x, z = c.x + math.sin(a) * reach, c.z - math.cos(a) * reach
-		local center = Vector3.new(x, footY + r * 0.2, z)
-		if not guard or guard(x, z, r, center.Y + r) then
-			ctx.terrain:FillBall(center, r, material)
-		end
+	local bands: { Band } = {}
+	if #colors > 1 then
+		table.insert(bands, {
+			color = colors[2],
+			height = math.clamp((top - bottom) * 0.3, 2, 6),
+			cap = cap,
+		})
+		table.insert(bands, { color = colors[1], grow = 0.6 })
+	else
+		table.insert(bands, { color = colors[1], cap = cap })
 	end
+	Land.stack(parent, shape, top, bottom, bands)
+	return Land.grown(shape, 0.6)
 end
 
--- Sea stack / hoodoo: a stack of shrinking, wobbling discs with strata.
-function Land.pinnacle(
-	ctx: Context,
-	base: Vector3,
-	height: number,
+-- A cluster of hex columns (a sea stack, a headland, a crag): the main
+-- column at `center` reaching `top`, `count - 1` shorter ones leaning on it,
+-- alternating `colors`. The main column gets the cap. Returns the outlines.
+function Land.cluster(
+	parent: Instance,
+	rng: Random,
+	center: Vector3,
 	radius: number,
-	rng: Random,
-	materials: { Enum.Material },
-	capRadius: number?,
-	cap: Enum.Material?,
+	bottom: number,
+	top: number,
+	colors: { Color3 },
+	cap: Color3?,
+	count: number,
 	guard: Guard?
-)
-	local layers = math.max(3, math.floor(height / 5))
-	local layerH = height / layers
-	local x, z = base.X, base.Z
-	for i = 1, layers do
-		local t = (i - 1) / (layers - 1)
-		local r = radius + ((capRadius or radius * 0.45) - radius) * t
-		r *= rng:NextNumber(0.85, 1.15)
-		x += rng:NextNumber(-1, 1) * radius * 0.1
-		z += rng:NextNumber(-1, 1) * radius * 0.1
-		local y0 = base.Y + (i - 1) * layerH
-		local top = y0 + layerH + 0.5
-		if guard and not guard(x, z, math.max(r, 1.5), top) then
-			return
-		end
-		ctx.terrain:FillCylinder(
-			CFrame.new(x, y0 + layerH / 2 + 0.25, z),
-			layerH + 0.5,
-			math.max(r, 1.5),
-			if i == layers and cap then cap else materials[(i - 1) % #materials + 1]
-		)
+): { Shape }
+	local shapes: { Shape } = {}
+	local main = radius * 0.6
+	local first = Land.column(
+		parent,
+		center,
+		bottom,
+		top,
+		main,
+		{ colors[1] },
+		cap,
+		rng:NextNumber(0, math.pi),
+		guard
+	)
+	if not first then
+		return shapes
 	end
+	table.insert(shapes, first)
+	local start = rng:NextNumber(0, math.pi * 2)
+	for i = 1, count - 1 do
+		local a = start + i * 2 * math.pi / math.max(count - 1, 1) + rng:NextNumber(-0.3, 0.3)
+		local r = radius * rng:NextNumber(0.32, 0.45)
+		local p = center + Vector3.new(math.sin(a), 0, -math.cos(a)) * (main + r * 0.75)
+		local shape = Land.column(
+			parent,
+			p,
+			bottom,
+			bottom + (top - bottom) * rng:NextNumber(0.45, 0.8),
+			r,
+			{ colors[i % #colors + 1] },
+			nil,
+			rng:NextNumber(0, math.pi),
+			guard
+		)
+		if shape then
+			table.insert(shapes, shape)
+		end
+	end
+	return shapes
 end
 
--- A rocky ridge from a to b (ground points; Y ignored): a chain of leaning
--- crag blobs whose tops rise from h0 to h1 with some noise. Pure terrain.
+-- A rocky ridge from a to b (ground points; Y ignored): a chain of hex
+-- columns of very different sizes whose tops rise from h0 to h1 with noise,
+-- alternating colours, the tallest capped. Returns the column outlines (for
+-- keeping props off them).
 function Land.ridge(
-	ctx: Context,
+	parent: Instance,
 	a: Vector3,
 	b: Vector3,
 	h0: number,
 	h1: number,
 	width: number,
 	rng: Random,
-	body: Enum.Material,
-	bands: { Enum.Material },
-	cap: Enum.Material,
-	guard: Guard?
-)
+	colors: { Color3 },
+	cap: Color3?,
+	guard: Guard?,
+	maxCount: number,
+	bottom: number
+): { Shape }
+	local out: { Shape } = {}
 	local flat = Vector3.new(b.X - a.X, 0, b.Z - a.Z)
 	local length = flat.Magnitude
-	local count = math.max(2, math.floor(length / (width * 0.9)))
+	if length < 1 then
+		return out
+	end
+	local count = math.clamp(math.floor(length / (width * 0.8)), 2, math.max(maxCount, 2))
+	local side = flat.Unit:Cross(UP)
+	local peak = rng:NextInteger(1, count)
 	for k = 0, count - 1 do
 		local f = (k + rng:NextNumber(0.2, 0.8)) / count
-		local p = a:Lerp(b, f)
-		local side = flat.Unit:Cross(Vector3.new(0, 1, 0)) * rng:NextNumber(-0.3, 0.3) * width
-		local top = h0 + (h1 - h0) * f + rng:NextNumber(-3, 3)
+		local p = a:Lerp(b, f) + side * (rng:NextNumber(-0.3, 0.3) * width)
+		local big = k + 1 == peak
+		local apothem = width
+			* (if big then rng:NextNumber(0.4, 0.5) else rng:NextNumber(0.26, 0.36))
+		local top = h0 + (h1 - h0) * f + rng:NextNumber(-3, 3) + (if big then 6 else 0)
 		top = math.floor(top / 2 + 0.5) * 2
-		local blob =
-			Land.blob(p + side, width * rng:NextNumber(0.45, 0.65), rng, rng:NextInteger(4, 6), 2)
-		Land.cliff(ctx, blob, -22, top, body, bands, cap, rng, { guard = guard, lean = 5 })
+		local shape = Land.column(
+			parent,
+			p,
+			bottom,
+			top,
+			apothem,
+			{ colors[k % #colors + 1] },
+			if big then cap else nil,
+			rng:NextNumber(0, math.pi),
+			guard
+		)
+		if shape then
+			table.insert(out, shape)
+		end
 	end
+	return out
 end
 
--- Natural rock arch from a to b (feet on the sea bed or ground), peak at
--- `height` above the feet.
+-- A pinnacle of hex tiers from `bottom` to `top`, narrowing from `radius`
+-- to `topRadius` and twisting a little per tier, colours alternating.
+-- Nothing is built (nil) unless every tier passes the guard.
+function Land.spire(
+	parent: Instance,
+	at: Vector3,
+	bottom: number,
+	top: number,
+	radius: number,
+	topRadius: number,
+	tiers: number,
+	colors: { Color3 },
+	yaw: number,
+	guard: Guard?
+): Shape?
+	local h = (top - bottom) / tiers
+	local shapes: { Shape } = {}
+	for i = 1, tiers do
+		local t = if tiers > 1 then (i - 1) / (tiers - 1) else 0
+		local shape = Land.poly(at, radius + (topRadius - radius) * t, 6, yaw + i * 0.35)
+		if not Land.allows(shape, bottom + i * h, guard) then
+			return nil
+		end
+		table.insert(shapes, shape)
+	end
+	for i, shape in shapes do
+		Land.prism(
+			parent,
+			colors[(i - 1) % #colors + 1],
+			shape,
+			bottom + i * h,
+			bottom + (i - 1) * h
+		)
+	end
+	return shapes[1]
+end
+
+-- Natural arch from a to b: two hex legs from `bottom` and a lintel block
+-- whose top is at `top`. Nothing is built (false) unless it all fits.
 function Land.arch(
-	ctx: Context,
+	parent: Instance,
 	a: Vector3,
 	b: Vector3,
-	height: number,
+	bottom: number,
+	top: number,
 	thickness: number,
-	rng: Random,
-	materials: { Enum.Material },
+	colors: { Color3 },
 	guard: Guard?
-)
-	Land.pinnacle(ctx, a, height, thickness * 0.95, rng, materials, thickness * 0.6, nil, guard)
-	Land.pinnacle(ctx, b, height, thickness * 0.95, rng, materials, thickness * 0.6, nil, guard)
-	local segments = 5
-	for i = 0, segments - 1 do
-		local t0, t1 = i / segments, (i + 1) / segments
-		local function at(t: number): Vector3
-			local p = a:Lerp(b, t)
-			local lift = math.sin(t * math.pi) * 0.18 * height
-			return p + Vector3.new(0, height - thickness * 0.4 + lift, 0)
-		end
-		local p0, p1 = at(t0), at(t1)
-		local mid = (p0 + p1) / 2
-		if not guard or guard(mid.X, mid.Z, thickness, mid.Y + thickness * 0.4) then
-			ctx.terrain:FillBlock(
-				CFrame.lookAt(mid, p1),
-				Vector3.new(thickness, thickness * 0.8, (p1 - p0).Magnitude + thickness * 0.6),
-				materials[(i % #materials) + 1]
-			)
-		end
+): boolean
+	local legTop = top - thickness * 0.5
+	local legA = Land.poly(a, thickness * 0.75, 6, 0.3)
+	local legB = Land.poly(b, thickness * 0.75, 6, 1.1)
+	local fa = Vector3.new(a.X, top, a.Z)
+	local fb = Vector3.new(b.X, top, b.Z)
+	local span = (fb - fa).Magnitude + thickness
+	local lintel =
+		Land.rect(CFrame.lookAt((fa + fb) / 2, fb), Vector2.new(thickness * 0.55, span / 2))
+	if
+		not (
+			Land.allows(legA, legTop, guard)
+			and Land.allows(legB, legTop, guard)
+			and Land.allows(lintel, top, guard)
+		)
+	then
+		return false
 	end
+	Land.prism(parent, colors[1], legA, legTop, bottom)
+	Land.prism(parent, colors[1], legB, legTop, bottom)
+	Land.prism(parent, colors[2] or colors[1], lintel, top, top - thickness * 0.8)
+	return true
+end
+
+-- A path strip 0.2 above the ground at `groundY` from a to b (ground points),
+-- on a darker edging strip a stud wider each side. Both are collidable ground.
+function Land.path(
+	parent: Instance,
+	a: Vector3,
+	b: Vector3,
+	width: number,
+	groundY: number,
+	color: Color3,
+	edging: Color3
+)
+	local fa = Vector3.new(a.X, groundY, a.Z)
+	local fb = Vector3.new(b.X, groundY, b.Z)
+	local length = (fb - fa).Magnitude
+	if length < 0.5 then
+		return
+	end
+	local frame = CFrame.lookAt((fa + fb) / 2, fb)
+	Blocks.box(
+		parent,
+		edging,
+		frame * CFrame.new(0, 0.12 - 0.3, 0),
+		Vector3.new(width + 2, 0.6, length),
+		{ Name = "Path" }
+	)
+	Blocks.box(
+		parent,
+		color,
+		frame * CFrame.new(0, 0.2 - 0.3, 0),
+		Vector3.new(width, 0.6, length),
+		{ Name = "Path" }
+	)
 end
 
 return Land

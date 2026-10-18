@@ -121,6 +121,7 @@ function Builder.build(styleName: string?): Folder
 	local map = folder("Map", workspace)
 	map:SetAttribute("AutoBuilt", true)
 	map:SetAttribute("Style", name)
+	map:SetAttribute("Ground", style.ground or "Terrain")
 
 	-- zone volumes stay loaded on every client even with streaming on
 	local zonesModel = Instance.new("Model")
@@ -128,7 +129,9 @@ function Builder.build(styleName: string?): Folder
 	zonesModel.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
 	zonesModel.Parent = map
 
+	-- ground = what players walk on (Blocks); the strike raycast hits it
 	local folders = {
+		ground = folder("Ground", map),
 		base = folder("Base", map),
 		hub = folder("Hub", map),
 		zones = folder("ZoneArt", map),

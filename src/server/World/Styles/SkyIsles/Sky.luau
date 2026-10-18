@@ -10,6 +10,7 @@ local World = ServerScriptService.Server.World
 local Kit = require(World.Kit)
 local Layout = require(World.Layout)
 local WorldTypes = require(World.Types)
+local Ground = require(script.Parent.Ground)
 local Palette = require(script.Parent.Palette)
 local Pieces = require(script.Parent.Pieces)
 
@@ -84,15 +85,6 @@ function Sky.atmosphere(_ctx: Context)
 	clouds.Cover = 0.5
 	clouds.Density = 0.42
 	clouds.Color = Color3.fromRGB(252, 242, 246)
-
-	terrain.WaterColor = Palette.WATER
-	terrain.WaterTransparency = 0.55
-	terrain.WaterWaveSize = 0.08
-	terrain.WaterWaveSpeed = 6
-	terrain.WaterReflectance = 0.3
-	for material, color in Palette.TERRAIN do
-		terrain:SetMaterialColor(material, color)
-	end
 end
 
 -- A drifting islet: a small floating island with a tapered underside, a
@@ -102,14 +94,17 @@ local function drifter(ctx: Context, center: Vector3, radius: number, kind: numb
 	local rng = ctx.rng
 	local high = center.Y > 0
 	local depth = radius * 2.4
-	Kit.floatingIsland(
+	local G = Palette.GROUND
+	local tones: Ground.Tones = if high
+		then { cap = G.grass, soil = G.soil, rocks = { G.rock, G.slate }, tip = G.slate }
+		else { cap = G.rock, soil = G.slate, rocks = { G.slate, G.basalt }, tip = G.basalt }
+	local tip = Ground.isle(
 		ctx,
-		center,
+		tones,
+		CFrame.new(center) * CFrame.Angles(0, rng:NextNumber(0, math.pi), 0),
 		radius,
-		center.Y,
 		depth,
-		if high then Enum.Material.Grass else Enum.Material.Rock,
-		Enum.Material.Rock
+		{ sides = 8, soil = 3, tiers = 0 }
 	)
 	if high then
 		if kind % 3 == 0 then
@@ -130,27 +125,34 @@ local function drifter(ctx: Context, center: Vector3, radius: number, kind: numb
 			Pieces.rocks(folder, rng, center - Vector3.new(radius * 0.3, 0, 0), radius * 0.35)
 		end
 	end
-	Pieces.cluster(folder, rng, center - UP * depth * 0.8, radius * 0.55, C.cyan, 3, true)
+	Pieces.cluster(folder, rng, tip + UP * 2, radius * 0.55, C.cyan, 3, true)
 end
 
 function Sky.base(ctx: Context)
 	local base = ctx.folders.base
 
-	-- the cloud sea: a pale floor far below plus big soft drifting puffs
+	-- the cloud sea: a pale backstop sheet far below, a lumpy layer of big
+	-- soft cloud balls on top of it (cream near the isles, plum-tinted in
+	-- the distance) and slow drifting puffs
 	Pieces.block(
 		base,
-		CFrame.new(0, CLOUD_SEA_Y, 0),
+		CFrame.new(0, CLOUD_SEA_Y - 20, 0),
 		Vector3.new(2048, 2, 2048),
 		C.cloud,
 		Enum.Material.SmoothPlastic,
-		{ Name = "CloudSea", CastShadow = false }
+		{
+			Name = "CloudSea",
+			CastShadow = false,
+			CanCollide = false,
+			CanQuery = false,
+			CanTouch = false,
+		}
 	)
 	for _, corner in
 		{
 			Vector3.new(1, 0, 1),
-			Vector3.new(-1, 0, 1),
-			Vector3.new(1, 0, -1),
-			Vector3.new(-1, 0, -1),
+			Vector3.new(-1, 0, 0.4),
+			Vector3.new(0.2, 0, -1),
 		}
 	do
 		local holder = Pieces.block(
@@ -159,9 +161,16 @@ function Sky.base(ctx: Context)
 			Vector3.new(520, 2, 520),
 			C.cloud,
 			Enum.Material.SmoothPlastic,
-			{ Name = "CloudPuffs", Transparency = 1, CastShadow = false }
+			{
+				Name = "CloudPuffs",
+				Transparency = 1,
+				CanCollide = false,
+				CastShadow = false,
+				CanQuery = false,
+				CanTouch = false,
+			}
 		)
-		Pieces.emitter(holder, {
+		local puffs = Pieces.emitter(holder, {
 			Name = "CloudSea",
 			Texture = Kit.TEXTURES.smoke,
 			Color = ColorSequence.new(C.cream, C.cloud),
@@ -186,6 +195,9 @@ function Sky.base(ctx: Context)
 				NumberSequenceKeypoint.new(1, 1),
 			}),
 		})
+		if puffs then
+			puffs:AddTag(Pieces.STORM_CLOUD)
+		end
 	end
 
 	-- stray rocks drifting below and between the islands, kept off every
