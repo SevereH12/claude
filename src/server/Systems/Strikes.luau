@@ -13,6 +13,7 @@ local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
+local Research = require(script.Parent.Research)
 local PlayerData = require(script.Parent.PlayerData)
 local StormCycle = require(script.Parent.StormCycle)
 local Sync = require(script.Parent.Sync)
@@ -127,6 +128,7 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3)
 		full = full,
 	}
 	landedRemote:FireAllClients(landed)
+	Research.onStrikeLanded(zone.id, catchers)
 end
 
 local function spawnStrike(zone: Types.ZoneDef, zonePart: BasePart)

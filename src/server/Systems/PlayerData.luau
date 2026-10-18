@@ -18,7 +18,7 @@ local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local STORE_NAME = "StormBottler_PlayerData"
-local CURRENT_VERSION = 1
+local CURRENT_VERSION = 2
 -- A lock older than this belongs to a server that crashed; it may be taken.
 local LOCK_STALE_SECONDS = Config.AUTOSAVE_INTERVAL * 3
 local LOCKED_RETRIES = 5
@@ -46,11 +46,21 @@ local DEFAULT_PROFILE: Types.Profile = {
 	bottleTier = 1,
 	chargeCount = 0,
 	chargeValue = 0,
+	researchers = {},
+	tankCount = 0,
+	tankValue = 0,
 }
 
 -- MIGRATIONS[n] turns a version-n profile into version n+1. When the profile
 -- shape changes: bump CURRENT_VERSION, add a step here, update DEFAULT_PROFILE.
-local MIGRATIONS: { [number]: (any) -> any } = {}
+local MIGRATIONS: { [number]: (any) -> any } = {
+	[1] = function(data: any): any
+		data.researchers = {}
+		data.tankCount = 0
+		data.tankValue = 0
+		return data
+	end,
+}
 
 local storeOk, storeResult = pcall(function()
 	return DataStoreService:GetDataStore(STORE_NAME)

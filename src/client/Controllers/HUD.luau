@@ -17,6 +17,7 @@ local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local Types = require(ReplicatedStorage.Shared.Types)
 local UI = require(script.Parent.Parent.Lib.UI)
+local ResearchUI = require(script.Parent.ResearchUI)
 local ShopUI = require(script.Parent.ShopUI)
 local State = require(script.Parent.State)
 local Storm = require(script.Parent.Storm)
@@ -147,6 +148,24 @@ local function buildShopButton()
 	button.Activated:Connect(function()
 		UI.pop(button)
 		ShopUI.toggle()
+	end)
+end
+
+local function buildResearchButton()
+	local button = UI.button({
+		Name = "ResearchButton",
+		Text = "RESEARCH",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.fromScale(0.015, 0.595),
+		Size = UDim2.fromScale(0.1, 0.075),
+		BackgroundColor3 = COLORS.storm,
+		Parent = screenGui,
+	})
+	UI.sizeLimits(button, Vector2.new(96, 46), Vector2.new(150, 62))
+	UI.maxText(button, 24)
+	button.Activated:Connect(function()
+		UI.pop(button)
+		ResearchUI.toggle()
 	end)
 end
 
@@ -293,6 +312,7 @@ function HUD.init()
 	buildStormPill()
 	buildCityMeter()
 	buildShopButton()
+	buildResearchButton()
 	buildBottleBar()
 
 	displayedVolts.Changed:Connect(function(value: number)

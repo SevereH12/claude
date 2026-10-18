@@ -16,17 +16,23 @@ local dirty: { [Player]: boolean } = {}
 
 local Sync = {}
 
+-- Owned by Systems/Research: per player, role id -> set-up-done time
+-- (workspace:GetServerTimeNow()). Sent in the snapshot for the Research panel.
+Sync.setupUntil = {} :: { [Player]: { [string]: number } }
+
 function Sync.markDirty(player: Player)
 	dirty[player] = true
 end
 
-local function toSnapshot(profile: Types.Profile): Types.Snapshot
+local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapshot
 	return {
 		volts = profile.volts,
 		totalVolts = profile.totalVolts,
 		bottleTier = profile.bottleTier,
 		chargeCount = profile.chargeCount,
 		chargeValue = profile.chargeValue,
+		researchers = profile.researchers,
+		setupUntil = Sync.setupUntil[player] or {},
 	}
 end
 
@@ -54,6 +60,7 @@ function Sync.init()
 	end)
 	Players.PlayerRemoving:Connect(function(player)
 		dirty[player] = nil
+		Sync.setupUntil[player] = nil
 	end)
 end
 
@@ -66,7 +73,7 @@ function Sync.start()
 			local profile = PlayerData.get(player)
 			if profile and player.Parent then
 				updateLeaderstats(player, profile)
-				remote:FireClient(player, toSnapshot(profile))
+				remote:FireClient(player, toSnapshot(player, profile))
 			end
 		end
 	end

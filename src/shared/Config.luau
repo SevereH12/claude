@@ -12,6 +12,49 @@ local BOTTLES: { Types.BottleDef } = {
 	{ name = "Storm Cell", capacity = 100, price = 8_000 },
 }
 
+local RESEARCHERS: { Types.ResearcherDef } = {
+	{
+		id = "Forecaster",
+		name = "Dr. Isobar",
+		role = "Forecaster",
+		price = 400,
+		perk = "Early Warning: see the next strike's ring {v}s early",
+		values = { 0.4, 0.6, 0.8, 1.0, 1.2 },
+	},
+	{
+		id = "RodTech",
+		name = "Ohmar",
+		role = "Rod Tech",
+		price = 1_500,
+		perk = "Grounding Rod: +{v} studs catch radius",
+		values = { 1, 1.5, 2, 2.5, 3 },
+	},
+	{
+		id = "Analyst",
+		name = "Prof. Kilowatt",
+		role = "Analyst",
+		price = 5_000,
+		perk = "Charge Assay: {v}% of charges are worth double",
+		values = { 10, 15, 20, 25, 30 },
+	},
+	{
+		id = "Chemist",
+		name = "Dr. Fizz",
+		role = "Chemist",
+		price = 12_000,
+		perk = "Overflow Tank: a full bottle spills {v} charges into her tank",
+		values = { 3, 6, 9, 12, 15 },
+	},
+	{
+		id = "StormChaser",
+		name = "Gale",
+		role = "Storm Chaser",
+		price = 30_000,
+		perk = "Weather Balloon: a bolt only you can catch every {v}s",
+		values = { 30, 24, 19, 15, 12 },
+	},
+}
+
 local ZONES: { [string]: Types.ZoneDef } = {
 	Shoreline = {
 		id = "Shoreline",
@@ -68,6 +111,13 @@ return table.freeze({
 	-- Selling
 	SELL_COOLDOWN = 1, -- seconds between sells per player
 
+	-- Researchers (Storm Society)
+	RESEARCH_LEVELS = table.freeze({ 0, 40, 150, 400, 1000 }), -- field data needed for level 1..5
+	RESEARCH_SETUP_TIME = 8, -- seconds a newly posted researcher needs before the perk works
+	RESEARCH_DATA_WATCH = 1, -- data per strike landing in their zone
+	RESEARCH_DATA_CATCH = 3, -- data per strike the owner caught
+
+	RESEARCHERS = table.freeze(RESEARCHERS),
 	BOTTLES = table.freeze(BOTTLES),
 	ZONES = table.freeze(ZONES),
 

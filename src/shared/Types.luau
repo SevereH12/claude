@@ -10,6 +10,16 @@ export type Profile = {
 	bottleTier: number, -- index into Config.BOTTLES
 	chargeCount: number, -- charges in the bottle (limited by capacity)
 	chargeValue: number, -- Volts those charges sell for
+	researchers: { [string]: ResearcherSave }, -- hired researchers by role id
+	tankCount: number, -- Chemist's overflow tank: charges held
+	tankValue: number, -- Volts those charges sell for
+}
+
+-- A hired researcher. post is "Office" or a zone id.
+export type ResearcherSave = {
+	level: number,
+	data: number,
+	post: string,
 }
 
 -- Sent to the owning client whenever their state changes.
@@ -19,6 +29,8 @@ export type Snapshot = {
 	bottleTier: number,
 	chargeCount: number,
 	chargeValue: number,
+	researchers: { [string]: ResearcherSave },
+	setupUntil: { [string]: number }, -- role id -> workspace:GetServerTimeNow() when set up
 }
 
 export type StormPhase = "Storm" | "Calm"
@@ -49,6 +61,16 @@ export type ZoneDef = {
 	width: number, -- catch floor size in studs (side to side, facing the hub)
 	depth: number, -- catch floor size in studs (from the gate to the back)
 	floor: number, -- height of the catch floor above sea level
+}
+
+-- values: the five per-level numbers of the perk (level 1 to 5).
+export type ResearcherDef = {
+	id: string,
+	name: string,
+	role: string,
+	price: number,
+	perk: string, -- {v} is replaced by the level's value
+	values: { number },
 }
 
 export type BottleDef = {
