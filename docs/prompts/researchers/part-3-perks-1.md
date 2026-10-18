@@ -45,5 +45,5 @@ must exist. If it doesn't, stop and tell the user.
 - `stylua src` and `selene src` are clean.
 - `test_research.luau` also covers the radius and lead math, if you put
   that math in `Util/Research`.
-- `tools/check_world.sh Legacy <scratch dir>` still passes.
+- `tools/check_world.sh WeatherLab <scratch dir>` still passes.
 - The part 3 box is ticked, and the work is committed and pushed.

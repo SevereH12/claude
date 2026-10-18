@@ -74,12 +74,15 @@ and the researcher has finished setting up.
 
 - **Research Office**: a building in the hub with an invisible box tagged
   `ResearchOffice` over a clearly marked doorstep pad. It works like
-  `SellArea`.
+  `SellArea`. In WeatherLab it's the observatory dome in the village ring.
 - **Research Camp**: one per zone, just outside the zone (never on the
-  catch floor), beside its entrance. It has an invisible box at
+  catch floor), beside its entrance. The world framework places it
+  (`Layout` gives each slot a `camp`), so a new zone gets one with no
+  extra work. It has an invisible box at
   `Workspace.Map.ResearchCamps.<ZoneId>` (Persistent-streaming model, `ZoneId`
   attribute) over a flat deck of about 14 x 28, plus a small tent, an
-  instrument mast and a "<ZONE> FIELD CAMP" sign in the zone colour.
+  instrument mast and a "<ZONE> FIELD CAMP" sign in the zone colour. A style
+  can restyle it with `buildCamp`.
 - `src/shared/Util/ResearchSites.luau` is the only code that finds these:
   `camp(zoneId)`, `offices()`, `inOffice(position)` and `campAt(position)`.
 

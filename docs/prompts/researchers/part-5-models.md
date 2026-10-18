@@ -48,7 +48,7 @@ client.
 ## Done means
 
 - `stylua src` and `selene src` are clean.
-- `tools/check_world.sh Legacy <scratch dir>` still passes. The models are
+- `tools/check_world.sh WeatherLab <scratch dir>` still passes. The models are
   client-only, so the map part count doesn't change.
 - If the Studio MCP is connected: hire the Forecaster and post them to
   Shoreline; they appear at the Shoreline camp and react to a storm.

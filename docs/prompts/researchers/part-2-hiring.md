@@ -71,5 +71,5 @@ researcher only exists as data and the panel.
 
 - `stylua src` and `selene src` are clean.
 - `lune run tools/harness/test_research.luau` passes.
-- `tools/check_world.sh Legacy <scratch dir>` still passes.
+- `tools/check_world.sh WeatherLab <scratch dir>` still passes.
 - The part 2 box is ticked, and the work is committed and pushed.

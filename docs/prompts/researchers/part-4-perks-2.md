@@ -47,5 +47,5 @@ isn't there, stop and tell the user.
 ## Done means
 
 - `stylua src` and `selene src` are clean.
-- `tools/check_world.sh Legacy <scratch dir>` still passes.
+- `tools/check_world.sh WeatherLab <scratch dir>` still passes.
 - The part 4 box is ticked, and the work is committed and pushed.

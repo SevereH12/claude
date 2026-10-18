@@ -7,16 +7,24 @@ is committed and pushed before the next part starts.
 The design (what Researchers are and how they behave) is in `design.md`.
 Each part reads only the sections of it that it needs.
 
-## How to run a part
+## How to run the parts
 
-Start a new Claude Code session on this repo and say:
+**All at once.** With the Claude Code CLI, on the branch Update Game pulls
+from, run:
+
+    tools/run_researchers.sh
+
+It runs each unfinished part in order, each in a fresh session. If it
+stops (a usage limit or a failed part), run it again and it carries on from
+the first unticked part.
+
+**One at a time.** Start a new Claude Code session and say:
 
 > Do `docs/prompts/researchers/part-1-map.md`
 
-Run the parts in order. **Run every part on the same branch** (the one
-Update Game pulls from, see `CLAUDE.md`), or merge each part before starting
-the next. Each part checks that the previous one is in the checkout and
-stops if it isn't.
+Either way, run every part on the same branch, the one Update Game pulls
+from (see `CLAUDE.md`). Each part checks that the previous one is in the
+checkout and stops if it isn't.
 
 ## Progress
 
@@ -27,17 +35,16 @@ Each part ticks its own box when it's done.
 - [ ] Part 3: perks I, Forecaster, Rod Tech and Analyst (`part-3-perks-1.md`)
 - [ ] Part 4: perks II, Chemist and Storm Chaser (`part-4-perks-2.md`)
 - [ ] Part 5: the researchers you can see (`part-5-models.md`)
-- [ ] Part 6 (later): camps and office in the world framework (`part-6-framework.md`).
-  Only do this when a new world style is about to replace Legacy.
 
 ## Rules for every part (keep token use low)
 
 - Read `CLAUDE.md`, the design sections the part names, and the files the
   part lists. For anything else, grep for the lines you need instead of
   opening whole files.
-- Don't open or edit files the part doesn't list. Never touch the
-  unfinished world styles (`src/server/World/Styles/StormPunk`, `SkyIsles`,
-  `WeatherLab`) or `docs/styles`.
+- Don't open or edit files the part doesn't list. `WeatherLab` is the live
+  world style: edit it only where a part says to. Never edit the alternate
+  styles (`src/server/World/Styles/StormPunk` and `SkyIsles`) or
+  `docs/styles`.
 - Plan once, then write each file in one pass. No refactors, renames or docs
   beyond what the part asks for.
 - Run the checks once at the end. Fix and re-run at most once more. Look at
