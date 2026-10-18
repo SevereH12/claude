@@ -72,6 +72,31 @@ local function spend(part: Instance, key: string, limit: number): boolean
 	return true
 end
 
+-- Per-zone part budget: Zone.ground puts SkyPartBudget on each zone's
+-- folder; dressing helpers (plants, rocks, crystals, posts) skip or shrink
+-- once the folder holds that many parts, so every zone costs about the
+-- same and many zones stack under the world's part cap.
+function Pieces.overBudget(parent: Instance): boolean
+	local folder: Instance? = parent
+	while folder and folder:GetAttribute("SkyPartBudget") == nil do
+		folder = folder.Parent
+		if folder and (folder:IsA("Model") or folder == game) then
+			folder = nil
+		end
+	end
+	if not folder then
+		return false
+	end
+	local limit = folder:GetAttribute("SkyPartBudget")
+	local count = 0
+	for _, d in folder:GetDescendants() do
+		if d:IsA("BasePart") then
+			count += 1
+		end
+	end
+	return type(limit) == "number" and count >= limit
+end
+
 local function merge(base: { [string]: any }, extra: { [string]: any }?): { [string]: any }
 	if extra then
 		for key, value in extra do
@@ -269,7 +294,7 @@ function Pieces.diamond(
 		CFrame.new(center) * CFrame.Angles(math.rad(45), math.rad(20), math.rad(35.26)),
 		Vector3.new(size, size, size),
 		color,
-		material or Enum.Material.Neon
+		material or Enum.Material.Glass
 	)
 end
 
@@ -285,7 +310,10 @@ function Pieces.light(
 	if not spend(part, "SkyLights", MAX_LIGHTS) then
 		return nil
 	end
-	return Kit.light(part, color, range, brightness or 1, shadows)
+	local light = Kit.light(part, color, range, brightness or 1, shadows)
+	-- crystals and rune glows swell during storms
+	light:AddTag(Pieces.STORM_GLOW)
+	return light
 end
 
 function Pieces.spot(
@@ -332,33 +360,33 @@ end
 
 -- Beams ------------------------------------------------------------------------
 
-local function attachment(anchor: BasePart, position: Vector3, axis: Vector3?): Attachment
-	local a = Instance.new("Attachment")
-	a.Name = "BeamEnd"
-	a.Position = anchor.CFrame:PointToObjectSpace(position)
+local MAX_BEAMS = 248
+
+local function aim(a: Attachment, axis: Vector3?)
 	local direction = axis or Vector3.new(0, -1, 0)
 	a.Axis = direction
 	a.SecondaryAxis = if math.abs(direction.Y) > 0.9 then Vector3.xAxis else UP
-	a.Parent = anchor
-	return a
 end
 
--- A beam between two world points with full control over its look.
-function Pieces.beam(ctx: Context, a: Vector3, b: Vector3, props: BeamProps): Beam
-	local anchor = ctx.cableAnchor
-	local beam = Instance.new("Beam")
-	beam.Name = "Beam"
-	beam.Attachment0 = attachment(anchor, a, props.axis0)
-	beam.Attachment1 = attachment(anchor, b, props.axis1)
-	beam.Color = ColorSequence.new(props.color, props.color1 or props.color)
-	beam.Width0 = props.width
-	beam.Width1 = props.width1 or props.width
-	beam.FaceCamera = true
-	beam.Segments = props.segments or 10
+-- A beam between two world points with full control over its look. Built
+-- with Kit.cable, then given the style's extras (gradients, textures,
+-- curve directions). Beams are budgeted per world; returns nil past it.
+function Pieces.beam(ctx: Context, a: Vector3, b: Vector3, props: BeamProps): Beam?
+	if not spend(ctx.cableAnchor, "SkyBeams", MAX_BEAMS) then
+		return nil
+	end
 	local glow = props.glow or 0
-	beam.LightEmission = glow
-	beam.LightInfluence = if glow > 0 then 0 else 1
 	local t0 = props.transparency or 0
+	local beam = Kit.cable(ctx, a, b, {
+		Color = props.color,
+		Width = props.width,
+		Segments = props.segments or 10,
+		LightEmission = glow,
+		Transparency = t0,
+	})
+	beam.Name = "Beam"
+	beam.Color = ColorSequence.new(props.color, props.color1 or props.color)
+	beam.Width1 = props.width1 or props.width
 	beam.Transparency = NumberSequence.new(t0, props.transparency1 or t0)
 	if props.texture then
 		beam.Texture = props.texture
@@ -366,32 +394,58 @@ function Pieces.beam(ctx: Context, a: Vector3, b: Vector3, props: BeamProps): Be
 		beam.TextureLength = props.textureLength or 4
 		beam.TextureMode = Enum.TextureMode.Wrap
 	end
+	local a0, a1 = beam.Attachment0, beam.Attachment1
+	if a0 and a1 then
+		aim(a0, props.axis0)
+		aim(a1, props.axis1)
+	end
 	beam.CurveSize0 = props.curve0 or 0
 	beam.CurveSize1 = props.curve1 or 0
-	beam.Parent = anchor
 	return beam
 end
 
--- Ring of straight beam segments around `center` in the plane of axisA/axisB.
+-- Ring of four curved beams (Bezier quarter circles) around `center` in
+-- the plane of axisA/axisB.
 function Pieces.ring(
 	ctx: Context,
 	center: Vector3,
 	radius: number,
 	axisA: Vector3,
 	axisB: Vector3,
-	segments: number,
+	_segments: number?,
 	props: BeamProps
-)
-	for i = 0, segments - 1 do
-		local t0 = i / segments * math.pi * 2
-		local t1 = (i + 1) / segments * math.pi * 2
+): { Beam }
+	local beams = {}
+	local k = radius * 0.5523
+	for i = 0, 3 do
+		local t0 = i * math.pi / 2
+		local t1 = t0 + math.pi / 2
 		local p0 = center + (axisA * math.cos(t0) + axisB * math.sin(t0)) * radius
 		local p1 = center + (axisA * math.cos(t1) + axisB * math.sin(t1)) * radius
-		Pieces.beam(ctx, p0, p1, props)
+		local tan0 = -axisA * math.sin(t0) + axisB * math.cos(t0)
+		local tan1 = -axisA * math.sin(t1) + axisB * math.cos(t1)
+		local quarter = table.clone(props)
+		quarter.axis0 = tan0
+		quarter.axis1 = tan1
+		quarter.curve0 = k
+		quarter.curve1 = k
+		quarter.segments = 12
+		local beam = Pieces.beam(ctx, p0, p1, quarter)
+		if beam then
+			table.insert(beams, beam)
+		end
 	end
+	return beams
 end
 
--- Jagged lightning arc from a to b.
+-- Tags the client's storm controller can look for: StormGlow lights get
+-- brighter during storms, StormArc beams flicker, StormCloud emitters
+-- darken and speed up (see docs/styles/SkyIsles.md).
+Pieces.STORM_GLOW = "StormGlow"
+Pieces.STORM_ARC = "StormArc"
+Pieces.STORM_CLOUD = "StormCloud"
+
+-- Jagged lightning arc from a to b (tagged StormArc).
 function Pieces.arc(
 	ctx: Context,
 	a: Vector3,
@@ -411,8 +465,25 @@ function Pieces.arc(
 				ctx.rng:NextNumber(-jitter, jitter)
 			)
 		end
-		Pieces.beam(ctx, previous, point, props)
+		local beam = Pieces.beam(ctx, previous, point, props)
+		if beam then
+			beam:AddTag(Pieces.STORM_ARC)
+		end
 		previous = point
+	end
+end
+
+-- Rune ring tagged as storm-reactive.
+function Pieces.stormRing(
+	ctx: Context,
+	center: Vector3,
+	radius: number,
+	axisA: Vector3,
+	axisB: Vector3,
+	props: BeamProps
+)
+	for _, beam in Pieces.ring(ctx, center, radius, axisA, axisB, nil, props) do
+		beam:AddTag(Pieces.STORM_ARC)
 	end
 end
 
@@ -494,8 +565,24 @@ end
 -- along `outward` until nothing the style filled is underneath it (past
 -- every coast lobe and shelf), and a water channel joins it back to the
 -- source, so the water spills off the rim instead of out of the cliff.
+-- Waterfalls are queued and built at the end of the build
+-- (Pieces.flushWaterfalls), once every island's land is down.
+function Pieces.waterfall(ctx: Context, lip: Vector3, outward: Vector3, drop: number, width: number)
+	local store = ctx :: any
+	store.skyFalls = store.skyFalls or {}
+	table.insert(store.skyFalls, { lip = lip, outward = outward, drop = drop, width = width })
+end
+
+function Pieces.flushWaterfalls(ctx: Context)
+	local store = ctx :: any
+	for _, fall in store.skyFalls or {} do
+		Pieces.buildWaterfall(ctx, fall.lip, fall.outward, fall.drop, fall.width)
+	end
+	store.skyFalls = {}
+end
+
 -- Returns false (and builds nothing) when no clear lip is found.
-function Pieces.waterfall(
+function Pieces.buildWaterfall(
 	ctx: Context,
 	lip: Vector3,
 	outward: Vector3,
@@ -581,7 +668,7 @@ function Pieces.shard(
 		* CFrame.Angles(math.rad(tilt), 0, 0)
 	local bodyHeight = height * 0.74
 	local tipHeight = height - bodyHeight
-	local mat = material or Enum.Material.Neon
+	local mat = material or Enum.Material.Glass
 	local body = Pieces.block(
 		parent,
 		base * CFrame.new(0, bodyHeight / 2, 0) * CFrame.Angles(0, math.rad(45), 0),
@@ -641,7 +728,7 @@ function Pieces.cluster(
 	count: number?,
 	hanging: boolean?
 ): BasePart
-	local n = count or rng:NextInteger(3, 5)
+	local n = if Pieces.overBudget(parent) then 1 else count or rng:NextInteger(3, 5)
 	local main: BasePart? = nil
 	for i = 1, n do
 		local height = size * (if i == 1 then 1 else rng:NextNumber(0.4, 0.72))
@@ -651,7 +738,16 @@ function Pieces.cluster(
 		local direction = CFrame.Angles(0, math.rad(yaw), 0):VectorToWorldSpace(Vector3.zAxis)
 		local foot = bottom + (if i == 1 then Vector3.zero else direction * size * 0.12)
 		local tilt = if hanging then 180 - lean else lean
-		local shard = Pieces.shard(parent, foot, height, width, color, yaw, tilt)
+		local shard = Pieces.shard(
+			parent,
+			foot,
+			height,
+			width,
+			color,
+			yaw,
+			tilt,
+			if i == 1 then Enum.Material.Neon else Enum.Material.Glass
+		)
 		if i == 1 then
 			main = shard
 		end
@@ -683,14 +779,20 @@ function Pieces.runePost(
 		base = 1.2
 	end
 	local shaftHeight = height - 1 - base
-	Pieces.solid(
+	local shaft = Pieces.solid(
 		parent,
 		yaw * CFrame.new(0, base + shaftHeight / 2, 0),
 		Vector3.new(if plinth then 1.3 else 1.5, shaftHeight, if plinth then 1.3 else 1.5),
 		if plinth then C.skystone else C.skystoneDark,
 		Enum.Material.Cobblestone
 	)
-	local cap = Pieces.diamond(parent, bottom + UP * (height - 0.4), 1.15, color)
+	if not plinth then
+		-- plain posts end in a rune-coloured slate top (no extra part)
+		shaft.Color = C.skystoneDark:Lerp(color, 0.25)
+		return bottom + UP * (height - 1.2), shaft
+	end
+	local cap =
+		Pieces.diamond(parent, bottom + UP * (height - 0.4), 1.15, color, Enum.Material.Glass)
 	return bottom + UP * (height - 0.9), cap
 end
 
@@ -856,7 +958,7 @@ function Pieces.gateway(
 		local foot = base * CFrame.new(side * halfSpan, 0, 0)
 		Pieces.solid(
 			parent,
-			foot * CFrame.new(0, 0.8, 0),
+			foot * CFrame.new(0, 0.8, 0) * CFrame.Angles(0, math.rad(45), 0),
 			Vector3.new(3.4, 1.6, 3.4),
 			C.plum,
 			Enum.Material.Slate
@@ -869,18 +971,10 @@ function Pieces.gateway(
 			C.skystone,
 			Enum.Material.Cobblestone
 		)
-		Pieces.block(
-			parent,
-			foot * CFrame.new(0, height * 0.42, 0),
-			Vector3.new(2.7, 0.5, 2.7),
-			glow,
-			Enum.Material.Neon,
-			{ CastShadow = false }
-		)
 		Pieces.solid(
 			parent,
-			foot * CFrame.new(0, height - 0.7, 0),
-			Vector3.new(3.4, 1.4, 3.4),
+			foot * CFrame.new(0, height - 0.7, 0) * CFrame.Angles(0, math.rad(45), 0),
+			Vector3.new(3.2, 1.4, 3.2),
 			C.cream,
 			Enum.Material.Marble
 		)
@@ -899,44 +993,29 @@ function Pieces.gateway(
 		C.plum,
 		Enum.Material.Slate
 	)
+	-- a pointed gable over the lintel: two leaning slabs meeting at the top
+	for side = -1, 1, 2 do
+		local half = halfSpan + 1.2
+		Pieces.block(
+			parent,
+			base
+				* CFrame.new(side * half / 2, height + 2.6, 0)
+				* CFrame.Angles(0, 0, -side * math.rad(20)),
+			Vector3.new(half / math.cos(math.rad(20)) + 0.6, 1.2, 2.2),
+			C.skystone,
+			Enum.Material.Cobblestone
+		)
+	end
 	Pieces.block(
 		parent,
-		base * CFrame.new(0, height + 2.4, 0),
-		Vector3.new(halfSpan * 2 - 1, 1.2, 2.2),
-		C.skystone,
-		Enum.Material.Cobblestone
-	)
-	Pieces.block(
-		parent,
-		base * CFrame.new(0, height + 3.6, 0) * CFrame.Angles(0, 0, math.rad(45)),
+		base
+			* CFrame.new(0, height + 3.4 + (halfSpan + 1.2) * math.tan(math.rad(20)) / 2, 0)
+			* CFrame.Angles(0, 0, math.rad(45)),
 		Vector3.new(2.4, 2.4, 2.6),
 		glow,
 		Enum.Material.Neon,
 		{ CastShadow = false }
 	)
-	for side = -1, 1, 2 do
-		Pieces.shard(
-			parent,
-			(base * CFrame.new(side * halfSpan, height + 1.8, 0)).Position,
-			4,
-			1.3,
-			glow,
-			side * 20,
-			side * 12
-		)
-	end
-	-- banners hanging off the lintel ends
-	for side = -1, 1, 2 do
-		local banner = base * CFrame.new(side * (halfSpan + 2.6), height - 2.2, 0)
-		Pieces.block(parent, banner, Vector3.new(2, 4.6, 0.15), glow, Enum.Material.Fabric)
-		Pieces.wedge(
-			parent,
-			banner * CFrame.new(0, -3, 0) * CFrame.Angles(math.pi, 0, 0),
-			Vector3.new(2, 1.4, 0.15),
-			glow,
-			Enum.Material.Fabric
-		)
-	end
 	Pieces.board(
 		parent,
 		base * CFrame.new(0, height - 3.4, -0.2),
@@ -1053,9 +1132,10 @@ function Pieces.bridge(
 	end
 
 	-- rail posts with glowing cables between them
-	local spacing = opts.spacing or 12
+	local spacing = opts.spacing or 24
 	local count = math.max(1, math.floor((math.min(run, stop) - 1) / spacing))
 	local previous: { [number]: Vector3 } = {}
+	local sections: { [number]: number } = {}
 	for k = 0, count do
 		local s = math.min(1 + k * spacing, stop - 0.5)
 		local deck = pointAt(s)
@@ -1069,16 +1149,25 @@ function Pieces.bridge(
 				Enum.Material.Cobblestone
 			)
 			shaft.Name = "RailPost"
-			local cap = Pieces.diamond(parent, foot + UP * 3.5, 0.95, opts.glow)
 			if opts.lights ~= false and k % 2 == 0 and side == 1 then
-				Pieces.light(cap, opts.glow, 14, 1)
+				Pieces.light(shaft, opts.glow, 14, 1)
 			end
 			local top = foot + UP * 2.8
 			local last = previous[side]
-			if last then
+			-- one cable per side across each straight stretch (flat, ramp,
+			-- flat), not one per gap: the rail reads the same with far fewer beams
+			local section = if s <= startFlat + 0.01
+				then 1
+				elseif s >= run - endFlat - 0.01 then 3
+				else 2
+			if last and (sections[side] ~= section or k == count) then
 				Pieces.runeCable(ctx, last, top, opts.glow, 0.5, 0.22)
+				previous[side] = top
+				sections[side] = section
+			elseif not last then
+				previous[side] = top
+				sections[side] = section
 			end
-			previous[side] = top
 		end
 	end
 end
@@ -1087,20 +1176,23 @@ end
 
 -- Palm tree; `away` makes the trunk lean that way (off a field).
 function Pieces.palm(parent: Instance, rng: Random, bottom: Vector3, height: number, away: Vector3?)
+	if Pieces.overBudget(parent) then
+		return
+	end
 	local lean = Vector3.new(rng:NextNumber(-1, 1), 0, rng:NextNumber(-1, 1))
 	if away then
 		lean = flat(away).Unit + lean * 0.35
 	end
 	lean = if lean.Magnitude > 0.01 then lean.Unit else Vector3.xAxis
 	local point = bottom
-	local segments = 3
+	local segments = 2
 	for i = 1, segments do
-		local nextPoint = point + (UP + lean * (0.22 * i)).Unit * (height / segments)
+		local nextPoint = point + (UP + lean * (0.3 * i)).Unit * (height / segments)
 		Pieces.pipe(
 			parent,
 			point,
 			nextPoint + (nextPoint - point).Unit * 0.3,
-			1.6 - i * 0.18,
+			1.6 - i * 0.25,
 			if i % 2 == 0 then C.wood else C.woodLight,
 			Enum.Material.Wood,
 			{ CanCollide = true }
@@ -1108,7 +1200,7 @@ function Pieces.palm(parent: Instance, rng: Random, bottom: Vector3, height: num
 		point = nextPoint
 	end
 	Pieces.ball(parent, point, 1.9, C.wood, Enum.Material.Wood)
-	local fronds = 6
+	local fronds = 4
 	for k = 1, fronds do
 		local angle = k / fronds * math.pi * 2 + rng:NextNumber(-0.25, 0.25)
 		local out = Vector3.new(math.cos(angle), 0, math.sin(angle))
@@ -1118,22 +1210,20 @@ function Pieces.palm(parent: Instance, rng: Random, bottom: Vector3, height: num
 			parent,
 			point + UP * 0.3,
 			tip,
-			2.4,
+			3,
 			0.25,
 			if k % 2 == 0 then C.meadow else C.meadowDark,
 			Enum.Material.Grass
 		)
 	end
-	for k = 1, 2 do
-		local angle = k * math.pi + rng:NextNumber(0, 1)
-		Pieces.ball(
-			parent,
-			point + Vector3.new(math.cos(angle) * 0.9, -0.9, math.sin(angle) * 0.9),
-			1,
-			C.wood,
-			Enum.Material.Wood
-		)
-	end
+	local angle = rng:NextNumber(0, math.pi * 2)
+	Pieces.ball(
+		parent,
+		point + Vector3.new(math.cos(angle) * 0.9, -0.9, math.sin(angle) * 0.9),
+		1.2,
+		C.wood,
+		Enum.Material.Wood
+	)
 end
 
 -- Round-canopied tree (storm blossom): trunk and three canopy balls.
@@ -1144,6 +1234,9 @@ function Pieces.blossomTree(
 	height: number,
 	colors: { Color3 }
 )
+	if Pieces.overBudget(parent) then
+		return
+	end
 	local top = bottom + UP * height * 0.62
 	Pieces.pipe(parent, bottom, top, 1.4, C.wood, Enum.Material.Wood, { CanCollide = true })
 	for k = 1, 3 do
@@ -1162,6 +1255,9 @@ function Pieces.blossomTree(
 end
 
 function Pieces.bush(parent: Instance, rng: Random, bottom: Vector3, size: number, color: Color3)
+	if Pieces.overBudget(parent) then
+		return
+	end
 	for k = 1, 2 do
 		local offset = Vector3.new(rng:NextNumber(-0.4, 0.4), 0, rng:NextNumber(-0.4, 0.4)) * size
 		Pieces.ball(
@@ -1182,6 +1278,9 @@ function Pieces.flowers(
 	colors: { Color3 },
 	count: number?
 )
+	if Pieces.overBudget(parent) then
+		return
+	end
 	for k = 1, count or 3 do
 		local offset = Vector3.new(rng:NextNumber(-1.5, 1.5), 0, rng:NextNumber(-1.5, 1.5))
 		Pieces.ball(
@@ -1195,6 +1294,9 @@ function Pieces.flowers(
 end
 
 function Pieces.rocks(parent: Instance, rng: Random, bottom: Vector3, size: number, color: Color3?)
+	if Pieces.overBudget(parent) then
+		return
+	end
 	Kit.rock(parent, bottom - UP * size * 0.15, size, rng, {
 		Color = color or C.skystone,
 		Material = Enum.Material.Rock,
@@ -1304,7 +1406,12 @@ function Pieces.landmass(
 		local roll = rng:NextNumber()
 		local big = roll < 0.1
 		local radius = lobe
-			* (if big then rng:NextNumber(1.6, 2) elseif roll < 0.55 then rng:NextNumber(0.3, 0.5) else rng:NextNumber(0.55, 0.9))
+			* (
+				if big
+					then rng:NextNumber(1.6, 2)
+					elseif roll < 0.55 then rng:NextNumber(0.3, 0.5)
+					else rng:NextNumber(0.55, 0.9)
+			)
 		local push = lobe * (if big then rng:NextNumber(0, reach) else rng:NextNumber(-0.5, reach))
 		local world = frame:PointToWorldSpace(localPoint + normal * push)
 		local facet = roll > 0.72
@@ -1317,7 +1424,8 @@ function Pieces.landmass(
 				local n = frame:VectorToWorldSpace(normal)
 				local at = Vector3.new(world.X, topY - h / 2, world.Z)
 				terrain:FillBlock(
-					CFrame.lookAt(at, at + n) * CFrame.Angles(0, math.rad(rng:NextNumber(-22, 22)), 0),
+					CFrame.lookAt(at, at + n)
+						* CFrame.Angles(0, math.rad(rng:NextNumber(-22, 22)), 0),
 					Vector3.new(length, h, deep),
 					material
 				)
@@ -1504,6 +1612,43 @@ local function allZones(ctx: Context): { ZoneContext }
 	return all
 end
 Pieces.allZones = allZones
+
+-- Where a zone's hero landmark goes: the first clear spot of back centre,
+-- back corners and side headlands (`back` studs off the footprint), first
+-- at full size and then at 3/4 size. Returns the spot and the scale, or nil
+-- after a warning (and the Map attribute SkyMissingHeroes) when nothing fits.
+function Pieces.heroSpot(
+	ctx: Context,
+	zone: ZoneContext,
+	radius: number,
+	back: number
+): (Vector3?, number)
+	local slot = zone.slot
+	local hw, hd = slot.width / 2, slot.depth / 2
+	local diagonal = back * 0.75
+	local candidates = {
+		Vector3.new(0, 0, hd + back),
+		Vector3.new(hw + diagonal, 0, hd + diagonal),
+		Vector3.new(-(hw + diagonal), 0, hd + diagonal),
+		Vector3.new(hw + back, 0, hd * 0.2),
+		Vector3.new(-(hw + back), 0, hd * 0.2),
+	}
+	for _, scale in { 1, 0.75 } do
+		for _, l in candidates do
+			local p = slot.frame:PointToWorldSpace(l)
+			if Pieces.clearOf(ctx, p, radius * scale, zone) then
+				return p, scale
+			end
+		end
+	end
+	warn(string.format("[SkyIsles] no room for the hero landmark of zone %s", zone.folder.Name))
+	local map = ctx.folders.hub.Parent
+	if map then
+		local missing = map:GetAttribute("SkyMissingHeroes")
+		map:SetAttribute("SkyMissingHeroes", (if type(missing) == "number" then missing else 0) + 1)
+	end
+	return nil, 0
+end
 
 -- Horizontal distance from p to the segment a-b.
 function Pieces.segmentDistance(p: Vector3, a: Vector3, b: Vector3): number

@@ -392,49 +392,74 @@ function Land.cliff(
 	local growth: { number } = table.create(n, 0)
 	local boxGrowth = 0
 
-	local function band(y0: number, y1: number, material: Enum.Material)
-		if y1 - y0 <= 0.05 then
-			return
-		end
-		local midY = (y0 + y1) / 2
-		for i, c in outline.circles do
-			local r = c.r + growth[i]
-			if not guard or guard(c.x, c.z, r, y1) then
-				ctx.terrain:FillCylinder(CFrame.new(c.x, midY, c.z), y1 - y0, r, material)
+	-- bands are worked out top-down (each spreads a little more), then
+	-- filled bottom-up so the widest, lowest band never covers a higher one
+	type Band = { y0: number, y1: number, material: Enum.Material, radii: { number }, box: number }
+	local planned: { Band } = {}
+	local function plan(y0: number, y1: number, material: Enum.Material)
+		if y1 - y0 > 0.05 then
+			local radii = table.create(n, 0)
+			for k, c in outline.circles do
+				radii[k] = c.r + growth[k]
 			end
-		end
-		local box = outline.box
-		if box then
-			fillBox(ctx, box, y0, y1, material, boxGrowth, guard)
+			table.insert(
+				planned,
+				{ y0 = y0, y1 = y1, material = material, radii = radii, box = boxGrowth }
+			)
 		end
 	end
 
 	-- cap
 	local y = topY - capDepth
-	band(y, topY, cap)
+	plan(y, topY, cap)
 	-- strata bands, spreading as they go down
+	-- at most ~7 bands however tall the cliff (terrain op budget); strata
+	-- land irregularly (never two in a row), not every other band
+	local minBand = math.max(3.2, (y - foot) / 7)
 	local i = 0
+	local strata = 0
+	local lastWasStrata = true
 	local first = rng:NextNumber(2.5, 5.5)
 	while y > foot + 0.5 do
 		i += 1
-		local h = if i == 1 then first else rng:NextNumber(3.2, 4.8)
+		local h = if i == 1 then first else rng:NextNumber(minBand, minBand * 1.5)
 		local y0 = math.max(y - h, foot)
 		local total = 0
+		local step = h / 4
 		for k = 1, n do
-			growth[k] = math.min(growth[k] + rng:NextNumber(0.6, 1.5), lean)
+			growth[k] = math.min(growth[k] + rng:NextNumber(0.6, 1.5) * step, lean)
 			total += growth[k]
 		end
 		boxGrowth = if n > 0 then total / n else boxGrowth + 1
 		local material = body
-		if #bands > 0 and i % 2 == 0 then
-			material = bands[((i // 2) - 1) % #bands + 1]
+		if #bands > 0 and not lastWasStrata and rng:NextNumber() < 0.6 then
+			strata += 1
+			material = bands[(strata - 1) % #bands + 1]
+			lastWasStrata = true
+		else
+			lastWasStrata = false
 		end
-		band(y0, y, material)
+		plan(y0, y, material)
 		y = y0
 	end
 	-- underwater / buried part in one go
 	if y > bottomY then
-		band(bottomY, y, body)
+		plan(bottomY, y, body)
+	end
+
+	for k = #planned, 1, -1 do
+		local b = planned[k]
+		local midY = (b.y0 + b.y1) / 2
+		for ci, c in outline.circles do
+			local r = b.radii[ci]
+			if not guard or guard(c.x, c.z, r, b.y1) then
+				ctx.terrain:FillCylinder(CFrame.new(c.x, midY, c.z), b.y1 - b.y0, r, b.material)
+			end
+		end
+		local box = outline.box
+		if box then
+			fillBox(ctx, box, b.y0, b.y1, b.material, b.box, guard)
+		end
 	end
 	return outline
 end
@@ -502,7 +527,10 @@ function Land.pinnacle(
 end
 
 -- A rocky ridge from a to b (ground points; Y ignored): a chain of leaning
--- crag blobs whose tops rise from h0 to h1 with some noise. Pure terrain.
+-- crag blobs of very different sizes whose tops rise from h0 to h1 with
+-- noise, each on a skirt of `skirt` (default Sand) so it rises from land,
+-- not open water. Pure terrain. Returns the blob outlines (for keeping
+-- props out of them).
 function Land.ridge(
 	ctx: Context,
 	a: Vector3,
@@ -514,21 +542,39 @@ function Land.ridge(
 	body: Enum.Material,
 	bands: { Enum.Material },
 	cap: Enum.Material,
-	guard: Guard?
-)
+	guard: Guard?,
+	skirt: Enum.Material?
+): { Outline }
+	local out: { Outline } = {}
 	local flat = Vector3.new(b.X - a.X, 0, b.Z - a.Z)
 	local length = flat.Magnitude
-	local count = math.max(2, math.floor(length / (width * 0.9)))
+	local count = math.max(2, math.floor(length / (width * 0.8)))
+	local side = flat.Unit:Cross(Vector3.new(0, 1, 0))
+	local peak = rng:NextInteger(1, count)
 	for k = 0, count - 1 do
 		local f = (k + rng:NextNumber(0.2, 0.8)) / count
-		local p = a:Lerp(b, f)
-		local side = flat.Unit:Cross(Vector3.new(0, 1, 0)) * rng:NextNumber(-0.3, 0.3) * width
-		local top = h0 + (h1 - h0) * f + rng:NextNumber(-3, 3)
+		local p = a:Lerp(b, f) + side * (rng:NextNumber(-0.35, 0.35) * width)
+		local big = k + 1 == peak
+		local radius = width
+			* (if big then rng:NextNumber(0.7, 0.85) else rng:NextNumber(0.32, 0.62))
+		local top = h0 + (h1 - h0) * f + rng:NextNumber(-3, 3) + (if big then 6 else 0)
 		top = math.floor(top / 2 + 0.5) * 2
-		local blob =
-			Land.blob(p + side, width * rng:NextNumber(0.45, 0.65), rng, rng:NextInteger(4, 6), 2)
+		local blob = Land.blob(p, radius, rng, rng:NextInteger(4, 6), 2)
+		Land.fill(
+			ctx,
+			Land.grown(blob, 5),
+			-22,
+			1,
+			skirt or Enum.Material.Sand,
+			0,
+			function(x, z, r, _)
+				return not guard or guard(x, z, r, top)
+			end
+		)
 		Land.cliff(ctx, blob, -22, top, body, bands, cap, rng, { guard = guard, lean = 5 })
+		table.insert(out, blob)
 	end
+	return out
 end
 
 -- Natural rock arch from a to b (feet on the sea bed or ground), peak at

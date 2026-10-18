@@ -257,7 +257,8 @@ end
 
 -- The terrain guard every landmass uses (see Land.Guard): a circle (x, z,
 -- r) may rise to `top` unless that puts terrain above a connector deck,
--- into another slot's footprint above its floor, into `own`'s footprint
+-- anywhere into another slot's footprint (+4: even below its floor, so a
+-- later zone never repaints an earlier field), into `own`'s footprint
 -- above its floor (unless `allowOwn`: the teaser's island is not a field),
 -- or onto the hub plaza above the hub floor.
 function Geo.guard(
@@ -282,7 +283,7 @@ function Geo.guard(
 				then
 					return false
 				end
-			elseif top > other.slot.floor - 0.5 and Kit.inFootprint(other, p, r + 4) then
+			elseif Kit.inFootprint(other, p, r + 4) then
 				return false
 			end
 		end

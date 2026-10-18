@@ -34,6 +34,7 @@ Default.bridge = Zone.defaultBridge
 type Hero = { x: number, z: number, height: number, drums: number }
 
 local layersByZone: { [string]: { Land.Layer } } = {}
+local blockedByZone: { [string]: { Land.Outline } } = {}
 local heroByZone: { [string]: Hero } = {}
 
 -- The Dynamo Stack's look and spot, from a hash of the zone id: every
@@ -104,7 +105,7 @@ function Default.ground(ctx: Context, zone: ZoneContext)
 	end
 	local yard = Land.cliff(
 		ctx,
-		Land.organic(slot.frame, w + 12, d + 12, rng, { edge = 5, jitter = 2 }),
+		Land.organic(slot.frame, w + 12, d + 12, rng, { edge = 8, jitter = 2 }),
 		SEA_FLOOR,
 		F,
 		TERRAIN.Slate,
@@ -118,7 +119,7 @@ function Default.ground(ctx: Context, zone: ZoneContext)
 	-- a basalt crag behind the field, standing 10-18 above it
 	local hero = heroFor(zone)
 	heroByZone[key] = hero
-	Land.ridge(
+	local blocked = Land.ridge(
 		ctx,
 		Geo.slotPoint(zone, -math.sign(hero.x) * hw * 0.9, hd + 20),
 		Geo.slotPoint(zone, math.sign(hero.x) * hw * 0.05, hd + 24),
@@ -131,6 +132,9 @@ function Default.ground(ctx: Context, zone: ZoneContext)
 		TERRAIN.LeafyGrass,
 		guard
 	)
+	local saddle =
+		Zone.saddle(ctx, zone, TERRAIN.Slate, { TERRAIN.Basalt, TERRAIN.Rock }, TERRAIN.LeafyGrass)
+	table.move(saddle, 1, #saddle, #blocked + 1, blocked)
 	-- rock pad for the Dynamo Stack behind the field
 	local base = Geo.slotPoint(zone, hero.x, hero.z)
 	local pad: Land.Outline? = nil
@@ -155,7 +159,11 @@ function Default.ground(ctx: Context, zone: ZoneContext)
 		table.insert(layers, { outline = shelf, top = shelfTop })
 	end
 	table.insert(layers, { outline = shore, top = 3 })
+	table.sort(layers, function(la, lb)
+		return la.top > lb.top
+	end)
 	layersByZone[key] = layers
+	blockedByZone[key] = blocked
 
 	-- the field: riveted plates tinted with the zone colour on concrete,
 	-- framed in brass with a glowing zone-colour strip
@@ -241,7 +249,7 @@ function Default.dress(ctx: Context, zone: ZoneContext)
 	local key = Geo.zoneKey(zone)
 	local rng = Geo.rng(ctx, key .. "-dress")
 	local center = slot.frame.Position
-	local place = Zone.placer(ctx, zone, layersByZone[key] or {})
+	local place = Zone.placer(ctx, zone, layersByZone[key] or {}, blockedByZone[key])
 	local V2 = Vector2.new
 
 	-- hero: the Dynamo Stack behind the field

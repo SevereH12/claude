@@ -41,12 +41,15 @@ function Default.spec(zone: ZoneContext): ThemeSpec
 			kind = "checker",
 			colors = { light, dark },
 			materials = { Enum.Material.Grass, Enum.Material.Grass },
-			size = 16,
+			size = 22,
 		},
 		accent = zone.color,
 		depth = 54,
 		ridge = Enum.Material.LeafyGrass,
 		ridgeHeight = 8,
+		ridgeShape = "dunes",
+		ridgeCap = Enum.Material.Grass,
+		spires = Enum.Material.Rock,
 	}
 end
 
@@ -104,12 +107,12 @@ function Default.obelisk(
 	local crystal = Pieces.bigShard(parent, crystalAt, 7, 3.4, color, C.cream, 30, 0)
 	Pieces.bigShard(parent, crystalAt, 5, 3.4, color, C.cream, 30, 180)
 	Pieces.light(crystal, color, 34, 1.6)
-	Pieces.ring(ctx, crystalAt + UP * 1.5, 5.5, Vector3.new(1, 0.2, 0).Unit, Vector3.zAxis, 12, {
+	Pieces.stormRing(ctx, crystalAt + UP * 1.5, 5.5, Vector3.new(1, 0.2, 0).Unit, Vector3.zAxis, {
 		color = color,
 		width = 0.35,
 		glow = 1,
 	})
-	Pieces.ring(ctx, crystalAt + UP * 1, 7.5, Vector3.xAxis, Vector3.new(0, 0.5, 1).Unit, 12, {
+	Pieces.stormRing(ctx, crystalAt + UP * 1, 7.5, Vector3.xAxis, Vector3.new(0, 0.5, 1).Unit, {
 		color = C.cream,
 		width = 0.25,
 		glow = 1,
@@ -124,6 +127,9 @@ function Default.crystalTree(
 	height: number,
 	color: Color3
 )
+	if Pieces.overBudget(parent) then
+		return
+	end
 	local top = foot + UP * height * 0.55
 	Pieces.pipe(parent, foot, top, 1.2, C.wood, Enum.Material.Wood, { CanCollide = true })
 	Pieces.ball(parent, top, height * 0.4, C.meadowDark, Enum.Material.Grass)
@@ -139,9 +145,10 @@ function Default.dress(ctx: Context, zone: ZoneContext, spec: ThemeSpec, land: L
 	local toHub = slot.frame.LookVector
 
 	-- hero: obelisk on a grassy knoll behind the field
-	local knoll = slot.frame:PointToWorldSpace(Vector3.new(0, 0, hd + 14))
-	if Pieces.clearOf(ctx, knoll, 13, zone) then
-		Kit.blob(ctx, Vector3.new(knoll.X, 0, knoll.Z), 13, floor, 12, spec.rim, 6)
+	local knollSpot, scale = Pieces.heroSpot(ctx, zone, 13, 14)
+	if knollSpot then
+		local knoll = knollSpot
+		Kit.blob(ctx, Vector3.new(knoll.X, 0, knoll.Z), 13 * scale, floor, 12, spec.rim, 6)
 		Kit.blob(ctx, Vector3.new(knoll.X, 0, knoll.Z) - toHub * 2, 8, floor + 2, 6, spec.rim, 5)
 		Default.obelisk(
 			ctx,
@@ -234,7 +241,7 @@ function Default.dress(ctx: Context, zone: ZoneContext, spec: ThemeSpec, land: L
 		)
 		Pieces.flowers(folder, rng, p, { C.coral, C.cream, C.gold }, 4)
 	end
-	for _, p in Zone.rimPoints(ctx, zone, land, 10, 2, 2) do
+	for _, p in Zone.rimPoints(ctx, zone, land, 6, 2, 2) do
 		if rng:NextNumber() < 0.5 then
 			Pieces.flowers(folder, rng, p, { C.coral, C.cream, zone.color }, 3)
 		else

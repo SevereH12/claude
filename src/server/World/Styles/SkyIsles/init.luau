@@ -51,7 +51,7 @@ Style.palette = (Palette.C :: any) :: { [string]: Color3 }
 -- Slots land on the eight compass directions (135 degree steps), each a
 -- little further out than the last; seven zones plus the teaser fit.
 Style.layout = {
-	hubFloor = 12,
+	hubFloor = 0,
 	hubRadius = 56,
 	firstRadius = 168,
 	radiusStep = 28,
@@ -109,6 +109,7 @@ Style.themes = themes
 
 function Style.buildTeaser(ctx: Context, zone: ZoneContext)
 	Teaser.build(ctx, zone)
+	Pieces.flushWaterfalls(ctx)
 	Pieces.checkChains(ctx)
 end
 

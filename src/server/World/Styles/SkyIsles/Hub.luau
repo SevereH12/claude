@@ -316,6 +316,47 @@ local function buildAltar(ctx: Context, sectors: { number }, facing: Vector3)
 		Pieces.star(hub, Vector3.new(0, top, 0), size, height, color, material, true)
 	end
 	local y = roofTop
+	-- sloped eave skirt on the canopy: an eight-sided roof rising to the tower
+	for k = 0, 7 do
+		local dir = direction(k * math.pi / 4)
+		local at = dir * 15.4 + UP * (roofTop + 2)
+		Pieces.wedge(
+			hub,
+			CFrame.lookAt(at, at + dir),
+			Vector3.new(16.5, 4, 8.6),
+			C.plumDeep,
+			Enum.Material.Slate
+		)
+	end
+	-- sloped skirts under each cornice and buttress fins on the first tier,
+	-- so the spire has eaves and a tapering silhouette, not stacked boxes
+	local function eaves(under: number, size: number, color: Color3)
+		for k = 0, 7 do
+			local dir = direction(k * math.pi / 4)
+			local at = dir * (size / 2 + 0.6) + UP * (under - 1)
+			Pieces.wedge(
+				hub,
+				CFrame.lookAt(at, at + dir),
+				Vector3.new(size * 0.42, 2, 2.6),
+				color,
+				Enum.Material.Slate
+			)
+		end
+	end
+	for k = 0, 7 do
+		local dir = direction(k * math.pi / 4)
+		local at = dir * 17.4 + UP * (roofTop + 7)
+		Pieces.wedge(
+			hub,
+			CFrame.lookAt(at, at + dir),
+			Vector3.new(1.4, 14, 4),
+			C.skystoneDark,
+			Enum.Material.Cobblestone
+		)
+	end
+	eaves(y + 15, 25, C.plum)
+	eaves(y + 29.4, 19, C.goldDeep)
+	eaves(y + 41.6, 13.4, C.plum)
 	tier(15, 22, y + 15, C.skystone, Enum.Material.Cobblestone)
 	Pieces.star(hub, Vector3.new(0, y + 9, 0), 22.6, 0.7, C.cyan, Enum.Material.Neon)
 	tier(1.4, 25, y + 16.4, C.plum, Enum.Material.Slate)
@@ -382,23 +423,29 @@ local function buildAltar(ctx: Context, sectors: { number }, facing: Vector3)
 	Pieces.bigShard(hub, crystalCenter + UP * 0.05, 11, 7.5, C.cyan, C.cream, 0, 180)
 	Pieces.light(crystal, C.cyan, 60, 2.2)
 	Pieces.sparkles(crystal, C.cyan, 8, 1.6)
-	Pieces.ring(ctx, crystalCenter + UP * 3, 10, Vector3.new(1, 0.25, 0).Unit, Vector3.zAxis, 14, {
+	Pieces.stormRing(ctx, crystalCenter + UP * 3, 10, Vector3.new(1, 0.25, 0).Unit, Vector3.zAxis, {
 		color = C.cyan,
 		width = 0.55,
 		glow = 1,
 	})
-	Pieces.ring(ctx, crystalCenter + UP * 2, 12.5, Vector3.xAxis, Vector3.new(0, 0.4, 1).Unit, 14, {
-		color = C.gold,
-		width = 0.45,
-		glow = 1,
-	})
-	Pieces.ring(
+	Pieces.stormRing(
+		ctx,
+		crystalCenter + UP * 2,
+		12.5,
+		Vector3.xAxis,
+		Vector3.new(0, 0.4, 1).Unit,
+		{
+			color = C.gold,
+			width = 0.45,
+			glow = 1,
+		}
+	)
+	Pieces.stormRing(
 		ctx,
 		crystalCenter + UP * 1,
 		15,
 		Vector3.new(1, -0.3, 0.3).Unit,
 		Vector3.new(0, 0.5, 1).Unit,
-		16,
 		{
 			color = C.cyan,
 			width = 0.35,
@@ -442,11 +489,38 @@ local function buildLanes(ctx: Context, lanes: { number })
 			hub,
 			CFrame.lookAt(middle, to) + UP * (floor - 0.06),
 			Vector3.new(LANE_HALF * 2, 0.4, length),
-			C.skystoneLight,
+			C.creamWarm,
 			Enum.Material.Cobblestone,
 			{ CastShadow = false, Name = "LaneRunner" }
 		)
+		-- plum curbs either side so every spoke reads against the paving
+		for side = -1, 1, 2 do
+			local offset = dir:Cross(UP) * side * (LANE_HALF + 0.4)
+			Pieces.block(
+				hub,
+				CFrame.lookAt(middle + offset, to + offset) + UP * (floor + 0.1),
+				Vector3.new(0.8, 0.4, length),
+				C.plum,
+				Enum.Material.Slate,
+				{ CastShadow = false, Name = "LaneCurb" }
+			)
+		end
 		local zone = laneOwner(ctx, index)
+		if zone and not zone.isTeaser then
+			-- two lamp posts lining the lane, the outer one lit
+			for k, s in { 40 } do
+				local side = if k == 1 then 1 else -1
+				local foot = dir * s + dir:Cross(UP) * side * (LANE_HALF + 1.8) + UP * floor
+				Pieces.lampPost(
+					hub,
+					foot,
+					8,
+					zone.color,
+					-dir:Cross(UP) * side,
+					if k == 2 then 16 else nil
+				)
+			end
+		end
 		if zone then
 			local glow = if zone.isTeaser then TEASER_GLOW else zone.color
 			-- light trail: centre line plus chevrons pointing out to the zone
@@ -473,7 +547,7 @@ local function buildLanes(ctx: Context, lanes: { number })
 					Enum.Material.Neon,
 					{ CastShadow = false, Name = "LightTrail" }
 				)
-				for s = 32, R - 6, 8 do
+				for s = 34, R - 8, 12 do
 					local tip = dir * (s + 1.5) + UP * (floor + 0.16)
 					for side = -1, 1, 2 do
 						local lateral = dir:Cross(UP) * side
@@ -507,7 +581,24 @@ local function buildLanes(ctx: Context, lanes: { number })
 				not zone.isTeaser
 			)
 		else
-			-- dormant lane: a pair of unlit markers at the rim
+			-- dormant lane: a low balustrade across the end (gone when a
+			-- zone claims the lane) and a pair of unlit markers
+			local rail = dir * (R - 2) + UP * (floor + 1.3)
+			Pieces.solid(
+				hub,
+				CFrame.lookAt(rail, rail + dir),
+				Vector3.new(LANE_HALF * 2 + 2, 2.6, 1.4),
+				C.plum,
+				Enum.Material.Slate,
+				{ Name = "LaneBalustrade" }
+			)
+			Pieces.block(
+				hub,
+				CFrame.lookAt(rail + UP * 1.5, rail + UP * 1.5 + dir),
+				Vector3.new(LANE_HALF * 2 + 2.6, 0.5, 1.9),
+				C.cream,
+				Enum.Material.Marble
+			)
 			for side = -1, 1, 2 do
 				local p = dir * (R - 2) + dir:Cross(UP) * side * (LANE_HALF + 1.5) + UP * floor
 				Pieces.solid(
@@ -520,6 +611,46 @@ local function buildLanes(ctx: Context, lanes: { number })
 				Pieces.diamond(hub, p + UP * 3.3, 0.9, C.skystoneDark, Enum.Material.Glass)
 			end
 		end
+	end
+end
+
+-- Compass rose: a flush gold ring round the cobbles and tapered plum and
+-- cream rays between the lanes, so the plaza reads as a compass on foot.
+local function buildRose(ctx: Context, sectors: { number })
+	local hub = ctx.folders.hub
+	local floor = ctx.layout.hubFloor
+	local ringRadius = 30.4
+	local chords = 16
+	for k = 0, chords - 1 do
+		local a = direction(k / chords * math.pi * 2) * ringRadius
+		local b = direction((k + 1) / chords * math.pi * 2) * ringRadius
+		Pieces.block(
+			hub,
+			CFrame.lookAt((a + b) / 2, b) + UP * (floor + 0.03),
+			Vector3.new(1.3, 0.2, (b - a).Magnitude + 0.5),
+			C.gold,
+			Enum.Material.Metal,
+			{ CastShadow = false, Name = "RoseRing" }
+		)
+	end
+	for i, angle in sectors do
+		local dir = direction(angle)
+		local color = if i % 2 == 0 then C.plum else C.creamWarm
+		-- a long tapering ray: a wide base block and a narrow tip block
+		local function ray(from: number, to: number, width: number)
+			local a = dir * from + UP * (floor + 0.05)
+			local b = dir * to + UP * (floor + 0.05)
+			Pieces.block(
+				hub,
+				CFrame.lookAt((a + b) / 2, b),
+				Vector3.new(width, 0.2, to - from),
+				color,
+				Enum.Material.Slate,
+				{ CastShadow = false, Name = "RoseRay" }
+			)
+		end
+		ray(31.2, 35, 3.2)
+		ray(35, 39.5, 1.6)
 	end
 end
 
@@ -821,6 +952,11 @@ local function buildTethers(ctx: Context)
 		local dir = zone.slot.hubExit.LookVector
 		local right = dir:Cross(UP)
 		for _, point in Zone.tetherPoints(ctx, zone) do
+			-- the high isles float free: a chain climbing to them would
+			-- run up through their own cliffs
+			if point.Y > towerY - 14 then
+				continue
+			end
 			local side = if (point - Vector3.zero):Dot(right) > 0 then 1 else -1
 			local start = dir * 8.5 + right * side * 2 + UP * towerY
 			bracket(start, dir)
@@ -857,6 +993,7 @@ function Hub.build(ctx: Context)
 	local lawnSpots = buildLand(ctx, sectors)
 	buildAltar(ctx, sectors, direction(view))
 	buildLanes(ctx, lanes)
+	buildRose(ctx, sectors)
 	buildSpawn(ctx, spawnAngle)
 	buildSectors(ctx, sectors, sectorAngle, lawnSpots)
 	buildTethers(ctx)

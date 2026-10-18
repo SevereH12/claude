@@ -183,6 +183,7 @@ function Teaser.build(ctx: Context, zone: ZoneContext)
 		rng,
 		{ guard = guard, lean = 6, foot = F - 24 }
 	)
+	Zone.saddle(ctx, zone, TERRAIN.Basalt, { TERRAIN.Slate, TERRAIN.Rock }, TERRAIN.LeafyGrass)
 	for i = 1, 4 do
 		local a = math.rad(i * 90 + rng:NextNumber(-30, 30))
 		local p = center
@@ -246,7 +247,7 @@ function Teaser.build(ctx: Context, zone: ZoneContext)
 		4.4,
 		"COMING SOON",
 		"a new storm zone is on the way",
-		Palette.sign(C.hazard, true)
+		Palette.sign(C.ceramic, true)
 	)
 	-- a girder dangling off the first bare pile cap
 	local hang = deckEnd + dir * 7 - UP * 1.4

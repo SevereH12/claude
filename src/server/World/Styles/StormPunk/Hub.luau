@@ -54,10 +54,12 @@ local function buildOcean(ctx: Context)
 	)
 end
 
+type IslandShapes = { plaza: Land.Outline, terrace: Land.Outline, crags: { Land.Outline } }
+
 -- `upperOnly` re-lays just the terrace, plaza and crags (same seed, same
 -- shapes): used after the zone landmasses so the hub always wins where
--- shores merge.
-local function buildHubIsland(ctx: Context, upperOnly: boolean?)
+-- shores merge. Returns the shapes (for dressing the terrace).
+local function buildHubIsland(ctx: Context, upperOnly: boolean?): IslandShapes
 	local rng = Geo.rng(ctx, "hub-island")
 	local R = ctx.layout.hubRadius
 	local floor = ctx.layout.hubFloor
@@ -107,6 +109,7 @@ local function buildHubIsland(ctx: Context, upperOnly: boolean?)
 		rng,
 		{ lean = 4, foot = floor - 8 }
 	)
+	local crags: { Land.Outline } = {}
 	if not upperOnly then
 		Land.talus(ctx, terrace, 2, rng, 16, TERRAIN.Rock, guard)
 	else
@@ -116,7 +119,7 @@ local function buildHubIsland(ctx: Context, upperOnly: boolean?)
 		local cragRng = Geo.rng(ctx, "hub-crags")
 		for k, offset in { 180, 225, 270 } do
 			local b = sb + offset
-			Land.ridge(
+			local blobs = Land.ridge(
 				ctx,
 				Geo.polar(b, R + 12, 0),
 				Geo.polar(b, R + 32, 0),
@@ -129,6 +132,7 @@ local function buildHubIsland(ctx: Context, upperOnly: boolean?)
 				TERRAIN.LeafyGrass,
 				guard
 			)
+			table.move(blobs, 1, #blobs, #crags + 1, crags)
 		end
 	end
 
@@ -148,7 +152,7 @@ local function buildHubIsland(ctx: Context, upperOnly: boolean?)
 	end
 	-- the spawn spoke is a real path: a paved ramp down to the harbour
 	local steps = 7
-	local run = 26
+	local run = 24
 	for i = 0, steps - 1 do
 		local r0 = R + 4 + i * run / steps
 		local top = floor - (i + 1) * (floor - 2) / steps
@@ -160,6 +164,7 @@ local function buildHubIsland(ctx: Context, upperOnly: boolean?)
 			TERRAIN.Pavement
 		)
 	end
+	return { plaza = plaza, terrace = terrace, crags = crags }
 end
 
 -- Little basalt islets on quiet bearings, each carrying a Tesla pylon,
@@ -270,8 +275,44 @@ end
 
 -- After every zone landmass: re-lay the hub's upper terrain and add the
 -- scenery that must stay clear of the zones' skirts.
+-- Shrub clumps on the green terrace: off the plaza's leaning cliff, off
+-- the crags, out of every exit lane.
+local function dressTerrace(ctx: Context, shapes: IslandShapes)
+	local parent = ctx.folders.hub
+	local rng = Geo.rng(ctx, "hub-terrace")
+	local R = ctx.layout.hubRadius
+	local floor = ctx.layout.hubFloor
+	local slope = Land.grown(shapes.plaza, 5)
+	local terrace: { Land.Layer } = { { outline = shapes.terrace, top = floor - 4 } }
+	local sb = Geo.spawnBearing(ctx)
+	for k = 1, 10 do
+		local a = sb + 18 + k * 33 + rng:NextNumber(-8, 8)
+		for _, r in { R + 12, R + 15, R + 9 } do
+			local p = Geo.polar(a, r, floor - 4)
+			local onCrag = false
+			for _, crag in shapes.crags do
+				if Land.contains(crag, p, -4) then
+					onCrag = true
+				end
+			end
+			if
+				not onCrag
+				and not Land.contains(slope, p, 0)
+				and Land.surfaceAt(terrace, p, 2.5) == floor - 4
+				and not Geo.inExitLane(ctx, p, 8)
+				and Geo.isClear(ctx, p, 3, { hub = false })
+			then
+				Pieces.shrub(parent, p, rng, if k % 2 == 0 then C.sage else T.sageDark)
+				Pieces.tuft(parent, p + Geo.dir(a + 90) * 2.5, rng, T.sageDark)
+				break
+			end
+		end
+	end
+end
+
 function Hub.restoreIsland(ctx: Context)
-	buildHubIsland(ctx, true)
+	local shapes = buildHubIsland(ctx, true)
+	dressTerrace(ctx, shapes)
 	buildIslets(ctx)
 	buildSeaStacks(ctx)
 end
@@ -305,7 +346,7 @@ local function grandCoil(parent: Instance, floor: number): Vector3
 	-- the secondary: a fat copper column banded every ~9 studs
 	local coilTop = floor + 66
 	Pieces.column(parent, Vector3.new(0, deckY + 0.9, 0), coilTop - deckY - 0.9, 6.6, C.copper)
-	for k, y in { 20, 29, 38, 47, 56 } do
+	for k, y in { 20, 38, 47, 56 } do
 		Pieces.column(
 			parent,
 			Vector3.new(0, floor + y, 0),
@@ -315,7 +356,8 @@ local function grandCoil(parent: Instance, floor: number): Vector3
 			if k % 2 == 1 then M.metal else M.ceramic
 		)
 	end
-	local glowBand = Pieces.column(parent, Vector3.new(0, floor + 42, 0), 2.2, 7.4, C.volt, M.neon)
+	-- a glowing band low enough to sit in the spawn's first frame
+	local glowBand = Pieces.column(parent, Vector3.new(0, floor + 28, 0), 2.6, 7.4, C.volt, M.neon)
 	Pieces.glow(glowBand, C.volt, 26, 1.6)
 
 	-- lattice legs and two rings, thick enough to read from the zones
@@ -401,21 +443,21 @@ local function voltExchange(parent: Instance, floor: number, bearing: number): {
 	local legX = 10.5
 	for _, side in { -1, 1 } do
 		local foot = (frame * CFrame.new(side * legX, 0, signZ)).Position
-		Pieces.column(parent, foot, 25, 2.2, C.copper, M.metal, true)
+		Pieces.column(parent, foot, 23, 2.2, C.copper, M.metal, true)
 		Pieces.column(parent, foot, 1.6, 3.4, C.iron)
-		Pieces.column(parent, foot + UP * 24.6, 1.6, 3, C.ceramic, M.ceramic)
-		Pieces.ball(parent, foot + UP * 27.4, 1.8, C.hazard, M.neon)
+		Pieces.column(parent, foot + UP * 22.6, 1.6, 3, C.ceramic, M.ceramic)
+		Pieces.ball(parent, foot + UP * 25.4, 1.8, C.hazard, M.neon)
 	end
 	local header = Pieces.block(
 		parent,
-		toSpawn * CFrame.new(0, 24.5, -signZ),
+		toSpawn * CFrame.new(0, 22.4, -signZ),
 		Vector3.new(2 * legX + 2.4, 3, 1.4),
 		C.soot,
 		Enum.Material.SmoothPlastic
 	)
 	Kit.faceText(header, Enum.NormalId.Front, "VOLT EXCHANGE", nil, Palette.sign(C.brass))
 	Kit.faceText(header, Enum.NormalId.Back, "VOLT EXCHANGE", nil, Palette.sign(C.brass))
-	local signCF = toSpawn * CFrame.new(0, 17, -signZ)
+	local signCF = toSpawn * CFrame.new(0, 15.6, -signZ)
 	local signW = 2 * legX - 3
 	local board =
 		Pieces.framedSign(parent, signCF, signW, 8, "SELL", "charges for Volts", Palette.marquee())
@@ -436,7 +478,7 @@ local function voltExchange(parent: Instance, floor: number, bearing: number): {
 		end
 	end
 	-- lightning bolt emblem on top
-	local boltCF = signCF * CFrame.new(0, 9.6, 0)
+	local boltCF = signCF * CFrame.new(0, 10.6, 0)
 	for _, b in
 		{
 			{ -0.8, 1.6, -28, 1.4, 3.6 },
@@ -456,7 +498,7 @@ local function voltExchange(parent: Instance, floor: number, bearing: number): {
 	-- capacitor towers beside the pad, fed from the coil
 	local caps: { Vector3 } = {}
 	for _, side in { -1, 1 } do
-		local foot = (frame * CFrame.new(side * 11.5, 0, 1.5)).Position
+		local foot = (frame * CFrame.new(side * 14.8, 0, -5)).Position
 		Pieces.column(parent, foot, 1.6, 6, C.iron, M.metal, true)
 		local core = Pieces.column(parent, foot + UP * 1.6, 13, 1.8, C.volt, M.neon)
 		Pieces.sparks(core, C.volt, 5)
@@ -896,22 +938,12 @@ function Hub.buildHub(ctx: Context)
 
 	-- a little harbour at the foot of the spawn ramp: pier and moored skiff
 	do
-		local a = Geo.polar(sb, R + 24, 0)
-		local b = Geo.polar(sb, R + 44, 0)
+		local a = Geo.polar(sb, R + 28, 0)
+		local b = Geo.polar(sb, R + 48, 0)
 		Pieces.pier(parent, a, b, 2.6, "HARBOUR", SEA_FLOOR)
 		local along = Geo.dir(sb)
-		local berth = Geo.polar(sb, R + 37, 0) + along:Cross(UP) * 6.5
+		local berth = Geo.polar(sb, R + 41, 0) + along:Cross(UP) * 6.5
 		Pieces.skiff(parent, CFrame.lookAt(berth + UP * 0.1, berth + along + UP * 0.1))
-	end
-
-	-- shrubs on the green terrace below the plaza, in small clumps
-	for k = 1, 8 do
-		local a = sb + 22.5 + k * 40 + rng:NextNumber(-8, 8)
-		local p = Geo.polar(a, R + rng:NextNumber(9, 12), floor - 4)
-		if Geo.isClear(ctx, p, 3, { hub = false }) and not Geo.inExitLane(ctx, p, 8) then
-			Pieces.shrub(parent, p, rng, C.sage)
-			Pieces.tuft(parent, p + Geo.dir(a + 90) * 2.5, rng, T.sageDark)
-		end
 	end
 end
 

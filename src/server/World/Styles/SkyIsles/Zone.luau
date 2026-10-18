@@ -25,6 +25,7 @@ local UP = Vector3.yAxis
 local RIM = 10 -- guaranteed flat land around the footprint
 local GATE_HALF = 7 -- gate pillars sit this far either side of the bridge
 local BRIDGE_WIDTH = 10
+local ZONE_PARTS = 150 -- per-zone part budget for ground, field, border, gate and dressing
 
 local Zone = {}
 
@@ -168,12 +169,7 @@ end
 -- A ragged backdrop ridge along the back edge and the back of both sides,
 -- so the field sits in a cove: rocks, canyon walls or hills by theme.
 -- Every lump stays clear of the footprint.
-function Zone.ridge(
-	ctx: Context,
-	zone: ZoneContext,
-	land: Land,
-	spec: ThemeSpec
-)
+function Zone.ridge(ctx: Context, zone: ZoneContext, land: Land, spec: ThemeSpec)
 	local height = spec.ridgeHeight
 	local slot = zone.slot
 	local frame = slot.frame
@@ -218,7 +214,8 @@ function Zone.ridge(
 				local outward = Zone.outward(zone, p)
 				if shape == "dunes" then
 					-- low rounded dunes with a grassy crown
-					local top = floor + 4 * math.max(1, math.round(height * rng:NextNumber(0.5, 1) / 4))
+					local top = floor
+						+ 4 * math.max(1, math.round(height * rng:NextNumber(0.5, 1) / 4))
 					Kit.blob(ctx, ground, radius, top, top - floor + 8, spec.ridge, 5)
 					if spec.ridgeCap then
 						Kit.blob(ctx, ground, radius * 0.6, top + 1, 3, spec.ridgeCap, 4)
@@ -268,6 +265,7 @@ function Zone.ground(ctx: Context, zone: ZoneContext, spec: ThemeSpec): Land
 	local front = -hd - frontRim(ctx, zone)
 	local accept = Zone.accept(ctx, zone)
 	local land = Zone.newLand(ctx, zone)
+	zone.folder:SetAttribute("SkyPartBudget", ZONE_PARTS)
 
 	-- tapering underside with hanging spikes
 	Pieces.underside(
@@ -371,6 +369,28 @@ function Zone.ground(ctx: Context, zone: ZoneContext, spec: ThemeSpec): Land
 	)
 	Pieces.field(zone.folder, zone, spec.field)
 
+	-- every lower terrace gets a stone ramp back up to the rim, so a player
+	-- who drops onto one while chasing a strike can walk straight back
+	for _, terrace in land.terraces do
+		if terrace.top < floor then
+			local inward = -Zone.outward(zone, terrace.center)
+			local rise = floor - terrace.top
+			local from = terrace.center + inward * (terrace.radius * 0.35)
+			local to = Vector3.new(from.X, floor, from.Z) + inward * (rise * 2.1)
+			if
+				Zone.onRim(zone, land, to, 3, 1.5)
+				and Zone.unblocked(land, to, 2)
+				and Pieces.clearOf(ctx, to, 3, zone)
+			then
+				Kit.walkway(zone.folder, from + UP * 0.2, to + UP * 0.2, 4.5, 1.2, {
+					Name = "TerraceRamp",
+					Color = C.skystone,
+					Material = Enum.Material.Cobblestone,
+				})
+			end
+		end
+	end
+
 	-- crystals hanging under the island
 	for _ = 1, 3 do
 		local l = Vector3.new(rng:NextNumber(-0.4, 0.4) * hw, 0, rng:NextNumber(-0.4, 0.4) * hd)
@@ -441,8 +461,9 @@ end
 function Zone.border(ctx: Context, zone: ZoneContext)
 	local slot = zone.slot
 	local folder = zone.folder
-	local posts = Kit.perimeter(zone, 14, 0)
+	local posts = Kit.perimeter(zone, 24, 0)
 	local tops: { Vector3? } = {}
+	local corners: { [number]: boolean } = {}
 	local hw, hd = slot.width / 2, slot.depth / 2
 	for i, cframe in posts do
 		local l = slot.frame:PointToObjectSpace(cframe.Position)
@@ -455,17 +476,29 @@ function Zone.border(ctx: Context, zone: ZoneContext)
 				Pieces.runePost(folder, cframe.Position, 7.5, zone.color, cframe.LookVector, true)
 			Pieces.shard(folder, cframe.Position + UP * 7.1, 3.2, 1.1, zone.color, 45, 0)
 			Pieces.light(cap, zone.color, 18, 1.2)
-			tops[i] = top
+			tops[i] = cframe.Position + UP * 3.4
+			corners[i] = top ~= nil
 		else
 			local top = Pieces.runePost(folder, cframe.Position, 4.6, zone.color, cframe.LookVector)
 			tops[i] = top
 		end
 	end
+	-- one glowing cable per straight run (corner to corner, or corner to
+	-- the gate gap), resting on the post tops: few beams, same look
 	local count = #posts
-	for i = 1, count do
-		local a, b = tops[i], tops[i % count + 1]
-		if a and b then
-			Pieces.runeCable(ctx, a - UP * 0.4, b - UP * 0.4, zone.color, 0.8, 0.32)
+	local runStart: Vector3? = nil
+	for step = 0, count do
+		local i = step % count + 1
+		local top = tops[i]
+		if top == nil then
+			runStart = nil
+		elseif corners[i] or tops[(i % count) + 1] == nil then
+			if runStart and step > 0 then
+				Pieces.runeCable(ctx, runStart, top, zone.color, 0.3, 0.32)
+			end
+			runStart = top
+		elseif runStart == nil then
+			runStart = top
 		end
 	end
 end

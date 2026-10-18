@@ -61,6 +61,7 @@ local function headlandSpots(zone: ZoneContext): ({ Spot }, { Spot })
 end
 
 local layersByZone: { [string]: { Land.Layer } } = {}
+local blockedByZone: { [string]: { Land.Outline } } = {}
 local heroByZone: { [string]: Spot } = {}
 
 function Beach.layers(zone: ZoneContext): { Land.Layer }
@@ -119,7 +120,7 @@ function Beach.ground(ctx: Context, zone: ZoneContext)
 			{ guard = guard, lean = 8, foot = 0 }
 		)
 	end
-	local field = Land.organic(slot.frame, w + 10, d + 10, rng, { edge = 5, jitter = 2 })
+	local field = Land.organic(slot.frame, w + 10, d + 10, rng, { edge = 8, jitter = 2 })
 	Land.fill(ctx, field, SEA_FLOOR, F, TERRAIN.Sand, 0, guard)
 	Land.flatRect(ctx, slot.frame, w + 6, d + 6, F, F - SEA_FLOOR, TERRAIN.Sand)
 
@@ -166,6 +167,8 @@ function Beach.ground(ctx: Context, zone: ZoneContext)
 			table.insert(layers, { outline = outline, top = top })
 		end
 	end
+	local blocked =
+		Zone.saddle(ctx, zone, TERRAIN.Basalt, { TERRAIN.Slate, TERRAIN.Rock }, TERRAIN.LeafyGrass)
 	-- grassy dunes in clumps on the wide back beach
 	for _ = 1, 7 do
 		local at = Geo.slotPoint(
@@ -177,6 +180,7 @@ function Beach.ground(ctx: Context, zone: ZoneContext)
 		local top = beachTop + 1.5
 		if Geo.isClear(ctx, at, r) and guard(at.X, at.Z, r, top) then
 			ctx.terrain:FillBall(Vector3.new(at.X, top - r, at.Z), r, TERRAIN.LeafyGrass)
+			table.insert(blocked, { box = nil, circles = { { x = at.X, z = at.Z, r = r * 0.7 } } })
 		end
 	end
 	table.insert(layers, { outline = field, top = F })
@@ -184,7 +188,11 @@ function Beach.ground(ctx: Context, zone: ZoneContext)
 		table.insert(layers, { outline = raised, top = F - 2 })
 	end
 	table.insert(layers, { outline = beach, top = beachTop })
+	table.sort(layers, function(la, lb)
+		return la.top > lb.top
+	end)
 	layersByZone[key] = layers
+	blockedByZone[key] = blocked
 
 	-- the field: warm sand with scalloped patina tide bands, framed in
 	-- brass with a glowing zone-colour strip
@@ -291,7 +299,7 @@ function Beach.dress(ctx: Context, zone: ZoneContext)
 	local rng = Geo.rng(ctx, key .. "-dress")
 	local layers = Beach.layers(zone)
 	local center = slot.frame.Position
-	local place = Zone.placer(ctx, zone, layers)
+	local place = Zone.placer(ctx, zone, layers, blockedByZone[key])
 	local V2 = Vector2.new
 
 	local function isWater(p: Vector3): boolean

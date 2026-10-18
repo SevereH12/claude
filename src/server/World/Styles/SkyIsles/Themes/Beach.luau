@@ -180,6 +180,9 @@ end
 
 -- Parasol with two deck chairs.
 local function parasol(parent: Instance, rng: Random, foot: Vector3, color: Color3)
+	if Pieces.overBudget(parent) then
+		return
+	end
 	Pieces.cylinder(parent, foot, 6.5, 0.35, C.cream, Enum.Material.Metal)
 	Pieces.cylinder(parent, foot + UP * 6.2, 0.5, 8, color, Enum.Material.Fabric)
 	Pieces.cylinder(parent, foot + UP * 6.7, 0.5, 5, C.cream, Enum.Material.Fabric)
@@ -315,18 +318,59 @@ function Beach.dress(ctx: Context, zone: ZoneContext, spec: ThemeSpec, land: Lan
 	end
 
 	-- hero: lighthouse on a rocky point at the end of a sandy headland
-	local headland = at(hw + 12, hd + 12)
-	if Pieces.clearOf(ctx, headland, 20, zone) then
-		Pieces.headland(ctx, headland, 17, floor, spec.rim, Enum.Material.Rock)
-		local point = at(hw + 16, hd + 16)
+	-- a broad beach: the sand reaches 8 studs further on the two sides and
+	-- the back (never toward the hub), over a pale salt surf line at the lip
+	local accept = Zone.accept(ctx, zone)
+	Pieces.landmass(
+		ctx,
+		frame,
+		land.halfW + 11,
+		land.front,
+		land.back + 11,
+		floor - 1,
+		3,
+		Enum.Material.Salt,
+		{
+			corner = 22,
+			lobe = 7,
+			reach = 0.3,
+			accept = accept,
+		}
+	)
+	Pieces.landmass(
+		ctx,
+		frame,
+		land.halfW + 8,
+		land.front,
+		land.back + 8,
+		floor,
+		6,
+		Enum.Material.Sand,
+		{
+			corner = 18,
+			lobe = 8,
+			reach = 0.4,
+			accept = accept,
+		}
+	)
+	land.halfW += 6
+	land.back += 6
+
+	local headlandSpot, scale = Pieces.heroSpot(ctx, zone, 20, 15)
+	if headlandSpot then
+		local headland = headlandSpot
+		local out = Zone.outward(zone, headland)
+		local side = out:Cross(UP)
+		Pieces.headland(ctx, headland, 17 * scale, floor, spec.rim, Enum.Material.Rock)
+		local point = headland + out * 5.6
 		Kit.blob(ctx, Vector3.new(point.X, 0, point.Z), 9, floor + 4, 20, Enum.Material.Rock, 6)
 		Kit.blob(ctx, Vector3.new(point.X, 0, point.Z), 6, floor + 8, 8, Enum.Material.Rock, 5)
 		Beach.lighthouse(ctx, folder, Vector3.new(point.X, floor + 8, point.Z), toHub, {
 			(frame.RightVector * 0.8 - frame.LookVector * 0.6).Unit,
 			(frame.RightVector * 0.2 - frame.LookVector).Unit,
 		})
-		Pieces.rocks(folder, rng, at(hw + 9, hd + 15) + UP * 0, 3.2, C.skystone)
-		Pieces.palm(folder, rng, at(hw + 6, hd + 20), 12, -toHub)
+		Pieces.rocks(folder, rng, headland + side * 7 + out * 2, 3.2, C.skystone)
+		Pieces.palm(folder, rng, headland - side * 6 + out * 4, 12, out)
 	end
 
 	-- a second headland on the far side with a cabana, a pier and the skiff
@@ -428,7 +472,7 @@ function Beach.dress(ctx: Context, zone: ZoneContext, spec: ThemeSpec, land: Lan
 	end
 
 	-- palms and parasols along the beach
-	local palms = Zone.rimPoints(ctx, zone, land, 8, 5, 4)
+	local palms = Zone.rimPoints(ctx, zone, land, 7, 5, 4)
 	for i, p in palms do
 		if i <= 5 then
 			Pieces.palm(folder, rng, p, rng:NextNumber(10, 13), Zone.outward(zone, p))
@@ -438,7 +482,7 @@ function Beach.dress(ctx: Context, zone: ZoneContext, spec: ThemeSpec, land: Lan
 	end
 
 	-- shells, starfish, sea-grass tufts and rocks in the sand
-	for _, p in Zone.rimPoints(ctx, zone, land, 16, 1.5, 1.5) do
+	for _, p in Zone.rimPoints(ctx, zone, land, 9, 1.5, 1.5) do
 		local roll = rng:NextNumber()
 		if roll < 0.35 then
 			Pieces.ball(

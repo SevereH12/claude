@@ -152,7 +152,7 @@ function Zone.catwalk(
 		local t = finish * (i - 0.5) / stations
 		local p = from:Lerp(to, t) + side * (half - 0.4)
 		local lantern = Pieces.lamp(parent, p, 6.5, C.volt, if i == 1 then 18 else nil)
-		local top = lantern.Position
+		local top = lantern.CFrame.Position
 		if prev then
 			Pieces.liveCable(ctx, prev, top, C.volt, 0.25, 1.6)
 		end
@@ -276,6 +276,50 @@ function Zone.buildBorder(ctx: Context, zone: ZoneContext)
 	end
 end
 
+-- Saddle ridge ----------------------------------------------------------------------------
+
+-- A rock ridge in the gap between this slot and the one before it on the
+-- spiral, climbing from just above the lower field to above this one, so
+-- neighbouring fields read as terraces on one mountain rather than
+-- separate islands. Clipped off both fields and every deck by the guard.
+function Zone.saddle(
+	ctx: Context,
+	zone: ZoneContext,
+	body: Enum.Material,
+	bands: { Enum.Material },
+	cap: Enum.Material
+): { Land.Outline }
+	local index = zone.slot.index
+	local prev = if zone.isTeaser then ctx.zones[#ctx.zones] else ctx.zones[index - 1]
+	if not prev or prev == zone then
+		return {}
+	end
+	local rng = Geo.rng(ctx, Geo.zoneKey(zone) .. "-saddle")
+	local a0 = math.deg(prev.slot.angle)
+	local a1 = math.deg(zone.slot.angle)
+	local mid = a0 + Geo.angleDiff(a1, a0) / 2
+	local r0 = Vector3.new(prev.slot.frame.X, 0, prev.slot.frame.Z).Magnitude
+	local r1 = Vector3.new(zone.slot.frame.X, 0, zone.slot.frame.Z).Magnitude
+	-- from where the gap between the two fields opens to their far edges
+	local inner = (r0 + r1) / 2 - 10
+	local outer = (r0 + prev.slot.depth / 2 + r1 + zone.slot.depth / 2) / 2 + 6
+	local low = math.max(prev.slot.floor, 4) + 6
+	local high = math.max(zone.slot.floor, low) + 14
+	return Land.ridge(
+		ctx,
+		Geo.polar(mid, inner, 0),
+		Geo.polar(mid + rng:NextNumber(-4, 4), outer, 0),
+		low,
+		high,
+		20,
+		rng,
+		body,
+		bands,
+		cap,
+		Geo.guard(ctx, zone)
+	)
+end
+
 -- Vignette placement ----------------------------------------------------------------------
 
 export type Placer = {
@@ -287,10 +331,23 @@ export type Placer = {
 	ground: (x: number, z: number, clearance: number) -> Vector3?,
 }
 
-function Zone.placer(ctx: Context, zone: ZoneContext, layers: { Land.Layer }): Placer
+-- `blocked`: terrain that is not a layer to stand on (ridges, pinnacles,
+-- arches); nothing is placed inside or against it.
+function Zone.placer(
+	ctx: Context,
+	zone: ZoneContext,
+	layers: { Land.Layer },
+	blocked: { Land.Outline }?
+): Placer
 	local used: { { p: Vector3, r: number } } = {}
+	local avoid: { Land.Outline } = blocked or {}
 	local function ground(x: number, z: number, clearance: number): Vector3?
 		local p = Geo.slotPoint(zone, x, z)
+		for _, outline in avoid do
+			if Land.contains(outline, p, -clearance - 1) then
+				return nil
+			end
+		end
 		local top = Land.surfaceAt(layers, p, clearance)
 		if top and top > 0.5 and Geo.isClear(ctx, p, clearance) then
 			return Vector3.new(p.X, top, p.Z)

@@ -42,7 +42,12 @@ Canyon.bridge = {
 } :: Zone.BridgeStyle
 
 local layersByZone: { [string]: { Land.Layer } } = {}
+local blockedByZone: { [string]: { Land.Outline } } = {}
 local spireByZone: { [string]: Vector3 } = {}
+
+local function disc(p: Vector3, r: number): Land.Outline
+	return { box = nil, circles = { { x = p.X, z = p.Z, r = r } } }
+end
 
 function Canyon.layers(zone: ZoneContext): { Land.Layer }
 	return layersByZone[Geo.zoneKey(zone)] or {}
@@ -66,6 +71,7 @@ function Canyon.ground(ctx: Context, zone: ZoneContext)
 	local rng = Geo.rng(ctx, key .. "-ground")
 	local guard = Geo.guard(ctx, zone)
 	local layers: { Land.Layer } = {}
+	local blocked: { Land.Outline } = {}
 
 	-- up to three terraces stepping up toward the plateau: 6-stud steps
 	-- for low mesas, taller cliffs (multiples of 4) for high ones
@@ -135,12 +141,12 @@ function Canyon.ground(ctx: Context, zone: ZoneContext)
 			rng,
 			{ guard = guard, lean = 6, foot = 0 }
 		)
-		table.insert(layers, 1, { outline = terrace, top = top })
+		table.insert(layers, { outline = terrace, top = top })
 	end
 	-- the plateau itself
 	local plateau = Land.cliff(
 		ctx,
-		Land.organic(slot.frame, w + 12, d + 12, rng, { edge = 6, jitter = 3 }),
+		Land.organic(slot.frame, w + 12, d + 12, rng, { edge = 8, jitter = 3 }),
 		SEA_FLOOR,
 		F,
 		TERRAIN.Sandstone,
@@ -155,7 +161,7 @@ function Canyon.ground(ctx: Context, zone: ZoneContext)
 	-- a broken ridge behind the field, standing 8-16 above it
 	local ridgeA = Geo.slotPoint(zone, -hw * 0.95, hd + 18)
 	local ridgeB = Geo.slotPoint(zone, hw * 0.1, hd + 22)
-	Land.ridge(
+	local ridge = Land.ridge(
 		ctx,
 		ridgeA,
 		ridgeB,
@@ -169,6 +175,9 @@ function Canyon.ground(ctx: Context, zone: ZoneContext)
 		guard
 	)
 
+	table.move(ridge, 1, #ridge, #blocked + 1, blocked)
+	local saddle = Zone.saddle(ctx, zone, TERRAIN.Sandstone, STRATA, TERRAIN.Sandstone)
+	table.move(saddle, 1, #saddle, #blocked + 1, blocked)
 	-- hoodoos around the base
 	for _ = 1, 5 do
 		local p = Geo.slotPoint(
@@ -178,6 +187,7 @@ function Canyon.ground(ctx: Context, zone: ZoneContext)
 		)
 		local r = rng:NextNumber(3.5, 6)
 		if Geo.isClear(ctx, p, r + 2) then
+			table.insert(blocked, disc(p, r + 1.5))
 			Land.pinnacle(
 				ctx,
 				Vector3.new(p.X, SEA_FLOOR, p.Z),
@@ -197,6 +207,7 @@ function Canyon.ground(ctx: Context, zone: ZoneContext)
 		local spire = Geo.slotPoint(zone, s.X, s.Z)
 		if Geo.isClear(ctx, spire, SPIRE_R) then
 			spireByZone[key] = spire
+			table.insert(blocked, disc(spire, SPIRE_R + 3))
 			Land.fill(
 				ctx,
 				Land.blob(spire, SPIRE_R + 10, rng, 6, 3),
@@ -234,6 +245,9 @@ function Canyon.ground(ctx: Context, zone: ZoneContext)
 		local a = mid - along * 13
 		local b = mid + along * 13
 		if Geo.isClear(ctx, a, 6) and Geo.isClear(ctx, b, 6) then
+			table.insert(blocked, disc(a, 7))
+			table.insert(blocked, disc(b, 7))
+			table.insert(blocked, disc(mid, 7))
 			Land.arch(
 				ctx,
 				Vector3.new(a.X, SEA_FLOOR, a.Z),
@@ -248,9 +262,13 @@ function Canyon.ground(ctx: Context, zone: ZoneContext)
 		end
 	end
 
-	table.insert(layers, 1, { outline = plateau, top = F })
+	table.insert(layers, { outline = plateau, top = F })
 	table.insert(layers, { outline = beach, top = 2 })
+	table.sort(layers, function(la, lb)
+		return la.top > lb.top
+	end)
 	layersByZone[key] = layers
+	blockedByZone[key] = blocked
 
 	-- the field: deep sage tiles on cream limestone, framed in brass with
 	-- a glowing zone-colour strip
@@ -375,7 +393,7 @@ function Canyon.dress(ctx: Context, zone: ZoneContext)
 	local key = Geo.zoneKey(zone)
 	local rng = Geo.rng(ctx, key .. "-dress")
 	local center = slot.frame.Position
-	local place = Zone.placer(ctx, zone, Canyon.layers(zone))
+	local place = Zone.placer(ctx, zone, Canyon.layers(zone), blockedByZone[key])
 	local V2 = Vector2.new
 
 	-- hero: the Thunder Spire's lightning rod, wired to the mesa rim
