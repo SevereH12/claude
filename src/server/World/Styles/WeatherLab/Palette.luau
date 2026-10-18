@@ -35,23 +35,26 @@ Palette.leafLight = C.kelp:Lerp(C.slicker, 0.25)
 Palette.sand = C.driftwood:Lerp(C.sailcloth, 0.45)
 Palette.teaser = Color3.fromRGB(150, 150, 160)
 
--- Terrain material colours, tuned to the palette.
-Palette.terrain = {
-	{ material = Enum.Material.Sand, color = Color3.fromRGB(234, 210, 154) },
-	{ material = Enum.Material.Salt, color = Color3.fromRGB(248, 244, 232) },
-	{ material = Enum.Material.Sandstone, color = Color3.fromRGB(204, 118, 78) },
-	{ material = Enum.Material.Limestone, color = Color3.fromRGB(238, 216, 172) },
-	{ material = Enum.Material.Rock, color = Color3.fromRGB(118, 124, 136) },
-	{ material = Enum.Material.Slate, color = Color3.fromRGB(86, 100, 122) },
-	{ material = Enum.Material.Grass, color = Color3.fromRGB(112, 168, 82) },
-	{ material = Enum.Material.LeafyGrass, color = Color3.fromRGB(74, 128, 60) },
-	{ material = Enum.Material.Cobblestone, color = Color3.fromRGB(164, 154, 140) },
-	{ material = Enum.Material.Brick, color = Color3.fromRGB(176, 90, 70) },
-	{ material = Enum.Material.WoodPlanks, color = Color3.fromRGB(176, 130, 88) },
-	{ material = Enum.Material.Ground, color = Color3.fromRGB(140, 106, 74) },
-	{ material = Enum.Material.Mud, color = Color3.fromRGB(86, 178, 172) },
-	{ material = Enum.Material.Basalt, color = Color3.fromRGB(60, 66, 80) },
-}
+-- Ground block colours (World/Blocks parts are SmoothPlastic, so colour
+-- carries every surface): caps, strata, beaches, paving and the sea bed.
+Palette.ground = {
+	sand = Color3.fromRGB(234, 210, 154), -- dry sand caps and fields
+	beach = Color3.fromRGB(224, 196, 140), -- beach tiers and wet slopes
+	salt = Color3.fromRGB(248, 244, 232),
+	sandstone = Color3.fromRGB(204, 118, 78), -- terracotta strata
+	limestone = Color3.fromRGB(238, 216, 172), -- cream strata, flagstones
+	mesa = Color3.fromRGB(198, 140, 96), -- dusty mesa top
+	rock = Color3.fromRGB(118, 124, 136),
+	slate = Color3.fromRGB(86, 100, 122),
+	grass = Color3.fromRGB(112, 168, 82),
+	meadow = Color3.fromRGB(80, 138, 64), -- rough meadow round the fields
+	earth = Color3.fromRGB(140, 106, 74),
+	cobble = Color3.fromRGB(164, 154, 140),
+	brick = Color3.fromRGB(176, 90, 70),
+	planks = Color3.fromRGB(176, 130, 88),
+	seaGlass = Color3.fromRGB(64, 200, 196), -- beach-towel stripes
+	seabed = Color3.fromRGB(44, 110, 124),
+} :: { [string]: Color3 }
 
 Palette.water = Color3.fromRGB(46, 150, 162)
 

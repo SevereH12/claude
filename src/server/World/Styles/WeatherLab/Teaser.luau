@@ -1,12 +1,16 @@
 --!strict
 -- The next empty slot: a misty rock island under survey (tent, crates,
 -- scaffold and a grey "?" balloon) and a boardwalk that stops half way at
--- a striped barrier with a COMING SOON board, bare stilts beyond it.
+-- a striped barrier with a COMING SOON board, bare stilts beyond it. The
+-- island is a grass-topped rock 11-gon on grey cliff bands with a sand
+-- skirt, two lower rock horns round a bay at the back and sea stacks.
 
 local ServerScriptService = game:GetService("ServerScriptService")
 
+local Blocks = require(ServerScriptService.Server.World.Blocks)
 local Kit = require(ServerScriptService.Server.World.Kit)
 local Geo = require(script.Parent.Geo)
+local Land = require(script.Parent.Land)
 local Palette = require(script.Parent.Palette)
 local Pieces = require(script.Parent.Pieces)
 local WLTypes = require(script.Parent.WLTypes)
@@ -16,36 +20,66 @@ type Context = WLTypes.Context
 type ZoneContext = WLTypes.ZoneContext
 
 local C = Palette.colors
+local G = Palette.ground
 
 local Teaser = {}
 
 local STOP_AT = 0.7
-local MARGINS = { front = -6, side = -10, back = -6 }
+local BEACH_TOP = 1
 
 local function island(ctx: Context, zone: ZoneContext)
+	local key = Geo.key(zone)
+	local folder = Land.folder(ctx, key)
 	local floor = zone.slot.floor
-	local m = MARGINS
 	local hw, hd = zone.slot.width / 2, zone.slot.depth / 2
-	-- a wide bay bitten out of the back turns the island into a rocky crescent
-	Geo.bite(ctx, Geo.key(zone), Geo.at(zone, hw * 0.15, hd + 6, 0), 27)
-	Geo.terrace(ctx, zone, m, 26, -4, -18, Enum.Material.Sand, 10, 1, 0.9)
-	Geo.terrace(ctx, zone, m, 20, 1.5, -16, Enum.Material.Sand, 8, 1, 1)
-	Geo.cliffs(ctx, zone, m, 1.5, floor - 3, { Enum.Material.Rock, Enum.Material.Slate }, 16, 4, 8)
-	Geo.terrace(ctx, zone, m, 2, floor - 2, -16, Enum.Material.Rock, 11, 2)
-	Geo.terrace(ctx, zone, m, 0, floor, -16, Enum.Material.LeafyGrass, 11, 1.5)
-	Geo.lobe(ctx, zone, hw + 4, -hd * 0.3, 9, 16, floor - 10, Enum.Material.Slate, 2)
-	Geo.lobe(ctx, zone, -hw - 2, hd * 0.4, 10, 18, 1, Enum.Material.Sand, 0.5)
-	for _, s in { { -hw + 4, hd - 2, 14 }, { hw - 2, hd * 0.2, 9 }, { hw + 2, hd + 2, 6 } } do
-		local p = Geo.at(zone, s[1], s[2], 0)
-		Geo.stack(
+	-- the main rock, covering the survey site and the camp
+	Land.island(ctx, key, Geo.cf(zone, 0, -hd * 0.14, 0, 8), {
+		cap = G.meadow,
+		strata = { G.rock, G.slate },
+		apothem = math.min(hw, hd) * 0.92,
+		sides = 11,
+		layer = 15,
+		inset = 2,
+		beach = G.beach,
+		beachTop = BEACH_TOP,
+		beachWidth = 6,
+	})
+	-- two lower horns round a bay at the back: a rocky crescent
+	-- x, z, top below the floor, yaw, width, depth, stack above the floor
+	local horns = {
+		{ -hw * 0.62, hd * 0.72, -7, 24, 20, 16, 9 },
+		{ hw * 0.66, hd * 0.6, -13, -18, 15, 13, 4 },
+	}
+	for _, h in horns do
+		local x, z, drop, yaw, rise = h[1], h[2], h[3], h[4], h[7]
+		local size = Vector2.new(h[5], h[6])
+		local top = math.max(floor + drop, BEACH_TOP + 3)
+		Land.mesa(
 			ctx,
-			Vector3.new(p.X, floor - 4, p.Z),
-			5,
-			floor + s[3],
-			{ Enum.Material.Slate, Enum.Material.Rock },
-			Enum.Material.LeafyGrass
+			key,
+			{ G.slate, G.rock },
+			Geo.cf(zone, x, z, top - floor, yaw),
+			size,
+			10,
+			2,
+			BEACH_TOP
 		)
+		-- a rock stack on each horn
+		local p = Geo.at(zone, x, z, top - floor)
+		Land.stack(ctx, folder, { G.slate, G.rock }, p, 7, floor + rise, 5, G.meadow)
 	end
+	-- and one standing in the sea off the front corner
+	local sea = Geo.at(zone, hw + 6, -hd * 0.35, 0)
+	Land.stack(
+		ctx,
+		folder,
+		{ G.rock, G.slate },
+		Vector3.new(sea.X, Land.SEABED, sea.Z),
+		8,
+		floor - 6,
+		9,
+		G.meadow
+	)
 end
 
 -- Striped sawhorse barrier across the deck.
@@ -145,7 +179,7 @@ local function walk(ctx: Context, zone: ZoneContext)
 	local parent = Instance.new("Folder")
 	parent.Name = "ComingSoon"
 	parent.Parent = ctx.folders.connectors
-	Zone.trail(ctx, parent, slot.angle, zone.color)
+	Zone.trail(ctx, parent, slot.angle, zone.color, Geo.key(zone))
 	local p, list = Zone.boardwalk(ctx, parent, slot.hubExit.Position, slot.gate.Position, {
 		color = zone.color,
 		title = "COMING SOON",
@@ -377,14 +411,17 @@ local function survey(ctx: Context, zone: ZoneContext)
 	-- only two stripes ploughed so far, both half done: a site, not a field
 	local columns = 7
 	local w = (x1 - x0) / columns
+	local ground = Land.folder(ctx, Geo.key(zone))
 	for i = 0, 2, 2 do
 		local done = if i == 0 then 0.6 else 0.3
 		local za, zb = z0, z0 + (z1 - z0) * done
-		local c = Geo.at(zone, x0 + (i + 0.5) * w, (za + zb) / 2, -2)
-		ctx.terrain:FillBlock(
-			CFrame.new(c) * zone.slot.frame.Rotation,
-			Vector3.new(w, 4, zb - za),
-			Enum.Material.Ground
+		-- turned earth just proud of the grass
+		Blocks.box(
+			ground,
+			G.earth,
+			Geo.cf(zone, x0 + (i + 0.5) * w, (za + zb) / 2, -0.18),
+			Vector3.new(w, 0.6, zb - za),
+			{ Name = "Furrow" }
 		)
 	end
 	-- pegs with orange flags round the edge, joined by caution tape

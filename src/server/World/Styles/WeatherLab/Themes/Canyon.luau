@@ -1,13 +1,15 @@
 --!strict
--- Canyon theme ("Anvil Mesa"): a layered sandstone plateau rising out of the
--- bay with a terracotta-and-cream checkerboard field, hoodoos, a farm
+-- Canyon theme ("Anvil Mesa"): a stepped sandstone-and-limestone mesa rising
+-- out of the bay with a terracotta-and-cream checkerboard field, lower mesa
+-- steps, a tall butte, hoodoos, a trail ramp up the cliff, a farm
 -- windmill, adobe weather huts, cacti and tumbleweeds. Hero: the Anvil
--- Observatory, a white telescope dome on a striped rock spire.
+-- Observatory, a white telescope dome on a banded rock spire.
 
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local Kit = require(ServerScriptService.Server.World.Kit)
 local Geo = require(script.Parent.Parent.Geo)
+local Land = require(script.Parent.Parent.Land)
 local Palette = require(script.Parent.Parent.Palette)
 local Pieces = require(script.Parent.Parent.Pieces)
 local WLTypes = require(script.Parent.Parent.WLTypes)
@@ -17,8 +19,22 @@ type ZoneContext = WLTypes.ZoneContext
 type Theme = WLTypes.Theme
 
 local C = Palette.colors
+local G = Palette.ground
 
 local MARGINS = { front = 12, side = 16, back = 26 }
+local ISLAND: WLTypes.IslandLook = {
+	cap = G.mesa,
+	strata = { G.sandstone, G.limestone },
+	layer = 4.5,
+	inset = 1.6,
+	beach = G.beach,
+	beachTop = 1.5,
+	beachSide = 12,
+	beachBack = 12,
+	beachFront = -4,
+	chamfer = 14,
+	ramp = 1,
+}
 local SPIRE_RISE = 26 -- observatory spire top above the floor
 local ADOBE = C.driftwood:Lerp(C.beacon, 0.3)
 
@@ -26,153 +42,95 @@ local Canyon = {}
 
 local function ground(ctx: Context, zone: ZoneContext)
 	local rng = ctx.rng
+	local key = Geo.key(zone)
 	local floor = zone.slot.floor
 	local hw, hd = zone.slot.width / 2, zone.slot.depth / 2
 	local m = MARGINS
-	-- a deep cove bitten into one side (cut from every land layer)
-	Geo.bite(ctx, Geo.key(zone), Geo.at(zone, hw + m.side + 4, hd * 0.6, 0), 16)
-	Geo.terrace(ctx, zone, m, 26, -4, -18, Enum.Material.Sand, 10, 1, 0.9)
-	Geo.terrace(ctx, zone, m, 19, math.min(1.5, floor - 2), -16, Enum.Material.Sand, 8, 1, 1)
-	Geo.cliffs(ctx, zone, m, 1.5, floor, {
-		Enum.Material.Rock,
-		Enum.Material.Sandstone,
-		Enum.Material.Limestone,
-		Enum.Material.Sandstone,
-	}, 16, 4, 8)
-	Geo.terrace(ctx, zone, m, 0, floor, -16, Enum.Material.Sandstone, 10, 0)
-	-- a broken cream cap-rock lip round the plateau edge (sizes vary and
-	-- about a third are missing so the edge never reads as a scallop)
-	Geo.rim(ctx, zone, floor, Enum.Material.Limestone, 4.5, 0.62)
-	-- wedge-faced scree slopes at the foot of the cliffs
+	local folder = Land.folder(ctx, key)
+	local beachTop = math.min(ISLAND.beachTop, floor - Land.CAP)
+	local tones = { G.limestone, G.sandstone }
+	-- a stepped mesa beside the plateau, its top half way down a cliff band
+	-- so no ledge lies flush with another
+	local function step(x: number, z: number, band: number, size: Vector2, yaw: number)
+		local p = Geo.at(zone, x, z)
+		local r = math.max(size.X, size.Y) / 2 + 4
+		if Geo.clearOf(ctx, zone, p, r, 10) then
+			local top = Land.ledge(zone, ISLAND, band)
+			Land.mesa(ctx, key, tones, Geo.cf(zone, x, z, top - floor, yaw), size, 5, 1.8, beachTop)
+		end
+	end
+	-- lower mesa steps breaking out of the plateau on both sides and a
+	-- headland off one back corner, so the island is never a plain block
 	if floor >= 10 then
-		Geo.talus(ctx, zone, floor, 1, floor * 0.55, 11, Enum.Material.Sandstone, 0.5)
+		step(-(hw + m.side + 6), -hd * 0.05, 1.5, Vector2.new(20, 26), 18)
+		step(hw + m.side + 5, hd * 0.55, 2.5, Vector2.new(18, 22), -24)
 	end
-	-- lower mesa steps breaking out of the outline on two sides
-	if floor >= 12 then
-		local lx, lz = -hw - m.side - 8, hd * 0.25
-		Geo.lobe(ctx, zone, lx, lz, 14, 24, floor - 12, Enum.Material.Limestone, 1)
-		Geo.lobe(ctx, zone, lx + 3, lz, 11, 19, floor - 7, Enum.Material.Sandstone, 0.5)
-		local rx, rz = hw + m.side + 5, -hd * 0.45
-		Geo.lobe(ctx, zone, rx, rz, 10, 18, floor - 10, Enum.Material.Rock, 1)
-		Geo.lobe(ctx, zone, rx - 2, rz, 8, 14, floor - 5, Enum.Material.Sandstone, 0.5)
-	end
-	-- a deep cove bitten into one side, and a big off-axis headland at a
-	-- back corner, so the plateau is never a square
-	do
-		local bx, bz = -hw - m.side + 4, hd + m.back + 6
-		Geo.lobe(ctx, zone, bx, bz, 13, 22, floor - 4, Enum.Material.Sandstone, 1.5)
-		Geo.lobe(ctx, zone, bx - 4, bz + 6, 9, 15, floor - 9, Enum.Material.Rock, 1)
-	end
-	-- a tall asymmetric butte behind the field and a long low terrace
-	-- reaching out on one side, so the island's silhouette is never the
-	-- field's square
-	do
-		local bp = Geo.at(zone, hw * 0.45, hd + m.back + 12, 0)
-		if Geo.clearOf(ctx, zone, bp, 30, 14) then
-			Geo.lobe(
-				ctx,
-				zone,
-				hw * 0.45,
-				hd + m.back + 12,
-				20,
-				28,
-				floor + 6,
-				Enum.Material.Sandstone,
-				1.5
-			)
-			Geo.lobe(
-				ctx,
-				zone,
-				hw * 0.3,
-				hd + m.back + 16,
-				14,
-				20,
-				floor + 16,
-				Enum.Material.Rock,
-				1
-			)
-			Geo.lobe(
-				ctx,
-				zone,
-				hw * 0.22,
-				hd + m.back + 18,
-				10,
-				15,
-				floor + 26,
-				Enum.Material.Sandstone,
-				1
-			)
-			Geo.lobe(
-				ctx,
-				zone,
-				hw * 0.22,
-				hd + m.back + 18,
-				8,
-				12,
-				floor + 28,
-				Enum.Material.Limestone,
-				0
-			)
-		end
-		local sx, sz = -hw - m.side - 34, -hd * 0.3
-		if Geo.clearOf(ctx, zone, Geo.at(zone, sx, sz, 0), 24, 14) then
-			Geo.lobe(ctx, zone, sx, sz, 16, 24, floor - 14, Enum.Material.Sand, 1)
-			Geo.lobe(ctx, zone, sx + 8, sz + 4, 12, 18, floor - 9, Enum.Material.Sandstone, 1)
-		end
-	end
-	-- dry scrub and bare rock pavement patches on the plateau rim
-	for i = 1, 10 do
-		local x, z = Geo.rimPoint(ctx, zone, 6, 15, true)
-		local p = Geo.at(zone, x, z, 0)
-		ctx.terrain:FillCylinder(
-			CFrame.new(p.X, floor - 1, p.Z),
-			2,
-			rng:NextNumber(3.5, 7),
-			if i % 3 == 0 then Enum.Material.Limestone else Enum.Material.Ground
+	step(-(hw + m.side - 2), hd + m.back + 7, 0.5, Vector2.new(24, 18), 32)
+	-- a sand bar bulging off the back-right corner of the beach
+	local sx, sz = hw + m.side + ISLAND.beachSide - 4, hd + m.back + 4
+	if Geo.clearOf(ctx, zone, Geo.at(zone, sx, sz), 20, 10) then
+		Land.lobe(
+			ctx,
+			key,
+			ISLAND.beach,
+			ISLAND.beach,
+			Geo.cf(zone, sx, sz, beachTop - floor, 10),
+			14,
+			9
 		)
 	end
-
-	-- hoodoos standing in the shallows around the mesa
+	-- a tall stepped butte behind the field
+	local bx, bz = hw * 0.45, hd + m.back + 17
+	if Geo.clearOf(ctx, zone, Geo.at(zone, bx, bz), 30, 10) then
+		Land.mesa(
+			ctx,
+			key,
+			{ G.sandstone, G.limestone, G.sandstone, G.rock },
+			Geo.cf(zone, bx, bz, SPIRE_RISE, 12),
+			Vector2.new(12, 10),
+			9,
+			2.6,
+			beachTop
+		)
+	end
+	-- hoodoos standing in the shallows round the mesa
 	local hoodoos = {
-		{ hw + m.side + 16, -hd * 0.1, 10 },
-		{ -hw - m.side - 14, hd * 0.35, 14 },
-		{ -hw * 0.55, hd + m.back + 14, 8 },
-		{ hw * 0.7, hd + m.back + 18, 16 },
-		{ -hw - m.side - 10, -hd * 0.65, 6 },
+		{ hw + m.side + 17, -hd * 0.12, 10 },
+		{ -(hw + m.side + 16), hd * 0.45, 14 },
+		{ -hw * 0.55, hd + m.back + 15, 8 },
+		{ hw + 8, hd + m.back + 14, 16 },
+		{ -(hw + m.side + 12), -hd * 0.7, 6 },
 	}
 	for _, h in hoodoos do
 		local base = Geo.at(zone, h[1], h[2], 0)
-		Geo.stack(ctx, Vector3.new(base.X, -6, base.Z), rng:NextNumber(4.5, 6.5), floor + h[3], {
-			Enum.Material.Sandstone,
-			Enum.Material.Limestone,
-			Enum.Material.Sandstone,
-			Enum.Material.Rock,
-		}, Enum.Material.Sandstone)
+		if Geo.clearOf(ctx, zone, base, 6, 6) then
+			Land.stack(
+				ctx,
+				folder,
+				{ G.sandstone, G.limestone, G.sandstone, G.rock },
+				Vector3.new(base.X, Land.SEABED, base.Z),
+				rng:NextNumber(9, 12),
+				floor + h[3],
+				11,
+				G.sandstone
+			)
+		end
 	end
-	-- the observatory spire behind the field
-	local spire = Geo.at(zone, 0, hd + 15, 0)
-	Geo.stack(
-		ctx,
-		Vector3.new(spire.X, floor - 4, spire.Z),
-		8,
-		floor + SPIRE_RISE,
-		{ Enum.Material.Limestone, Enum.Material.Sandstone },
-		nil
-	)
-	ctx.terrain:FillCylinder(
-		CFrame.new(spire.X, floor + SPIRE_RISE - 1, spire.Z),
-		2,
-		8.5,
-		Enum.Material.Sandstone
-	)
-	-- boulders on the plateau rim
-	for _ = 1, 5 do
-		local x, z = Geo.rimPoint(ctx, zone, 6, 12, true)
-		ctx.terrain:FillBall(
-			Geo.at(zone, x, z, -1),
-			rng:NextNumber(2.5, 4),
-			Enum.Material.Sandstone
+	-- the observatory spire behind the field: octagonal bands of cream and
+	-- terracotta, its top wide enough for the observatory deck
+	-- (height, apothem, turn): flat faces toward the field where the
+	-- stair climbs past
+	local bands = { { 7.5, 8, 0 }, { 6.5, 7.4, 22.5 }, { 6.5, 7, 0 }, { 6.5, 8.6, 0 } }
+	local y = -1
+	for i, b in bands do
+		Land.octBand(
+			folder,
+			if i % 2 == 1 then G.limestone else G.sandstone,
+			Geo.cf(zone, 0, hd + 15, y, b[3]),
+			b[2],
+			b[1]
 		)
+		y += b[1]
 	end
 end
 
@@ -270,8 +228,8 @@ local function observatory(ctx: Context, zone: ZoneContext)
 		local side = if i % 2 == 0 then -1 else 1
 		local y0 = floorY + (i - 1) * SPIRE_RISE / flights
 		local y1 = floorY + i * SPIRE_RISE / flights
-		local a = Geo.at(zone, -side * 5, hd + 6.4, y0)
-		local b = Geo.at(zone, side * 5, hd + 6.4, y1)
+		local a = Geo.at(zone, -side * 5, hd + 5, y0)
+		local b = Geo.at(zone, side * 5, hd + 5, y1)
 		Pieces.plank(folder, a, b, 2.2, 0.5, C.driftwood)
 	end
 	-- zip line from the observatory down to the plateau
@@ -619,12 +577,13 @@ end
 
 local theme: Theme = {
 	margins = MARGINS,
+	island = ISLAND,
 	field = {
-		base = Enum.Material.Sandstone,
-		accent = Enum.Material.Limestone,
-		trim = Enum.Material.Brick,
+		base = G.sandstone,
+		accent = G.limestone,
+		trim = G.brick,
 		pattern = "checker",
-		cell = 16,
+		cell = 20,
 	},
 	border = {
 		postColor = C.sailcloth,

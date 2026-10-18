@@ -1,13 +1,16 @@
 --!strict
 -- Generic zone pieces for WeatherLab, used by every zone whatever its
--- slot, size or theme: the island ground (theme terrain + painted field),
--- the winding boardwalk from the hub, the glowing rope border and the
--- lighthouse-post gate. Themes only add biome dressing on top.
+-- slot, size or theme: the block island (field plateau, strata and beach
+-- from Land, then the theme's landforms), the winding boardwalk from the
+-- hub, the glowing rope border and the lighthouse-post gate. Themes only
+-- add biome landforms and dressing on top.
 
 local ServerScriptService = game:GetService("ServerScriptService")
 
+local Blocks = require(ServerScriptService.Server.World.Blocks)
 local Kit = require(ServerScriptService.Server.World.Kit)
 local Geo = require(script.Parent.Geo)
+local Land = require(script.Parent.Land)
 local Palette = require(script.Parent.Palette)
 local Pieces = require(script.Parent.Pieces)
 local Themes = require(script.Parent.Themes)
@@ -21,7 +24,9 @@ local C = Palette.colors
 local Zone = {}
 
 Zone.DECK_WIDTH = 10
-local START_FLAT = 7
+-- Decks ride this far over the ground they start and land on, so plank
+-- and grass tops never share a height.
+local LIFT = 0.2
 
 -- Ground --------------------------------------------------------------------------
 
@@ -29,9 +34,9 @@ function Zone.ground(ctx: Context, zone: ZoneContext)
 	local def = zone.def
 	local theme = Themes.get(if def then def.theme else "Default")
 	Geo.markHub(ctx)
-	theme.ground(ctx, zone)
 	local look = if theme.fieldFor then theme.fieldFor(zone) else theme.field
-	Geo.field(ctx, zone, look)
+	Land.plateau(ctx, zone, theme.margins, theme.island, look)
+	theme.ground(ctx, zone)
 end
 
 -- Boardwalk -------------------------------------------------------------------------
@@ -46,20 +51,22 @@ export type WalkOptions = {
 
 type Profile = {
 	length: number,
+	startFlat: number,
 	at: (s: number) -> Vector3, -- point on the walking surface
 	tangent: (s: number) -> Vector3, -- horizontal direction of travel
 	platform: { from: number, to: number }?,
 	breaks: { number },
 }
 
--- Plans the walkway from `from` to `to`: flat at both ends, an S-bend in
--- the middle and (on long runs) a flat rest platform half way.
-local function profile(from: Vector3, to: Vector3, landing: number): Profile
+-- Plans the walkway from `from` to `to`: flat at both ends (at the hub
+-- end until it has cleared the hub's grass top), an S-bend in the middle
+-- and (on long runs) a flat rest platform half way.
+local function profile(from: Vector3, to: Vector3, landing: number, flat: number): Profile
 	local flatDelta = Vector3.new(to.X - from.X, 0, to.Z - from.Z)
 	local length = flatDelta.Magnitude
 	local dir = flatDelta.Unit
 	local right = Vector3.new(-dir.Z, 0, dir.X)
-	local startFlat = math.min(START_FLAT, length * 0.15)
+	local startFlat = math.min(flat, length * 0.3)
 	local endFlat = math.min(landing, length * 0.3)
 	local rampLength = length - startFlat - endFlat
 	local platform: { from: number, to: number }? = nil
@@ -103,6 +110,7 @@ local function profile(from: Vector3, to: Vector3, landing: number): Profile
 	end
 	return {
 		length = length,
+		startFlat = startFlat,
 		at = at,
 		tangent = tangent,
 		platform = platform,
@@ -163,10 +171,12 @@ local function hubArch(parent: Instance, at: Vector3, dir: Vector3, opts: WalkOp
 	local tops = {}
 	for _, side in { -1, 1 } do
 		local bottom = at + right * side * half
+		-- posts stand on the grass beside the (lifted) deck
+		local post = bottom + Vector3.new(0, 4.5 - LIFT / 2, 0)
 		Pieces.box(
 			parent,
-			CFrame.lookAt(bottom + Vector3.new(0, 4.5, 0), bottom + Vector3.new(0, 4.5, 0) + dir),
-			Vector3.new(0.9, 9, 0.9),
+			CFrame.lookAt(post, post + dir),
+			Vector3.new(0.9, 9 + LIFT, 0.9),
 			C.piling,
 			Enum.Material.Wood
 		)
@@ -206,7 +216,8 @@ function Zone.boardwalk(
 	opts: WalkOptions
 )
 	local rng = ctx.rng
-	local p = profile(from, to, opts.landing)
+	local up = Vector3.new(0, LIFT, 0)
+	local p = profile(from + up, to + up, opts.landing, Land.hubEdge() - ctx.layout.hubRadius + 1.5)
 	local limit = if opts.stopAt then p.length * opts.stopAt else p.length
 	local detail = Geo.detail(ctx)
 	local list = samples(p, limit, detail)
@@ -319,7 +330,7 @@ function Zone.boardwalk(
 		-- stilts every other sample where the deck is over water
 		if
 			i % stiltEvery == 0
-			and s > START_FLAT
+			and s > p.startFlat
 			and s < p.length - opts.landing + 4
 			and not onPlatform(s)
 		then
@@ -363,30 +374,38 @@ function Zone.boardwalk(
 	return p, list
 end
 
--- Plaza trail and cobbled path from the lighthouse to a hub exit.
-function Zone.trail(ctx: Context, parent: Instance, angle: number, color: Color3)
+-- Plaza trail and cobbled path from the lighthouse to a hub exit: paving
+-- blocks just over the plaza and grass (in Map.Ground/<key>), with
+-- glowing dashes set into them.
+function Zone.trail(ctx: Context, parent: Instance, angle: number, color: Color3, key: string)
 	local layout = ctx.layout
 	local dir = Vector3.new(math.sin(angle), 0, -math.cos(angle))
 	local floor = layout.hubFloor
-	-- a cream spoke across the plaza, then a cobbled path through the village
-	local function path(r0: number, r1: number, width: number, material: Enum.Material)
+	local ground = Land.folder(ctx, key)
+	local G = Palette.ground
+	local function strip(r0: number, r1: number, width: number, lift: number, tone: Color3)
 		local from, to = dir * r0, dir * r1
 		local mid = (from + to) / 2
-		ctx.terrain:FillBlock(
-			CFrame.lookAt(Vector3.new(mid.X, floor - 2, mid.Z), Vector3.new(to.X, floor - 2, to.Z)),
-			Vector3.new(width, 4, (to - from).Magnitude),
-			material
+		local y = floor + lift - 0.3
+		Blocks.box(
+			ground,
+			tone,
+			CFrame.lookAt(Vector3.new(mid.X, y, mid.Z), Vector3.new(to.X, y, to.Z)),
+			Vector3.new(width, 0.6, (to - from).Magnitude),
+			{ Color = tone, Name = "Path" }
 		)
 	end
-	-- the cream spoke tapers toward the lighthouse and ends in the flagstone
-	-- square by the exit (Hub) instead of a ring
-	path(24, 34, 3, Enum.Material.Limestone)
-	path(34, 46, 5, Enum.Material.Limestone)
-	path(46, layout.hubRadius + 5, 10, Enum.Material.Cobblestone)
-	-- glowing dashes set into the cobbles
+	-- a cream spoke across the plaza that tapers toward the lighthouse and
+	-- ends in the flagstone square by the exit (Hub), then a cobbled path
+	-- with a brick edging through the village to the boardwalk
+	strip(24, 34, 3, 0.3, G.limestone)
+	strip(34, 46, 5, 0.3, G.limestone)
+	strip(46, layout.hubRadius - 0.5, 10, 0.2, G.cobble)
+	strip(46, layout.hubRadius - 0.5, 11.6, 0.1, G.brick)
+	-- glowing dashes set into the paving
 	local r = 15
 	while r < layout.hubRadius - 2 do
-		local p = dir * r + Vector3.new(0, floor + 0.06, 0)
+		local p = dir * r + Vector3.new(0, floor + 0.26, 0)
 		local dash = Pieces.box(
 			parent,
 			CFrame.lookAt(p, p + dir),
@@ -407,7 +426,7 @@ function Zone.connector(ctx: Context, zone: ZoneContext)
 	local parent = Instance.new("Folder")
 	parent.Name = def.id
 	parent.Parent = ctx.folders.connectors
-	Zone.trail(ctx, parent, slot.angle, zone.color)
+	Zone.trail(ctx, parent, slot.angle, zone.color, Geo.key(zone))
 	Zone.boardwalk(ctx, parent, slot.hubExit.Position, slot.gate.Position, {
 		color = zone.color,
 		title = string.upper(def.displayName),
