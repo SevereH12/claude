@@ -3,13 +3,13 @@
 -- bloom so lamps and lanterns glow (cozy), light haze so the far heroes
 -- keep their silhouettes. Storm (Lighting attributes the client tweens to):
 -- dark slate and indigo so the cyan and zone-colour neon takes over.
--- Also paints every terrain material StormPunk uses (Palette.terrain).
+-- The ground and sea are part-built (Palette.ground, Palette.water), so no
+-- terrain material is painted here.
 
 local Lighting = game:GetService("Lighting")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local WorldTypes = require(ServerScriptService.Server.World.Types)
-local Palette = require(script.Parent.Palette)
 
 type Context = WorldTypes.Context
 
@@ -74,16 +74,6 @@ function Atmosphere.apply(ctx: Context)
 	clouds.Cover = 0.58
 	clouds.Density = 0.45
 	clouds.Color = Color3.fromRGB(255, 236, 220)
-
-	local terrain = ctx.terrain
-	terrain.WaterColor = Palette.water
-	terrain.WaterTransparency = 0.55
-	terrain.WaterWaveSize = 0.18
-	terrain.WaterWaveSpeed = 10
-	terrain.WaterReflectance = 0.35
-	for material, color in Palette.terrain do
-		terrain:SetMaterialColor(material, color)
-	end
 end
 
 return Atmosphere

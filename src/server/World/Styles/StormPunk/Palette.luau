@@ -1,6 +1,6 @@
 --!strict
 -- StormPunk style guide in code: the 10-colour palette, the tints derived
--- from it, the terrain and light tokens, materials and sign styles every
+-- from it, the ground and light tokens, materials and sign styles every
 -- piece uses (see docs/styles/StormPunk.md).
 
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -44,7 +44,7 @@ Palette.tints = {
 	timberPale = pale(C.timber, 0.35),
 	sageDark = dark(C.sage, 0.3),
 	glass = pale(C.volt, 0.55), -- lantern and capacitor glass
-	rock = dark(C.timber, 0.15):Lerp(C.iron, 0.35), -- part rocks match terrain Rock
+	rock = dark(C.timber, 0.15):Lerp(C.iron, 0.35), -- loose rocks and boulders
 	rockDark = dark(C.iron, 0.05):Lerp(C.timber, 0.2),
 }
 
@@ -54,26 +54,29 @@ Palette.light = {
 	volt = C.volt, -- lanterns, orbs, coil
 }
 
--- Terrain material colours (Terrain:SetMaterialColor), all palette-derived.
--- Every terrain material StormPunk uses is listed, so Roblox defaults
--- (drab khaki sand, near-black basalt, teal slate...) never show.
-Palette.terrain = {
-	[Enum.Material.Sand] = Color3.fromRGB(230, 200, 140), -- beaches, Shoreline field
-	[Enum.Material.Limestone] = Color3.fromRGB(224, 204, 162), -- Mesa field base, strata
-	[Enum.Material.Sandstone] = Color3.fromRGB(198, 128, 86), -- mesa cliffs (copper family)
-	[Enum.Material.Basalt] = Color3.fromRGB(82, 88, 104), -- sea stacks, crags (iron family)
-	[Enum.Material.Slate] = Color3.fromRGB(104, 110, 124), -- hub and yard cliffs
-	[Enum.Material.Rock] = Color3.fromRGB(132, 120, 108), -- strata, talus
-	[Enum.Material.Brick] = Color3.fromRGB(160, 92, 62), -- hub plaza
-	[Enum.Material.Pavement] = Color3.fromRGB(184, 176, 160), -- hub paving, spokes
-	[Enum.Material.LeafyGrass] = Color3.fromRGB(116, 160, 84), -- terraces, dunes, caps
-	[Enum.Material.Grass] = Color3.fromRGB(126, 166, 92), -- planters
-	[Enum.Material.Ground] = Color3.fromRGB(150, 98, 64), -- mesa strata (timber family)
-	[Enum.Material.Concrete] = Color3.fromRGB(150, 154, 156), -- generator yard
-	[Enum.Material.Salt] = Color3.fromRGB(226, 220, 204), -- salt flats on the shore
+-- Ground block colours (World/Blocks, SmoothPlastic only): the colour is
+-- the whole look, so every ground tone is named here. Strata alternate two
+-- tones (slate/basalt, sandstone/limestone); grass caps are the lightest
+-- green so island tops read from far away.
+Palette.ground = {
+	sand = Color3.fromRGB(230, 200, 140), -- beaches, aprons, the Shoreline field
+	wetSand = Color3.fromRGB(204, 176, 124), -- shore slopes running into the sea
+	seabed = Color3.fromRGB(92, 140, 132), -- under the water everywhere
+	limestone = Color3.fromRGB(224, 204, 162), -- Mesa field, pale strata
+	sandstone = Color3.fromRGB(198, 128, 86), -- mesa strata (copper family)
+	basalt = Color3.fromRGB(82, 88, 104), -- sea stacks, crags, columns (iron family)
+	slate = Color3.fromRGB(110, 116, 130), -- hub and yard cliffs
+	rock = Color3.fromRGB(132, 120, 108), -- rock caps, talus
+	earth = Color3.fromRGB(150, 98, 64), -- mesa strata (timber family)
+	brick = Color3.fromRGB(160, 92, 62), -- hub plaza
+	pavement = Color3.fromRGB(184, 176, 160), -- paths, the harbour ramp
+	edging = Color3.fromRGB(112, 104, 96), -- the darker strip under every path
+	grass = Color3.fromRGB(130, 174, 94), -- grass caps, dunes
+	grassDark = Color3.fromRGB(108, 150, 80), -- dune tops, lower lawns
+	concrete = Color3.fromRGB(150, 154, 156), -- generator yard
 }
 
--- Water: teal, a patina cousin.
+-- Water: teal, a patina cousin (the see-through sea surface).
 Palette.water = Color3.fromRGB(34, 132, 138)
 
 Palette.materials = {

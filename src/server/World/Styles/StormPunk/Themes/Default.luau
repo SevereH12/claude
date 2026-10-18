@@ -1,10 +1,11 @@
 --!strict
 -- Default theme ("Generator Yard"), used for any zone theme StormPunk has
--- no module for. A slate island with leaning stepped cliffs and a basalt
--- crag behind the field, a riveted plate checker tinted with the zone's
--- colour, the Dynamo Stack (smokestack, generator drums and an orb; its
--- height, drum count and side vary per zone), a transformer yard, pipe
--- runs and cable spools. Works for any slot and floor height.
+-- no module for. A block island: a concrete yard on stepped slate and
+-- basalt strata with a wide grassy shelf, a basalt column crag behind the
+-- field, a plate checker tinted with the zone's colour, the Dynamo Stack on
+-- its own concrete pad (smokestack, generator drums and an orb; its height,
+-- drum count and side vary per zone), a transformer yard, pipe runs and
+-- cable spools. Works for any slot and floor height.
 
 local ServerScriptService = game:GetService("ServerScriptService")
 
@@ -23,8 +24,8 @@ local C = Palette.colors
 local T = Palette.tints
 local M = Palette.materials
 local L = Palette.light
-local TERRAIN = Enum.Material
-local SEA_FLOOR = Geo.SEA_FLOOR
+local G = Palette.ground
+local BOTTOM = Geo.SEA_FLOOR - 0.5
 local UP = Vector3.new(0, 1, 0)
 
 local Default = {}
@@ -34,8 +35,9 @@ Default.bridge = Zone.defaultBridge
 type Hero = { x: number, z: number, height: number, drums: number }
 
 local layersByZone: { [string]: { Land.Layer } } = {}
-local blockedByZone: { [string]: { Land.Outline } } = {}
+local blockedByZone: { [string]: { Land.Shape } } = {}
 local heroByZone: { [string]: Hero } = {}
+local padByZone: { [string]: boolean } = {}
 
 -- The Dynamo Stack's look and spot, from a hash of the zone id: every
 -- generator yard gets its own silhouette.
@@ -53,121 +55,68 @@ end
 function Default.ground(ctx: Context, zone: ZoneContext)
 	local slot = zone.slot
 	local F = slot.floor
-	local w, d = slot.width, slot.depth
-	local hw, hd = w / 2, d / 2
+	local hw, hd = slot.width / 2, slot.depth / 2
 	local key = Geo.zoneKey(zone)
 	local rng = Geo.rng(ctx, key .. "-ground")
 	local guard = Geo.guard(ctx, zone)
-	local layers: { Land.Layer } = {}
+	local detail = Geo.zoneDetail(zone)
+	local parent = ctx.folders.ground
 
-	Land.fill(
-		ctx,
-		Land.organic(slot.frame, w + 60, d + 60, rng, { edge = 16, jitter = 10, bays = 2 }),
-		SEA_FLOOR,
-		-3,
-		TERRAIN.Sand,
-		0,
-		guard
-	)
-	local shore = Land.cliff(
-		ctx,
-		Land.organic(slot.frame, w + 46, d + 46, rng, {
-			edge = 13,
-			jitter = 8,
-			bays = 2,
-			spits = 1,
-			spitLength = 20,
-		}),
-		SEA_FLOOR,
-		3,
-		TERRAIN.Rock,
-		{},
-		TERRAIN.Rock,
-		rng,
-		{ guard = guard, lean = 4, foot = -2 }
-	)
-	Land.talus(ctx, shore, 0, rng, 8, TERRAIN.Basalt, guard)
-	-- a skirt of grassy slate shelves stepping up to the yard
-	local shelfTop = math.max(F - 6, 6)
-	local shelf: Land.Outline? = nil
-	if shelfTop < F then
-		shelf = Land.cliff(
-			ctx,
-			Land.organic(slot.frame, w + 28, d + 28, rng, { edge = 10, jitter = 6, bays = 1 }),
-			SEA_FLOOR,
-			shelfTop,
-			TERRAIN.Slate,
-			{ TERRAIN.Rock, TERRAIN.Basalt },
-			TERRAIN.LeafyGrass,
-			rng,
-			{ guard = guard, lean = 7, foot = 0 }
-		)
-	end
-	local yard = Land.cliff(
-		ctx,
-		Land.organic(slot.frame, w + 12, d + 12, rng, { edge = 8, jitter = 2 }),
-		SEA_FLOOR,
-		F,
-		TERRAIN.Slate,
-		{ TERRAIN.Basalt, TERRAIN.Rock },
-		TERRAIN.Concrete,
-		rng,
-		{ guard = guard, lean = 6, foot = 0 }
-	)
-	Land.flatRect(ctx, slot.frame, w + 4, d + 4, F, 8, TERRAIN.Concrete)
+	-- a concrete yard on slate and basalt strata, the second one a wide
+	-- grassy shelf
+	local island = Zone.island(ctx, zone, {
+		field = G.concrete,
+		colors = { G.slate, G.basalt },
+		grow = 2.5,
+		capBand = 2,
+		capGrow = 6,
+	})
+	local layers = island.layers
 
-	-- a basalt crag behind the field, standing 10-18 above it
+	-- a basalt column crag behind the field (away from the hero), 10-18
+	-- above it
 	local hero = heroFor(zone)
 	heroByZone[key] = hero
+	local sign = math.sign(hero.x)
 	local blocked = Land.ridge(
-		ctx,
-		Geo.slotPoint(zone, -math.sign(hero.x) * hw * 0.9, hd + 20),
-		Geo.slotPoint(zone, math.sign(hero.x) * hw * 0.05, hd + 24),
+		parent,
+		Geo.slotPoint(zone, -sign * hw * 0.9, hd + 20),
+		Geo.slotPoint(zone, -sign * hw * 0.1, hd + 24),
 		F + 10,
 		F + 18,
 		16,
 		rng,
-		TERRAIN.Basalt,
-		{ TERRAIN.Slate },
-		TERRAIN.LeafyGrass,
-		guard
+		{ G.basalt, G.slate },
+		G.grass,
+		guard,
+		Geo.count(detail, 2, 3),
+		BOTTOM
 	)
-	local saddle =
-		Zone.saddle(ctx, zone, TERRAIN.Slate, { TERRAIN.Basalt, TERRAIN.Rock }, TERRAIN.LeafyGrass)
+	local saddle = Zone.saddle(ctx, zone, { G.slate, G.basalt }, G.grass)
 	table.move(saddle, 1, #saddle, #blocked + 1, blocked)
-	-- rock pad for the Dynamo Stack behind the field
+
+	-- the Dynamo Stack's pad behind the field, flush with the yard (same
+	-- colour key, so where they meet they are one surface)
+	padByZone[key] = false
 	local base = Geo.slotPoint(zone, hero.x, hero.z)
-	local pad: Land.Outline? = nil
-	if Geo.isClear(ctx, base, 10) then
-		pad = Land.cliff(
-			ctx,
-			Land.blob(base, 14, rng, 6, 2),
-			SEA_FLOOR,
-			F,
-			TERRAIN.Slate,
-			{ TERRAIN.Basalt },
-			TERRAIN.Concrete,
-			rng,
-			{ guard = guard, lean = 5, foot = 0 }
-		)
-	end
+	local pad = if Geo.isClear(ctx, base, 10)
+		then Land.fit(Land.poly(base, 14.5, 12, Zone.yawOf(slot.frame)), F, guard, 0.8)
+		else nil
 	if pad then
-		table.insert(layers, { outline = pad, top = F })
+		padByZone[key] = true
+		local built = Land.stack(parent, pad, F, BOTTOM, {
+			{ color = G.concrete, height = 1.5 },
+			{ color = G.slate, height = 4, grow = 0.5 },
+			{ color = G.basalt, grow = 1 },
+		}, island.key)
+		table.move(built, 1, #built, #layers + 1, layers)
 	end
-	table.insert(layers, { outline = yard, top = F })
-	if shelf then
-		table.insert(layers, { outline = shelf, top = shelfTop })
-	end
-	table.insert(layers, { outline = shore, top = 3 })
-	table.sort(layers, function(la, lb)
-		return la.top > lb.top
-	end)
 	layersByZone[key] = layers
 	blockedByZone[key] = blocked
 
-	-- the field: riveted plates tinted with the zone colour on concrete,
-	-- framed in brass with a glowing zone-colour strip
-	Zone.checker(zone, 16, T.ironLight:Lerp(zone.color, 0.35), M.plate, 1.2)
+	-- the field: plates tinted with the zone colour on concrete, framed in
+	-- brass with a glowing zone-colour strip
+	Zone.checker(zone, 16, T.ironLight:Lerp(zone.color, 0.35), Enum.Material.SmoothPlastic, 1.2)
 	Zone.floorFrame(zone, C.brass, 1.5)
 end
 
@@ -255,7 +204,7 @@ function Default.dress(ctx: Context, zone: ZoneContext)
 	-- hero: the Dynamo Stack behind the field
 	local hero = heroByZone[key] or heroFor(zone)
 	local base = Geo.slotPoint(zone, hero.x, hero.z)
-	if Geo.isClear(ctx, base, 10) then
+	if padByZone[key] then
 		dynamoStack(
 			ctx,
 			parent,
@@ -281,9 +230,9 @@ function Default.dress(ctx: Context, zone: ZoneContext)
 		Pieces.barrel(parent, (frame * CFrame.new(7.4, 0, 0.6)).Position, C.patina)
 	end
 
-	-- a pipe run on brackets along the back edge
-	local a = place.ground(-math.sign(hero.x) * hw * 0.85, hd + 5, 1.5)
-	local b = place.ground(math.sign(hero.x) * hw * 0.05, hd + 5, 1.5)
+	-- a pipe run on brackets along the grassy shelf behind the field
+	local a = place.ground(-math.sign(hero.x) * hw * 0.85, hd + 9, 1.5)
+	local b = place.ground(math.sign(hero.x) * hw * 0.05, hd + 9, 1.5)
 	if a and b and math.abs(a.Y - b.Y) < 0.5 then
 		Pieces.pipe(parent, a + UP * 1.8, b + UP * 1.8, 1.6, C.copper)
 		Pieces.pipe(parent, a + UP * 3.4, b + UP * 3.4, 1.1, C.patina)

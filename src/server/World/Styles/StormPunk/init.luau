@@ -7,11 +7,11 @@
 -- Modules:
 --   Palette     colours, materials, sign styles (the style guide in code)
 --   Geo         bearings, placement checks, per-zone seeded randomness
---   Land        terrain landmasses: organic outlines, strata cliffs, stacks
+--   Land        block-built land: polygon/rect shapes, strata, shores, columns
 --   Pieces      shared building pieces (insulators, pylons, lamps, signs...)
 --   Atmosphere  calm and storm lighting
---   Hub         ocean, hub island, islets, Grand Coil, Volt Exchange, wayfinding
---   Zone        connector, border, gate and floor patterns for any slot
+--   Hub         sea, hub island, islets, Grand Coil, Volt Exchange, wayfinding
+--   Zone        island, connector, border, gate and floor patterns for any slot
 --   Themes/*    one module per zone theme: Beach, Canyon, Default
 --   Teaser      the "Coming Soon" slot
 --
@@ -55,6 +55,8 @@ Style.name = "StormPunk"
 Style.description =
 	"Voltcliff Works: copper, brass and patina factory islands strung with glowing cables."
 Style.palette = Palette.colors
+-- All ground is SmoothPlastic blocks in Map.Ground; no terrain is filled.
+Style.ground = "Blocks"
 -- A rising ring of fields: each zone is the next neighbour round (45
 -- degrees on) and a little further out, so the floors 4, 20, 32... climb
 -- round the hub like a mountain of fields. 8 bearings: 7 zones + teaser.
@@ -90,9 +92,9 @@ end
 
 function Style.buildConnector(ctx: Context, zone: ZoneContext)
 	if zone.slot.index == 1 then
-		-- every zone landmass is down now: re-lay the hub's upper terrain on
-		-- top and add the islets, crags and sea stacks clear of every skirt
-		Hub.restoreIsland(ctx)
+		-- every zone island is down now: add the hub's crags, the islets
+		-- and the sea stacks in the open water between them
+		Hub.buildScenery(ctx)
 	end
 	Zone.buildConnector(ctx, zone, themeFor(zone).bridge)
 end

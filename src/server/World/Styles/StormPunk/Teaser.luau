@@ -1,6 +1,6 @@
 --!strict
--- The next empty slot: a tall basalt island under construction (crane,
--- scaffolding, work lamp), reached by a catwalk that stops partway at a
+-- The next empty slot: a tall block-built basalt island under construction
+-- (crane, scaffolding, work lamp), reached by a catwalk that stops partway at a
 -- barricade with a big COMING SOON sign. Bare piles carry on toward the
 -- island with a girder hanging off them. Amber here is construction only:
 -- the barricade stripes, the trail chevrons and the crane cab.
@@ -23,8 +23,9 @@ local C = Palette.colors
 local T = Palette.tints
 local M = Palette.materials
 local L = Palette.light
-local TERRAIN = Enum.Material
-local SEA_FLOOR = Geo.SEA_FLOOR
+local G = Palette.ground
+local BEACH = Geo.BEACH
+local BOTTOM = Geo.SEA_FLOOR - 0.5
 local UP = Vector3.new(0, 1, 0)
 
 local Teaser = {}
@@ -133,74 +134,49 @@ function Teaser.build(ctx: Context, zone: ZoneContext)
 	local rng = Geo.rng(ctx, "teaser")
 	local guard = Geo.guard(ctx, zone, true)
 
-	-- the uncharted island: a basalt crag with slate strata, sea stacks
-	-- around it and a ragged grass cap where the crane stands
+	-- the uncharted island: a sand beach with shore slopes, a basalt crag
+	-- in two steps (a rock-capped ledge, then a grass-capped top where the
+	-- crane stands) and column stacks around it
 	local center = slot.frame.Position
-	Land.fill(
-		ctx,
-		Land.organic(slot.frame, w + 6, d + 6, rng, { edge = 16, jitter = 12, bays = 2 }),
-		SEA_FLOOR,
-		-3,
-		TERRAIN.Sand,
-		0,
-		guard
-	)
-	Land.fill(
-		ctx,
-		Land.organic(
-			slot.frame,
-			w - 10,
-			d - 10,
-			rng,
-			{ edge = 13, jitter = 9, bays = 2, spits = 1 }
-		),
-		SEA_FLOOR,
-		2,
-		TERRAIN.Sand,
-		0,
-		guard
-	)
-	local lower = Land.cliff(
-		ctx,
-		Land.organic(slot.frame, w * 0.6, d * 0.6, rng, { edge = 11, jitter = 8, bays = 1 }),
-		SEA_FLOOR,
-		F - 16,
-		TERRAIN.Basalt,
-		{ TERRAIN.Slate, TERRAIN.Rock },
-		TERRAIN.Rock,
-		rng,
-		{ guard = guard, lean = 8, foot = 0 }
-	)
-	Land.talus(ctx, lower, 2, rng, 8, TERRAIN.Basalt, guard)
-	Land.cliff(
-		ctx,
-		Land.blob(Vector3.new(center.X, 0, center.Z), math.min(w, d) * 0.3, rng, 8, 3),
-		SEA_FLOOR,
-		F,
-		TERRAIN.Basalt,
-		{ TERRAIN.Slate, TERRAIN.Rock },
-		TERRAIN.LeafyGrass,
-		rng,
-		{ guard = guard, lean = 6, foot = F - 24 }
-	)
-	Zone.saddle(ctx, zone, TERRAIN.Basalt, { TERRAIN.Slate, TERRAIN.Rock }, TERRAIN.LeafyGrass)
-	for i = 1, 4 do
+	local ground = ctx.folders.ground
+	local yaw = Zone.yawOf(slot.frame)
+	local size = math.min(w, d)
+	local beach = Land.fit(Land.poly(center, size * 0.42, 12, yaw), BEACH, guard, 0.6)
+	if beach then
+		Land.prism(ground, G.sand, beach, BEACH, BOTTOM, Land.SHARED + UP * BEACH)
+		Land.register(ctx, beach)
+		Land.skirt(ground, G.wetSand, beach, BEACH, BOTTOM, Land.registered(ctx))
+	end
+	local lower = Land.fit(Land.poly(center, size * 0.3, 12, yaw + 0.26), F - 16, guard, 0.7)
+	if lower then
+		Land.stack(ground, lower, F - 16, BOTTOM, { { color = G.basalt, cap = G.rock } })
+	end
+	local upper = Land.fit(Land.poly(center, size * 0.23, 10, yaw + 0.6), F, guard, 0.8)
+	if upper then
+		Land.stack(ground, upper, F, F - 17, {
+			{ color = G.slate, height = 4, cap = G.grass },
+			{ color = G.basalt, grow = 0.8 },
+		})
+	end
+	for i = 1, Geo.count(Geo.worldDetail(ctx), 2, 4) do
 		local a = math.rad(i * 90 + rng:NextNumber(-30, 30))
 		local p = center
-			+ slot.frame.RightVector * math.cos(a) * w * 0.38
-			+ slot.frame.LookVector * math.sin(a) * d * 0.38
-		Land.pinnacle(
-			ctx,
-			Vector3.new(p.X, SEA_FLOOR, p.Z),
-			F - SEA_FLOOR + rng:NextNumber(-14, 6),
-			rng:NextNumber(4, 6.5),
+			+ slot.frame.RightVector * math.cos(a) * w * 0.4
+			+ slot.frame.LookVector * math.sin(a) * d * 0.4
+		Land.cluster(
+			ground,
 			rng,
-			{ TERRAIN.Basalt, TERRAIN.Slate, TERRAIN.Basalt },
-			3,
-			TERRAIN.LeafyGrass,
+			p,
+			rng:NextNumber(6, 9),
+			BOTTOM,
+			F + rng:NextNumber(-14, 4),
+			{ G.basalt, G.slate },
+			G.grass,
+			2,
 			guard
 		)
 	end
+	Zone.saddle(ctx, zone, { G.basalt, G.slate }, G.grass)
 
 	-- the unfinished catwalk (soot trail: not open yet) and its barricade
 	local from = slot.hubExit.Position

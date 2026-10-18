@@ -1,10 +1,12 @@
 --!strict
 -- Beach theme ("Tidewire Beach"): a sand field with scalloped patina tide
--- bands; a coast with bays and sand spits, pulled in close on the hub side
--- and wide at the back; basalt headlands that break the coastline out to
--- sea; the Tidewire Lighthouse; and a few composed vignettes (bathing huts,
--- the pier and skiff, a driftwood beach, palm groves) with open sand
--- between them. Works for any slot: everything is placed in the slot frame.
+-- bands on a block island (limestone and sandstone steps down to a sand
+-- apron, beach lobes wide at the back and pulled in on the hub side, shore
+-- slopes into the sea); basalt headlands and column clusters that break the
+-- coastline out to sea; grassy dunes; the Tidewire Lighthouse; and a few
+-- composed vignettes (bathing huts, the pier and skiff, a driftwood beach,
+-- palm groves) with open sand between them. Works for any slot: everything
+-- is placed in the slot frame.
 
 local ServerScriptService = game:GetService("ServerScriptService")
 
@@ -23,8 +25,10 @@ local C = Palette.colors
 local T = Palette.tints
 local M = Palette.materials
 local L = Palette.light
-local TERRAIN = Enum.Material
+local G = Palette.ground
 local SEA_FLOOR = Geo.SEA_FLOOR
+local BEACH = Geo.BEACH
+local BOTTOM = SEA_FLOOR - 0.5
 local UP = Vector3.new(0, 1, 0)
 
 local Beach = {}
@@ -34,11 +38,12 @@ Beach.bridge = {
 	deckMaterial = M.planks,
 	rail = C.brass,
 	pile = C.copper,
-	stack = TERRAIN.Basalt,
+	stack = G.basalt,
 } :: Zone.BridgeStyle
 
--- Coast margins outside the footprint: tight on the hub side, wide behind.
-local FRONT, SIDE, BACK = 9, 14, 34
+-- Coast margins outside the footprint: wide behind, narrower at the sides
+-- (the hub side has no beach: the field's steps meet open water).
+local SIDE, BACK = 14, 34
 
 type Spot = { x: number, z: number, r: number, h: number }
 
@@ -60,9 +65,11 @@ local function headlandSpots(zone: ZoneContext): ({ Spot }, { Spot })
 	return lighthouse, minor
 end
 
+type Hero = { x: number, z: number, top: number }
+
 local layersByZone: { [string]: { Land.Layer } } = {}
-local blockedByZone: { [string]: { Land.Outline } } = {}
-local heroByZone: { [string]: Spot } = {}
+local blockedByZone: { [string]: { Land.Shape } } = {}
+local heroByZone: { [string]: Hero } = {}
 
 function Beach.layers(zone: ZoneContext): { Land.Layer }
 	return layersByZone[Geo.zoneKey(zone)] or {}
@@ -75,128 +82,98 @@ function Beach.ground(ctx: Context, zone: ZoneContext)
 	local key = Geo.zoneKey(zone)
 	local rng = Geo.rng(ctx, key .. "-ground")
 	local guard = Geo.guard(ctx, zone)
-	local layers: { Land.Layer } = {}
-	-- the coast's rectangle: shifted back so the hub side stays close
-	local coastFrame = slot.frame * CFrame.new(0, 0, (BACK - FRONT) / 2)
-	local coastW, coastD = w + 2 * SIDE, d + FRONT + BACK
-
-	Land.fill(
-		ctx,
-		Land.organic(coastFrame, coastW + 30, coastD + 30, rng, {
-			edge = 16,
-			jitter = 10,
-			bays = 2,
-			calmFront = true,
-		}),
-		SEA_FLOOR,
-		-3,
-		TERRAIN.Sand,
-		0,
-		guard
-	)
-	local beachTop = math.min(F - 2, 2)
-	local beach = Land.organic(coastFrame, coastW, coastD, rng, {
-		edge = 12,
-		jitter = 6,
-		bays = 2,
-		bayDepth = 12,
-		spits = 2,
-		spitLength = 26,
-		calmFront = true,
+	local detail = Geo.zoneDetail(zone)
+	local parent = ctx.folders.ground
+	local yaw = Zone.yawOf(slot.frame)
+	local island = Zone.island(ctx, zone, {
+		field = G.sand,
+		colors = { G.limestone, G.sandstone },
+		side = SIDE,
+		back = BACK,
 	})
-	Land.fill(ctx, beach, SEA_FLOOR, beachTop, TERRAIN.Sand, 0, guard)
-	local raised: Land.Outline? = nil
-	if F > 8 then
-		-- a raised beach: sandstone cliffs under it
-		raised = Land.cliff(
-			ctx,
-			Land.organic(slot.frame, w + 16, d + 16, rng, { edge = 9, jitter = 5, bays = 1 }),
-			SEA_FLOOR,
-			F - 2,
-			TERRAIN.Sandstone,
-			{ TERRAIN.Limestone, TERRAIN.Rock },
-			TERRAIN.Sand,
-			rng,
-			{ guard = guard, lean = 8, foot = 0 }
-		)
-	end
-	local field = Land.organic(slot.frame, w + 10, d + 10, rng, { edge = 8, jitter = 2 })
-	Land.fill(ctx, field, SEA_FLOOR, F, TERRAIN.Sand, 0, guard)
-	Land.flatRect(ctx, slot.frame, w + 6, d + 6, F, F - SEA_FLOOR, TERRAIN.Sand)
+	local layers = island.layers
+	local blocked: { Land.Shape } = {}
 
-	-- basalt headlands breaking the coast; the first clear big one is the
-	-- lighthouse's
+	-- basalt headlands breaking the coast: the first clear big spot is the
+	-- lighthouse's (slate and basalt strata, grass cap), the minor ones are
+	-- column clusters
 	local lighthouseSpots, minorSpots = headlandSpots(zone)
-	local spots: { Spot } = {}
+	local base = math.max(F, BEACH)
+	heroByZone[key] = nil
 	for _, spot in lighthouseSpots do
 		local p = Geo.slotPoint(zone, spot.x, spot.z)
-		if Geo.isClear(ctx, p, spot.r * 0.9) then
-			table.insert(spots, spot)
-			heroByZone[key] = spot
+		local top = base + spot.h
+		local shape = if Geo.isClear(ctx, p, spot.r * 0.9)
+			then Land.fit(
+				Land.poly(p, spot.r * 0.7, 10, rng:NextNumber(0, math.pi)),
+				top,
+				guard,
+				0.7
+			)
+			else nil
+		if shape then
+			local built = Land.stack(parent, shape, top, BOTTOM, {
+				{ color = G.slate, height = 4, cap = G.grass },
+				{ color = G.basalt, grow = 1.2 },
+			})
+			table.move(built, 1, #built, #layers + 1, layers)
+			Land.register(ctx, Land.grown(shape, 1.2))
+			heroByZone[key] = { x = spot.x, z = spot.z, top = top }
 			break
 		end
 	end
-	for _, spot in minorSpots do
-		table.insert(spots, spot)
-	end
-	for _, spot in spots do
+	for i, spot in minorSpots do
 		local center = Geo.slotPoint(zone, spot.x, spot.z)
-		if Geo.isClear(ctx, center, spot.r * 0.7) then
-			local top = math.max(F, 2) + spot.h
-			Land.fill(
-				ctx,
-				Land.blob(center, spot.r + 8, rng, 6, 3),
-				SEA_FLOOR,
-				beachTop - 1,
-				TERRAIN.Sand,
-				0,
+		if i <= Geo.count(detail, 1, 3) and Geo.isClear(ctx, center, spot.r * 0.7) then
+			local columns = Land.cluster(
+				parent,
+				rng,
+				center,
+				spot.r,
+				BOTTOM,
+				base + spot.h,
+				{ G.basalt, G.slate },
+				nil,
+				3,
 				guard
 			)
-			local outline = Land.cliff(
-				ctx,
-				Land.blob(center, spot.r, rng, 7, 2),
-				SEA_FLOOR,
-				top,
-				TERRAIN.Basalt,
-				{ TERRAIN.Slate, TERRAIN.Rock },
-				if spot == heroByZone[key] then TERRAIN.LeafyGrass else TERRAIN.Rock,
-				rng,
-				{ guard = guard, lean = 6, foot = -2 }
-			)
-			Land.talus(ctx, outline, -1, rng, 4, TERRAIN.Basalt, guard)
-			table.insert(layers, { outline = outline, top = top })
+			for _, shape in columns do
+				Land.register(ctx, shape)
+				table.insert(blocked, shape)
+			end
 		end
 	end
-	local blocked =
-		Zone.saddle(ctx, zone, TERRAIN.Basalt, { TERRAIN.Slate, TERRAIN.Rock }, TERRAIN.LeafyGrass)
+	local saddle = Zone.saddle(ctx, zone, { G.basalt, G.slate }, G.grass)
+	table.move(saddle, 1, #saddle, #blocked + 1, blocked)
+
 	-- grassy dunes in clumps on the wide back beach
-	for _ = 1, 7 do
+	local dunes = Geo.count(detail, 1, 4)
+	for _ = 1, 8 do
+		if dunes <= 0 then
+			break
+		end
 		local at = Geo.slotPoint(
 			zone,
 			rng:NextNumber(-0.5, 0.5) * (w + SIDE),
-			d / 2 + rng:NextNumber(8, BACK - 6)
+			d / 2 + rng:NextNumber(10, BACK - 4)
 		)
-		local r = rng:NextNumber(5, 8)
-		local top = beachTop + 1.5
-		if Geo.isClear(ctx, at, r) and guard(at.X, at.Z, r, top) then
-			ctx.terrain:FillBall(Vector3.new(at.X, top - r, at.Z), r, TERRAIN.LeafyGrass)
-			table.insert(blocked, { box = nil, circles = { { x = at.X, z = at.Z, r = r * 0.7 } } })
+		local r = rng:NextNumber(4, 6)
+		if
+			Geo.isClear(ctx, at, r)
+			and Land.surfaceAt(layers, at, r + 1) == BEACH
+			and not Land.containsAny(blocked, at, -(r + 2))
+			and Land.allows(Land.poly(at, r, 6, yaw), BEACH + 2, guard)
+		then
+			dunes -= 1
+			table.insert(blocked, Zone.dune(parent, at, r, yaw + rng:NextNumber(0, math.pi)))
 		end
 	end
-	table.insert(layers, { outline = field, top = F })
-	if raised then
-		table.insert(layers, { outline = raised, top = F - 2 })
-	end
-	table.insert(layers, { outline = beach, top = beachTop })
-	table.sort(layers, function(la, lb)
-		return la.top > lb.top
-	end)
 	layersByZone[key] = layers
 	blockedByZone[key] = blocked
 
 	-- the field: warm sand with scalloped patina tide bands, framed in
 	-- brass with a glowing zone-colour strip
-	Zone.waveStripes(zone, 5, C.patina, TERRAIN.Sand, 5)
+	Zone.waveStripes(zone, 5, C.patina, Enum.Material.SmoothPlastic, 5)
 	Zone.floorFrame(zone, C.brass, 1.5)
 end
 
@@ -292,7 +269,6 @@ end
 
 function Beach.dress(ctx: Context, zone: ZoneContext)
 	local slot = zone.slot
-	local F = slot.floor
 	local hw, hd = slot.width / 2, slot.depth / 2
 	local parent = zone.folder
 	local key = Geo.zoneKey(zone)
@@ -303,14 +279,14 @@ function Beach.dress(ctx: Context, zone: ZoneContext)
 	local V2 = Vector2.new
 
 	local function isWater(p: Vector3): boolean
-		return Land.surfaceAt(layers, p, -3) == nil and Land.surfaceAt(layers, p, 0) == nil
+		return Land.isOpenWater(ctx, p, 3)
 	end
 
 	-- hero: the lighthouse on its headland, wired to the field corner
 	local hero = heroByZone[key]
 	if hero then
 		local p = Geo.slotPoint(zone, hero.x, hero.z)
-		local lantern = lighthouse(parent, Vector3.new(p.X, math.max(F, 2) + hero.h, p.Z), center)
+		local lantern = lighthouse(parent, Vector3.new(p.X, hero.top, p.Z), center)
 		local corner = Geo.slotPoint(zone, math.sign(hero.x) * hw, hd, Zone.POST_HEIGHT - 1.35)
 		Pieces.liveCable(ctx, lantern + UP * 1, corner, zone.color, 0.4, 6)
 	end
@@ -358,7 +334,7 @@ function Beach.dress(ctx: Context, zone: ZoneContext)
 					parent,
 					Vector3.new(a.X, 0, a.Z),
 					Vector3.new(b.X, 0, b.Z),
-					2.6,
+					BEACH + 0.8,
 					"PIER",
 					SEA_FLOOR
 				)
@@ -392,7 +368,7 @@ function Beach.dress(ctx: Context, zone: ZoneContext)
 				M.wood
 			)
 		end
-		Pieces.rocks(parent, drift + Vector3.new(-3, 0, 2), 2.4, rng, T.rockDark)
+		Pieces.rocks(parent, drift + Vector3.new(-3, 0, 2), 2.4, T.rockDark)
 		buoy(parent, drift + Vector3.new(3.5, 1, -2.5), C.copper)
 		Pieces.tuft(parent, drift + Vector3.new(-1, 0, -3), rng, C.sage)
 	end

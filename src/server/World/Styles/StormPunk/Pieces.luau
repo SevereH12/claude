@@ -10,6 +10,7 @@
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local World = ServerScriptService.Server.World
+local Blocks = require(World.Blocks)
 local Kit = require(World.Kit)
 local WorldTypes = require(World.Types)
 local Palette = require(script.Parent.Palette)
@@ -527,10 +528,10 @@ function Pieces.barrel(parent: Instance, bottom: Vector3, color: Color3?)
 end
 
 -- Small rock cluster (Kit.rock, 2-4 parts) in palette stone tones.
-function Pieces.rocks(parent: Instance, bottom: Vector3, size: number, rng: Random, color: Color3?)
-	Kit.rock(parent, bottom - UP * (size * 0.2), size, rng, {
-		Color = color or T.rock,
-		Material = Enum.Material.Slate,
+-- A chunky block rock (World/Blocks: SmoothPlastic, shape from its spot).
+function Pieces.rocks(parent: Instance, bottom: Vector3, size: number, color: Color3?)
+	Blocks.rock(parent, color or T.rock, bottom - UP * (size * 0.2), size, {
+		Name = "Rock",
 		CanCollide = size > 3,
 	})
 end

@@ -1,10 +1,11 @@
 --!strict
 -- Shared zone kit for every StormPunk zone, whatever its theme or slot:
--- the riveted catwalk connector, the insulator-fence border, the insulator
--- arch gate and the flush two-tone floor patterns. Everything is placed in
--- the slot's own frame, so any position, rotation, size or height works.
--- Every zone gets the same full detail (no distance LOD): the pieces are
--- cheap enough that 7 zones fit the part budget.
+-- the block-built island (field slab, strata, sand apron, beach lobes and
+-- shore slopes), the riveted catwalk connector, the insulator-fence border,
+-- the insulator arch gate, saddle ridges and the flush two-tone floor
+-- patterns. Everything is placed in the slot's own frame, so any position,
+-- rotation, size or height works. Props get full detail in every zone; the
+-- ground's optional pieces follow Geo.zoneDetail so 7 zones fit the budget.
 
 local ServerScriptService = game:GetService("ServerScriptService")
 
@@ -23,8 +24,11 @@ local C = Palette.colors
 local T = Palette.tints
 local M = Palette.materials
 
+local G = Palette.ground
 local UP = Vector3.new(0, 1, 0)
 local SEA_FLOOR = Geo.SEA_FLOOR
+local BEACH = Geo.BEACH
+local BOTTOM = SEA_FLOOR - 0.5
 
 local Zone = {}
 
@@ -35,13 +39,16 @@ Zone.GATE_ATTACH_Y = 4.2 -- border cables meet the pillars here
 Zone.POST_HEIGHT = 5.5
 Zone.POST_SPACING = 22
 Zone.DECK_WIDTH = 10
+-- The field slab reaches this far past the footprint (the gate pillars and
+-- the last studs of the catwalk stand on it).
+Zone.MARGIN = 4
 
 export type BridgeStyle = {
 	deck: Color3,
 	deckMaterial: Enum.Material,
 	rail: Color3,
 	pile: Color3,
-	stack: Enum.Material, -- terrain rock the long spans hop across
+	stack: Color3, -- rock columns the long spans hop across
 }
 
 Zone.defaultBridge = {
@@ -49,7 +56,7 @@ Zone.defaultBridge = {
 	deckMaterial = M.plate,
 	rail = C.brass,
 	pile = C.copper,
-	stack = Enum.Material.Basalt,
+	stack = G.basalt,
 } :: BridgeStyle
 
 local function name(zone: ZoneContext): string
@@ -66,7 +73,7 @@ export type CatwalkOptions = {
 
 -- Riveted catwalk from `from` to `to` (points on the walking surface).
 -- Piles carry on past an unfinished deck. Long spans over water hop across
--- basalt stacks (terrain, no parts). Returns the end of the deck.
+-- capped rock columns (block ground). Returns the end of the deck.
 function Zone.catwalk(
 	ctx: Context,
 	parent: Instance,
@@ -131,15 +138,15 @@ function Zone.catwalk(
 			if t > finish then C.hazard else C.iron
 		)
 		if run > 70 and i % 2 == 1 and top.Y > 8 then
-			Land.pinnacle(
-				ctx,
-				Vector3.new(top.X, SEA_FLOOR, top.Z),
-				math.min(top.Y - 4, 14 + rng:NextNumber(0, 8)) - SEA_FLOOR,
-				rng:NextNumber(4.5, 6.5),
-				rng,
-				{ style.stack, Enum.Material.Rock, style.stack },
-				2.6,
-				Enum.Material.LeafyGrass,
+			Land.column(
+				ctx.folders.ground,
+				top,
+				BOTTOM,
+				math.min(top.Y - 4, 14 + rng:NextNumber(0, 8)),
+				rng:NextNumber(3.6, 4.8),
+				{ style.stack },
+				G.grass,
+				rng:NextNumber(0, math.pi),
 				guard
 			)
 		end
@@ -276,19 +283,147 @@ function Zone.buildBorder(ctx: Context, zone: ZoneContext)
 	end
 end
 
+-- Island ------------------------------------------------------------------------------------
+
+export type IslandOptions = {
+	field: Color3, -- the catch floor: the top slab, exactly at the floor
+	colors: { Color3 }, -- strata under it, alternating
+	grow: number?, -- each stratum steps out this far (default 2.5)
+	lean: Vector2?, -- extra step-out per stratum toward one side (slot x, z)
+	capBand: number?, -- this stratum (1 = first under the field) gets a grass cap
+	capGrow: number?, -- ...and steps out this far instead (a wide shelf)
+	side: number?, -- beach reach beside the apron (default 10)
+	back: number?, -- beach reach behind it (default 22)
+}
+
+export type Island = {
+	layers: { Land.Layer },
+	apron: Land.Shape,
+	lobes: { Land.Shape },
+	key: Vector3, -- colour key of the field: ground meeting it at the floor shares it
+}
+
+local function yawOf(frame: CFrame): number
+	local _, yaw, _ = frame:ToEulerAnglesYXZ()
+	return yaw
+end
+Zone.yawOf = yawOf
+
+-- The zone's landmass: a rectangular field slab exactly at the floor over
+-- the whole footprint (+ Zone.MARGIN), strata stepping out under it (1-stud
+-- walkable steps for a field near sea level, two-tone cliffs for raised
+-- ones), a sand apron at beach level round the foot, and polygon beach
+-- lobes behind and beside it with shore slopes into the sea. Nothing lands
+-- in front (the hub side), so low catwalks cross open water.
+function Zone.island(ctx: Context, zone: ZoneContext, opts: IslandOptions): Island
+	local slot = zone.slot
+	local F = slot.floor
+	local detail = Geo.zoneDetail(zone)
+	local parent = ctx.folders.ground
+	local guard = Geo.guard(ctx, zone)
+	local key = Vector3.new(slot.frame.X, 0, slot.frame.Z)
+	local grow = opts.grow or 2.5
+	local base = Land.rect(
+		slot.frame,
+		Vector2.new(slot.width / 2 + Zone.MARGIN, slot.depth / 2 + Zone.MARGIN)
+	)
+	local bands: { Land.Band } = {}
+	local drop = F - BEACH
+	if drop <= 4.5 then
+		local steps = math.max(1, math.ceil(drop - 0.01))
+		local h = drop / steps
+		table.insert(bands, { color = opts.field, height = h })
+		for i = 1, steps - 1 do
+			table.insert(
+				bands,
+				{ color = opts.colors[(i - 1) % #opts.colors + 1], height = h, grow = 2 }
+			)
+		end
+	else
+		table.insert(bands, { color = opts.field, height = 2 })
+		local n = math.clamp(math.floor((drop - 2) / 5 + 0.5), 1, Geo.count(detail, 3, 4))
+		local h = (drop - 2) / n
+		for i = 1, n do
+			local capped = i == opts.capBand
+			table.insert(bands, {
+				color = opts.colors[(i - 1) % #opts.colors + 1],
+				height = h,
+				grow = if capped then opts.capGrow or grow else grow,
+				lean = opts.lean,
+				cap = if capped then G.grass else nil,
+			})
+		end
+	end
+	table.insert(bands, { color = G.sand, grow = 3, key = Land.SHARED })
+	local layers = Land.stack(parent, base, F, BOTTOM, bands, key, guard)
+	local apron = layers[#layers].shape
+	Land.register(ctx, apron)
+
+	-- beach lobes: a big one behind (wide at the back, pulled in at the
+	-- front corners) and, in full detail, a bump on one side
+	local rng = Geo.rng(ctx, Geo.zoneKey(zone) .. "-island")
+	local frame = CFrame.new(apron.center) * apron.rotation
+	local hx, hz = apron.half.X, apron.half.Y
+	local reach = hx + (opts.side or 10)
+	local s = if rng:NextNumber() < 0.5 then -1 else 1
+	local specs = {
+		{
+			x = s * hx * 0.12,
+			z = math.max(hz + (opts.back or 22) - reach, -hz * 0.2),
+			a = reach,
+			n = Geo.sides(detail, 10, 12),
+		},
+		{ x = -s * (hx + 2), z = -hz * 0.15, a = math.min(hx, hz) * 0.42, n = 10 },
+	}
+	local lobes: { Land.Shape } = {}
+	local yaw = yawOf(slot.frame)
+	for i = 1, Geo.count(detail, 1, 2) do
+		local spec = specs[i]
+		local shape = Land.fit(
+			Land.poly(
+				frame:PointToWorldSpace(Vector3.new(spec.x, 0, spec.z)),
+				spec.a,
+				spec.n,
+				yaw + rng:NextNumber(0, math.pi)
+			),
+			BEACH,
+			guard,
+			0.5
+		)
+		if shape then
+			Land.prism(parent, G.sand, shape, BEACH, BOTTOM, Land.SHARED + UP * BEACH)
+			Land.register(ctx, shape)
+			table.insert(lobes, shape)
+			table.insert(layers, { shape = shape, top = BEACH })
+		end
+	end
+	for _, lobe in lobes do
+		Land.skirt(parent, G.wetSand, lobe, BEACH, BOTTOM, Land.registered(ctx))
+	end
+	return { layers = layers, apron = apron, lobes = lobes, key = key }
+end
+
+-- A low two-tier grass dune (6 parts) on the beach at `at`.
+function Zone.dune(parent: Instance, at: Vector3, radius: number, yaw: number): Land.Shape
+	local shape = Land.poly(at, radius, 6, yaw)
+	Land.prism(parent, G.grass, shape, BEACH + 1, BEACH - 0.5)
+	Land.prism(parent, G.grassDark, Land.scaled(shape, 0.55), BEACH + 2, BEACH + 1)
+	return shape
+end
+
 -- Saddle ridge ----------------------------------------------------------------------------
 
--- A rock ridge in the gap between this slot and the one before it on the
--- spiral, climbing from just above the lower field to above this one, so
--- neighbouring fields read as terraces on one mountain rather than
--- separate islands. Clipped off both fields and every deck by the guard.
+-- A ridge of rock columns in the gap between this slot and the one before
+-- it on the spiral, climbing from just above the lower field to above this
+-- one, so neighbouring fields read as terraces on one mountain rather than
+-- separate islands. Kept off both fields and every deck by the guard.
+-- Returns the column outlines (props keep off them).
 function Zone.saddle(
 	ctx: Context,
 	zone: ZoneContext,
-	body: Enum.Material,
-	bands: { Enum.Material },
-	cap: Enum.Material
-): { Land.Outline }
+	colors: { Color3 },
+	cap: Color3?
+): { Land.Shape }
 	local index = zone.slot.index
 	local prev = if zone.isTeaser then ctx.zones[#ctx.zones] else ctx.zones[index - 1]
 	if not prev or prev == zone then
@@ -306,17 +441,18 @@ function Zone.saddle(
 	local low = math.max(prev.slot.floor, 4) + 6
 	local high = math.max(zone.slot.floor, low) + 14
 	return Land.ridge(
-		ctx,
+		ctx.folders.ground,
 		Geo.polar(mid, inner, 0),
 		Geo.polar(mid + rng:NextNumber(-4, 4), outer, 0),
 		low,
 		high,
 		20,
 		rng,
-		body,
-		bands,
+		colors,
 		cap,
-		Geo.guard(ctx, zone)
+		Geo.guard(ctx, zone),
+		Geo.count(Geo.zoneDetail(zone), 2, 3),
+		BOTTOM
 	)
 end
 
@@ -331,22 +467,20 @@ export type Placer = {
 	ground: (x: number, z: number, clearance: number) -> Vector3?,
 }
 
--- `blocked`: terrain that is not a layer to stand on (ridges, pinnacles,
--- arches); nothing is placed inside or against it.
+-- `blocked`: ground that is not a layer to stand on (ridges, columns,
+-- dunes, arches); nothing is placed inside or against it.
 function Zone.placer(
 	ctx: Context,
 	zone: ZoneContext,
 	layers: { Land.Layer },
-	blocked: { Land.Outline }?
+	blocked: { Land.Shape }?
 ): Placer
 	local used: { { p: Vector3, r: number } } = {}
-	local avoid: { Land.Outline } = blocked or {}
+	local avoid: { Land.Shape } = blocked or {}
 	local function ground(x: number, z: number, clearance: number): Vector3?
 		local p = Geo.slotPoint(zone, x, z)
-		for _, outline in avoid do
-			if Land.contains(outline, p, -clearance - 1) then
-				return nil
-			end
+		if Land.containsAny(avoid, p, -clearance - 1) then
+			return nil
 		end
 		local top = Land.surfaceAt(layers, p, clearance)
 		if top and top > 0.5 and Geo.isClear(ctx, p, clearance) then
