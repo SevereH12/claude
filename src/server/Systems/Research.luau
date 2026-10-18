@@ -186,7 +186,8 @@ local function emptyTank(player: Player, profile: Types.Profile)
 	if not save or save.post == "Office" or profile.tankCount <= 0 then
 		return
 	end
-	local readyAt = (Sync.setupUntil[player] or {}).Chemist
+	local setup = Sync.setupUntil[player]
+	local readyAt = setup and setup.Chemist
 	if readyAt and workspace:GetServerTimeNow() < readyAt then
 		return
 	end
@@ -223,7 +224,7 @@ local function balloonTick(player: Player, now: number)
 		return
 	end
 	-- required here: Strikes requires this module
-	local Strikes = require(script.Parent.Strikes)
+	local Strikes = (require :: any)(script.Parent.Strikes)
 	if Strikes.spawnFor(player) then
 		balloonAt[player] = now + ResearchMath.balloonInterval(level)
 	else

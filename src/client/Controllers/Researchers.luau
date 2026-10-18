@@ -123,11 +123,11 @@ end
 
 -- World frames for a site's spots, front first, or nil if the site isn't in
 -- the world (yet).
-local function spotsFor(site: string): ({ CFrame }, CFrame)?
+local function spotsFor(site: string): ({ CFrame }?, CFrame?)
 	if site == "Office" then
 		local office = ResearchSites.offices()[1]
 		if not office then
-			return nil
+			return nil, nil
 		end
 		local size = office.Size
 		local floor = CFrame.new(0, 1 - size.Y / 2, 0)
@@ -144,7 +144,7 @@ local function spotsFor(site: string): ({ CFrame }, CFrame)?
 	end
 	local camp = ResearchSites.camp(site)
 	if not camp then
-		return nil
+		return nil, nil
 	end
 	local floor = camp.CFrame * CFrame.new(0, 1 - camp.Size.Y / 2, 0)
 	local frames: { CFrame } = {}
@@ -165,7 +165,10 @@ local function makeTag(model: Model, text: string): TextLabel
 	gui.Size = UDim2.fromOffset(240, 26)
 	gui.StudsOffset = Vector3.new(0, 3.2, 0)
 	gui.MaxDistance = 70
-	gui.Adornee = model:FindFirstChild("Head") :: BasePart?
+	local head = model:FindFirstChild("Head")
+	if head then
+		gui.Adornee = head
+	end
 	gui.Parent = model
 	local label = Instance.new("TextLabel")
 	label.Size = UDim2.fromScale(1, 1)
