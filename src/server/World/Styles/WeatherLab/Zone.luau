@@ -396,7 +396,8 @@ function Zone.trail(ctx: Context, parent: Instance, angle: number, color: Color3
 	-- with a brick edging through the village to the boardwalk
 	strip(24, 34, 3, 0.3, G.limestone)
 	strip(34, 46, 5, 0.3, G.limestone)
-	strip(46, layout.hubRadius - 0.5, 10, 0.2, G.cobble)
+	-- 0.15, not 0.2: the boardwalk deck starting on it sits at 0.2
+	strip(46, layout.hubRadius - 0.5, 10, 0.15, G.cobble)
 	strip(46, layout.hubRadius - 0.5, 11.6, 0.1, G.brick)
 	-- glowing dashes set into the paving
 	local r = 15

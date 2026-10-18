@@ -106,6 +106,9 @@ detail to save parts; the build output still reports the count.
   (needs Pillow) so map layout can be reviewed as images.
 - `tools/walkcheck.py map.json out` checks you can walk from spawn to every
   zone and sell area and that catch floors are flat and open.
+- `python3 tools/flickercheck.py map.json` fails if two visible parts with
+  different colours or materials have overlapping top faces at the same
+  height (they flicker in Studio). Offset one, butt them, or match colours.
 - `tools/check_world.sh <Style> [outdir]` runs all of the above for a style.
 Run it after any map or zone change.
 

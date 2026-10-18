@@ -535,7 +535,7 @@ local function bridgehead(
 		local foot = (frame * CFrame.new(side * 7, 0, 0)).Position
 		local f = Vector3.new(foot.X, floor, foot.Z)
 		Pieces.column(parent, f, 12, 2.2, C.copper, M.metal, true)
-		Pieces.column(parent, f + UP * 10.4, 1.6, 3, C.ceramic, M.ceramic)
+		Pieces.column(parent, f + UP * 10.4, 1.7, 3, C.ceramic, M.ceramic) -- top clears the pole's
 		Pieces.ball(parent, f + UP * 12.9, 2, color, M.neon)
 		table.insert(tops, f + UP * 12.9)
 	end

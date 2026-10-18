@@ -481,6 +481,7 @@ local CAMP_DARK = Color3.fromRGB(74, 62, 52)
 local CAMP_CANVAS = Color3.fromRGB(226, 216, 192)
 local CAMP_METAL = Color3.fromRGB(150, 156, 164)
 local CAMP_PILE_FALLBACK = 14
+local CAMP_DECK_LIFT = 0.35 -- above the 0.2 boardwalk decks sit at, so they never share a plane
 
 -- How far below `from` the nearest ground or base part is.
 local function dropBelow(ctx: Context, from: Vector3): number
@@ -506,7 +507,10 @@ function Kit.researchCamp(ctx: Context, zone: ZoneContext)
 	if not def then
 		return
 	end
-	local camp = zone.slot.camp
+	-- The deck sits CAMP_DECK_LIFT above the camp height so it rests on top
+	-- of whatever ground reaches under it (a zone plateau's edge is at the
+	-- same height): two surfaces on one plane flicker.
+	local camp = zone.slot.camp * CFrame.new(0, CAMP_DECK_LIFT, 0)
 	local W, D = 28, 14
 	local parent = Instance.new("Folder")
 	parent.Name = def.id .. "Camp"

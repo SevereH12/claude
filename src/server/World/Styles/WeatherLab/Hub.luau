@@ -435,15 +435,8 @@ local function lighthouse(ctx: Context, parent: Instance, floor: number, doorDir
 		C.seafoam,
 		Enum.Material.Wood
 	)
-	Kit.sign(
-		parent,
-		doorCf * CFrame.new(0, 4.4, -0.5) * CFrame.Angles(0, math.pi, 0),
-		9,
-		1.6,
-		"VOLT EXCHANGE",
-		nil,
-		Palette.SIGN
-	)
+	-- text on the face toward the spawn (doorCf looks out of the door)
+	Kit.sign(parent, doorCf * CFrame.new(0, 4.4, -0.5), 9, 1.6, "VOLT EXCHANGE", nil, Palette.SIGN)
 	return lanternBottom + Vector3.new(0, 3.5, 0)
 end
 
@@ -744,10 +737,12 @@ local function village(
 					researchOffice(ctx, parent, cf, diameter, floor)
 				end
 				if domes == 2 then
-					-- a small weather balloon tethered over the radar dome
+					-- a small weather balloon tethered over the radar dome, its
+					-- posts just outside the dome's plinth (radius diameter/2 + 0.6)
+					local reach = diameter / 2 + 1.4
 					local anchors = {
-						at + cf.RightVector * 6 + Vector3.new(0, 0.4, 0),
-						at - cf.RightVector * 6 + Vector3.new(0, 0.4, 0),
+						at + cf.RightVector * reach + Vector3.new(0, 0.4, 0),
+						at - cf.RightVector * reach + Vector3.new(0, 0.4, 0),
 					}
 					for _, a in anchors do
 						Pieces.cyl(

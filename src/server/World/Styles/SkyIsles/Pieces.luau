@@ -1357,7 +1357,10 @@ function Pieces.mound(
 		Ground.box(
 			ctx,
 			crown,
-			CFrame.new(center.X, top - 0.8, center.Z) * yaw * CFrame.Angles(0, math.pi / 8, 0),
+			-- 0.05 up so a neighbour built to the same `top` can't share its plane
+			CFrame.new(center.X, top - 0.75, center.Z)
+				* yaw
+				* CFrame.Angles(0, math.pi / 8, 0),
 			Vector3.new(radius * 0.95, 1.6, radius * 0.95),
 			"Crown"
 		)

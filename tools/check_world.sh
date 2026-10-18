@@ -17,6 +17,8 @@ echo "== gameplay tests"
 if [ -f "$OUT/$STYLE.json" ]; then
 	echo "== walkability"
 	python3 tools/walkcheck.py "$OUT/$STYLE.json" "$OUT/$STYLE" || status=1
+	echo "== flicker"
+	python3 tools/flickercheck.py "$OUT/$STYLE.json" || status=1
 	echo "== render"
 	python3 tools/render_map.py "$OUT/$STYLE.json" "$OUT/$STYLE" || status=1
 fi

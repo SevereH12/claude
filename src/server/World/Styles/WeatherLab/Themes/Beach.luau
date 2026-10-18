@@ -263,8 +263,9 @@ local function pier(ctx: Context, zone: ZoneContext, spots: Geo.Spots)
 		local za, zb = z0 + (z1 - z0) * i / n, z0 + (z1 - z0) * (i + 1) / n
 		Kit.walkway(
 			folder,
-			Geo.at(zone, x, za - 0.3, 0.6),
-			Geo.at(zone, x, zb + 0.3, 0.6),
+			-- butt joints: overlapping planks of different tones would flicker
+			Geo.at(zone, x, za, 0.6),
+			Geo.at(zone, x, zb, 0.6),
 			width,
 			0.6,
 			{
@@ -277,8 +278,8 @@ local function pier(ctx: Context, zone: ZoneContext, spots: Geo.Spots)
 	-- T-head at the end
 	Kit.walkway(
 		folder,
-		Geo.at(zone, x - 7, z1 + 2.5, 0.6),
-		Geo.at(zone, x + 7, z1 + 2.5, 0.6),
+		Geo.at(zone, x - 7, z1 + 3, 0.6),
+		Geo.at(zone, x + 7, z1 + 3, 0.6),
 		6,
 		0.6,
 		{ Name = "PierHead", Color = Palette.plankLight, Material = Enum.Material.WoodPlanks }
