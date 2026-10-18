@@ -1,12 +1,14 @@
 --!strict
--- Walk speed: normal inside storm zones (catching should take skill), fast
--- everywhere else so walking to the Power Plant isn't a chore.
+-- Walk speed: normal inside storm zones (catching should take skill, and
+-- boots add a little), fast everywhere else so walking to the Power Plant
+-- isn't a chore.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Config = require(ReplicatedStorage.Shared.Config)
+local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
+local PlayerData = require(script.Parent.PlayerData)
 
 local CHECK_INTERVAL = 0.2
 
@@ -19,9 +21,9 @@ local function update(player: Player)
 	if not humanoid or not root or not root:IsA("BasePart") then
 		return
 	end
-	local speed = if Zones.at(root.Position)
-		then Config.WALK_SPEED_IN_ZONE
-		else Config.WALK_SPEED_OUTSIDE
+	local profile = PlayerData.get(player)
+	local speed =
+		Formulas.walkSpeed(Zones.at(root.Position) ~= nil, if profile then profile.bootTier else 1)
 	if humanoid.WalkSpeed ~= speed then
 		humanoid.WalkSpeed = speed
 	end

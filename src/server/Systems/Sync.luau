@@ -29,6 +29,7 @@ local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapsho
 		volts = profile.volts,
 		totalVolts = profile.totalVolts,
 		bottleTier = profile.bottleTier,
+		bootTier = profile.bootTier,
 		chargeCount = profile.chargeCount,
 		chargeValue = profile.chargeValue,
 		researchers = profile.researchers,

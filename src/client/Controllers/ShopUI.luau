@@ -1,6 +1,7 @@
 --!strict
--- Bottle shop popup. One row per bottle tier; only the next tier can be
--- bought. Pressing Buy just asks the server, which checks the price itself.
+-- Shop popup with two tabs, BOTTLES and BOOTS. One row per tier; only the
+-- next tier can be bought. Pressing Buy just asks the server, which checks
+-- the price itself.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -14,54 +15,76 @@ local State = require(script.Parent.State)
 
 local COLORS = UI.COLORS
 
-type Row = { tier: number, bottle: Types.BottleDef, frame: Frame, button: TextButton }
+-- What a row shows, whichever kind of item it is.
+type Item = { name: string, price: number, badge: string, detail: string }
+type Row = { tier: number, item: Item, frame: Frame, button: TextButton }
+type Tab = {
+	title: string,
+	hint: string,
+	remote: RemoteEvent,
+	ownedTier: (snapshot: Types.Snapshot) -> number,
+	list: ScrollingFrame,
+	button: TextButton,
+	rows: { Row },
+}
 
 local ShopUI = {}
 
 local panel: Frame
-local rows: { Row } = {}
-local buyRemote: RemoteEvent
+local hint: TextLabel
+local tabs: { Tab } = {}
+local current: Tab? = nil
 
 function ShopUI.toggle()
 	UI.togglePanel(panel)
 end
 
 local function render(snapshot: Types.Snapshot)
-	for _, row in rows do
-		local owned = row.tier <= snapshot.bottleTier
-		local isNext = row.tier == snapshot.bottleTier + 1
-		if owned then
-			row.button.Text = if row.tier == snapshot.bottleTier then "EQUIPPED" else "OWNED"
-			UI.setEnabled(row.button, false, COLORS.green)
-		elseif isNext then
-			row.button.Text = `{Format.abbreviate(row.bottle.price)} ⚡`
-			UI.setEnabled(row.button, snapshot.volts >= row.bottle.price, COLORS.green)
-		else
-			row.button.Text = "LOCKED"
-			UI.setEnabled(row.button, false, COLORS.green)
-		end
-		-- highlight the bottle you're carrying
-		local stroke = row.frame:FindFirstChildOfClass("UIStroke")
-		if stroke then
-			stroke.Color = if row.tier == snapshot.bottleTier then COLORS.volt else COLORS.stroke
+	for _, tab in tabs do
+		local owned = tab.ownedTier(snapshot)
+		for _, row in tab.rows do
+			if row.tier <= owned then
+				row.button.Text = if row.tier == owned then "EQUIPPED" else "OWNED"
+				UI.setEnabled(row.button, false, COLORS.green)
+			elseif row.tier == owned + 1 then
+				row.button.Text = `{Format.abbreviate(row.item.price)} ⚡`
+				UI.setEnabled(row.button, snapshot.volts >= row.item.price, COLORS.green)
+			else
+				row.button.Text = "LOCKED"
+				UI.setEnabled(row.button, false, COLORS.green)
+			end
+			-- highlight the one you're using
+			local stroke = row.frame:FindFirstChildOfClass("UIStroke")
+			if stroke then
+				stroke.Color = if row.tier == owned then COLORS.volt else COLORS.stroke
+			end
 		end
 	end
 end
 
-local function buildRow(list: Instance, tier: number, bottle: Types.BottleDef)
+local function selectTab(tab: Tab)
+	current = tab
+	for _, other in tabs do
+		other.list.Visible = other == tab
+		other.button.BackgroundColor3 = if other == tab then COLORS.volt else COLORS.panelDark
+	end
+	hint.Text = tab.hint
+end
+
+local function buildRow(tab: Tab, tier: number, item: Item)
 	local frame = UI.make(Instance.new("Frame"), {
-		Name = bottle.name,
+		Name = item.name,
 		LayoutOrder = tier,
 		Size = UDim2.new(1, -12, 0, 0),
 		BackgroundColor3 = COLORS.panelDark,
-		Parent = list,
+		Parent = tab.list,
 	})
 	-- height follows width so rows keep their shape on any screen
 	UI.make(Instance.new("UIAspectRatioConstraint"), { AspectRatio = 4.2, Parent = frame })
 	UI.corner(frame, UDim.new(0.2, 0))
 	UI.stroke(frame, 3)
 
-	-- capacity badge
+	-- capacity / speed badge
 	local badge = UI.make(Instance.new("Frame"), {
 		Name = "Badge",
 		AnchorPoint = Vector2.new(0, 0.5),
@@ -74,33 +97,33 @@ local function buildRow(list: Instance, tier: number, bottle: Types.BottleDef)
 	UI.corner(badge, UDim.new(0.5, 0))
 	UI.stroke(badge, 3)
 	UI.gradient(badge, COLORS.storm, COLORS.stormDeep)
-	local capacityText = UI.label({
+	local badgeText = UI.label({
 		Title = true,
-		Text = tostring(bottle.capacity),
+		Text = item.badge,
 		Position = UDim2.fromScale(0.12, 0.15),
 		Size = UDim2.fromScale(0.76, 0.7),
 		Parent = badge,
 	})
-	UI.maxText(capacityText, 30)
+	UI.maxText(badgeText, 30)
 
 	local name = UI.label({
 		Title = true,
-		Text = string.upper(bottle.name),
+		Text = string.upper(item.name),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = UDim2.fromScale(0.25, 0.12),
 		Size = UDim2.fromScale(0.42, 0.42),
 		Parent = frame,
 	})
 	UI.maxText(name, 28)
-	local capacity = UI.label({
-		Text = `Holds {bottle.capacity} charges`,
+	local detail = UI.label({
+		Text = item.detail,
 		TextColor3 = COLORS.subtext,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = UDim2.fromScale(0.25, 0.56),
 		Size = UDim2.fromScale(0.42, 0.3),
 		Parent = frame,
 	})
-	UI.maxText(capacity, 20)
+	UI.maxText(detail, 20)
 
 	local button = UI.button({
 		Name = "Buy",
@@ -114,15 +137,70 @@ local function buildRow(list: Instance, tier: number, bottle: Types.BottleDef)
 	UI.maxText(button, 24)
 	button.Activated:Connect(function()
 		UI.pop(button)
-		buyRemote:FireServer(tier)
+		tab.remote:FireServer(tier)
 	end)
 
-	table.insert(rows, { tier = tier, bottle = bottle, frame = frame, button = button })
+	table.insert(tab.rows, { tier = tier, item = item, frame = frame, button = button })
+end
+
+local function buildTab(
+	order: number,
+	title: string,
+	tabHint: string,
+	remote: RemoteEvent,
+	ownedTier: (Types.Snapshot) -> number
+): Tab
+	local tabButton = UI.button({
+		Name = title,
+		Text = title,
+		Position = UDim2.fromScale(0.04 + (order - 1) * 0.47, 0.17),
+		Size = UDim2.fromScale(0.45, 0.08),
+		BackgroundColor3 = COLORS.panelDark,
+		Parent = panel,
+	})
+	UI.maxText(tabButton, 22)
+	local list = UI.make(Instance.new("ScrollingFrame"), {
+		Name = title .. "List",
+		Position = UDim2.fromScale(0.04, 0.33),
+		Size = UDim2.fromScale(0.92, 0.64),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollBarThickness = 6,
+		Visible = false,
+		Parent = panel,
+	})
+	UI.make(Instance.new("UIListLayout"), {
+		Padding = UDim.new(0, 10),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = list,
+	})
+	UI.make(Instance.new("UIPadding"), {
+		PaddingTop = UDim.new(0, 4),
+		PaddingLeft = UDim.new(0, 4),
+		Parent = list,
+	})
+	local tab: Tab = {
+		title = title,
+		hint = tabHint,
+		remote = remote,
+		ownedTier = ownedTier,
+		list = list,
+		button = tabButton,
+		rows = {},
+	}
+	tabButton.Activated:Connect(function()
+		if current ~= tab then
+			UI.pop(tabButton)
+			selectTab(tab)
+		end
+	end)
+	table.insert(tabs, tab)
+	return tab
 end
 
 function ShopUI.init()
-	buyRemote = Net.get("BuyBottle")
-
 	local screenGui = UI.make(Instance.new("ScreenGui"), {
 		Name = "StormBottlerShop",
 		ResetOnSpawn = false,
@@ -133,15 +211,15 @@ function ShopUI.init()
 		Name = "ShopPanel",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.44, 0.62),
+		Size = UDim2.fromScale(0.44, 0.66),
 		Visible = false,
 		Parent = screenGui,
 	})
-	UI.sizeLimits(panel, Vector2.new(320, 280), Vector2.new(580, 520))
+	UI.sizeLimits(panel, Vector2.new(320, 300), Vector2.new(580, 560))
 
 	local header = UI.make(Instance.new("Frame"), {
 		Name = "Header",
-		Size = UDim2.fromScale(1, 0.15),
+		Size = UDim2.fromScale(1, 0.14),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		Parent = panel,
 	})
@@ -149,7 +227,7 @@ function ShopUI.init()
 	UI.gradient(header, COLORS.storm, COLORS.stormDeep)
 	local title = UI.label({
 		Title = true,
-		Text = "⚡ BOTTLES",
+		Text = "⚡ SHOP",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = UDim2.fromScale(0.05, 0.15),
 		Size = UDim2.fromScale(0.7, 0.7),
@@ -168,39 +246,54 @@ function ShopUI.init()
 	})
 	close.Activated:Connect(ShopUI.toggle)
 
-	local hint = UI.label({
-		Text = "Bigger bottles hold more charges before you need to sell.",
+	hint = UI.label({
+		Text = "",
 		TextColor3 = COLORS.subtext,
-		Position = UDim2.fromScale(0.05, 0.17),
-		Size = UDim2.fromScale(0.9, 0.06),
+		Position = UDim2.fromScale(0.05, 0.265),
+		Size = UDim2.fromScale(0.9, 0.055),
 		Parent = panel,
 	})
 	UI.maxText(hint, 18)
 
-	local list = UI.make(Instance.new("ScrollingFrame"), {
-		Name = "List",
-		Position = UDim2.fromScale(0.04, 0.25),
-		Size = UDim2.fromScale(0.92, 0.72),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollBarThickness = 6,
-		Parent = panel,
-	})
-	UI.make(Instance.new("UIListLayout"), {
-		Padding = UDim.new(0, 10),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = list,
-	})
-	UI.make(Instance.new("UIPadding"), {
-		PaddingTop = UDim.new(0, 4),
-		PaddingLeft = UDim.new(0, 4),
-		Parent = list,
-	})
+	local bottles = buildTab(
+		1,
+		"BOTTLES",
+		"Bigger bottles hold more charges before you need to sell.",
+		Net.get("BuyBottle"),
+		function(snapshot)
+			return snapshot.bottleTier
+		end
+	)
 	for tier, bottle in Config.BOTTLES do
-		buildRow(list, tier, bottle)
+		buildRow(bottles, tier, {
+			name = bottle.name,
+			price = bottle.price,
+			badge = tostring(bottle.capacity),
+			detail = `Holds {bottle.capacity} charges`,
+		})
 	end
+
+	local boots = buildTab(
+		2,
+		"BOOTS",
+		"Boots make you faster inside storm zones, so you reach bolts first.",
+		Net.get("BuyBoots"),
+		function(snapshot)
+			return snapshot.bootTier
+		end
+	)
+	for tier, def in Config.BOOTS do
+		buildRow(boots, tier, {
+			name = def.name,
+			price = def.price,
+			badge = `+{def.speedBonus}`,
+			detail = if def.speedBonus > 0
+				then `+{def.speedBonus} speed in storm zones`
+				else "Your starter pair",
+		})
+	end
+
+	selectTab(bottles)
 end
 
 function ShopUI.start()

@@ -8,6 +8,7 @@ export type Profile = {
 	volts: number,
 	totalVolts: number, -- lifetime earnings (for stats/leaderboards later)
 	bottleTier: number, -- index into Config.BOTTLES
+	bootTier: number, -- index into Config.BOOTS
 	chargeCount: number, -- charges in the bottle (limited by capacity)
 	chargeValue: number, -- Volts those charges sell for
 	researchers: { [string]: ResearcherSave }, -- hired researchers by role id
@@ -27,6 +28,7 @@ export type Snapshot = {
 	volts: number,
 	totalVolts: number,
 	bottleTier: number,
+	bootTier: number,
 	chargeCount: number,
 	chargeValue: number,
 	researchers: { [string]: ResearcherSave },
@@ -78,6 +80,13 @@ export type ResearcherDef = {
 export type BottleDef = {
 	name: string,
 	capacity: number,
+	price: number,
+}
+
+-- speedBonus: added to the walk speed inside storm zones only.
+export type BootsDef = {
+	name: string,
+	speedBonus: number,
 	price: number,
 }
 

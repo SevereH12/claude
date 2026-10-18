@@ -3,7 +3,7 @@
 -- The server creates them at startup; the client only waits for them.
 --
 -- Server -> client: StateSnapshot, StormState, StrikeWarning, StrikeLanded, Sold, Forecast
--- Client -> server: BuyBottle, HireResearcher, PostResearcher, DevCommand
+-- Client -> server: BuyBottle, BuyBoots, HireResearcher, PostResearcher, DevCommand
 
 export type RemoteName =
 	"StateSnapshot"
@@ -13,6 +13,7 @@ export type RemoteName =
 	| "Forecast"
 	| "Sold"
 	| "BuyBottle"
+	| "BuyBoots"
 	| "HireResearcher"
 	| "PostResearcher"
 	| "DevCommand"
@@ -25,6 +26,7 @@ local NAMES: { RemoteName } = {
 	"Forecast",
 	"Sold",
 	"BuyBottle",
+	"BuyBoots",
 	"HireResearcher",
 	"PostResearcher",
 	"DevCommand",

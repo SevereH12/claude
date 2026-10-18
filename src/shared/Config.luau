@@ -12,6 +12,17 @@ local BOTTLES: { Types.BottleDef } = {
 	{ name = "Storm Cell", capacity = 100, price = 8_000 },
 }
 
+-- In-zone walk speed is WALK_SPEED_IN_ZONE + speedBonus. Keep every tier
+-- below WALK_SPEED_OUTSIDE: boots only matter inside storm zones, where
+-- speed decides who reaches a bolt first.
+local BOOTS: { Types.BootsDef } = {
+	{ name = "Rain Boots", speedBonus = 0, price = 0 }, -- everyone starts with these
+	{ name = "Puddle Jumpers", speedBonus = 2, price = 300 },
+	{ name = "Squall Skippers", speedBonus = 3, price = 900 },
+	{ name = "Gale Striders", speedBonus = 4, price = 2_000 },
+	{ name = "Thunder Treads", speedBonus = 6, price = 10_000 },
+}
+
 local RESEARCHERS: { Types.ResearcherDef } = {
 	{
 		id = "Forecaster",
@@ -107,7 +118,8 @@ return table.freeze({
 	BALLOON_MAX_DISTANCE = 20,
 	STRIKE_INTERVAL_JITTER = 0.3, -- +/-30% randomness on strike timing
 
-	-- Movement: you move faster between zones so travel isn't a chore
+	-- Movement: you move faster between zones so travel isn't a chore.
+	-- Boots add their speedBonus inside zones only (see BOOTS).
 	WALK_SPEED_IN_ZONE = 16, -- Roblox default
 	WALK_SPEED_OUTSIDE = 30,
 
@@ -122,6 +134,7 @@ return table.freeze({
 
 	RESEARCHERS = table.freeze(RESEARCHERS),
 	BOTTLES = table.freeze(BOTTLES),
+	BOOTS = table.freeze(BOOTS),
 	ZONES = table.freeze(ZONES),
 
 	-- Placeholder sounds (built into Roblox). Swap for Creator Store sounds.

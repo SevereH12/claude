@@ -1,6 +1,6 @@
 --!strict
--- Bottle upgrades. BuyBottle is the only request a client can send, so it
--- gets the full treatment: rate limit, type/range checks, server prices.
+-- Bottle and boots upgrades. Both requests come from the client, so they
+-- get the full treatment: rate limit, type/range checks, server prices.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -41,8 +41,37 @@ local function onBuyBottle(player: Player, tier: unknown)
 	Sync.markDirty(player)
 end
 
+local function onBuyBoots(player: Player, tier: unknown)
+	if not RateLimit.allow(player, "BuyBoots", 3, 5) then
+		return
+	end
+	-- type and range: a whole number that is a real tier (rejects NaN/inf too)
+	if typeof(tier) ~= "number" or tier ~= math.floor(tier) then
+		return
+	end
+	if tier < 1 or tier > #Config.BOOTS then
+		return
+	end
+	local profile = PlayerData.get(player)
+	if not profile then
+		return
+	end
+	-- tiers are bought in order
+	if tier ~= profile.bootTier + 1 then
+		return
+	end
+	local boots = Config.BOOTS[tier]
+	if profile.volts < boots.price then -- price from the server's catalog
+		return
+	end
+	profile.volts -= boots.price
+	profile.bootTier = tier
+	Sync.markDirty(player)
+end
+
 function Shop.init()
 	Net.get("BuyBottle").OnServerEvent:Connect(onBuyBottle)
+	Net.get("BuyBoots").OnServerEvent:Connect(onBuyBoots)
 end
 
 return Shop
