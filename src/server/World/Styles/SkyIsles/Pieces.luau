@@ -73,29 +73,11 @@ local function spend(part: Instance, key: string, limit: number): boolean
 	return true
 end
 
--- Per-zone part budget: Zone.ground puts SkyPartBudget on each zone's
--- folder; dressing helpers (plants, rocks, crystals, posts) skip or shrink
--- once the folder holds that many parts, so every zone costs about the
--- same and many zones stack under the world's part cap.
-function Pieces.overBudget(parent: Instance): boolean
-	local folder: Instance? = parent
-	while folder and folder:GetAttribute("SkyPartBudget") == nil do
-		folder = folder.Parent
-		if folder and (folder:IsA("Model") or folder == game) then
-			folder = nil
-		end
-	end
-	if not folder then
-		return false
-	end
-	local limit = folder:GetAttribute("SkyPartBudget")
-	local count = 0
-	for _, d in folder:GetDescendants() do
-		if d:IsA("BasePart") then
-			count += 1
-		end
-	end
-	return type(limit) == "number" and count >= limit
+-- Dressing helpers (plants, rocks, crystals, posts) ask this before
+-- adding optional pieces. There's no part limit, so it's never over; the
+-- calls stay so a per-zone cap could come back here.
+function Pieces.overBudget(_parent: Instance): boolean
+	return false
 end
 
 local function merge(base: { [string]: any }, extra: { [string]: any }?): { [string]: any }

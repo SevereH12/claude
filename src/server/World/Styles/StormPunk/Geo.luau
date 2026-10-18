@@ -153,23 +153,20 @@ function Geo.zoneKey(zone: ZoneContext): string
 	return if def then def.id else `slot{zone.slot.index}`
 end
 
--- Part budget ---------------------------------------------------------------------
+-- Detail ---------------------------------------------------------------------------
 -- The ground is part-built, so its optional pieces (beach lobes, column
--- counts, polygon sides, scenery) are allocated here. A zone's ground detail
--- depends only on its own spiral index (zones 1-2 full, later zones leaner,
--- like a distance LOD), so adding a zone never changes an earlier zone's
--- ground or the props standing on it. The hub's scattered scenery thins
--- with the zone count instead. Sized so 7 zones + the teaser stay under the
--- 2,500-part cap (about 1,500 parts with 2 zones).
+-- counts, polygon sides, scenery) scale with a detail level from 0 (lean)
+-- to 1 (full). There's no part limit, so every zone and the hub scenery get
+-- full detail; only the teaser (a half-built placeholder) stays lean.
 
--- 1 (full) for zones 1-2, 0 (lean) from zone 3 on and for the teaser.
+-- 1 (full) for every zone, 0 (lean) for the teaser.
 function Geo.zoneDetail(zone: ZoneContext): number
-	return if not zone.isTeaser and zone.slot.index <= 2 then 1 else 0
+	return if zone.isTeaser then 0 else 1
 end
 
--- 1 with up to two zones, 0 at Geo.MAX_ZONES (hub scenery only).
-function Geo.worldDetail(ctx: Context): number
-	return math.clamp((Geo.MAX_ZONES - #ctx.zones) / (Geo.MAX_ZONES - 2), 0, 1)
+-- Hub scenery detail: always full.
+function Geo.worldDetail(_ctx: Context): number
+	return 1
 end
 
 -- A whole number from `low` (detail 0) to `high` (detail 1).

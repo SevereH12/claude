@@ -33,7 +33,6 @@ local LIFT = 0.2
 function Zone.ground(ctx: Context, zone: ZoneContext)
 	local def = zone.def
 	local theme = Themes.get(if def then def.theme else "Default")
-	Geo.markHub(ctx)
 	local look = if theme.fieldFor then theme.fieldFor(zone) else theme.field
 	Land.plateau(ctx, zone, theme.margins, theme.island, look)
 	theme.ground(ctx, zone)

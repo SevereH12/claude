@@ -84,7 +84,8 @@ Map rules: catch floors are flat and clear (nothing above floor + 0.3 inside
 a zone except its outer 2-stud band); in a Blocks style every catch floor is
 covered by `Map.Ground` parts whose top is exactly at floor height; selling
 is a position check against `SellArea` boxes; the spawn is outside every
-zone; stay under 2,500 parts.
+zone. There is no part limit (the user's decision): don't thin or cap
+detail to save parts; the build output still reports the count.
 
 ## Testing without Studio
 

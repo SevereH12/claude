@@ -294,7 +294,7 @@ if map and map:GetAttribute("Ground") == "Blocks" then
 	end
 end
 
--- teaser and budget ----------------------------------------------------------
+-- teaser and part count ----------------------------------------------------------
 local zoneArt = map and map:FindFirstChild("ZoneArt")
 local teaser = zoneArt and zoneArt:FindFirstChild("ComingSoon")
 if map then
@@ -306,7 +306,7 @@ for _, inst in world.workspace:GetDescendants() do
 		partCount += 1
 	end
 end
-check(partCount <= 2500, string.format("part budget: %d / 2500", partCount))
+-- no part limit (the user's call); the count is reported for reference
 print(string.format("parts: %d", partCount))
 
 print(string.format("%d passed, %d failed", passes, failures))

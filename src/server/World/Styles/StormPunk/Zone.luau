@@ -5,7 +5,7 @@
 -- the insulator arch gate, saddle ridges and the flush two-tone floor
 -- patterns. Everything is placed in the slot's own frame, so any position,
 -- rotation, size or height works. Props get full detail in every zone; the
--- ground's optional pieces follow Geo.zoneDetail so 7 zones fit the budget.
+-- ground's optional pieces follow Geo.zoneDetail (full for every zone).
 
 local ServerScriptService = game:GetService("ServerScriptService")
 

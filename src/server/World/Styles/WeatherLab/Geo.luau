@@ -115,11 +115,10 @@ function Geo.rimPoint(
 	return hw + near, 0
 end
 
--- Detail budget: 1 with up to two zones, thinning the scattered small
--- props (and widening border post spacing) as more zones are added, so a
--- growing world stays near its part budget.
-function Geo.detail(ctx: Context): number
-	return math.clamp(1 - 0.25 * (#ctx.zones - 2), 0.35, 1)
+-- Detail level for scattered props and border post spacing. Always full:
+-- there's no part limit, so more zones never thin the dressing.
+function Geo.detail(_ctx: Context): number
+	return 1
 end
 
 -- `n` scattered props scaled by the detail budget (at least one).
@@ -217,13 +216,12 @@ type Top = {
 }
 type State = {
 	registry: { [string]: { Top } },
-	hubParts: number?,
 }
 
 local function state(ctx: Context): State
 	local holder = ctx :: any
 	if not holder.weatherLab then
-		holder.weatherLab = { registry = {}, hubParts = nil }
+		holder.weatherLab = { registry = {} }
 	end
 	return holder.weatherLab :: State
 end
@@ -359,59 +357,12 @@ function Geo.seaward(
 end
 
 -- Part budget -------------------------------------------------------------------
--- The whole map stays under PART_CAP however many zones there are: the
--- hub (with its ground) is counted once, before the first zone, the
--- teaser keeps a fixed reserve and every zone gets an equal share of the
--- rest for its ground, island dressing, boardwalk, border and gate.
--- Themes build their hero landmark and essentials first and ask Geo.room
--- before each optional prop, so the 1st-2nd zones get full detail and
--- later zones a lighter dressing.
--- (2,450 keeps a two-zone world near 2,350 parts and any world under the
--- 2,500 hard cap until the essentials alone outgrow it, past ~6 zones)
-local PART_CAP = 2450
-local TEASER_RESERVE = 290
+-- There's no part limit, so every zone gets its full dressing. Themes still
+-- ask Geo.room before each optional prop, so a cap could come back here.
 
-local function countParts(root: Instance): number
-	local n = 0
-	for _, d in root:GetDescendants() do
-		if d:IsA("BasePart") then
-			n += 1
-		end
-	end
-	return n
-end
-
--- Call once before the first zone is built: remembers the hub's cost.
-function Geo.markHub(ctx: Context)
-	local st = state(ctx)
-	if st.hubParts == nil then
-		st.hubParts = countParts(ctx.map)
-	end
-end
-
--- Parts each zone may use (its ground, ZoneArt and connector).
-function Geo.allowance(ctx: Context): number
-	local hub = state(ctx).hubParts or 650
-	return math.floor((PART_CAP - TEASER_RESERVE - hub) / math.max(#ctx.zones, 1))
-end
-
-function Geo.used(ctx: Context, zone: ZoneContext): number
-	local n = countParts(zone.folder)
-	for _, holder in { ctx.folders.connectors, ctx.folders.ground } do
-		local folder = holder:FindFirstChild(zone.folder.Name)
-		if folder then
-			n += countParts(folder)
-		end
-	end
-	return n
-end
-
--- Is there budget left in this zone for `cost` more parts?
-function Geo.room(ctx: Context, zone: ZoneContext, cost: number): boolean
-	if zone.isTeaser then
-		return true
-	end
-	return Geo.used(ctx, zone) + cost <= Geo.allowance(ctx)
+-- Is there room in this zone for `cost` more parts? Always, with no limit.
+function Geo.room(_ctx: Context, _zone: ZoneContext, _cost: number): boolean
+	return true
 end
 
 -- Neighbours -----------------------------------------------------------------------

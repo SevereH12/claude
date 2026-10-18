@@ -29,7 +29,6 @@ local SOIL = 6 -- soil band under the plateau cap
 local GATE_HALF = 7 -- gate pillars sit this far either side of the bridge
 local BRIDGE_WIDTH = 10
 local BRIDGE_LIFT = 0.2 -- bridge decks sit this far above the ground they land on
-local ZONE_PARTS = 150 -- per-zone part budget for field, border, gate and dressing (not ground)
 
 local Zone = {}
 
@@ -332,7 +331,6 @@ function Zone.ground(ctx: Context, zone: ZoneContext, spec: ThemeSpec): Land
 	local rng = ctx.rng
 	local land = Zone.newLand(ctx, zone, spec)
 	local tones = Zone.tones(spec)
-	zone.folder:SetAttribute("SkyPartBudget", ZONE_PARTS)
 
 	-- the plateau: a light cap over a soil band, its top exactly at the
 	-- floor across the whole footprint (the catch floor) and the rim

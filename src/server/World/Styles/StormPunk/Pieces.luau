@@ -4,8 +4,8 @@
 -- primitives, so all the world's modules share one look. Positions are
 -- world space; "bottom" is the point a piece stands on.
 --
--- Part budget: pieces are designed chunky and cheap (a border post is 2-3
--- parts, a lamp 2, a palm 9, a framed sign 2) so 7 zones fit in 2,500.
+-- Pieces are designed chunky and cheap (a border post is 2-3 parts, a
+-- lamp 2, a palm 9, a framed sign 2).
 
 local ServerScriptService = game:GetService("ServerScriptService")
 
