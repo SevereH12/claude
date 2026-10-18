@@ -24,6 +24,7 @@ local ROOT_HEIGHT = 3
 
 local random = Random.new()
 local nextStrikeId = 0
+local balloonInFlight: { [number]: boolean } = {} -- owner UserId -> has a bolt coming
 
 local warningRemote: RemoteEvent
 local landedRemote: RemoteEvent
@@ -32,8 +33,14 @@ local forecastRemote: RemoteEvent
 local Strikes = {}
 
 -- Random point on the ground inside the zone, kept far enough from the
--- border that the whole circle fits inside it.
-local function randomGroundPoint(zonePart: BasePart): Vector3?
+-- border that the whole circle fits inside it. With a centre, the point is
+-- minDistance to maxDistance studs from it instead (Storm Chaser balloon).
+local function randomGroundPoint(
+	zonePart: BasePart,
+	centre: Vector3?,
+	minDistance: number?,
+	maxDistance: number?
+): Vector3?
 	local inset = Config.STRIKE_RADIUS + 2
 	local halfX = math.max(zonePart.Size.X / 2 - inset, 0)
 	local halfZ = math.max(zonePart.Size.Z / 2 - inset, 0)
@@ -42,6 +49,17 @@ local function randomGroundPoint(zonePart: BasePart): Vector3?
 		zonePart.Size.Y / 2,
 		random:NextNumber(-halfZ, halfZ)
 	)
+	if centre and minDistance and maxDistance then
+		local angle = random:NextNumber(0, math.pi * 2)
+		local distance = random:NextNumber(minDistance, maxDistance)
+		local localPoint = zonePart.CFrame:PointToObjectSpace(
+			centre + Vector3.new(math.cos(angle), 0, math.sin(angle)) * distance
+		)
+		if math.abs(localPoint.X) > halfX or math.abs(localPoint.Z) > halfZ then
+			return nil
+		end
+		offset = Vector3.new(localPoint.X, zonePart.Size.Y / 2, localPoint.Z)
+	end
 	local top = zonePart.CFrame:PointToWorldSpace(offset)
 
 	-- the ground is Map.Ground parts or terrain; ignore everything else
@@ -87,26 +105,40 @@ local function distanceInside(root: BasePart, position: Vector3, radius: number)
 	return if distance <= radius then distance else nil
 end
 
-local function resolve(zone: Types.ZoneDef, id: number, position: Vector3)
+local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, ownerId: number?)
 	local catchers: { number } = {}
 	local full: { number } = {}
 	local assayed: { number } = {}
+	local tanked: { number } = {}
 
-	-- everyone inside with room in their bottle, closest first
-	local candidates: { { player: Player, profile: Types.Profile, distance: number } } = {}
+	-- everyone inside with room in their bottle (or their Chemist's tank),
+	-- closest first
+	local candidates: { { player: Player, profile: Types.Profile, distance: number, toTank: boolean } } =
+		{}
 	for _, player in Players:GetPlayers() do
+		if ownerId and player.UserId ~= ownerId then
+			continue
+		end
 		local root = catchingRoot(player)
 		local profile = PlayerData.get(player)
 		local radius = ResearchMath.catchRadius(Research.active(player, "RodTech"))
 		local distance = if root then distanceInside(root, position, radius) else nil
 		if profile and distance then
-			if Formulas.isFull(profile) then
-				table.insert(full, player.UserId)
-			else
+			local chemist = Research.active(player, "Chemist")
+			local tankRoom = chemist ~= nil
+				and profile.tankCount < ResearchMath.tankCapacity(chemist)
+			if not Formulas.isFull(profile) then
 				table.insert(
 					candidates,
-					{ player = player, profile = profile, distance = distance }
+					{ player = player, profile = profile, distance = distance, toTank = false }
 				)
+			elseif tankRoom then
+				table.insert(
+					candidates,
+					{ player = player, profile = profile, distance = distance, toTank = true }
+				)
+			else
+				table.insert(full, player.UserId)
 			end
 		end
 	end
@@ -118,15 +150,21 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3)
 		if zone.mode == "Single" and index > 1 then
 			break
 		end
-		candidate.profile.chargeCount += 1
 		local value = zone.chargeValue
 		local assayLevel = Research.active(candidate.player, "Analyst")
 		if assayLevel and random:NextNumber() < ResearchMath.assayChance(assayLevel) then
 			value *= 2
 			table.insert(assayed, candidate.player.UserId)
 		end
-		candidate.profile.chargeValue += value
-		table.insert(catchers, candidate.player.UserId)
+		if candidate.toTank then
+			candidate.profile.tankCount += 1
+			candidate.profile.tankValue += value
+			table.insert(tanked, candidate.player.UserId)
+		else
+			candidate.profile.chargeCount += 1
+			candidate.profile.chargeValue += value
+			table.insert(catchers, candidate.player.UserId)
+		end
 		Sync.markDirty(candidate.player)
 	end
 
@@ -138,21 +176,29 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3)
 		catchers = catchers,
 		full = full,
 		assayed = assayed,
+		tanked = tanked,
+		ownerId = ownerId,
 	}
+	if ownerId then
+		balloonInFlight[ownerId] = nil
+	end
 	landedRemote:FireAllClients(landed)
-	Research.onStrikeLanded(zone.id, catchers)
+	local watchers = table.clone(catchers)
+	table.move(tanked, 1, #tanked, #watchers + 1, watchers)
+	Research.onStrikeLanded(zone.id, watchers)
 end
 
-local function publicWarning(zone: Types.ZoneDef, id: number, position: Vector3)
+local function publicWarning(zone: Types.ZoneDef, id: number, position: Vector3, ownerId: number?)
 	local warning: Types.StrikeWarning = {
 		id = id,
 		zoneId = zone.id,
 		position = position,
 		radius = Config.STRIKE_RADIUS,
 		landsAt = workspace:GetServerTimeNow() + Config.WARNING_TIME,
+		ownerId = ownerId,
 	}
 	warningRemote:FireAllClients(warning)
-	task.delay(Config.WARNING_TIME, resolve, zone, id, position)
+	task.delay(Config.WARNING_TIME, resolve, zone, id, position, ownerId)
 end
 
 -- The position is picked now. The public warning goes out FORECAST_MAX_LEAD
@@ -189,6 +235,34 @@ local function spawnStrike(zone: Types.ZoneDef, zonePart: BasePart)
 	task.delay(Config.FORECAST_MAX_LEAD, publicWarning, zone, id, position)
 end
 
+-- Storm Chaser's weather balloon: a bolt 12 to 20 studs from the player that
+-- only they can catch. Returns false if there was no room for one or the
+-- player already has one coming. Zone pacing is untouched.
+function Strikes.spawnFor(player: Player): boolean
+	if balloonInFlight[player.UserId] then
+		return false
+	end
+	local root = catchingRoot(player)
+	local zone = if root then Zones.at(root.Position) else nil
+	local zonePart = if zone then Zones.part(zone.id) else nil
+	if not root or not zone or not zonePart then
+		return false
+	end
+	local position = randomGroundPoint(
+		zonePart,
+		root.Position,
+		Config.BALLOON_MIN_DISTANCE,
+		Config.BALLOON_MAX_DISTANCE
+	)
+	if not position then
+		return false
+	end
+	nextStrikeId += 1
+	balloonInFlight[player.UserId] = true
+	publicWarning(zone, nextStrikeId, position, player.UserId)
+	return true
+end
+
 local function runZone(zone: Types.ZoneDef)
 	local zonePart = Zones.part(zone.id)
 	if not zonePart then
@@ -210,6 +284,9 @@ function Strikes.init()
 	warningRemote = Net.get("StrikeWarning")
 	landedRemote = Net.get("StrikeLanded")
 	forecastRemote = Net.get("Forecast")
+	Players.PlayerRemoving:Connect(function(player)
+		balloonInFlight[player.UserId] = nil
+	end)
 end
 
 function Strikes.start()

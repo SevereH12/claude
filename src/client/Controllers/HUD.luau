@@ -15,6 +15,7 @@ local TweenService = game:GetService("TweenService")
 
 local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
+local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local Types = require(ReplicatedStorage.Shared.Types)
 local UI = require(script.Parent.Parent.Lib.UI)
 local ResearchUI = require(script.Parent.ResearchUI)
@@ -36,6 +37,7 @@ local bottleFill: Frame
 local fillGradient: UIGradient
 local bottleLabel: TextLabel
 local bottleValue: TextLabel
+local tankLabel: TextLabel
 local displayedVolts: NumberValue
 local fullPulse: Tween?
 local lastChargeCount = -1
@@ -237,6 +239,20 @@ local function buildBottleBar()
 	})
 	UI.gradient(bottleValue, COLORS.volt, COLORS.voltDeep)
 	UI.maxText(bottleValue, 24)
+
+	-- your Chemist's overflow tank, beside the bar
+	tankLabel = UI.label({
+		Title = true,
+		Name = "Tank",
+		Text = "",
+		Visible = false,
+		TextColor3 = COLORS.volt,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.new(1, 10, 0.1, 0),
+		Size = UDim2.fromScale(0.3, 0.8),
+		Parent = bottleBar,
+	})
+	UI.maxText(tankLabel, 20)
 end
 
 local function renderStorm()
@@ -286,6 +302,13 @@ local function render(snapshot: Types.Snapshot)
 		then "FULL! SELL AT THE POWER PLANT"
 		else `{string.upper(bottle.name)}  {snapshot.chargeCount} / {bottle.capacity}`
 	bottleValue.Text = if full then "" else `{Format.abbreviate(snapshot.chargeValue)} ⚡`
+
+	local chemist = snapshot.researchers.Chemist
+	tankLabel.Visible = chemist ~= nil
+	if chemist then
+		local capacity = ResearchMath.tankCapacity(chemist.level)
+		tankLabel.Text = `TANK {snapshot.tankCount}/{capacity}`
+	end
 
 	if snapshot.chargeCount > lastChargeCount and lastChargeCount >= 0 then
 		UI.pop(bottleBar, 1.08)

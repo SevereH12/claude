@@ -15,9 +15,15 @@ local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local ResearchSites = require(ReplicatedStorage.Shared.Util.ResearchSites)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
+local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local PlayerData = require(script.Parent.PlayerData)
+local StormCycle = require(script.Parent.StormCycle)
 local Sync = require(script.Parent.Sync)
 local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
+
+local CHECK_INTERVAL = 0.15
+
+local balloonAt: { [Player]: number } = {} -- os.clock() when the next balloon bolt is due
 
 local Research = {}
 
@@ -173,7 +179,76 @@ function Research.onStrikeLanded(zoneId: string, catchers: { number })
 	end
 end
 
+-- Chemist: standing at the camp of the zone she is posted to, with room in
+-- your bottle, empties her tank into it. A position check like Selling's.
+local function emptyTank(player: Player, profile: Types.Profile)
+	local save = profile.researchers.Chemist
+	if not save or save.post == "Office" or profile.tankCount <= 0 then
+		return
+	end
+	local readyAt = (Sync.setupUntil[player] or {}).Chemist
+	if readyAt and workspace:GetServerTimeNow() < readyAt then
+		return
+	end
+	local root = liveRoot(player)
+	if not root or ResearchSites.campAt(root.Position) ~= save.post then
+		return
+	end
+	local room = Formulas.capacity(profile.bottleTier) - profile.chargeCount
+	if room <= 0 then
+		return
+	end
+	local moved = math.min(room, profile.tankCount)
+	local value = profile.tankValue * moved / profile.tankCount
+	profile.chargeCount += moved
+	profile.chargeValue += value
+	profile.tankCount -= moved
+	profile.tankValue = if profile.tankCount == 0 then 0 else profile.tankValue - value
+	Sync.markDirty(player)
+end
+
+-- Storm Chaser: while active during a storm, a balloon bolt every N seconds.
+local function balloonTick(player: Player, now: number)
+	local level = Research.active(player, "StormChaser")
+	if not level or not StormCycle.isStorming() then
+		balloonAt[player] = nil
+		return
+	end
+	local dueAt = balloonAt[player]
+	if not dueAt then
+		balloonAt[player] = now + ResearchMath.balloonInterval(level)
+		return
+	end
+	if now < dueAt then
+		return
+	end
+	-- required here: Strikes requires this module
+	local Strikes = require(script.Parent.Strikes)
+	if Strikes.spawnFor(player) then
+		balloonAt[player] = now + ResearchMath.balloonInterval(level)
+	else
+		balloonAt[player] = now + 1 -- no room or one still in flight; try again soon
+	end
+end
+
+function Research.start()
+	while true do
+		task.wait(CHECK_INTERVAL)
+		local now = os.clock()
+		for _, player in Players:GetPlayers() do
+			local profile = PlayerData.get(player)
+			if profile then
+				emptyTank(player, profile)
+				balloonTick(player, now)
+			end
+		end
+	end
+end
+
 function Research.init()
+	Players.PlayerRemoving:Connect(function(player)
+		balloonAt[player] = nil
+	end)
 	Net.get("HireResearcher").OnServerEvent:Connect(onHire)
 	Net.get("PostResearcher").OnServerEvent:Connect(onPost)
 	PlayerData.Loaded:Connect(onLoaded)

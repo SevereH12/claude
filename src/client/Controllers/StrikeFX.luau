@@ -36,6 +36,7 @@ local BOLT_SEGMENTS = 9
 local FLASH_DISTANCE = 220 -- strikes closer than this light up your screen
 local FULL_MESSAGE_COOLDOWN = 3
 local FORECAST_DASHES = 24
+local BALLOON_MUTED = Color3.fromRGB(120, 124, 130)
 
 local FADE = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local SLOW_FADE = TweenInfo.new(4, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
@@ -411,6 +412,9 @@ local function onWarning(warning: Types.StrikeWarning)
 	end
 	local zone = Config.ZONES[warning.zoneId]
 	local color = if zone then zone.color else UI.COLORS.volt
+	if warning.ownerId and warning.ownerId ~= player.UserId then
+		color = BALLOON_MUTED -- someone else's balloon bolt
+	end
 	local lifetime = timeLeft + 2 -- safety net if the landed event never arrives
 	clearForecast(warning.id)
 
@@ -497,6 +501,9 @@ local function onLanded(landed: Types.StrikeLanded)
 		if table.find(landed.assayed, player.UserId) then
 			popup("x2 ASSAYED", true, 0.5, 0.06)
 		end
+	elseif table.find(landed.tanked, player.UserId) then
+		popup("+1 → TANK", true, 0.42, 0.06)
+		playSound(Config.SOUNDS.CATCH, screenGui, 0.9)
 	elseif table.find(landed.full, player.UserId) then
 		local now = os.clock()
 		if now - lastFullMessage > FULL_MESSAGE_COOLDOWN then

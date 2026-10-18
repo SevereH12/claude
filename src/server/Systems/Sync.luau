@@ -32,6 +32,8 @@ local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapsho
 		chargeCount = profile.chargeCount,
 		chargeValue = profile.chargeValue,
 		researchers = profile.researchers,
+		tankCount = profile.tankCount,
+		tankValue = profile.tankValue,
 		setupUntil = Sync.setupUntil[player] or {},
 	}
 end

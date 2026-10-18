@@ -55,6 +55,16 @@ function Research.forecastLead(level: number): number
 	return math.min(Research.perkValue("Forecaster", level), Config.FORECAST_MAX_LEAD)
 end
 
+-- Charges the Chemist's tank holds at this level.
+function Research.tankCapacity(level: number): number
+	return Research.perkValue("Chemist", level)
+end
+
+-- Seconds between weather balloon bolts for a Storm Chaser at this level.
+function Research.balloonInterval(level: number): number
+	return Research.perkValue("StormChaser", level)
+end
+
 -- Chance (0 to 1) that a charge is high grade for an Analyst at this level.
 function Research.assayChance(level: number): number
 	return Research.perkValue("Analyst", level) / 100

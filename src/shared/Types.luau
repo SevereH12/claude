@@ -30,6 +30,8 @@ export type Snapshot = {
 	chargeCount: number,
 	chargeValue: number,
 	researchers: { [string]: ResearcherSave },
+	tankCount: number,
+	tankValue: number,
 	setupUntil: { [string]: number }, -- role id -> workspace:GetServerTimeNow() when set up
 }
 
@@ -86,6 +88,7 @@ export type StrikeWarning = {
 	position: Vector3,
 	radius: number,
 	landsAt: number, -- workspace:GetServerTimeNow() time
+	ownerId: number?, -- Storm Chaser balloon bolt: only this UserId can catch it
 }
 
 -- Server -> one client (a Forecaster's owner): the next strike's ring, early.
@@ -108,6 +111,8 @@ export type StrikeLanded = {
 	catchers: { number },
 	full: { number },
 	assayed: { number }, -- catchers whose charge was high grade (worth double)
+	tanked: { number }, -- full players whose charge went into their Chemist's tank
+	ownerId: number?, -- Storm Chaser balloon bolt: only this UserId could catch it
 }
 
 return nil
