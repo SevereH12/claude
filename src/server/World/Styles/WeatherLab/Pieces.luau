@@ -167,7 +167,8 @@ end
 
 -- Light helpers --------------------------------------------------------------------
 
--- A small lantern hanging at `position`: navy cage, warm glowing core, light.
+-- A small lantern hanging at `position`: navy cage, warm glowing core and a
+-- real light (pass withLight = false for an unlit one).
 function Pieces.lantern(
 	parent: Instance,
 	position: Vector3,
@@ -188,7 +189,7 @@ function Pieces.lantern(
 		Pieces.box(parent, CFrame.new(position), Vector3.new(0.9, 1.3, 0.9), glowColor),
 		glowColor
 	)
-	if withLight == true then
+	if withLight ~= false then
 		Kit.light(core, color or Palette.lamp, range or 18, 1.4)
 	end
 	return core

@@ -51,27 +51,7 @@ export type BridgeOptions = {
 local C = Palette.C
 local UP = Vector3.yAxis
 
--- Performance budgets for the whole world.
-local MAX_LIGHTS = 86
-local MAX_EMITTERS = 24
-
 local Pieces = {}
-
--- Spends one unit of a per-world budget, counted on the Map folder so the
--- count is shared by every module and resets with each new map.
-local function spend(part: Instance, key: string, limit: number): boolean
-	local map = part:FindFirstAncestor("Map")
-	if not map then
-		return true
-	end
-	local used = map:GetAttribute(key)
-	local count = if type(used) == "number" then used else 0
-	if count >= limit then
-		return false
-	end
-	map:SetAttribute(key, count + 1)
-	return true
-end
 
 -- Dressing helpers (plants, rocks, crystals, posts) ask this before
 -- adding optional pieces. There's no part limit, so it's never over; the
@@ -281,7 +261,7 @@ function Pieces.diamond(
 	)
 end
 
--- Lights and particles (budgeted) ---------------------------------------------
+-- Lights and particles ------------------------------------------------
 
 function Pieces.light(
 	part: BasePart,
@@ -289,10 +269,7 @@ function Pieces.light(
 	range: number,
 	brightness: number?,
 	shadows: boolean?
-): PointLight?
-	if not spend(part, "SkyLights", MAX_LIGHTS) then
-		return nil
-	end
+): PointLight
 	local light = Kit.light(part, color, range, brightness or 1, shadows)
 	-- crystals and rune glows swell during storms
 	light:AddTag(Pieces.STORM_GLOW)
@@ -306,17 +283,11 @@ function Pieces.spot(
 	brightness: number,
 	angle: number,
 	face: Enum.NormalId
-): SpotLight?
-	if not spend(part, "SkyLights", MAX_LIGHTS) then
-		return nil
-	end
+): SpotLight
 	return Kit.spotLight(part, color, range, brightness, angle, face)
 end
 
-function Pieces.emitter(part: BasePart, props: { [string]: any }): ParticleEmitter?
-	if not spend(part, "SkyEmitters", MAX_EMITTERS) then
-		return nil
-	end
+function Pieces.emitter(part: BasePart, props: { [string]: any }): ParticleEmitter
 	return Kit.emitter(part, props)
 end
 
@@ -343,8 +314,6 @@ end
 
 -- Beams ------------------------------------------------------------------------
 
-local MAX_BEAMS = 248
-
 local function aim(a: Attachment, axis: Vector3?)
 	local direction = axis or Vector3.new(0, -1, 0)
 	a.Axis = direction
@@ -353,11 +322,8 @@ end
 
 -- A beam between two world points with full control over its look. Built
 -- with Kit.cable, then given the style's extras (gradients, textures,
--- curve directions). Beams are budgeted per world; returns nil past it.
-function Pieces.beam(ctx: Context, a: Vector3, b: Vector3, props: BeamProps): Beam?
-	if not spend(ctx.cableAnchor, "SkyBeams", MAX_BEAMS) then
-		return nil
-	end
+-- curve directions).
+function Pieces.beam(ctx: Context, a: Vector3, b: Vector3, props: BeamProps): Beam
 	local glow = props.glow or 0
 	local t0 = props.transparency or 0
 	local beam = Kit.cable(ctx, a, b, {
