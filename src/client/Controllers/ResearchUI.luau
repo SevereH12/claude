@@ -14,6 +14,7 @@ local Net = require(ReplicatedStorage.Shared.Net)
 local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local ResearchSites = require(ReplicatedStorage.Shared.Util.ResearchSites)
 local Types = require(ReplicatedStorage.Shared.Types)
+local ResearcherModels = require(script.Parent.Parent.Lib.ResearcherModels)
 local UI = require(script.Parent.Parent.Lib.UI)
 local State = require(script.Parent.State)
 
@@ -166,14 +167,39 @@ local function buildCard(list: Instance, index: number, def: Types.ResearcherDef
 		Size = UDim2.fromScale(0.22, 1),
 	}, 24)
 
-	local now = text(row(2, 20), {
+	-- portrait on the left, perk and next-level text beside it
+	local portraitRow = row(2, 64)
+	local portrait = UI.make(Instance.new("ViewportFrame"), {
+		Size = UDim2.fromOffset(64, 64),
+		BackgroundColor3 = COLORS.stroke,
+		BackgroundTransparency = 0.4,
+		Ambient = Color3.fromRGB(190, 190, 200),
+		LightColor = Color3.fromRGB(255, 250, 235),
+		Parent = portraitRow,
+	})
+	UI.corner(portrait, UDim.new(0, 8))
+	local model = ResearcherModels.build(def.id)
+	model.Parent = portrait
+	local camera = Instance.new("Camera")
+	local box, extent = model:GetBoundingBox()
+	local fov = 35
+	local reach = math.max(extent.X, extent.Y) / (2 * math.tan(math.rad(fov / 2)))
+	camera.FieldOfView = fov
+	camera.CFrame =
+		CFrame.lookAt(box.Position + Vector3.new(0, 0, -(reach * 1.1 + extent.Z / 2)), box.Position)
+	camera.Parent = portrait
+	portrait.CurrentCamera = camera
+
+	local now = text(portraitRow, {
 		Text = "",
-		Size = UDim2.fromScale(1, 1),
+		Position = UDim2.new(0, 72, 0, 0),
+		Size = UDim2.new(1, -72, 0.55, 0),
 	}, 16)
-	local next = text(row(3, 18), {
+	local next = text(portraitRow, {
 		Text = "",
 		TextColor3 = COLORS.subtext,
-		Size = UDim2.fromScale(1, 1),
+		Position = UDim2.new(0, 72, 0.55, 0),
+		Size = UDim2.new(1, -72, 0.45, 0),
 	}, 14)
 
 	local bar = row(4, 18)

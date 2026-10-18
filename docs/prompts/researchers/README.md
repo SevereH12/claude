@@ -34,7 +34,7 @@ Each part ticks its own box when it's done.
 - [x] Part 2: hiring, posting, levels and the Research panel (`part-2-hiring.md`)
 - [x] Part 3: perks I, Forecaster, Rod Tech and Analyst (`part-3-perks-1.md`)
 - [x] Part 4: perks II, Chemist and Storm Chaser (`part-4-perks-2.md`)
-- [ ] Part 5: the researchers you can see (`part-5-models.md`)
+- [x] Part 5: the researchers you can see (`part-5-models.md`)
 
 ## Rules for every part (keep token use low)
 
