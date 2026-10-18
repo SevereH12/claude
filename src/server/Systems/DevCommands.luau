@@ -1,21 +1,22 @@
 --!strict
--- Test commands for the game's owner, typed in chat. Roblox never shows a
--- chat command's message to anyone, and this one is hidden from the "/"
--- autocomplete list. The repo is public, so the name isn't the lock: the
--- command only works in Studio play tests or, in a live server, for the
--- user who owns the place.
+-- Test commands for the game's owner. The client recognises the secret chat
+-- command (Controllers/DevCommands) and sends DevCommand; everything is
+-- decided here. The repo and the client code are public, so the command
+-- name isn't the lock: it only works in Studio play tests or, in a live
+-- server, for the user who owns the place.
 --
 --   /v2eon6gx4y        set your Volts to 1 trillion (as good as infinite)
 --   /v2eon6gx4y <n>    set your Volts to n (/v2eon6gx4y 0 resets them)
 
-local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local TextChatService = game:GetService("TextChatService")
+local ServerScriptService = game:GetService("ServerScriptService")
 
+local Net = require(ReplicatedStorage.Shared.Net)
 local PlayerData = require(script.Parent.PlayerData)
 local Sync = require(script.Parent.Sync)
+local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
 
-local VOLTS_COMMAND = "/v2eon6gx4y"
 local INFINITE_VOLTS = 1e12
 
 local DevCommands = {}
@@ -28,40 +29,36 @@ local function isOwner(player: Player): boolean
 	return game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId
 end
 
-local function setVolts(source: TextSource, text: string)
-	local player = Players:GetPlayerByUserId(source.UserId)
-	if not player or not isOwner(player) then
+local function onCommand(player: Player, name: unknown, amount: unknown)
+	if not RateLimit.allow(player, "DevCommand", 2, 4) then
 		return
+	end
+	if name ~= "volts" or not isOwner(player) then
+		return
+	end
+	local volts = INFINITE_VOLTS
+	if amount ~= nil then
+		if
+			typeof(amount) ~= "number"
+			or amount ~= amount
+			or amount < 0
+			or amount > INFINITE_VOLTS
+		then
+			return
+		end
+		volts = math.floor(amount)
 	end
 	local profile = PlayerData.get(player)
 	if not profile then
 		return
 	end
-	local amount = INFINITE_VOLTS
-	local arg = string.match(text, "^%S+%s+(%S+)")
-	if arg then
-		local n = tonumber(arg)
-		if not n or n ~= n or n < 0 or n > INFINITE_VOLTS then
-			return
-		end
-		amount = math.floor(n)
-	end
-	profile.volts = amount
+	profile.volts = volts
 	Sync.markDirty(player)
-	print(`[DevCommands] {player.Name} set Volts to {amount}`)
+	print(`[DevCommands] {player.Name} set Volts to {volts}`)
 end
 
 function DevCommands.init()
-	if TextChatService.ChatVersion ~= Enum.ChatVersion.TextChatService then
-		warn("[DevCommands] chat commands need TextChatService (Chat > ChatVersion)")
-		return
-	end
-	local command = Instance.new("TextChatCommand")
-	command.Name = "DevVolts"
-	command.PrimaryAlias = VOLTS_COMMAND
-	command.AutocompleteVisible = false
-	command.Triggered:Connect(setVolts)
-	command.Parent = TextChatService
+	Net.get("DevCommand").OnServerEvent:Connect(onCommand)
 end
 
 return DevCommands
