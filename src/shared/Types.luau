@@ -88,6 +88,16 @@ export type StrikeWarning = {
 	landsAt: number, -- workspace:GetServerTimeNow() time
 }
 
+-- Server -> one client (a Forecaster's owner): the next strike's ring, early.
+-- The public StrikeWarning for the same position goes out at warnsAt.
+export type Forecast = {
+	id: number,
+	zoneId: string,
+	position: Vector3,
+	radius: number,
+	warnsAt: number, -- workspace:GetServerTimeNow() time of the public warning
+}
+
 -- Server -> all clients: the bolt landed. Lists who caught it (UserIds) and
 -- who was inside but had a full bottle.
 export type StrikeLanded = {
@@ -97,6 +107,7 @@ export type StrikeLanded = {
 	value: number,
 	catchers: { number },
 	full: { number },
+	assayed: { number }, -- catchers whose charge was high grade (worth double)
 }
 
 return nil

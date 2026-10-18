@@ -102,6 +102,7 @@ return table.freeze({
 	WARNING_TIME = 1.5, -- seconds between the warning circle and the bolt
 	STRIKE_RADIUS = 8, -- studs; stand within this of the centre to catch
 	STRIKE_MAX_HEIGHT_ABOVE = 8, -- studs; you can catch mid-jump, but not from below a cliff
+	FORECAST_MAX_LEAD = 1.2, -- seconds; the top Forecaster perk value. Public warnings wait this long
 	STRIKE_INTERVAL_JITTER = 0.3, -- +/-30% randomness on strike timing
 
 	-- Movement: you move faster between zones so travel isn't a chore

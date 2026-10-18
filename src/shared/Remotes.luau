@@ -2,7 +2,7 @@
 -- The full list of RemoteEvents. Adding a remote = adding a name here.
 -- The server creates them at startup; the client only waits for them.
 --
--- Server -> client: StateSnapshot, StormState, StrikeWarning, StrikeLanded, Sold
+-- Server -> client: StateSnapshot, StormState, StrikeWarning, StrikeLanded, Sold, Forecast
 -- Client -> server: BuyBottle, HireResearcher, PostResearcher
 
 export type RemoteName =
@@ -10,6 +10,7 @@ export type RemoteName =
 	| "StormState"
 	| "StrikeWarning"
 	| "StrikeLanded"
+	| "Forecast"
 	| "Sold"
 	| "BuyBottle"
 	| "HireResearcher"
@@ -20,6 +21,7 @@ local NAMES: { RemoteName } = {
 	"StormState",
 	"StrikeWarning",
 	"StrikeLanded",
+	"Forecast",
 	"Sold",
 	"BuyBottle",
 	"HireResearcher",

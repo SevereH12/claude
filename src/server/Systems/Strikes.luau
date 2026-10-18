@@ -14,6 +14,7 @@ local Net = require(ReplicatedStorage.Shared.Net)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
 local Research = require(script.Parent.Research)
+local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local PlayerData = require(script.Parent.PlayerData)
 local StormCycle = require(script.Parent.StormCycle)
 local Sync = require(script.Parent.Sync)
@@ -26,6 +27,7 @@ local nextStrikeId = 0
 
 local warningRemote: RemoteEvent
 local landedRemote: RemoteEvent
+local forecastRemote: RemoteEvent
 
 local Strikes = {}
 
@@ -73,27 +75,30 @@ local function catchingRoot(player: Player): BasePart?
 	return if root and root:IsA("BasePart") then root else nil
 end
 
--- Horizontal distance to the strike, or nil if the player isn't inside it.
-local function distanceInside(root: BasePart, position: Vector3): number?
+-- Horizontal distance to the strike, or nil if the player isn't inside their
+-- own catch radius (bigger with Rod Tech).
+local function distanceInside(root: BasePart, position: Vector3, radius: number): number?
 	local heightAboveGround = root.Position.Y - ROOT_HEIGHT - position.Y
 	if heightAboveGround < -3 or heightAboveGround > Config.STRIKE_MAX_HEIGHT_ABOVE then
 		return nil
 	end
 	local flat = Vector3.new(root.Position.X - position.X, 0, root.Position.Z - position.Z)
 	local distance = flat.Magnitude
-	return if distance <= Config.STRIKE_RADIUS then distance else nil
+	return if distance <= radius then distance else nil
 end
 
 local function resolve(zone: Types.ZoneDef, id: number, position: Vector3)
 	local catchers: { number } = {}
 	local full: { number } = {}
+	local assayed: { number } = {}
 
 	-- everyone inside with room in their bottle, closest first
 	local candidates: { { player: Player, profile: Types.Profile, distance: number } } = {}
 	for _, player in Players:GetPlayers() do
 		local root = catchingRoot(player)
 		local profile = PlayerData.get(player)
-		local distance = if root then distanceInside(root, position) else nil
+		local radius = ResearchMath.catchRadius(Research.active(player, "RodTech"))
+		local distance = if root then distanceInside(root, position, radius) else nil
 		if profile and distance then
 			if Formulas.isFull(profile) then
 				table.insert(full, player.UserId)
@@ -114,7 +119,13 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3)
 			break
 		end
 		candidate.profile.chargeCount += 1
-		candidate.profile.chargeValue += zone.chargeValue
+		local value = zone.chargeValue
+		local assayLevel = Research.active(candidate.player, "Analyst")
+		if assayLevel and random:NextNumber() < ResearchMath.assayChance(assayLevel) then
+			value *= 2
+			table.insert(assayed, candidate.player.UserId)
+		end
+		candidate.profile.chargeValue += value
 		table.insert(catchers, candidate.player.UserId)
 		Sync.markDirty(candidate.player)
 	end
@@ -126,19 +137,13 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3)
 		value = zone.chargeValue,
 		catchers = catchers,
 		full = full,
+		assayed = assayed,
 	}
 	landedRemote:FireAllClients(landed)
 	Research.onStrikeLanded(zone.id, catchers)
 end
 
-local function spawnStrike(zone: Types.ZoneDef, zonePart: BasePart)
-	local position = randomGroundPoint(zonePart)
-	if not position then
-		return
-	end
-	nextStrikeId += 1
-	local id = nextStrikeId
-
+local function publicWarning(zone: Types.ZoneDef, id: number, position: Vector3)
 	local warning: Types.StrikeWarning = {
 		id = id,
 		zoneId = zone.id,
@@ -148,6 +153,40 @@ local function spawnStrike(zone: Types.ZoneDef, zonePart: BasePart)
 	}
 	warningRemote:FireAllClients(warning)
 	task.delay(Config.WARNING_TIME, resolve, zone, id, position)
+end
+
+-- The position is picked now. The public warning goes out FORECAST_MAX_LEAD
+-- later, and each Forecaster owner hears about it `lead` seconds before that.
+local function spawnStrike(zone: Types.ZoneDef, zonePart: BasePart)
+	local position = randomGroundPoint(zonePart)
+	if not position then
+		return
+	end
+	nextStrikeId += 1
+	local id = nextStrikeId
+
+	local warnsAt = workspace:GetServerTimeNow() + Config.FORECAST_MAX_LEAD
+	local forecast: Types.Forecast = {
+		id = id,
+		zoneId = zone.id,
+		position = position,
+		radius = Config.STRIKE_RADIUS,
+		warnsAt = warnsAt,
+	}
+	for _, player in Players:GetPlayers() do
+		local level = Research.active(player, "Forecaster")
+		local profile = PlayerData.get(player)
+		local save = if profile then profile.researchers.Forecaster else nil
+		if level and save and save.post == zone.id then
+			local lead = ResearchMath.forecastLead(level)
+			task.delay(Config.FORECAST_MAX_LEAD - lead, function()
+				if player.Parent then
+					forecastRemote:FireClient(player, forecast)
+				end
+			end)
+		end
+	end
+	task.delay(Config.FORECAST_MAX_LEAD, publicWarning, zone, id, position)
 end
 
 local function runZone(zone: Types.ZoneDef)
@@ -170,6 +209,7 @@ end
 function Strikes.init()
 	warningRemote = Net.get("StrikeWarning")
 	landedRemote = Net.get("StrikeLanded")
+	forecastRemote = Net.get("Forecast")
 end
 
 function Strikes.start()
