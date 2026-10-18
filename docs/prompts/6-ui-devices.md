@@ -63,7 +63,28 @@ sizing and input, not a redesign.
    banners, toasts):
    - place them by scale and keep them inside the safe area
    - never let two pile on top of each other: queue or stack them
-6. **Test**: put the device-class and scale maths in pure functions, and
+6. **Warnings become temporary**: warning and hint text must not stay on
+   screen forever. Add one toast helper in `Lib/UI` (for example
+   `UI.toast(text, kind, seconds)`).
+   - It shows a short message near the top-centre, inside the safe area.
+   - It fades out after about 3 seconds.
+   - The same text isn't repeated while it's showing (the timer restarts
+     instead).
+   - At most two show at once.
+   - Use it for every warning-style message. Find them with
+     `grep -rn -i "full\|locked\|needs\|visit the\|can't\|not enough" src/client`.
+     Today these include:
+     - "FULL! SELL AT THE POWER PLANT" in the HUD bottle bar: the bar only
+       shows the fill (glowing when full) and the warning becomes a toast
+       when the bottle first fills, repeating at most every 20 seconds while
+       it stays full
+     - "Bottle full! Sell at the Power Plant" in `StrikeFX`
+     - the zone lock reasons in `ZoneBanner` and `ZoneGates`
+     - "Visit the Research Office to hire" in `ResearchUI`: the button just
+       shows as disabled, and the hint appears as a toast when it's tapped
+   - Status that is still true and needed (Volts, the storm timer, the
+     bottle count, a button's LOCKED state) stays on screen.
+7. **Test**: put the device-class and scale maths in pure functions, and
    add `tools/harness/test_layout.luau` covering phone portrait, phone
    landscape, iPad, 1080p, 4K and a console at 1080p.
 
@@ -78,7 +99,7 @@ do at the end of this file, so a second run picks them up.
   - use Studio's device emulator to look at the HUD and every panel on iPhone
     (portrait and landscape), iPad, a 1080p desktop and a console
   - check that nothing is cut off, overlaps, hides under the thumbstick or
-    jump button, or has unreadable text
+    jump button, or has unreadable text, and that warnings disappear on their own
   - fix anything you find, then check again once
 - In your final message, give the user a short list of what to check in
   Studio (Test tab, then Device), one line per device.
