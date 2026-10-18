@@ -672,36 +672,6 @@ end
 
 -- Village ring -------------------------------------------------------------------------
 
--- The observatory dome is the Storm Society Research Office: a marked
--- doorstep pad in front of the door under an invisible ResearchOffice box.
-local function researchOffice(
-	ctx: Context,
-	parent: Instance,
-	cf: CFrame,
-	diameter: number,
-	floor: number
-)
-	local r = diameter / 2
-	local doorstep = cf * CFrame.new(0, 0, -r - 3.9)
-	local p = doorstep.Position
-	local pad = Blocks.box(
-		ctx.folders.ground,
-		Palette.stone,
-		CFrame.new(p.X, floor + 0.1, p.Z) * cf.Rotation,
-		Vector3.new(8, 0.6, 6),
-		{ Name = "ResearchPad" }
-	)
-	Blocks.box(
-		ctx.folders.ground,
-		C.seafoam,
-		CFrame.new(p.X, floor + 0.36, p.Z) * cf.Rotation,
-		Vector3.new(6, 0.12, 4),
-		{ Name = "ResearchMark" }
-	)
-	Kit.researchOffice(parent, pad, 12)
-	Kit.sign(parent, cf * CFrame.new(0, 5.9, -r - 1.5), 5.4, 1.2, "RESEARCH", nil, Palette.SIGN)
-end
-
 type CottageLook = { name: string, roof: string, chimney: boolean, instrument: string? }
 
 local COTTAGES: { CottageLook } = {
@@ -733,9 +703,6 @@ local function village(
 				domes += 1
 				local diameter = math.min(12, maxHalf * 2 - 1)
 				Pieces.dome(parent, cf, diameter, domes == 1)
-				if domes == 1 then
-					researchOffice(ctx, parent, cf, diameter, floor)
-				end
 				if domes == 2 then
 					-- a small weather balloon tethered over the radar dome, its
 					-- posts just outside the dome's plinth (radius diameter/2 + 0.6)

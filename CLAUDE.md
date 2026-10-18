@@ -83,8 +83,11 @@ a style pack decides how everything looks:
 Research sites (`Util/ResearchSites` is the only code that finds them): every
 zone gets a Research Camp from the framework (`Slot.camp` pad, box at
 `Map.ResearchCamps.<ZoneId>`, `buildCamp` or `Kit.researchCamp`), and the hub
-has a `ResearchOffice`-tagged box over a marked pad (`Kit.researchOffice`;
-WeatherLab: the observatory dome). Both sit outside every zone and are walkable.
+has a `ResearchOffice`-tagged box over a marked pad (`Kit.researchOffice`).
+In WeatherLab the office is the Research Center: the island in the teaser
+slot (`Styles/WeatherLab/Teaser.luau`), reached by a full boardwalk, with the
+pad at the observatory dome's door; adding a zone moves it one slot out.
+Both sit outside every zone and are walkable.
 
 Map rules: catch floors are flat and clear (nothing above floor + 0.3 inside
 a zone except its outer 2-stud band); in a Blocks style every catch floor is
