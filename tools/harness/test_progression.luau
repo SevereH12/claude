@@ -1,6 +1,7 @@
 --!nocheck
 -- Zone gates, next goals and the bottle tier migration.
 --   lune run tools/harness/test_progression.luau
+local roblox = require("@lune/roblox")
 local World = require("./World")
 
 local world = World.new("src")
@@ -32,19 +33,58 @@ check(flask == 3, "the Flask is bottle tier 3")
 check(mesa.requiresBottle == flask, "Mesa needs the Flask")
 
 -- canEnter / lockReason
-check(Progression.canEnter(progress(1), shoreline), "everyone can enter Shoreline")
-check(Progression.lockReason(progress(1), shoreline) == nil, "Shoreline has no lock reason")
-check(not Progression.canEnter(progress(1), mesa), "a Jar can't enter Mesa")
-check(not Progression.canEnter(progress(2), mesa), "a Vial can't enter Mesa")
-check(Progression.canEnter(progress(3), mesa), "a Flask can enter Mesa")
-check(Progression.canEnter(progress(5), mesa), "a better bottle can enter Mesa")
+check(Progression.canEnter(progress(1), shoreline, false), "everyone can enter Shoreline")
+check(Progression.lockReason(progress(1), shoreline, false) == nil, "Shoreline has no lock reason")
+check(not Progression.canEnter(progress(1), mesa, false), "a Jar can't enter Mesa")
+check(not Progression.canEnter(progress(2), mesa, false), "a Vial can't enter Mesa")
+check(Progression.canEnter(progress(3), mesa, false), "a Flask can enter Mesa")
+check(Progression.canEnter(progress(5), mesa, false), "a better bottle can enter Mesa")
 check(
-	Progression.lockReason(progress(1), mesa) == "Needs a Flask",
+	Progression.lockReason(progress(1), mesa, false) == "Needs a Flask",
 	"Mesa's lock reason names the Flask"
 )
-check(Progression.lockReason(progress(3), mesa) == nil, "no lock reason once Mesa is open")
+check(Progression.lockReason(progress(3), mesa, false) == nil, "no lock reason once Mesa is open")
 check(Progression.requirement(shoreline) == nil, "Shoreline has no gate")
 check(Progression.requirement(mesa) == "Needs a Flask", "Mesa's gate sign says it needs a Flask")
+
+-- Premium zone: members only, and pays 1.5x the best zone you can enter
+local aurora = Config.ZONES.Aurora
+local Premium, NotPremium = roblox.Enum.MembershipType.Premium, roblox.Enum.MembershipType.None
+check(aurora ~= nil and aurora.premium == true, "Aurora is a premium zone")
+check(Progression.isPremium(Premium, false, false), "a member is Premium")
+check(not Progression.isPremium(NotPremium, false, false), "a non-member isn't")
+check(Progression.isPremium(NotPremium, true, true), "Pretend Premium works in Studio")
+check(not Progression.isPremium(NotPremium, true, false), "Pretend Premium is ignored live")
+check(Progression.canEnter(progress(1), aurora, true), "a member can enter Aurora with a Jar")
+check(not Progression.canEnter(progress(5), aurora, false), "a non-member can't, whatever the bottle")
+check(Progression.canEnter(progress(5), shoreline, false), "non-members still enter free zones")
+local premiumReason = Progression.lockReason(progress(1), aurora, false)
+check(
+	premiumReason ~= nil and string.find(premiumReason, "Premium members only", 1, true) ~= nil,
+	"Aurora's lock reason says Premium members only"
+)
+check(
+	string.find(premiumReason or "", utf8.char(0xE001), 1, true) ~= nil,
+	"and shows the Premium icon"
+)
+check(Progression.lockReason(progress(1), aurora, true) == nil, "no lock reason for a member")
+check(Progression.lockReason(progress(1), mesa, true) == "Needs a Flask", "Premium doesn't open Mesa")
+check(Progression.requirement(aurora) == premiumReason, "Aurora's gate sign matches")
+local multiplier = Config.PREMIUM_VALUE_MULTIPLIER
+check(
+	Progression.boltValue(progress(1), aurora) == math.round(shoreline.chargeValue * multiplier),
+	"with a Jar, Aurora pays 1.5x Shoreline"
+)
+check(
+	Progression.boltValue(progress(3), aurora) == math.round(mesa.chargeValue * multiplier),
+	"with a Flask, Aurora pays 1.5x Mesa"
+)
+check(Progression.boltValue(progress(3), mesa) == mesa.chargeValue, "other zones pay their own value")
+for tier = 1, #Config.BOTTLES do
+	for _, goal in Progression.nextGoals(progress(tier)) do
+		check(goal.title ~= aurora.displayName, "Aurora is never a Volts goal")
+	end
+end
 
 -- nextGoals: cheapest first, a zone wins ties
 local goals = Progression.nextGoals(progress(1))

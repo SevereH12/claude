@@ -93,11 +93,12 @@ local function nearLockedGate(position: Vector3)
 		local zone = Config.ZONES[gate.Name]
 		local barrier = gate:FindFirstChild("Barrier")
 		if zone and barrier and barrier:IsA("BasePart") then
-			local reason = Progression.lockReason(snapshot, zone)
+			local reason = Progression.lockReason(snapshot, zone, snapshot.premium)
 			local distance = (barrier.Position - position).Magnitude
 			if reason and distance < GATE_NEAR and not explained[zone.id] then
 				explained[zone.id] = true
-				ZoneBanner.show(`🔒 {string.upper(zone.displayName)}`, reason, UI.COLORS.red)
+				local color = if zone.premium then zone.color else UI.COLORS.red
+				ZoneBanner.show(`🔒 {string.upper(zone.displayName)}`, reason, color)
 			elseif distance > GATE_FAR then
 				explained[zone.id] = nil
 			end

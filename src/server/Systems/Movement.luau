@@ -26,7 +26,11 @@ local function update(player: Player)
 	end
 	local profile = PlayerData.get(player)
 	local zone = Zones.at(root.Position)
-	if zone and profile and not Progression.canEnter(profile, zone) then
+	if
+		zone
+		and profile
+		and not Progression.canEnter(profile, zone, Progression.playerIsPremium(player))
+	then
 		local part = Zones.part(zone.id)
 		if part then
 			-- the zone part faces the hub (-Z); its gate is the middle of that

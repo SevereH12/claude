@@ -55,6 +55,7 @@ export type Theme = {
 	-- several fallback zones never look identical)
 	fieldFor: ((zone: ZoneContext) -> FieldLook)?,
 	border: BorderLook,
+	boardwalkTrim: Color3?, -- a band in this colour round each boardwalk rail post
 	-- biome landforms round the plateau (headlands, spits, spires, stacks),
 	-- built after the plateau and its beach
 	ground: (ctx: Context, zone: ZoneContext) -> (),

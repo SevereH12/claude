@@ -8,6 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Net = require(ReplicatedStorage.Shared.Net)
 local Types = require(ReplicatedStorage.Shared.Types)
+local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local PlayerData = require(script.Parent.PlayerData)
 
 local FLUSH_INTERVAL = 0.1
@@ -36,6 +37,7 @@ local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapsho
 		tankCount = profile.tankCount,
 		tankValue = profile.tankValue,
 		setupUntil = Sync.setupUntil[player] or {},
+		premium = Progression.playerIsPremium(player),
 	}
 end
 
@@ -61,6 +63,8 @@ function Sync.init()
 		setupLeaderstats(player)
 		Sync.markDirty(player)
 	end)
+	-- fires when someone buys Premium in game: their gates open straight away
+	Players.PlayerMembershipChanged:Connect(Sync.markDirty)
 	Players.PlayerRemoving:Connect(function(player)
 		dirty[player] = nil
 		Sync.setupUntil[player] = nil

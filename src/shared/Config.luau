@@ -100,6 +100,22 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		depth = 104,
 		floor = 20,
 	},
+	Aurora = {
+		id = "Aurora",
+		displayName = "Aurora Reef",
+		tagline = "Premium members only, 1.5x your best zone",
+		color = Color3.fromRGB(176, 120, 255), -- violet; its theme trims it in gold
+		mode = "Shared",
+		chargeValue = 0, -- unused: pays PREMIUM_VALUE_MULTIPLIER x each player's best zone
+		strikeInterval = 0.6,
+		order = 3,
+		requiresBottle = 1,
+		premium = true, -- Roblox Premium members only (no Game Pass)
+		theme = "Premium",
+		width = 100,
+		depth = 110,
+		floor = 12,
+	},
 }
 
 return table.freeze({
@@ -127,6 +143,10 @@ return table.freeze({
 	-- Boots add their speedBonus inside zones only (see BOOTS).
 	WALK_SPEED_IN_ZONE = 16, -- Roblox default
 	WALK_SPEED_OUTSIDE = 30,
+
+	-- Premium zones pay this many times the best other zone the player can
+	-- enter, so they're worth a visit at every stage (Progression.boltValue)
+	PREMIUM_VALUE_MULTIPLIER = 1.5,
 
 	-- Selling
 	SELL_COOLDOWN = 1, -- seconds between sells per player

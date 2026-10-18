@@ -5,8 +5,10 @@
 -- hub, the glowing rope border and the lighthouse-post gate. Themes only
 -- add biome landforms and dressing on top.
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
+local Config = require(ReplicatedStorage.Shared.Config)
 local Blocks = require(ServerScriptService.Server.World.Blocks)
 local Kit = require(ServerScriptService.Server.World.Kit)
 local Geo = require(script.Parent.Geo)
@@ -46,6 +48,7 @@ export type WalkOptions = {
 	subtitle: string?,
 	landing: number, -- flat studs at the far end (over the island rim)
 	stopAt: number?, -- teaser: fraction of the length where the deck ends
+	trim: Color3?, -- a band round each rail post (the theme's boardwalkTrim)
 }
 
 type Profile = {
@@ -145,7 +148,13 @@ local function samples(p: Profile, limit: number, detail: number): { number }
 end
 
 -- A rail post with a glowing cap in the trail colour. Returns the rope point.
-local function railPost(parent: Instance, bottom: Vector3, color: Color3, cap: boolean?): Vector3
+local function railPost(
+	parent: Instance,
+	bottom: Vector3,
+	color: Color3,
+	cap: boolean?,
+	trim: Color3?
+): Vector3
 	Pieces.box(
 		parent,
 		CFrame.new(bottom + Vector3.new(0, 1.6, 0)),
@@ -153,6 +162,16 @@ local function railPost(parent: Instance, bottom: Vector3, color: Color3, cap: b
 		C.piling,
 		Enum.Material.Wood
 	)
+	if trim then
+		Pieces.box(
+			parent,
+			CFrame.new(bottom + Vector3.new(0, 2.9, 0)),
+			Vector3.new(0.64, 0.3, 0.64),
+			trim,
+			Enum.Material.Metal,
+			false
+		)
+	end
 	if cap ~= false then
 		Pieces.glow(Pieces.ball(parent, bottom + Vector3.new(0, 3.45, 0), 0.8, color), color)
 	end
@@ -314,7 +333,7 @@ function Zone.boardwalk(
 					Pieces.lampPost(parent, bottom, 5.5, -right * side)
 					ropePoint = bottom + Vector3.new(0, 2.7, 0)
 				else
-					ropePoint = railPost(parent, bottom, opts.color, postCount % 2 == 1)
+					ropePoint = railPost(parent, bottom, opts.color, postCount % 2 == 1, opts.trim)
 				end
 				local previous = last[side]
 				if previous then
@@ -427,8 +446,11 @@ function Zone.connector(ctx: Context, zone: ZoneContext)
 	Zone.boardwalk(ctx, parent, slot.hubExit.Position, slot.gate.Position, {
 		color = zone.color,
 		title = string.upper(def.displayName),
-		subtitle = `{def.chargeValue} VOLTS PER BOLT`,
+		subtitle = if def.premium
+			then `{Config.PREMIUM_VALUE_MULTIPLIER}X YOUR BEST ZONE`
+			else `{def.chargeValue} VOLTS PER BOLT`,
 		landing = theme.margins.front + 4,
+		trim = theme.boardwalkTrim,
 	})
 end
 
@@ -641,8 +663,8 @@ function Zone.gate(ctx: Context, zone: ZoneContext)
 		Geo.cf(zone, -postX - 2.4, z - 0.4, 3.4),
 		3.6,
 		2,
-		`{def.chargeValue} VOLTS`,
-		"per bolt",
+		if def.premium then `{Config.PREMIUM_VALUE_MULTIPLIER}X` else `{def.chargeValue} VOLTS`,
+		if def.premium then "your best zone" else "per bolt",
 		Palette.SIGN,
 		zone.slot.floor
 	)

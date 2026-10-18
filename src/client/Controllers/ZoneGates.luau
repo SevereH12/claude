@@ -3,8 +3,11 @@
 -- with nothing solid). It's solid while you can't enter that zone, and your
 -- character is simulated on your client, so the local collision blocks you.
 -- When you unlock the zone it turns green, bursts into sparks and fades
--- away, with a banner. The server's checks are the real lock.
+-- away, with a banner. The server's checks are the real lock. A non-member
+-- who walks into a Premium zone's barrier gets Roblox's Premium offer.
 
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
@@ -16,10 +19,15 @@ local ZoneBanner = require(script.Parent.ZoneBanner)
 
 local FADE = TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local GREEN = Color3.fromRGB(90, 230, 120)
+local UPSELL_COOLDOWN = 30 -- seconds between Premium offers
+local TOUCH = 2.5 -- studs from a barrier's face that count as walking into it
+
+local player = Players.LocalPlayer
 
 local ZoneGates = {}
 
 local wasOpen: { [string]: boolean } = {} -- zone id -> open at the last update
+local lastUpsell = -math.huge
 
 local function gates(): { Model }
 	local map = workspace:FindFirstChild("Map")
@@ -67,13 +75,22 @@ local function dissolve(model: Model, barrier: BasePart)
 	task.delay(0.5, fadeOut, model, 1)
 end
 
+-- A gate's zone and its barrier part, if it has both.
+local function parts(model: Model): (Types.ZoneDef?, BasePart?)
+	local zoneId = model:GetAttribute("ZoneId")
+	local zone = if typeof(zoneId) == "string" then Config.ZONES[zoneId] else nil
+	local barrier = model:FindFirstChild("Barrier")
+	if zone and barrier and barrier:IsA("BasePart") then
+		return zone, barrier
+	end
+	return nil, nil
+end
+
 local function update(snapshot: Types.Snapshot)
 	for _, model in gates() do
-		local zoneId = model:GetAttribute("ZoneId")
-		local zone = if typeof(zoneId) == "string" then Config.ZONES[zoneId] else nil
-		local barrier = model:FindFirstChild("Barrier")
-		if zone and barrier and barrier:IsA("BasePart") then
-			local open = Progression.canEnter(snapshot, zone)
+		local zone, barrier = parts(model)
+		if zone and barrier then
+			local open = Progression.canEnter(snapshot, zone, snapshot.premium)
 			local before = wasOpen[zone.id]
 			if open and before == false then
 				-- unlocked while playing
@@ -89,6 +106,34 @@ local function update(snapshot: Types.Snapshot)
 	end
 end
 
+-- Offers Premium when a non-member walks into a Premium zone's barrier.
+local function checkUpsell(snapshot: Types.Snapshot)
+	if snapshot.premium or os.clock() - lastUpsell < UPSELL_COOLDOWN then
+		return
+	end
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not root or not root:IsA("BasePart") then
+		return
+	end
+	for _, model in gates() do
+		local zone, barrier = parts(model)
+		if zone and zone.premium and barrier then
+			local p = barrier.CFrame:PointToObjectSpace(root.Position)
+			local half = barrier.Size / 2
+			if
+				math.abs(p.X) < half.X + 1
+				and math.abs(p.Z) < half.Z + TOUCH
+				and math.abs(p.Y) < half.Y + 3
+			then
+				lastUpsell = os.clock()
+				pcall(MarketplaceService.PromptPremiumPurchase, MarketplaceService, player)
+				return
+			end
+		end
+	end
+end
+
 function ZoneGates.start()
 	-- the gates are a Persistent model, but may arrive after this script runs
 	local map = workspace:WaitForChild("Map", 30)
@@ -99,6 +144,12 @@ function ZoneGates.start()
 		update(State.current)
 	end
 	State.Changed:Connect(update)
+	while true do
+		task.wait(0.2)
+		if State.current then
+			checkUpsell(State.current)
+		end
+	end
 end
 
 return ZoneGates

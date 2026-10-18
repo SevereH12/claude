@@ -117,7 +117,7 @@ local function onPost(player: Player, roleId: unknown, post: unknown)
 	end
 	-- researchers can only be posted to zones the player has unlocked
 	local zone = Config.ZONES[post]
-	if zone and not Progression.canEnter(profile, zone) then
+	if zone and not Progression.canEnter(profile, zone, Progression.playerIsPremium(player)) then
 		return
 	end
 	save.post = post

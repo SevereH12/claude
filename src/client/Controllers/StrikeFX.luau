@@ -493,10 +493,11 @@ local function onLanded(landed: Types.StrikeLanded)
 		end
 	end
 
-	if table.find(landed.catchers, player.UserId) then
+	local caught = table.find(landed.catchers, player.UserId)
+	if caught then
 		screenFlash(0.55)
 		cameraShake(0.3, 0.7)
-		popup(`+{Format.abbreviate(landed.value)} ⚡`, true, 0.42)
+		popup(`+{Format.abbreviate(landed.values[caught] or landed.value)} ⚡`, true, 0.42)
 		playSound(Config.SOUNDS.CATCH, screenGui, 1.2)
 		if table.find(landed.assayed, player.UserId) then
 			popup("x2 ASSAYED", true, 0.5, 0.06)

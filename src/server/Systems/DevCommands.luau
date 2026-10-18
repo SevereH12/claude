@@ -1,16 +1,18 @@
 --!strict
--- TEMPORARY test tool: the client's TEST button (Controllers/DevCommands)
--- sends DevCommand and this sets that player's Volts. The repo and client
--- code are public, so this is the lock: it only obeys in Studio play tests
--- or, in a live server, the user who owns the place. To remove it: delete
--- this file and Controllers/DevCommands.luau, and take "DevCommand" out of
--- Shared/Remotes.
+-- TEMPORARY test tool: the client's TEST buttons (Controllers/DevCommands)
+-- send DevCommand: "volts" sets that player's Volts, "premium" turns
+-- Pretend Premium on or off. The repo and client code are public, so this
+-- is the lock: it only obeys in Studio play tests or, in a live server, the
+-- user who owns the place; Pretend Premium is Studio only. To remove it:
+-- delete this file and Controllers/DevCommands.luau, and take "DevCommand"
+-- out of Shared/Remotes.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local Net = require(ReplicatedStorage.Shared.Net)
+local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local PlayerData = require(script.Parent.PlayerData)
 local Sync = require(script.Parent.Sync)
 local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
@@ -27,13 +29,7 @@ local function isOwner(player: Player): boolean
 	return game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId
 end
 
-local function onCommand(player: Player, name: unknown, amount: unknown)
-	if not RateLimit.allow(player, "DevCommand", 2, 4) then
-		return
-	end
-	if name ~= "volts" or not isOwner(player) then
-		return
-	end
+local function setVolts(player: Player, amount: unknown)
 	local volts = INFINITE_VOLTS
 	if amount ~= nil then
 		if
@@ -53,6 +49,28 @@ local function onCommand(player: Player, name: unknown, amount: unknown)
 	profile.volts = volts
 	Sync.markDirty(player)
 	print(`[DevCommands] {player.Name} set Volts to {volts}`)
+end
+
+-- Lets a tester without Premium try the Premium zone. Progression also
+-- ignores the attribute outside Studio.
+local function setPretendPremium(player: Player, on: unknown)
+	if not RunService:IsStudio() or typeof(on) ~= "boolean" then
+		return
+	end
+	player:SetAttribute(Progression.PRETEND_PREMIUM, on)
+	Sync.markDirty(player)
+	print(`[DevCommands] {player.Name} Pretend Premium {if on then "on" else "off"}`)
+end
+
+local function onCommand(player: Player, name: unknown, value: unknown)
+	if not RateLimit.allow(player, "DevCommand", 2, 4) or not isOwner(player) then
+		return
+	end
+	if name == "volts" then
+		setVolts(player, value)
+	elseif name == "premium" then
+		setPretendPremium(player, value)
+	end
 end
 
 function DevCommands.init()

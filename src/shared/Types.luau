@@ -35,6 +35,7 @@ export type Snapshot = {
 	tankCount: number,
 	tankValue: number,
 	setupUntil: { [string]: number }, -- role id -> workspace:GetServerTimeNow() when set up
+	premium: boolean, -- counts as Premium for zone entry (decided by the server)
 }
 
 export type StormPhase = "Storm" | "Calm"
@@ -59,6 +60,7 @@ export type ZoneDef = {
 	strikeInterval: number, -- average seconds between strikes during a storm
 	order: number, -- position along the zone spiral (1 = closest to the hub)
 	requiresBottle: number, -- bottle tier needed to catch here (Util/Progression)
+	premium: boolean?, -- Roblox Premium members only; pays per player (Util/Progression)
 
 	-- World layout (see src/server/World). Zones are placed automatically on
 	-- a spiral around the hub in `order`; these only describe the zone itself.
@@ -119,6 +121,7 @@ export type StrikeLanded = {
 	position: Vector3,
 	value: number,
 	catchers: { number },
+	values: { number }, -- Volts each catcher's charge is worth before the assay (catchers' order)
 	full: { number },
 	assayed: { number }, -- catchers whose charge was high grade (worth double)
 	tanked: { number }, -- full players whose charge went into their Chemist's tank

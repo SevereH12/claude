@@ -368,5 +368,8 @@ local theme: Theme = {
 	dress = dress,
 }
 Default.theme = theme
+-- for themes built on Default's island (Premium)
+Default.ground = ground
+Default.dress = dress
 
 return Default

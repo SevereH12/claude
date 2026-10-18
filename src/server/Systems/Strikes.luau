@@ -108,6 +108,7 @@ end
 
 local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, ownerId: number?)
 	local catchers: { number } = {}
+	local values: { number } = {}
 	local full: { number } = {}
 	local assayed: { number } = {}
 	local tanked: { number } = {}
@@ -123,7 +124,9 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, owner
 		local root = catchingRoot(player)
 		local profile = PlayerData.get(player)
 		-- a player in a zone they haven't unlocked catches nothing there
-		if profile and not Progression.canEnter(profile, zone) then
+		if
+			profile and not Progression.canEnter(profile, zone, Progression.playerIsPremium(player))
+		then
 			continue
 		end
 		local radius = ResearchMath.catchRadius(Research.active(player, "RodTech"))
@@ -155,7 +158,8 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, owner
 		if zone.mode == "Single" and index > 1 then
 			break
 		end
-		local value = zone.chargeValue
+		local value = Progression.boltValue(candidate.profile, zone)
+		local base = value
 		local assayLevel = Research.active(candidate.player, "Analyst")
 		if assayLevel and random:NextNumber() < ResearchMath.assayChance(assayLevel) then
 			value *= 2
@@ -169,6 +173,7 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, owner
 			candidate.profile.chargeCount += 1
 			candidate.profile.chargeValue += value
 			table.insert(catchers, candidate.player.UserId)
+			table.insert(values, base)
 		end
 		Sync.markDirty(candidate.player)
 	end
@@ -179,6 +184,7 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, owner
 		position = position,
 		value = zone.chargeValue,
 		catchers = catchers,
+		values = values,
 		full = full,
 		assayed = assayed,
 		tanked = tanked,
@@ -254,7 +260,7 @@ function Strikes.spawnFor(player: Player): boolean
 	if not root or not zone or not zonePart or not profile then
 		return false
 	end
-	if not Progression.canEnter(profile, zone) then
+	if not Progression.canEnter(profile, zone, Progression.playerIsPremium(player)) then
 		return false
 	end
 	local position = randomGroundPoint(
