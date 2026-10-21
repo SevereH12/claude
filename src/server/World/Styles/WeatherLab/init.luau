@@ -12,11 +12,6 @@
 --   Zone        generic zone plateau, boardwalk, border and gate
 --   Themes/     Beach, Canyon, Default biome dressing
 --   Teaser      the Coming Soon slot
---
--- Borrowed looks: a zone whose theme is "<Style>:<Theme>" (e.g.
--- "StormPunk:Default") gets that style pack's own island, border, gate and
--- theme dressing. WeatherLab still builds its boardwalk to the gate, and
--- the other pack's atmosphere, hub and teaser never run.
 
 local ServerScriptService = game:GetService("ServerScriptService")
 
@@ -30,155 +25,8 @@ local Zone = require(script.Zone)
 
 type Context = WorldTypes.Context
 type ZoneContext = WorldTypes.ZoneContext
-type Build = (ctx: Context, zone: ZoneContext) -> ()
 
--- Borrowed looks ---------------------------------------------------------------------
-
--- Per-zone palette tweaks, written into the borrowed pack's own Palette
--- tables while that zone builds and put back after. WeatherLab's ambient
--- is cooler and hazier than StormPunk's, so its cool greys go flat
--- blue-grey: warm them a touch. Beaches and grass caps take WeatherLab's
--- own colours, so the shores read as one bay.
-local TWEAKS: { [string]: { [string]: { [string]: Color3 } } } = {
-	Works = {
-		ground = {
-			sand = Palette.ground.beach,
-			grass = Palette.ground.grass,
-			concrete = Color3.fromRGB(168, 164, 154),
-			slate = Color3.fromRGB(118, 118, 126),
-		},
-	},
-}
-
--- The borrowed pack gets its own seeded Random (so it never shifts
--- WeatherLab's ctx.rng draws) on a view of the build context, kept on the
--- context; the pack's per-build state (seeds, land registries) is keyed
--- by that view.
-local BORROW_SEED = 4417
-
-type Borrowed = {
-	pack: any, -- the other style pack (its StylePack table)
-	palette: any, -- its Palette module
-	theme: string, -- the theme name inside that pack
-	front: number?, -- how far its island top reaches past the footprint
-}
-
-local borrowedByTheme: { [string]: Borrowed } = {}
-
-local function borrowed(zone: ZoneContext): Borrowed?
-	local def = zone.def
-	if not def then
-		return nil
-	end
-	local cached = borrowedByTheme[def.theme]
-	if cached then
-		return cached
-	end
-	local styleName, themeName = string.match(def.theme, "^(%w+):(%w+)$")
-	if not styleName or not themeName then
-		return nil
-	end
-	local module = script.Parent:FindFirstChild(styleName)
-	assert(
-		module and module:IsA("ModuleScript"),
-		`[WeatherLab] zone {def.id} borrows style {styleName}, which doesn't exist`
-	)
-	local paletteModule = module:FindFirstChild("Palette")
-	local zoneModule = module:FindFirstChild("Zone")
-	local b: Borrowed = {
-		pack = (require :: any)(module),
-		palette = if paletteModule then (require :: any)(paletteModule) else {},
-		theme = themeName,
-		front = if zoneModule then (require :: any)(zoneModule).MARGIN else nil,
-	}
-	borrowedByTheme[def.theme] = b
-	return b
-end
-
-local function viewOf(ctx: Context): Context
-	local holder = ctx :: any
-	if not holder.borrowView then
-		holder.borrowView = setmetatable({ rng = Random.new(BORROW_SEED) }, { __index = ctx })
-	end
-	return holder.borrowView :: Context
-end
-
--- Runs one of the borrowed pack's functions for `zone`, on the context
--- view, with the zone's palette tweaks applied and its def showing the
--- bare theme name (the pack looks its theme up by def.theme). The zone
--- itself is passed as is: packs compare zones by identity.
-local function run(ctx: Context, zone: ZoneContext, b: Borrowed, build: Build)
-	local def = zone.def :: any
-	local saved: { { any } } = {}
-	for group, colors in TWEAKS[def.id] or {} do
-		local target = b.palette[group]
-		if target then
-			for name, color in colors do
-				table.insert(saved, { target, name, target[name] })
-				target[name] = color
-			end
-		end
-	end
-	local view = table.clone(def)
-	view.theme = b.theme
-	zone.def = view
-	local ok, err = xpcall(build, debug.traceback, viewOf(ctx), zone)
-	zone.def = def
-	for i = #saved, 1, -1 do
-		local entry = saved[i]
-		entry[1][entry[2]] = entry[3]
-	end
-	if not ok then
-		error(err, 0)
-	end
-end
-
-local function buildZoneGround(ctx: Context, zone: ZoneContext)
-	local b = borrowed(zone)
-	if b then
-		run(ctx, zone, b, b.pack.buildZoneGround)
-	else
-		Zone.ground(ctx, zone)
-	end
-end
-
-local function buildConnector(ctx: Context, zone: ZoneContext)
-	local b = borrowed(zone)
-	Zone.connector(ctx, zone, if b then b.front else nil)
-end
-
-local function buildBorder(ctx: Context, zone: ZoneContext)
-	local b = borrowed(zone)
-	if b then
-		run(ctx, zone, b, b.pack.buildBorder)
-	else
-		Zone.border(ctx, zone)
-	end
-end
-
-local function buildGate(ctx: Context, zone: ZoneContext)
-	local b = borrowed(zone)
-	if b then
-		run(ctx, zone, b, function(view: Context, z: ZoneContext)
-			b.pack.buildGate(view, z) -- StormPunk's returns its cable points
-		end)
-	else
-		Zone.gate(ctx, zone)
-	end
-end
-
-local function dressBorrowed(ctx: Context, zone: ZoneContext)
-	local b = borrowed(zone) :: Borrowed
-	run(ctx, zone, b, b.pack.themes[b.theme] or b.pack.themes.Default)
-end
-
--- Builder looks dressing up by the full theme name: any "<Style>:<Theme>"
--- name finds the borrowed pack's dressing.
-local themes: { [string]: Build } = setmetatable({}, {
-	__index = function(_, name: string): Build?
-		return if string.find(name, ":", 1, true) then dressBorrowed else nil
-	end,
-}) :: any
+local themes: { [string]: (Context, ZoneContext) -> () } = {}
 for name, theme in Themes.list do
 	themes[name] = theme.dress
 end
@@ -207,10 +55,10 @@ local Style: WorldTypes.StylePack = {
 	atmosphere = Atmosphere.build,
 	buildBase = Hub.buildBase,
 	buildHub = Hub.buildHub,
-	buildZoneGround = buildZoneGround,
-	buildConnector = buildConnector,
-	buildBorder = buildBorder,
-	buildGate = buildGate,
+	buildZoneGround = Zone.ground,
+	buildConnector = Zone.connector,
+	buildBorder = Zone.border,
+	buildGate = Zone.gate,
 	themes = themes,
 	buildTeaser = Teaser.build,
 }

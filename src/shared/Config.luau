@@ -14,6 +14,7 @@ local BOTTLES: { Types.BottleDef } = {
 	{ name = "Battery Pack", capacity = 40, price = 1_500 },
 	{ name = "Storm Cell", capacity = 100, price = 8_000 },
 	{ name = "Tempest Tank", capacity = 250, price = 40_000 },
+	{ name = "Dynamo Drum", capacity = 600, price = 200_000 },
 }
 
 -- In-zone walk speed is WALK_SPEED_IN_ZONE + speedBonus. Keep every tier
@@ -26,6 +27,7 @@ local BOOTS: { Types.BootsDef } = {
 	{ name = "Gale Striders", speedBonus = 4, price = 2_000 },
 	{ name = "Thunder Treads", speedBonus = 6, price = 10_000 },
 	{ name = "Coil Striders", speedBonus = 7, price = 35_000 },
+	{ name = "Arc Runners", speedBonus = 8, price = 150_000 },
 }
 
 local RESEARCHERS: { Types.ResearcherDef } = {
@@ -71,9 +73,37 @@ local RESEARCHERS: { Types.ResearcherDef } = {
 	},
 }
 
+-- Worlds, in travel order. Each is its own map (src/server/World) in its
+-- own style, built `offset` studs from the first, with its own hub, sell
+-- station and zones. A portal at each hub leads to the next world (and
+-- back); you can go through once you own its bottle. Volts, bottles and
+-- boots are the same everywhere.
+local WORLDS: { Types.WorldDef } = {
+	{
+		id = "Bay",
+		displayName = "Barometer Bay",
+		tagline = "Where every storm chaser starts",
+		style = "WeatherLab",
+		requiresBottle = 1,
+		color = Color3.fromRGB(255, 214, 90),
+		offset = Vector3.zero,
+	},
+	{
+		id = "Voltcliff",
+		displayName = "Voltcliff Works",
+		tagline = "Copper coils, factory islands, bigger storms",
+		style = "StormPunk",
+		requiresBottle = 5, -- the Storm Cell
+		color = Color3.fromRGB(90, 238, 255),
+		-- far enough that the two 2048-stud seas don't meet
+		offset = Vector3.new(5000, 0, 0),
+	},
+}
+
 local ZONES: { [string]: Types.ZoneDef } = {
 	Shoreline = {
 		id = "Shoreline",
+		world = "Bay",
 		displayName = "Shoreline",
 		tagline = "Everyone catches the beach storms, 5 Volts",
 		color = Color3.fromRGB(255, 220, 80),
@@ -89,6 +119,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 	},
 	Mesa = {
 		id = "Mesa",
+		world = "Bay",
 		displayName = "Mesa",
 		tagline = "Closest scientist takes the bolt, 20 Volts",
 		color = Color3.fromRGB(255, 120, 60),
@@ -104,6 +135,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 	},
 	Aurora = {
 		id = "Aurora",
+		world = "Bay",
 		displayName = "Aurora Reef",
 		tagline = "Premium members only, 1.5x your best zone",
 		color = Color3.fromRGB(176, 120, 255), -- violet; its theme trims it in gold
@@ -118,27 +150,58 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		depth = 110,
 		floor = 12,
 	},
-	Works = {
-		id = "Works",
-		displayName = "Voltcliff Works",
+	-- Voltcliff Works (world 2), in StormPunk's own zone looks
+	Yard = {
+		id = "Yard",
+		world = "Voltcliff",
+		displayName = "Generator Yard",
 		tagline = "Everyone catches the coil storms, 60 Volts",
-		color = Color3.fromRGB(60, 200, 255), -- electric blue
+		color = Color3.fromRGB(70, 160, 255), -- electric blue
 		mode = "Shared",
 		chargeValue = 60,
 		strikeInterval = 0.9,
-		order = 4,
-		requiresBottle = 5, -- the Storm Cell
-		theme = "StormPunk:Default", -- StormPunk's Generator Yard, borrowed into WeatherLab
+		order = 1,
+		requiresBottle = 5, -- the Storm Cell (the world's own entry rule)
+		theme = "Default",
 		width = 104,
 		depth = 116,
-		floor = 12,
+		floor = 8,
+	},
+	Tidewire = {
+		id = "Tidewire",
+		world = "Voltcliff",
+		displayName = "Tidewire Beach",
+		tagline = "Everyone catches the tide storms, 150 Volts",
+		color = Color3.fromRGB(80, 230, 150), -- sea green
+		mode = "Shared",
+		chargeValue = 150,
+		strikeInterval = 0.8,
+		order = 2,
+		requiresBottle = 6, -- the Tempest Tank
+		theme = "Beach",
+		width = 96,
+		depth = 104,
+		floor = 4,
+	},
+	Thunderhead = {
+		id = "Thunderhead",
+		world = "Voltcliff",
+		displayName = "Thunderhead Mesa",
+		tagline = "Closest scientist takes the bolt, 500 Volts",
+		color = Color3.fromRGB(255, 80, 120), -- hot pink
+		mode = "Single",
+		chargeValue = 500,
+		strikeInterval = 1.2,
+		order = 3,
+		requiresBottle = 7, -- the Dynamo Drum
+		theme = "Canyon",
+		width = 100,
+		depth = 110,
+		floor = 20,
 	},
 }
 
 return table.freeze({
-	-- Which world style MapBuilder builds (src/server/World/Styles/<name>).
-	WORLD_STYLE = "WeatherLab",
-
 	-- Saving
 	AUTOSAVE_INTERVAL = 60, -- seconds between autosaves per player
 
@@ -177,6 +240,7 @@ return table.freeze({
 	RESEARCHERS = table.freeze(RESEARCHERS),
 	BOTTLES = table.freeze(BOTTLES),
 	BOOTS = table.freeze(BOOTS),
+	WORLDS = table.freeze(WORLDS),
 	ZONES = table.freeze(ZONES),
 
 	-- Placeholder sounds (built into Roblox). Swap for Creator Store sounds.

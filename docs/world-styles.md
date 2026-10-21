@@ -1,19 +1,23 @@
 # World styles
 
-The map is built by `src/server/World/Builder.luau` using a style pack from
-`src/server/World/Styles/`. All three packs build the same gameplay layout
-(hub with spawn and sell station, one zone per `Config.ZONES` entry, and a
-"Coming Soon" teaser) and pass every check in `tools/check_world.sh`.
+The map is built by `src/server/World/Builder.luau`: one world per
+`Config.WORLDS` entry, each with its own style pack from
+`src/server/World/Styles/`. Every pack builds the same gameplay layout (hub
+with spawn, sell station and portals, one zone per `Config.ZONES` entry in
+that world, and a "Coming Soon" teaser).
 
 All three are built from blocks: the ground is chunky SmoothPlastic parts
 (`src/server/World/Blocks.luau`) rather than Roblox Terrain, for a clean,
 hand-built diorama look. Lightning lands on the `Map.Ground` parts.
 
-## Switching styles
+## Worlds and styles
 
-Set `WORLD_STYLE` in `src/shared/Config.luau` to `"WeatherLab"`,
-`"StormPunk"` or `"SkyIsles"`, push, then click **Update Game** in Studio.
-The plugin rebuilds the map.
+World 1, Barometer Bay, is built in WeatherLab; world 2, Voltcliff Works, in
+StormPunk. SkyIsles is unused, kept for a future world. A world's `style` in
+`Config.WORLDS` picks its pack; push, then click **Update Game** in Studio.
+To review a pack on its own, `tools/check_world.sh <Style>` builds the first
+world's zones in it. A pack used for a world must build its hub's portals
+(`ctx.portals`, `Kit.portal`).
 
 ## WeatherLab (live)
 
@@ -26,14 +30,14 @@ fairly across zones so it keeps working as zones are added (about 2,350
 parts with two zones). Chosen by 2 of 3 judges for first impressions,
 wayfinding and room to grow. Style guide: `docs/styles/WeatherLab.md`.
 
-## StormPunk (alternate)
+## StormPunk (world 2, Voltcliff Works)
 
 "Voltcliff Works": copper coils, insulators and factory islands. A Grand
 Coil hero with the Volt Exchange sell station, insulator-post borders with
 glowing cables, and zones that spiral up around the hub like a mountain.
 The lightest pack (about 1,300 parts). Style guide: `docs/styles/StormPunk.md`.
 
-## SkyIsles (alternate)
+## SkyIsles (unused, for a future world)
 
 Floating sky islands with rune bridges and the Stormspire crystal tower over
 the sell altar. Boldest field patterns (tile frames with neon corners,

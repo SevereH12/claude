@@ -50,15 +50,28 @@ export type StormState = {
 -- "Single": only the closest player inside the circle catches it.
 export type ZoneMode = "Shared" | "Single"
 
+-- A world: its own map (hub, sell station, zones) far from the others,
+-- reached through a portal. Volts, bottles and boots carry over.
+export type WorldDef = {
+	id: string,
+	displayName: string,
+	tagline: string, -- shown on its portal and the welcome banner
+	style: string, -- the world style it's built in (src/server/World/Styles/<style>)
+	requiresBottle: number, -- bottle tier needed to go through its portal
+	color: Color3, -- its portal and banner colour
+	offset: Vector3, -- where its hub centre is (the first world's is the origin)
+}
+
 export type ZoneDef = {
-	id: string, -- must match the part name in Workspace.Map.Zones
+	id: string, -- must match the part name in Workspace.Map.Zones (unique across worlds)
+	world: string, -- id of the world it's in (Config.WORLDS)
 	displayName: string,
 	tagline: string, -- shown on the zone sign and banner
 	color: Color3, -- border, sign and warning circle colour
 	mode: ZoneMode,
 	chargeValue: number, -- Volts per caught charge
 	strikeInterval: number, -- average seconds between strikes during a storm
-	order: number, -- position along the zone spiral (1 = closest to the hub)
+	order: number, -- position along its world's zone spiral (1 = closest to the hub)
 	requiresBottle: number, -- bottle tier needed to catch here (Util/Progression)
 	premium: boolean?, -- Roblox Premium members only; pays per player (Util/Progression)
 

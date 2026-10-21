@@ -1,6 +1,6 @@
 --!strict
 -- Who may go where, and what to aim for next. This is the one place for
--- zone entry rules. Takes a server Profile or a client Snapshot: both carry
+-- zone and world entry rules. Takes a server Profile or a client Snapshot: both carry
 -- the tiers it reads. The server enforces it (Strikes, Movement, Research);
 -- the client only uses it for barriers and the HUD.
 
@@ -55,8 +55,8 @@ local function withArticle(name: string): string
 	return if string.find(string.lower(name), "^[aeiou]") then `an {name}` else `a {name}`
 end
 
-local function needsBottle(zone: Types.ZoneDef): string
-	return `Needs {withArticle(Formulas.bottle(zone.requiresBottle).name)}`
+local function needsBottle(tier: number): string
+	return `Needs {withArticle(Formulas.bottle(tier).name)}`
 end
 
 -- What a zone asks for, e.g. "Needs a Flask", or nil if it's open to all.
@@ -64,7 +64,7 @@ function Progression.requirement(zone: Types.ZoneDef): string?
 	if zone.premium then
 		return PREMIUM_ONLY
 	elseif zone.requiresBottle > 1 then
-		return needsBottle(zone)
+		return needsBottle(zone.requiresBottle)
 	end
 	return nil
 end
@@ -83,9 +83,26 @@ function Progression.lockReason(progress: Progress, zone: Types.ZoneDef, premium
 	if zone.premium and not premium then
 		return PREMIUM_ONLY
 	elseif progress.bottleTier < zone.requiresBottle then
-		return needsBottle(zone)
+		return needsBottle(zone.requiresBottle)
 	end
 	return nil
+end
+
+-- Worlds: anyone who owns the world's bottle can go through its portal.
+function Progression.canEnterWorld(progress: Progress, world: Types.WorldDef): boolean
+	return progress.bottleTier >= world.requiresBottle
+end
+
+-- What a world's portal asks for, e.g. "Needs a Storm Cell", or nil.
+function Progression.worldRequirement(world: Types.WorldDef): string?
+	return if world.requiresBottle > 1 then needsBottle(world.requiresBottle) else nil
+end
+
+-- Why a world's portal won't take this player yet, or nil when it will.
+function Progression.worldLockReason(progress: Progress, world: Types.WorldDef): string?
+	return if Progression.canEnterWorld(progress, world)
+		then nil
+		else needsBottle(world.requiresBottle)
 end
 
 -- Volts one charge caught in `zone` is worth to this player. A premium
@@ -115,8 +132,9 @@ end
 local KIND_ORDER: { [GoalKind]: number } = { zone = 1, bottle = 2, boots = 3 }
 
 -- The next bottle, the next boots and the nearest zone a bottle unlocks,
--- cheapest first (a zone wins a tie: it's the bigger reward). Premium
--- zones aren't goals: Volts can't open them. Empty at the top.
+-- cheapest first (a zone wins a tie: it's the bigger reward). When that
+-- zone is in a world you can't travel to yet, the goal is the world.
+-- Premium zones aren't goals: Volts can't open them. Empty at the top.
 function Progression.nextGoals(progress: Progress): { Goal }
 	local goals: { Goal } = {}
 	local bottle = Formulas.nextBottle(progress.bottleTier)
@@ -139,13 +157,24 @@ function Progression.nextGoals(progress: Progress): { Goal }
 	end
 	for _, zone in Formulas.sortedZones() do
 		if not zone.premium and progress.bottleTier < zone.requiresBottle then
-			local needed = Formulas.bottle(zone.requiresBottle).name
-			table.insert(goals, {
-				kind = "zone",
-				title = zone.displayName,
-				detail = `Buy {withArticle(needed)} to enter`,
-				price = bottleCost(progress.bottleTier, zone.requiresBottle),
-			})
+			local world = Formulas.world(zone.world)
+			if not Progression.canEnterWorld(progress, world) then
+				local needed = Formulas.bottle(world.requiresBottle).name
+				table.insert(goals, {
+					kind = "zone",
+					title = world.displayName,
+					detail = `New world! Buy {withArticle(needed)} to travel there`,
+					price = bottleCost(progress.bottleTier, world.requiresBottle),
+				})
+			else
+				local needed = Formulas.bottle(zone.requiresBottle).name
+				table.insert(goals, {
+					kind = "zone",
+					title = zone.displayName,
+					detail = `Buy {withArticle(needed)} to enter`,
+					price = bottleCost(progress.bottleTier, zone.requiresBottle),
+				})
+			end
 			break
 		end
 	end

@@ -1,5 +1,5 @@
 --!nocheck
--- Zone gates, next goals and the bottle tier migration.
+-- Zone gates, world portals, next goals and the bottle tier migration.
 --   lune run tools/harness/test_progression.luau
 local roblox = require("@lune/roblox")
 local World = require("./World")
@@ -114,6 +114,43 @@ end
 for _, goal in Progression.nextGoals(progress(topNeed)) do
 	check(goal.kind ~= "zone", "no zone goal once every zone is open")
 end
+
+-- worlds: the second world's portal opens with its bottle, and until then
+-- the zone goal past the first world is the world itself
+local second = Config.WORLDS[2]
+if second then
+	local need = second.requiresBottle
+	check(Progression.canEnterWorld(progress(1), Config.WORLDS[1]), "everyone can be in the first world")
+	check(not Progression.canEnterWorld(progress(need - 1), second), "the bottle before can't travel on")
+	check(Progression.canEnterWorld(progress(need), second), "its bottle opens the next world")
+	check(
+		Progression.worldLockReason(progress(1), second) == Progression.worldRequirement(second),
+		"a locked portal says what it needs"
+	)
+	check(Progression.worldLockReason(progress(need), second) == nil, "an open portal has no lock reason")
+	local firstWorldTop = 0
+	for _, zone in Config.ZONES do
+		if zone.world == Config.WORLDS[1].id and not zone.premium then
+			firstWorldTop = math.max(firstWorldTop, zone.requiresBottle)
+		end
+	end
+	local worldGoal
+	for _, goal in Progression.nextGoals(progress(firstWorldTop)) do
+		if goal.kind == "zone" then
+			worldGoal = goal
+		end
+	end
+	check(
+		worldGoal ~= nil and worldGoal.title == second.displayName,
+		"with the first world open, the next zone goal is the next world"
+	)
+	local cost = 0
+	for tier = firstWorldTop + 1, need do
+		cost += Config.BOTTLES[tier].price
+	end
+	check(worldGoal ~= nil and worldGoal.price == cost, "and it costs the bottles up to the world's")
+end
+
 local top = Progression.nextGoals(progress(#Config.BOTTLES, #Config.BOOTS))
 check(#top == 0, "nothing left to aim for with the best bottle and boots")
 

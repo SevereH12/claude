@@ -772,6 +772,9 @@ local function fingerPosts(parent: Instance, ctx: Context, base: Vector3, along:
 	end
 end
 
+-- Quiet-bearing slots (counted clockwise from the spawn) the portals use.
+local PORTAL_SLOTS = { 7, 1 }
+
 function Hub.buildHub(ctx: Context)
 	local parent = ctx.folders.hub
 	local floor = ctx.layout.hubFloor
@@ -835,9 +838,19 @@ function Hub.buildHub(ctx: Context)
 			local center = Geo.polar(b, 42, floor)
 			local frame = Geo.facing(center, Vector3.new(0, floor, 0))
 			-- clockwise from the spawn: kiosk, gasometer, foundry, water
-			-- tower, siren, weather hut, garden
+			-- tower, siren, weather hut, garden. Portals to other worlds
+			-- take the garden's place, then the kiosk's (beside the spawn).
 			local slotIndex = math.floor(((b - sb) % 360) / 45 + 0.5)
-			if slotIndex == 1 then
+			local portal = ctx.portals[table.find(PORTAL_SLOTS, slotIndex) or 0]
+			if portal then
+				Kit.portal(parent, frame, portal, {
+					ring = C.copper,
+					ringMaterial = M.metal,
+					step = C.iron,
+					stepMaterial = M.plate,
+					sign = Palette.sign(portal.to.color, true),
+				})
+			elseif slotIndex == 1 then
 				kiosk(parent, frame)
 				Pieces.crate(parent, (frame * CFrame.new(6.5, 0, 2)).Position, 2.2, 20, nil, true)
 				Pieces.barrel(parent, (frame * CFrame.new(-6.8, 0, 2.5)).Position, C.patina)

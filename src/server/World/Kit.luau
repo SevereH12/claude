@@ -12,6 +12,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Portals = require(ReplicatedStorage.Shared.Util.Portals)
 local ResearchSites = require(ReplicatedStorage.Shared.Util.ResearchSites)
 local Blocks = require(script.Parent.Blocks)
 local WorldTypes = require(script.Parent.Types)
@@ -23,6 +24,9 @@ local Kit = {}
 
 Kit.SELL_TAG = "SellArea"
 Kit.OFFICE_TAG = "ResearchOffice"
+Kit.PORTAL_TAG = Portals.TAG
+-- Ground a hub keeps clear for each portal (Kit.portal): a circle this wide.
+Kit.PORTAL_SPACE = 14
 
 -- Built-in particle textures (no uploads needed).
 Kit.TEXTURES = table.freeze({
@@ -712,6 +716,122 @@ function Kit.spawn(
 	end
 	spawnLocation.Parent = parent
 	return spawnLocation
+end
+
+-- Portals --------------------------------------------------------------------------
+
+export type PortalLook = {
+	ring: Color3,
+	ringMaterial: Enum.Material?,
+	step: Color3, -- the round step it stands on
+	stepMaterial: Enum.Material?,
+	sign: SignStyle,
+}
+
+local PORTAL_RADIUS = 6.5 -- of the ring's centre line
+local PORTAL_LIFT = 1.4 -- the ring's lowest point above the step
+local PORTAL_STEP = 0.45 -- step height: walk straight up onto it
+local PORTAL_SEGMENTS = 20
+
+-- A portal to another world standing on the ground at `frame`, facing
+-- along frame.LookVector (the side players walk up from): a round step,
+-- a ring round a glowing disc in the destination world's colour, a sign
+-- with where it goes and what it needs, and the invisible box tagged
+-- Portal (attribute ToWorld) that Systems/Worlds watches. Walking into the
+-- disc takes you there. Fits in a Kit.PORTAL_SPACE circle.
+function Kit.portal(
+	parent: Instance,
+	frame: CFrame,
+	portal: WorldTypes.Portal,
+	look: PortalLook
+): BasePart
+	local to = portal.to
+	local model = Instance.new("Model")
+	model.Name = `Portal{to.id}`
+	local bottom = frame.Position
+	Kit.cylinder(model, bottom - Vector3.new(0, 0.3, 0), PORTAL_STEP + 0.3, Kit.PORTAL_SPACE - 1, {
+		Name = "Step",
+		Color = look.step,
+		Material = look.stepMaterial or Enum.Material.SmoothPlastic,
+	})
+	local floor = PORTAL_STEP
+	local center = frame * CFrame.new(0, floor + PORTAL_LIFT + PORTAL_RADIUS, 0)
+	local segment = 2 * PORTAL_RADIUS * math.tan(math.pi / PORTAL_SEGMENTS) + 0.25
+	for i = 0, PORTAL_SEGMENTS - 1 do
+		local angle = (i + 0.5) * 2 * math.pi / PORTAL_SEGMENTS
+		Kit.decor({
+			Name = "Ring",
+			Size = Vector3.new(segment, 1.3, 1.4),
+			CFrame = center
+				* CFrame.new(math.cos(angle) * PORTAL_RADIUS, math.sin(angle) * PORTAL_RADIUS, 0)
+				* CFrame.Angles(0, 0, angle + math.pi / 2),
+			Color = look.ring,
+			Material = look.ringMaterial or Enum.Material.Metal,
+			CanCollide = false,
+			Parent = model,
+		})
+	end
+	-- feet: two blocks the ring stands on
+	for _, side in { -1, 1 } do
+		Kit.decor({
+			Name = "Foot",
+			Size = Vector3.new(1.6, PORTAL_LIFT + 1.2, 2),
+			CFrame = frame * CFrame.new(side * 3.4, floor + (PORTAL_LIFT + 1.2) / 2, 0),
+			Color = look.ring,
+			Material = look.ringMaterial or Enum.Material.Metal,
+			Parent = model,
+		})
+	end
+	local disc = Kit.decor({
+		Name = "Disc",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.3, 2 * PORTAL_RADIUS - 0.8, 2 * PORTAL_RADIUS - 0.8),
+		CFrame = center * CFrame.Angles(0, math.pi / 2, 0),
+		Color = to.color,
+		Material = Enum.Material.Neon,
+		Transparency = 0.35,
+		CanCollide = false,
+		CastShadow = false,
+		Parent = model,
+	})
+	Kit.light(disc, to.color, 18, 2)
+	Kit.emitter(disc, {
+		Texture = Kit.TEXTURES.sparkle,
+		Color = ColorSequence.new(to.color, Color3.new(1, 1, 1)),
+		LightEmission = 1,
+		Lifetime = NumberRange.new(0.8, 1.6),
+		Rate = 14,
+		Speed = NumberRange.new(1, 3),
+		SpreadAngle = Vector2.new(180, 180),
+		Size = NumberSequence.new(0.5, 0),
+	})
+	local title = if portal.back
+		then `BACK TO {string.upper(to.displayName)}`
+		else string.upper(to.displayName)
+	Kit.sign(
+		model,
+		frame * CFrame.new(0, floor + PORTAL_LIFT + 2 * PORTAL_RADIUS + 2.6, 0),
+		15,
+		3.4,
+		title,
+		if portal.requirement then `🔒 {portal.requirement}` else to.tagline,
+		look.sign
+	)
+	local box = Kit.part({
+		Name = "Portal",
+		Size = Vector3.new(2 * PORTAL_RADIUS - 1, 2 * PORTAL_RADIUS, 6),
+		CFrame = center,
+		Transparency = 1,
+		CanCollide = false,
+		CanQuery = false,
+		CanTouch = false,
+		CastShadow = false,
+		Parent = model,
+	})
+	box:AddTag(Kit.PORTAL_TAG)
+	box:SetAttribute("ToWorld", to.id)
+	model.Parent = parent
+	return box
 end
 
 -- Particles ----------------------------------------------------------------------

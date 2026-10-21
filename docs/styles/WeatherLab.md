@@ -110,6 +110,9 @@ is one see-through teal sheet (`Palette.water`, 35% transparent).
 - **Spawn**: a cream compass deck 52 studs out, facing straight down the
   pad to the lighthouse; the spawn gap has no cottage and its lamp stands
   aside, so nothing blocks the view.
+- **Portals**: the portal to the next world (and, in a later world, the one
+  back) stands where a cottage would, in the gap beside the spawn's (never
+  the harbour cove), 52 studs out and facing the lighthouse.
 - **Wayfinding**: a fingerpost beside the spawn with one arm per zone (zone
   colour, pointed toward it); a dashed glowing trail in each zone's colour
   set into the cobbles from the lighthouse to that zone's boardwalk; a

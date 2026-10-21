@@ -2,6 +2,10 @@
 -- Builds the map with the real MapBuilder in a stand-in world and writes
 -- every part + terrain fill to a JSON file for checks and rendering.
 --   lune run tools/harness/buildmap.luau [outfile] [style]
+-- style "Game" (or none) builds every world in Config.WORLDS; a style name
+-- builds only the first world's zones in that style (a preview). Each world
+-- gets its own file, since worlds sit thousands of studs apart: the first
+-- world's is `outfile`, world N's is `outfile` with _<WorldId> before .json.
 -- Exits non-zero if the build errors or required map pieces are missing.
 
 local fs = require("@lune/fs")
@@ -11,7 +15,10 @@ local serde = require("@lune/serde")
 local World = require("./World")
 
 local outPath = process.args[1] or "map.json"
-local styleName = process.args[2] -- nil = Config.WORLD_STYLE
+local styleName = process.args[2] -- nil or "Game" = every world
+if styleName == "Game" then
+	styleName = nil
+end
 local world = World.new("src")
 
 local MapBuilder = world:require("ServerScriptService.Server.Lib.MapBuilder")
@@ -139,9 +146,26 @@ end
 local zones = map and map:FindFirstChild("Zones")
 need(zones ~= nil, "Map.Zones missing")
 local Config = world:require("ReplicatedStorage.Shared.Config")
-for id in Config.ZONES do
-	local zonePart = zones and zones:FindFirstChild(id)
-	need(zonePart ~= nil and zonePart:IsA("BasePart"), "zone part missing for " .. id)
+local Formulas = world:require("ReplicatedStorage.Shared.Util.Formulas")
+local worlds = if styleName then { Config.WORLDS[1] } else Config.WORLDS
+for _, w in worlds do
+	for _, def in Formulas.worldZones(w.id) do
+		local zonePart = zones and zones:FindFirstChild(def.id)
+		need(zonePart ~= nil and zonePart:IsA("BasePart"), "zone part missing for " .. def.id)
+	end
+end
+-- every world's hub has a portal to the next world and back to the last
+local portalsTo = {}
+for _, inst in workspace:GetDescendants() do
+	if inst:IsA("BasePart") and inst:HasTag("Portal") then
+		local to = inst:GetAttribute("ToWorld")
+		portalsTo[to] = (portalsTo[to] or 0) + 1
+	end
+end
+for index, w in worlds do
+	-- one from the world before (onward) and one from the world after (back)
+	local links = (if worlds[index - 1] then 1 else 0) + (if worlds[index + 1] then 1 else 0)
+	need((portalsTo[w.id] or 0) == links, string.format("%d portals lead to %s", links, w.id))
 end
 local sellAreas = 0
 for _, inst in workspace:GetDescendants() do
@@ -161,28 +185,55 @@ for _, inst in workspace:GetDescendants() do
 end
 need(spawns > 0, "no SpawnLocation")
 
-fs.writeFile(
-	outPath,
-	serde.encode("json", {
-		parts = parts,
-		terrain = terrain,
-		beams = beams,
-		lights = lights,
-		style = map and map:GetAttribute("Style"),
-		counts = counts,
-		warnings = world.warnings,
-		problems = problems,
-	})
-)
-print(
-	string.format(
-		"built: %d parts, %d terrain ops, %d warnings -> %s",
-		#parts,
-		#terrain,
-		#world.warnings,
-		outPath
+-- one file per world: everything goes to the world whose hub is nearest
+local function nearest(p)
+	local best, bestDistance = 1, math.huge
+	for index, w in worlds do
+		local dx, dz = p[1] - w.offset.X, p[3] - w.offset.Z
+		local distance = dx * dx + dz * dz
+		if distance < bestDistance then
+			best, bestDistance = index, distance
+		end
+	end
+	return best
+end
+for index, w in worlds do
+	local mine = function(list, key)
+		local out = {}
+		for _, item in list do
+			if nearest(item[key]) == index then
+				table.insert(out, item)
+			end
+		end
+		return out
+	end
+	local path = if index == 1 then outPath else string.gsub(outPath, "%.json$", "") .. "_" .. w.id .. ".json"
+	local worldParts = mine(parts, "cframe")
+	fs.writeFile(
+		path,
+		serde.encode("json", {
+			parts = worldParts,
+			terrain = terrain,
+			beams = mine(beams, "a"),
+			lights = mine(lights, "p"),
+			style = if styleName then styleName else w.style,
+			world = w.id,
+			counts = counts,
+			warnings = world.warnings,
+			problems = problems,
+		})
 	)
-)
+	print(
+		string.format(
+			"built %s: %d parts, %d terrain ops, %d warnings -> %s",
+			w.id,
+			#worldParts,
+			#terrain,
+			#world.warnings,
+			path
+		)
+	)
+end
 for _, w in world.warnings do
 	print("WARN: " .. w)
 end

@@ -432,11 +432,6 @@ function Zone.saddle(
 	local rng = Geo.rng(ctx, Geo.zoneKey(zone) .. "-saddle")
 	local a0 = math.deg(prev.slot.angle)
 	local a1 = math.deg(zone.slot.angle)
-	-- only between neighbours round the ring (StormPunk's 45-degree steps;
-	-- a wider spiral, e.g. a zone borrowed into WeatherLab, has no gap)
-	if math.abs(Geo.angleDiff(a1, a0)) > 90 then
-		return {}
-	end
 	local mid = a0 + Geo.angleDiff(a1, a0) / 2
 	local r0 = Vector3.new(prev.slot.frame.X, 0, prev.slot.frame.Z).Magnitude
 	local r1 = Vector3.new(zone.slot.frame.X, 0, zone.slot.frame.Z).Magnitude

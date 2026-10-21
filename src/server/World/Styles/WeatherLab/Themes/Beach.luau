@@ -622,14 +622,11 @@ local function dress(ctx: Context, zone: ZoneContext)
 		if not (z < 0 and math.abs(x) < 16) then
 			x, z = Geo.seaward(ctx, zone, x + rng:NextNumber(-3, 3), z + rng:NextNumber(-3, 3), 3)
 			local p = Geo.at(zone, x, z)
-			-- not on a neighbour's beach (a borrowed island reaches further)
-			if Geo.clearOf(ctx, zone, p, 2, 20) then
-				Pieces.buoy(
-					folder,
-					Vector3.new(p.X, 0.2, p.Z),
-					if i % 2 == 0 then C.beacon else C.slicker
-				)
-			end
+			Pieces.buoy(
+				folder,
+				Vector3.new(p.X, 0.2, p.Z),
+				if i % 2 == 0 then C.beacon else C.slicker
+			)
 		end
 	end
 

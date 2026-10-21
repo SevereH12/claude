@@ -44,15 +44,50 @@ function Formulas.walkSpeed(inZone: boolean, bootTier: number): number
 	return Config.WALK_SPEED_IN_ZONE + Formulas.boots(bootTier).speedBonus
 end
 
--- Zone definitions sorted for display.
+-- The world with this id (the first world for an unknown id).
+function Formulas.world(id: string): Types.WorldDef
+	for _, world in Config.WORLDS do
+		if world.id == id then
+			return world
+		end
+	end
+	return Config.WORLDS[1]
+end
+
+-- Position of a world in travel order (1 = the first world).
+function Formulas.worldIndex(id: string): number
+	for index, world in Config.WORLDS do
+		if world.id == id then
+			return index
+		end
+	end
+	return 1
+end
+
+-- Every zone, in travel order: by world, then along each world's spiral.
 function Formulas.sortedZones(): { Types.ZoneDef }
 	local list: { Types.ZoneDef } = {}
 	for _, def in Config.ZONES do
 		table.insert(list, def)
 	end
 	table.sort(list, function(a, b)
+		local wa, wb = Formulas.worldIndex(a.world), Formulas.worldIndex(b.world)
+		if wa ~= wb then
+			return wa < wb
+		end
 		return a.order < b.order
 	end)
+	return list
+end
+
+-- One world's zones along its spiral.
+function Formulas.worldZones(worldId: string): { Types.ZoneDef }
+	local list: { Types.ZoneDef } = {}
+	for _, def in Formulas.sortedZones() do
+		if def.world == worldId then
+			table.insert(list, def)
+		end
+	end
 	return list
 end
 
