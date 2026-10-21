@@ -5,7 +5,7 @@
     python3 tools/render_ui.py preview.json out.png
 
 One tile per device, drawn to the same height so the shapes compare:
-the screen, Roblox's top bar (grey), the TV-safe edge (console), the
+the screen, Roblox's top-bar buttons (grey corners), the TV-safe edge (console), the
 thumbstick and jump areas (touch, red), and every HUD piece in design
 pixels times the device's UI scale, as it would sit on that screen.
 """
@@ -50,18 +50,20 @@ def main():
         img = Image.new("RGB", (int(vw * k) + 2, TILE_H + 28), (24, 28, 44))
         dr = ImageDraw.Draw(img)
         dr.rectangle([0, 0, vw * k, vh * k], fill=(64, 110, 150), outline=(255, 255, 255))
-        top = d["topbar"]
-        dr.rectangle([0, 0, vw * k, top * k], fill=(90, 90, 100))
         edge = d["edge"]
         s = d["scale"]
         # the safe area's top left in real pixels
-        ox = vw * edge
-        oy = top + (vh - top) * edge
+        ox, oy = vw * edge, vh * edge
         if edge:
-            dr.rectangle(
-                [ox * k, oy * k, (vw - ox) * k, (vh - (vh - top) * edge) * k],
-                outline=(255, 255, 255),
-            )
+            dr.rectangle([ox * k, oy * k, (vw - ox) * k, (vh - oy) * k], outline=(255, 255, 255))
+        left, right, height = d["topbar"]
+        if height > 0:
+            ax = d["area"][0]
+            for x0, x1 in ((0, left), (right, ax)):
+                dr.rectangle(
+                    [(ox + x0 * s) * k, oy * k, (ox + x1 * s) * k, (oy + height * s) * k],
+                    fill=(90, 90, 100),
+                )
         for z in d["thumbs"]:
             x, y, w, h = z
             dr.rectangle(

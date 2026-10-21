@@ -25,7 +25,11 @@ end
 local touch = { touch = true, keyboard = false, gamepad = false }
 local pc = { touch = false, keyboard = true, gamepad = false }
 local pad = { touch = false, keyboard = false, gamepad = true }
-local TOPBAR = 58 -- Roblox's top bar, which the HUD keeps clear of
+-- Roblox's top row (real pixels): its buttons take the left corner and
+-- (to be safe) a bit of the right one; the middle is free. Consoles have none.
+local TOPBAR = 58
+local TOPBAR_LEFT = { Phone = 170, Tablet = 230, Desktop = 230, Console = 0 }
+local TOPBAR_RIGHT = 70
 
 local devices = {
 	-- name, viewport, input, class
@@ -50,12 +54,21 @@ for _, device in devices do
 	check(got == class, `{name}: is a {class} (got {got})`)
 	local scale = LayoutMath.scale(got, viewport)
 	local edge = LayoutMath.edgePadding(got)
-	-- the safe area in design pixels: below the top bar, inside the TV edge
-	local area = Vector2.new(
-		viewport.X * (1 - 2 * edge),
-		(viewport.Y - TOPBAR) * (1 - 2 * edge)
-	) / scale
-	local hud = LayoutMath.hud(got, area)
+	-- the safe area in design pixels: inside the TV edge on a console
+	local area = viewport * (1 - 2 * edge) / scale
+	local topbar = if got == "Console"
+		then { left = 0, right = area.X, height = 0 }
+		else {
+			left = TOPBAR_LEFT[got] / scale,
+			right = (viewport.X - TOPBAR_RIGHT) / scale,
+			height = TOPBAR / scale,
+		}
+	local hud = LayoutMath.hud(got, area, topbar)
+	for _, block in LayoutMath.topbarBlocks(area, topbar) do
+		for key, r in hud do
+			check(not LayoutMath.overlaps(r, block), `{name}: {key} is clear of Roblox's top bar buttons`)
+		end
+	end
 
 	for key, r in hud do
 		if key ~= "test" then
@@ -94,7 +107,7 @@ for _, device in devices do
 		check(math.abs(share - 84 / 720) < 0.01, `{name}: the menu button is the same share of the screen`)
 	end
 	-- a big panel always fits
-	local panel = LayoutMath.fit(Vector2.new(620, 520), area)
+	local panel = LayoutMath.fit(Vector2.new(620, 520), area - Vector2.new(0, topbar.height))
 	check(panel.X <= area.X - 32 + 1e-6 and panel.Y <= area.Y - 32 + 1e-6, `{name}: panels fit`)
 
 	local rects = {}
@@ -108,7 +121,7 @@ for _, device in devices do
 		viewport = { viewport.X, viewport.Y },
 		area = { area.X, area.Y },
 		edge = edge,
-		topbar = TOPBAR,
+		topbar = { topbar.left, topbar.right, topbar.height },
 		hud = rects,
 		panel = { panel.X, panel.Y },
 		thumbs = if LayoutMath.isTouch(got)
@@ -127,6 +140,11 @@ check(LayoutMath.scale("Phone", Vector2.new(390, 844)) < LayoutMath.scale("Deskt
 check(LayoutMath.scale("Desktop", Vector2.new(3840, 2160)) == 2 * LayoutMath.scale("Desktop", Vector2.new(1920, 1080)), "4K is twice 1080p")
 local laptopWithPad = { touch = false, keyboard = true, gamepad = true, preferred = "Gamepad" }
 check(LayoutMath.classify(Vector2.new(1920, 1080), laptopWithPad) == "Console", "playing with a gamepad on a PC uses console layout")
+-- a click in Studio's phone emulator reports the mouse as the preferred
+-- input: the phone must stay a phone
+local clicked = { touch = true, keyboard = false, gamepad = false, preferred = "KeyboardAndMouse" }
+check(LayoutMath.classify(Vector2.new(844, 390), clicked) == "Phone", "a click doesn't turn a phone into a PC")
+check(LayoutMath.classify(Vector2.new(1024, 768), clicked) == "Tablet", "or a tablet into a PC")
 local touchLaptop = { touch = true, keyboard = true, gamepad = false }
 check(LayoutMath.classify(Vector2.new(1366, 768), touchLaptop) == "Desktop", "a touchscreen laptop with a keyboard is a desktop")
 

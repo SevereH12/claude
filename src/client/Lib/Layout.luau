@@ -1,14 +1,19 @@
 --!strict
 -- One layout system for every screen (the maths is in Lib/LayoutMath).
---   * Layout.class: "Phone", "Tablet", "Desktop" or "Console", from the
---     viewport and the input; Layout.Changed fires when it or the viewport
---     changes (rotate, resize, plug in a gamepad).
+--   * Layout.class: "Phone", "Tablet", "Desktop" or "Console", from what the
+--     device has (touch, keyboard, gamepad) and its screen size. It only
+--     changes when the screen is resized or rotated or a gamepad comes or
+--     goes; clicking or tapping never flips it (Studio's phone emulator
+--     reports a mouse click as a change of input).
 --   * Layout.screen(name, order): a ScreenGui inside the device safe area
---     with one UIScale, and a full-size `root` frame to build into. The root
---     keeps clear of Roblox's top bar and, on a console, of the outer 5% of
---     the TV. Everything inside is sized in design pixels (LayoutMath).
---   * Layout.area: the root's size in design pixels; Layout.hud: where each
---     HUD piece goes on it (LayoutMath.hud). Both update with Changed.
+--     and a `root` frame to build into, in DESIGN PIXELS: the root is
+--     1/scale of the screen and a UIScale on it brings it back to full
+--     size, so everything inside scales together. On a console the root
+--     keeps 5% clear of the TV's edges.
+--   * Layout.area: the root's size in design pixels; Layout.topbar: which
+--     parts of the top row Roblox's own buttons take (the middle is free);
+--     Layout.hud: where each HUD piece goes (LayoutMath.hud). All update
+--     with Changed.
 
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
@@ -20,7 +25,7 @@ local LayoutMath = require(script.Parent.LayoutMath)
 
 export type DeviceClass = LayoutMath.DeviceClass
 
-type Screen = { gui: ScreenGui, scale: UIScale, padding: UIPadding, clearTop: boolean }
+type Screen = { gui: ScreenGui, root: Frame, scale: UIScale, padding: UIPadding }
 
 local Layout = {}
 
@@ -28,13 +33,14 @@ Layout.class = "Desktop" :: DeviceClass
 Layout.viewport = Vector2.new(1920, 1080)
 Layout.scale = 1
 Layout.portrait = false
-Layout.area = Vector2.new(1280, 680)
-Layout.hud = LayoutMath.hud("Desktop", Layout.area)
+Layout.area = Vector2.new(1280, 720)
+Layout.topbar = { left = 0, right = 0, height = 0 } :: LayoutMath.Topbar
+Layout.hud = LayoutMath.hud("Desktop", Layout.area, Layout.topbar)
 Layout.Changed = Signal.new() :: Signal.Signal<DeviceClass>
 
 local screens: { Screen } = {}
--- an empty frame filling the first top-clear root's padded area: its size
--- is the safe area every screen builds in
+-- an empty frame filling the first screen's padded root: its size and
+-- position are the area every screen builds in
 local measure: Frame? = nil
 
 local function preferredInput(): string?
@@ -49,40 +55,54 @@ local function camera(): Camera?
 end
 
 local function applyScreen(screen: Screen)
-	screen.scale.Scale = Layout.scale
-	local edge = LayoutMath.edgePadding(Layout.class)
-	-- the top bar's bottom edge is measured from the top of the screen, but
-	-- this gui starts below the device's own inset (a notch); both are real
-	-- pixels, and the root's padding is in scaled units
-	local top = 0
-	if screen.clearTop then
-		local below = GuiService.TopbarInset.Max.Y - screen.gui.AbsolutePosition.Y
-		top = math.max(0, below) / Layout.scale
-	end
-	screen.padding.PaddingTop = UDim.new(edge, top)
-	screen.padding.PaddingBottom = UDim.new(edge, 0)
-	screen.padding.PaddingLeft = UDim.new(edge, 0)
-	screen.padding.PaddingRight = UDim.new(edge, 0)
+	local s = Layout.scale
+	screen.root.Size = UDim2.fromScale(1 / s, 1 / s)
+	screen.scale.Scale = s
+	local edge = UDim.new(LayoutMath.edgePadding(Layout.class), 0)
+	screen.padding.PaddingTop = edge
+	screen.padding.PaddingBottom = edge
+	screen.padding.PaddingLeft = edge
+	screen.padding.PaddingRight = edge
 end
 
--- Area and HUD from the measuring frame (or an estimate before there is
--- one). True if the area changed.
+-- Area, top bar and HUD from the measuring frame (or an estimate before
+-- there is one). True if anything moved.
 local function remeasure(): boolean
+	local s = Layout.scale
 	local frame = measure
-	local area
+	local area, origin
 	if frame and frame.AbsoluteSize.X > 0 then
-		area = frame.AbsoluteSize / Layout.scale
+		area = frame.AbsoluteSize / s
+		-- a position above the top bar's bottom can read negative (Roblox
+		-- measures some GUI from under its bar): the screen top is 0 either way
+		origin = Vector2.new(
+			math.max(0, frame.AbsolutePosition.X),
+			math.max(0, frame.AbsolutePosition.Y)
+		)
 	else
 		local edge = LayoutMath.edgePadding(Layout.class)
-		local top = GuiService.TopbarInset.Max.Y
-		area = Vector2.new(
-			Layout.viewport.X * (1 - 2 * edge),
-			(Layout.viewport.Y - top) * (1 - 2 * edge)
-		) / Layout.scale
+		area = Layout.viewport * (1 - 2 * edge) / s
+		origin = Layout.viewport * edge
 	end
-	local changed = (area - Layout.area).Magnitude > 0.5
+	-- Roblox's top bar: its free middle (TopbarInset) in the root's design
+	-- pixels; no more than a fifth of the screen whatever it reports
+	local inset = GuiService.TopbarInset
+	local topbar: LayoutMath.Topbar = {
+		left = math.max(0, (inset.Min.X - origin.X) / s),
+		right = math.min(area.X, (inset.Max.X - origin.X) / s),
+		height = math.clamp((inset.Max.Y - origin.Y) / s, 0, area.Y * 0.2),
+	}
+	if inset.Max.X <= inset.Min.X then
+		topbar = { left = 0, right = area.X, height = 0 } -- no top bar
+	end
+	local old, oldBar = Layout.area, Layout.topbar
+	local changed = (area - old).Magnitude > 0.5
+		or math.abs(topbar.height - oldBar.height) > 0.5
+		or math.abs(topbar.left - oldBar.left) > 0.5
+		or math.abs(topbar.right - oldBar.right) > 0.5
 	Layout.area = area
-	Layout.hud = LayoutMath.hud(Layout.class, area)
+	Layout.topbar = topbar
+	Layout.hud = LayoutMath.hud(Layout.class, area, topbar)
 	return changed
 end
 
@@ -112,48 +132,45 @@ function Layout.isTouch(): boolean
 	return LayoutMath.isTouch(Layout.class)
 end
 
--- `clearTop` (default true): keep the root below Roblox's top bar buttons.
-function Layout.screen(name: string, displayOrder: number, clearTop: boolean?): (ScreenGui, Frame)
+function Layout.screen(name: string, displayOrder: number): (ScreenGui, Frame)
 	local gui = Instance.new("ScreenGui")
 	gui.Name = name
 	gui.ResetOnSpawn = false
 	gui.DisplayOrder = displayOrder
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	gui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
-	local scale = Instance.new("UIScale")
-	scale.Parent = gui
 	local root = Instance.new("Frame")
 	root.Name = "Root"
-	root.Size = UDim2.fromScale(1, 1)
 	root.BackgroundTransparency = 1
 	root.Parent = gui
+	local scale = Instance.new("UIScale")
+	scale.Parent = root
 	local padding = Instance.new("UIPadding")
 	padding.Parent = root
-	local screen = { gui = gui, scale = scale, padding = padding, clearTop = clearTop ~= false }
+	local screen = { gui = gui, root = root, scale = scale, padding = padding }
 	table.insert(screens, screen)
-	if not measure and screen.clearTop then
+	applyScreen(screen)
+	if not measure then
 		local frame = Instance.new("Frame")
 		frame.Name = "SafeArea"
 		frame.Size = UDim2.fromScale(1, 1)
 		frame.BackgroundTransparency = 1
 		frame.Parent = root
 		measure = frame
-		frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		local function moved()
 			if remeasure() then
 				Layout.Changed:Fire(Layout.class)
 			end
-		end)
+		end
+		frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(moved)
+		frame:GetPropertyChangedSignal("AbsolutePosition"):Connect(moved)
 	end
 	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
-	applyScreen(screen)
-	-- the safe-area offset is only known once it's on screen (and on rotate)
-	gui:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
-		applyScreen(screen)
-	end)
 	return gui, root
 end
 
--- Watch everything that changes the class or the viewport.
+-- Watch what changes the class, the viewport or the top bar. Not the last
+-- input type: that changes on every click in the emulator.
 local watchedCamera: Camera? = nil
 local function watchCamera()
 	local cam = camera()
@@ -166,8 +183,11 @@ end
 workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watchCamera)
 UserInputService.GamepadConnected:Connect(refresh)
 UserInputService.GamepadDisconnected:Connect(refresh)
-UserInputService.LastInputTypeChanged:Connect(refresh)
-GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(refresh)
+GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(function()
+	if remeasure() then
+		Layout.Changed:Fire(Layout.class)
+	end
+end)
 pcall(function()
 	UserInputService:GetPropertyChangedSignal("PreferredInput" :: any):Connect(refresh)
 end)

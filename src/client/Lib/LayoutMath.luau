@@ -14,9 +14,11 @@
 --
 -- The HUD sits on the screen's edges: Volts and the storm timer top left,
 -- the next goal top right, the bottle bar bottom centre (top centre on
--- touch, clear of the thumbstick and jump button; under the top row on a
--- phone held upright), MENU on the left edge. Toasts and the zone banner
--- go in the middle of the top, under whatever sits there.
+-- touch, clear of the thumbstick and jump button; on a phone held upright
+-- under the top row, beside MENU), MENU on the left edge. Toasts and the zone banner
+-- go in the middle of the top, under whatever sits there. Pieces use the
+-- free middle of Roblox's top row and only drop below it where its own
+-- buttons are, so the top of the screen isn't wasted.
 
 export type DeviceClass = "Phone" | "Tablet" | "Desktop" | "Console"
 
@@ -31,6 +33,10 @@ export type Input = {
 
 -- A rectangle in design pixels, from the top left of the safe area.
 export type Rect = { x: number, y: number, w: number, h: number }
+
+-- Roblox's top row, in design pixels: its buttons take the left of `left`
+-- and the right of `right`, `height` tall; the middle is free.
+export type Topbar = { left: number, right: number, height: number }
 
 export type Hud = {
 	volts: Rect,
@@ -83,19 +89,18 @@ LayoutMath.HUD = table.freeze({
 	testHeight = 50,
 })
 
+-- From what the device has, not what was used last: the preferred input
+-- only matters for a gamepad (a PC played with one gets the console
+-- layout). A click in Studio's phone emulator changes the preferred input
+-- to mouse; that must not turn a phone into a PC.
 function LayoutMath.classify(viewport: Vector2, input: Input): DeviceClass
 	local short = math.min(viewport.X, viewport.Y)
-	local preferred = input.preferred
-	local gamepadFirst = if preferred
-		then preferred == "Gamepad"
-		else input.gamepad and not input.keyboard and not input.touch
-	if gamepadFirst then
+	if
+		input.preferred == "Gamepad" or (input.gamepad and not input.keyboard and not input.touch)
+	then
 		return "Console"
 	end
-	local touchFirst = if preferred
-		then preferred == "Touch"
-		else input.touch and not input.keyboard
-	if touchFirst then
+	if input.touch and (not input.keyboard or short < LayoutMath.PHONE_SHORT_SIDE) then
 		return if short < LayoutMath.PHONE_SHORT_SIDE then "Phone" else "Tablet"
 	end
 	return "Desktop"
@@ -146,68 +151,128 @@ local function rect(x: number, y: number, w: number, h: number): Rect
 	return { x = x, y = y, w = w, h = h }
 end
 
+-- The parts of the top row Roblox's own buttons take (left of
+-- topbar.left, right of topbar.right), as rectangles.
+function LayoutMath.topbarBlocks(area: Vector2, topbar: Topbar): { Rect }
+	if topbar.height <= 0 then
+		return {}
+	end
+	return {
+		rect(0, 0, topbar.left, topbar.height),
+		rect(topbar.right, 0, area.X - topbar.right, topbar.height),
+	}
+end
+
 -- Where every HUD piece goes on a safe area of `area` design pixels.
-function LayoutMath.hud(class: DeviceClass, area: Vector2): Hud
+-- `topbar`: Roblox's top row (design pixels); pieces use its free middle
+-- and only drop below it where its buttons are.
+function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?): Hud
 	local H = LayoutMath.HUD
 	local M, G = LayoutMath.MARGIN, LayoutMath.GAP
 	local W, T = area.X, area.Y
+	local bar0: Topbar = topbar or { left = 0, right = W, height = 0 }
 	local touch = LayoutMath.isTouch(class)
-	local portrait = T > W
+	local upright = touch and T > W
+
+	-- the top edge for something spanning x .. x + w: the very top in the
+	-- top bar's free middle, under the bar where its buttons are
+	local function topFor(x: number, w: number): number
+		if bar0.height > 0 and (x < bar0.left + G or x + w > bar0.right - G) then
+			return bar0.height + M
+		end
+		return M
+	end
 
 	-- top left: Volts, the storm timer under it; top right: the next goal
-	local volts = rect(M, M, H.statWidth, H.voltsHeight)
-	local storm = rect(M, M + H.voltsHeight + G, H.statWidth, H.stormHeight)
-	local goal = rect(W - M - H.goalWidth, M, H.goalWidth, H.goalHeight)
-	local topRow = math.max(H.voltsHeight + G + H.stormHeight, H.goalHeight)
+	local volts = rect(M, topFor(M, H.statWidth), H.statWidth, H.voltsHeight)
+	local storm = rect(M, volts.y + volts.h + G, H.statWidth, H.stormHeight)
+	local goalX = W - M - H.goalWidth
+	local goal = rect(goalX, topFor(goalX, H.goalWidth), H.goalWidth, H.goalHeight)
+	local leftBottom = storm.y + storm.h
+	local rightBottom = goal.y + goal.h
 
-	-- the bottle bar
+	-- the bottle bar, and on a phone or tablet held upright MENU beside it
 	local bar
+	local menu: Rect? = nil
 	if not touch then
 		bar = rect((W - H.barWidth) / 2, T - M - H.barHeight, H.barWidth, H.barHeight)
-	elseif portrait then
-		local width = math.min(H.barWidth, W - 2 * M)
-		bar = rect((W - width) / 2, M + topRow + G, width, H.barHeight)
+	elseif upright then
+		local rowY = math.max(leftBottom, rightBottom) + G
+		menu = rect(M, rowY, H.menuSize, H.menuSize)
+		local x = M + H.menuSize + G
+		local width = math.min(H.barWidth, W - x - M)
+		bar = rect(x, rowY + (H.menuSize - H.barHeight) / 2, width, H.barHeight)
 	else
 		-- between the two top corners
 		local left, right = volts.x + volts.w + 2 * G, goal.x - 2 * G
 		local width = math.min(H.barWidth, right - left)
-		bar = rect((left + right - width) / 2, M, width, H.barHeight)
+		local x = (left + right - width) / 2
+		bar = rect(x, topFor(x, width), width, H.barHeight)
 	end
 
-	-- toasts, then the zone banner, in the middle of the top
-	local centerTop = if touch then bar.y + bar.h + G else M
+	-- toasts, then the zone banner, in the middle of the top; each drops
+	-- below a corner piece it would reach sideways
+	local function belowCorners(x: number, w: number, y: number): number
+		if x < volts.x + volts.w + G then
+			y = math.max(y, leftBottom + G)
+		end
+		if x + w > goal.x - G then
+			y = math.max(y, rightBottom + G)
+		end
+		return y
+	end
 	local toastWidth = math.min(H.toastWidth, W - 2 * M)
+	local toastX = (W - toastWidth) / 2
+	local centerTop = if upright and menu
+		then menu.y + menu.h + G
+		elseif touch then bar.y + bar.h + G
+		else topFor(toastX, toastWidth)
+	local toastHeight = H.toastRows * (H.toastHeight + 6)
 	local toasts =
-		rect((W - toastWidth) / 2, centerTop, toastWidth, H.toastRows * (H.toastHeight + 6))
+		rect(toastX, belowCorners(toastX, toastWidth, centerTop), toastWidth, toastHeight)
 	local bannerWidth = math.min(H.bannerWidth, W - 2 * M)
-	local banner = rect((W - bannerWidth) / 2, toasts.y + toasts.h + G, bannerWidth, H.bannerHeight)
-
-	-- MENU on the left edge: the middle on a PC or console; higher on touch,
-	-- clear of the thumbstick; always below the top-left stats
-	local below = M + topRow + 2 * G + (if touch and portrait then H.barHeight + G else 0)
-	-- where the toasts and banner reach the left edge (narrow screens held
-	-- upright), MENU goes below them too
-	if banner.x < M + H.menuSize + G or toasts.x < M + H.menuSize + G then
-		below = math.max(below, banner.y + banner.h + 2 * G)
-	end
-	local menuY = if touch then T * 0.36 - H.menuSize / 2 else T / 2 - H.menuSize / 2
-	local menu = rect(M, math.max(below, menuY), H.menuSize, H.menuSize)
-	-- the card opens beside the button, never above the top-left stats
-	local cardTop = M + topRow + G
-	local cardY = math.clamp(
-		menu.y + (menu.h - H.cardHeight) / 2,
-		cardTop,
-		math.max(cardTop, T - M - H.cardHeight)
+	local bannerX = (W - bannerWidth) / 2
+	local banner = rect(
+		bannerX,
+		belowCorners(bannerX, bannerWidth, toasts.y + toasts.h + G),
+		bannerWidth,
+		H.bannerHeight
 	)
-	local card = rect(menu.x + menu.w + 10, cardY, H.cardWidth, H.cardHeight)
-	local test = rect(M, menu.y + menu.h + G, H.testWidth, 2 * H.testHeight + G)
+
+	-- MENU on the left edge (unless it's already beside the bar): the middle
+	-- on a PC or console, higher on touch (clear of the thumbstick), always
+	-- below the top-left stats and below the middle column where that
+	-- reaches the left edge
+	local card
+	if menu then
+		-- upright: the card opens under the button
+		card = rect(M, menu.y + menu.h + G, H.cardWidth, H.cardHeight)
+	else
+		local below = leftBottom + 2 * G
+		if banner.x < M + H.menuSize + G or toasts.x < M + H.menuSize + G then
+			below = math.max(below, banner.y + banner.h + 2 * G)
+		end
+		local menuY = if touch then T * 0.36 - H.menuSize / 2 else T / 2 - H.menuSize / 2
+		menu = rect(M, math.max(below, menuY), H.menuSize, H.menuSize)
+		-- the card opens beside the button, never above the top-left stats
+		local placed = menu :: Rect
+		local cardTop = leftBottom + G
+		local cardY = math.clamp(
+			placed.y + (placed.h - H.cardHeight) / 2,
+			cardTop,
+			math.max(cardTop, T - M - H.cardHeight)
+		)
+		card = rect(placed.x + placed.w + 10, cardY, H.cardWidth, H.cardHeight)
+	end
+	local button = menu :: Rect
+	local test = rect(M, button.y + button.h + G, H.testWidth, 2 * H.testHeight + G)
 
 	return {
 		volts = volts,
 		storm = storm,
 		goal = goal,
 		bar = bar,
-		menu = menu,
+		menu = button,
 		card = card,
 		toasts = toasts,
 		banner = banner,

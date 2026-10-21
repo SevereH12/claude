@@ -277,7 +277,7 @@ local function getBackdrop(): TextButton
 		return existing
 	end
 	-- its own screen just under the panels (DisplayOrder 5+) and over the HUD
-	local _, root = Layout.screen("Backdrop", 4, false)
+	local _, root = Layout.screen("Backdrop", 4)
 	local button = UI.make(Instance.new("TextButton"), {
 		Name = "Backdrop",
 		Text = "",
@@ -423,9 +423,12 @@ function UI.window(
 		Visible = false,
 		Parent = parent,
 	})
+	-- centred in the space under Roblox's top bar
 	UI.onLayout(function()
-		local size = LayoutMath.fit(design, Layout.area)
+		local top = Layout.topbar.height
+		local size = LayoutMath.fit(design, Layout.area - Vector2.new(0, top))
 		panel.Size = UDim2.fromOffset(size.X, size.Y)
+		panel.Position = UDim2.new(0.5, 0, 0.5, top / 2)
 	end)
 	local header = UI.make(Instance.new("Frame"), {
 		Name = "Header",
