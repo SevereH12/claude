@@ -17,8 +17,8 @@ and stops if it isn't. To run one, say: "Do `docs/prompts/<file>`".
    Dashboard, including where players are when they leave. It can run any
    time after prompt 2.
 6. `6-ui-devices.md`: **run it twice.** Part A replaces the HUD buttons
-   with one MENU button whose Shop, Research, Teleport and Passes (Game
-   Pass shop) buttons fly out from the centre. Part B makes every screen
+   with one MENU button whose Shop, Research, Teleport (between worlds) and
+   Passes (a coming-soon placeholder) buttons fly out from the centre. Part B makes every screen
    fit and work on PC, phone (portrait and landscape), iPad and console.
 7. `7-temp-text-and-charge-size.md`: makes every on-screen message go away
    after a few seconds (second fix, with a test), and makes bigger zones

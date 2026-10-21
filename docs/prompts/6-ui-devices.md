@@ -1,4 +1,4 @@
-# Prompt 6: one menu button, teleport, Game Pass shop, and a GUI for every device
+# Prompt 6: one menu button, world teleport, and a GUI for every device
 
 Follow the rules in `docs/prompts/README.md`. Run this after prompts 1 to
 5, so it covers every screen they added.
@@ -6,8 +6,8 @@ Follow the rules in `docs/prompts/README.md`. Run this after prompts 1 to
 **Run it twice.** Each run does the first part below that isn't ticked,
 then ticks it:
 
-- [ ] Part A: one menu button, with Shop, Research, Teleport and Passes
-  flying out of it
+- [ ] Part A: one menu button, with Shop, Research, Teleport (worlds) and
+  Passes (coming soon) flying out of it
 - [ ] Part B: every screen fits and works on every device
 
 ## Part A: one menu button (run 1)
@@ -19,8 +19,7 @@ then ticks it:
   (`buildShopButton`, the RESEARCH button)
 - `ShopUI.luau` and `ResearchUI.luau`: only how they open and close
 - `src/server/Systems/Travel.luau` and `src/client/Controllers/Travel.luau`
-- `src/shared/Config.luau`, `Remotes.luau` and `Util/Progression.luau`
-- `src/server/Systems/Selling.luau`: only where Volts are earned
+- `src/shared/Config.luau` (`WORLDS`) and `Remotes.luau`
 
 ### Build
 
@@ -42,58 +41,42 @@ then ticks it:
      boots, and on RESEARCH when you can afford the next hire.
    - Use TweenService, allocate nothing per frame, and don't change how
      hiring works (it still needs the Research Office).
-2. **TELEPORT panel**: one section per world. Each lists the world's hub,
-   its Research Center or Office, and its zones in order.
-   - **Locked rows** are greyed, with the reason (`Progression.lockReason`,
-     the world's `requiresBottle`, or Premium only).
-   - **Remote**: `TeleportTo(destId)`, rate-limited.
-     - `destId` must be one of the server's own destination ids:
-       `"Hub:<WorldId>"`, `"Research:<WorldId>"` or a zone id.
-     - The server checks the player is allowed there (the same rules as
-       zone gates and portals), is alive, and is off `TELEPORT_COOLDOWN`
-       (Config, about 10s).
-     - It moves them with the same code `Systems/Travel` uses for portals
-       (and sets the `World` attribute).
-   - **Landing spots**:
-     - a zone: just outside its gate, never inside the zone
-     - a hub: the world's spawn
-     - Research: the office pad
+2. **TELEPORT panel: worlds only.** One row per world in `Config.WORLDS`,
+   showing its name, tagline and colour. Teleporting takes you to that
+   world's spawn. There are no zone or Research destinations.
+   - **Locked worlds** are greyed with "Needs a <bottle name>", the same
+     rule the portals use (the world's `requiresBottle`).
+   - **The world you're in** shows as "YOU ARE HERE" and can't be
+     selected.
+   - **Remote**: `TeleportToWorld(worldId)`, rate-limited.
+     - `worldId` must be a real world id.
+     - The server checks the world is unlocked, the player is alive, and
+       they're off `TELEPORT_COOLDOWN` (Config, about 10s).
+     - It moves them with the same function `Systems/Travel` uses for
+       portals, so the spawn spot and the `World` attribute are handled the
+       same way. If that function isn't reusable, make it so; don't copy
+       it.
    - Show the cooldown on the panel.
-   - Put the destination list and the allowed check in a pure
-     `src/shared/Util/Teleport.luau`.
-3. **PASSES panel (Game Pass shop)**:
-   - **Config**: `GAMEPASSES`, a list of `{ key, id, name, description }`.
-     An `id` of 0 means not created yet, and its card says COMING SOON.
-     Start with two simple passes:
-     - `DoubleVolts`: selling pays 2x
-     - `FastTravel`: no teleport cooldown
-   - **Cards**: the name, description and price from
-     `MarketplaceService:GetProductInfo(id, Enum.InfoType.GamePass)`
-     (cached, wrapped in `pcall`), shown with the Robux icon
-     `utf8.char(0xE002)`. BUY calls
-     `MarketplaceService:PromptGamePassPurchase`; owned passes show OWNED.
-   - **Server** (`Systems/Passes.luau`):
-     - check ownership on join with `UserOwnsGamePassAsync` (`pcall` and one
-       retry)
-     - grant straight away on `PromptGamePassPurchaseFinished`
-     - expose `Passes.owns(player, key)`
-     - set `Pass_<key>` player attributes for the client to show
-     - never trust the client
-   - **Effects**: `Selling` applies `DoubleVolts`, and `TeleportTo` skips the
-     cooldown for `FastTravel`.
-   - **README**: explain how to create a Game Pass on the Creator Dashboard
-     and paste its id into Config.
-4. **Test**: `tools/harness/test_teleport.luau` covers the destination list,
-   allowed and locked destinations, and the cooldown maths.
+   - Put the unlocked check in a pure function (shared with the portals if
+     they don't already have one).
+3. **PASSES button**: no Game Passes yet. The button opens a small panel
+   saying "Game Pass shop coming soon", with nothing to buy and no
+   MarketplaceService code. A later prompt will fill it.
+4. **Test**: `tools/harness/test_teleport.luau` covers:
+   - a locked world and an unlocked world
+   - an unknown world id
+   - the cooldown maths
 
 ### Done means (part A)
 
 - `stylua src` and `selene src` are clean.
 - `test_teleport.luau` and the existing harness tests pass.
 - `tools/check_world.sh Game` still passes.
-- If the Studio MCP is connected: open the menu, watch the buttons fly
-  out, teleport to Mesa and to the hub, and check that a locked zone
-  refuses.
+- If the Studio MCP is connected:
+  - open the menu and watch the buttons fly out
+  - teleport to Voltcliff Works (after using the TEST button for Volts and
+    buying its bottle) and back to Barometer Bay
+  - check that a locked world refuses
 - Tick part A, commit and push.
 
 ## Part B: every screen fits and works on every device (run 2)
