@@ -1,9 +1,105 @@
-# Prompt 6: make the GUI work on every device
+# Prompt 6: one menu button, teleport, Game Pass shop, and a GUI for every device
 
 Follow the rules in `docs/prompts/README.md`. Run this after prompts 1 to
 5, so it covers every screen they added.
 
-Make every screen of the game's UI fit, read well and be easy to use on:
+**Run it twice.** Each run does the first part below that isn't ticked,
+then ticks it:
+
+- [ ] Part A: one menu button, with Shop, Research, Teleport and Passes
+  flying out of it
+- [ ] Part B: every screen fits and works on every device
+
+## Part A: one menu button (run 1)
+
+### Read only
+
+- `src/client/Lib/UI.luau`
+- in `src/client/Controllers/HUD.luau`, grep for the buttons
+  (`buildShopButton`, the RESEARCH button)
+- `ShopUI.luau` and `ResearchUI.luau`: only how they open and close
+- `src/server/Systems/Travel.luau` and `src/client/Controllers/Travel.luau`
+- `src/shared/Config.luau`, `Remotes.luau` and `Util/Progression.luau`
+- `src/server/Systems/Selling.luau`: only where Volts are earned
+
+### Build
+
+1. **One MENU button** replaces the separate SHOP and RESEARCH buttons.
+   The TEST button and the readouts stay where they are.
+   - It's a round button with a lightning-bottle icon at the side of the
+     screen, clear of the thumbstick.
+   - **Opening it**: the button spins and pulses, a dim backdrop fades in,
+     and four round buttons fly out from the screen centre into a ring:
+     SHOP, RESEARCH, TELEPORT and PASSES, each with an icon and a label.
+     - They start at scale 0 in the centre and stagger about 0.05s apart,
+       with Back easing so they overshoot a little and settle.
+   - **Closing it**: clicking the backdrop, the MENU button again, Esc or
+     gamepad B plays it in reverse. Picking a button closes the ring and
+     opens that panel.
+   - **One thing at a time**: only one panel is open at once, and opening
+     the menu closes any open panel.
+   - **Badges**: a small dot on SHOP when you can afford the next bottle or
+     boots, and on RESEARCH when you can afford the next hire.
+   - Use TweenService, allocate nothing per frame, and don't change how
+     hiring works (it still needs the Research Office).
+2. **TELEPORT panel**: one section per world. Each lists the world's hub,
+   its Research Center or Office, and its zones in order.
+   - **Locked rows** are greyed, with the reason (`Progression.lockReason`,
+     the world's `requiresBottle`, or Premium only).
+   - **Remote**: `TeleportTo(destId)`, rate-limited.
+     - `destId` must be one of the server's own destination ids:
+       `"Hub:<WorldId>"`, `"Research:<WorldId>"` or a zone id.
+     - The server checks the player is allowed there (the same rules as
+       zone gates and portals), is alive, and is off `TELEPORT_COOLDOWN`
+       (Config, about 10s).
+     - It moves them with the same code `Systems/Travel` uses for portals
+       (and sets the `World` attribute).
+   - **Landing spots**:
+     - a zone: just outside its gate, never inside the zone
+     - a hub: the world's spawn
+     - Research: the office pad
+   - Show the cooldown on the panel.
+   - Put the destination list and the allowed check in a pure
+     `src/shared/Util/Teleport.luau`.
+3. **PASSES panel (Game Pass shop)**:
+   - **Config**: `GAMEPASSES`, a list of `{ key, id, name, description }`.
+     An `id` of 0 means not created yet, and its card says COMING SOON.
+     Start with two simple passes:
+     - `DoubleVolts`: selling pays 2x
+     - `FastTravel`: no teleport cooldown
+   - **Cards**: the name, description and price from
+     `MarketplaceService:GetProductInfo(id, Enum.InfoType.GamePass)`
+     (cached, wrapped in `pcall`), shown with the Robux icon
+     `utf8.char(0xE002)`. BUY calls
+     `MarketplaceService:PromptGamePassPurchase`; owned passes show OWNED.
+   - **Server** (`Systems/Passes.luau`):
+     - check ownership on join with `UserOwnsGamePassAsync` (`pcall` and one
+       retry)
+     - grant straight away on `PromptGamePassPurchaseFinished`
+     - expose `Passes.owns(player, key)`
+     - set `Pass_<key>` player attributes for the client to show
+     - never trust the client
+   - **Effects**: `Selling` applies `DoubleVolts`, and `TeleportTo` skips the
+     cooldown for `FastTravel`.
+   - **README**: explain how to create a Game Pass on the Creator Dashboard
+     and paste its id into Config.
+4. **Test**: `tools/harness/test_teleport.luau` covers the destination list,
+   allowed and locked destinations, and the cooldown maths.
+
+### Done means (part A)
+
+- `stylua src` and `selene src` are clean.
+- `test_teleport.luau` and the existing harness tests pass.
+- `tools/check_world.sh Game` still passes.
+- If the Studio MCP is connected: open the menu, watch the buttons fly
+  out, teleport to Mesa and to the hub, and check that a locked zone
+  refuses.
+- Tick part A, commit and push.
+
+## Part B: every screen fits and works on every device (run 2)
+
+Make every screen of the game's UI, including the menu ring and the
+Teleport and Passes panels from part A, fit, read well and be easy to use on:
 - a PC with mouse and keyboard
 - a phone, in portrait and landscape
 - a tablet (iPad)
@@ -12,7 +108,7 @@ Make every screen of the game's UI fit, read well and be easy to use on:
 Keep the current look: same colours, fonts and style. This is about layout,
 sizing and input, not a redesign.
 
-## Read only
+### Read only
 
 - `src/client/Lib/UI.luau`
 - every client file that builds GUI. Find them with
@@ -21,7 +117,7 @@ sizing and input, not a redesign.
   `DevCommands`, plus the popup, flash and banner code in `StrikeFX`. Read
   each file once, when you get to it.
 
-## Build
+### Build
 
 1. **One layout system in `Lib/UI`** (or a new `Lib/Layout.luau`):
    - **Device class**: decide `Phone`, `Tablet`, `Desktop` or `Console`
@@ -49,23 +145,23 @@ sizing and input, not a redesign.
      overflow.
    - In portrait, stack things that sit side by side in landscape.
 3. **PC**:
-   - Keyboard shortcuts: **B** for the shop, **R** for Research and **Esc**
-     to close a panel. Show them as small key hints on the buttons, on PC
+   - Keyboard shortcuts: **M** for the menu, **B** for the shop, **R** for
+     Research, **T** for Teleport, **P** for Passes and **Esc** to close. Show them as small key hints on the buttons, on PC
      only.
    - Panels keep a sensible maximum size on big monitors (`UI.sizeLimits`).
 4. **Console / gamepad**:
    - Every button is `Selectable`, and opening a panel puts the selection on
      its first button (`GuiService.SelectedObject`).
-   - **ButtonY** opens the shop, **ButtonX** opens Research and **ButtonB**
-     closes a panel. Show button hints instead of key hints.
+   - **ButtonY** opens the menu ring, the D-pad moves round the ring, and
+     **ButtonB** closes. Show button hints instead of key hints.
    - Keep everything inside the TV-safe area, about 5% in from every edge.
 5. **Pop-ups and banners** ("+5", "x2 ASSAYED", unlock banners, zone
    banners, toasts):
    - place them by scale and keep them inside the safe area
    - never let two pile on top of each other: queue or stack them
-6. **Warnings become temporary**: warning and hint text must not stay on
-   screen forever. Add one toast helper in `Lib/UI` (for example
-   `UI.toast(text, kind, seconds)`).
+6. **Warnings become temporary**: prompt 7 already added `UI.toast`. Keep
+   every warning on it, including any new ones from part A, and check the
+   points below still hold:
    - It shows a short message near the top-centre, inside the safe area.
    - It fades out after about 3 seconds.
    - The same text isn't repeated while it's showing (the timer restarts
@@ -88,11 +184,7 @@ sizing and input, not a redesign.
    add `tools/harness/test_layout.luau` covering phone portrait, phone
    landscape, iPad, 1080p, 4K and a console at 1080p.
 
-If there are too many screens to finish in one go, finish the layout system
-and the HUD and shop first, commit and push, and list the screens still to
-do at the end of this file, so a second run picks them up.
-
-## Review before pushing
+### Review before pushing (part B)
 
 - `stylua src` and `selene src` are clean, and `test_layout.luau` passes.
 - If the Studio MCP is connected:
@@ -103,4 +195,4 @@ do at the end of this file, so a second run picks them up.
   - fix anything you find, then check again once
 - In your final message, give the user a short list of what to check in
   Studio (Test tab, then Device), one line per device.
-- Commit and push.
+- Tick part B, commit and push.
