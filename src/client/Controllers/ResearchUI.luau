@@ -14,6 +14,7 @@ local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local ResearchSites = require(ReplicatedStorage.Shared.Util.ResearchSites)
 local Types = require(ReplicatedStorage.Shared.Types)
 local ResearcherModels = require(script.Parent.Parent.Lib.ResearcherModels)
+local Layout = require(script.Parent.Parent.Lib.Layout)
 local UI = require(script.Parent.Parent.Lib.UI)
 local State = require(script.Parent.State)
 
@@ -34,7 +35,7 @@ type Card = {
 
 local ResearchUI = {}
 
-local screenGui: ScreenGui
+local screenGui: Frame -- the panel's Layout root
 local panel: Frame
 local cards: { Card } = {}
 local hireRemote: RemoteEvent
@@ -335,12 +336,8 @@ function ResearchUI.init()
 		postNames[zone.id] = zone.displayName
 	end
 
-	screenGui = UI.make(Instance.new("ScreenGui"), {
-		Name = "StormBottlerResearch",
-		ResetOnSpawn = false,
-		DisplayOrder = 6, -- above the shop if both are open
-		Parent = Players.LocalPlayer:WaitForChild("PlayerGui"),
-	})
+	local _, root = Layout.screen("StormBottlerResearch", 6) -- above the shop if both are open
+	screenGui = root
 	panel = UI.panel({
 		Name = "ResearchPanel",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -379,6 +376,7 @@ function ResearchUI.init()
 		Parent = header,
 	})
 	close.Activated:Connect(ResearchUI.toggle)
+	UI.sheet(panel, UDim2.fromScale(0.5, 0.74), close)
 
 	local hint = UI.label({
 		Text = "Hire at the Research Center (the island at the end of the north boardwalk), then post them at a zone.",

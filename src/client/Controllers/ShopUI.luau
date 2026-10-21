@@ -3,13 +3,13 @@
 -- next tier can be bought. Pressing Buy just asks the server, which checks
 -- the price itself.
 
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Types = require(ReplicatedStorage.Shared.Types)
+local Layout = require(script.Parent.Parent.Lib.Layout)
 local UI = require(script.Parent.Parent.Lib.UI)
 local State = require(script.Parent.State)
 
@@ -200,12 +200,7 @@ local function buildTab(
 end
 
 function ShopUI.init()
-	local screenGui = UI.make(Instance.new("ScreenGui"), {
-		Name = "StormBottlerShop",
-		ResetOnSpawn = false,
-		DisplayOrder = 5,
-		Parent = Players.LocalPlayer:WaitForChild("PlayerGui"),
-	})
+	local _, screenGui = Layout.screen("StormBottlerShop", 5)
 	panel = UI.panel({
 		Name = "ShopPanel",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -244,6 +239,7 @@ function ShopUI.init()
 		Parent = header,
 	})
 	close.Activated:Connect(ShopUI.toggle)
+	UI.sheet(panel, UDim2.fromScale(0.44, 0.66), close)
 
 	hint = UI.label({
 		Text = "",

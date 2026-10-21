@@ -9,7 +9,6 @@
 --   ├── ShopButton   left: opens the bottle shop
 --   └── BottleBar    bottom centre: shiny fill + "JAR 3 / 5"
 
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
 local TweenService = game:GetService("TweenService")
@@ -19,6 +18,7 @@ local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local Types = require(ReplicatedStorage.Shared.Types)
+local Layout = require(script.Parent.Parent.Lib.Layout)
 local UI = require(script.Parent.Parent.Lib.UI)
 local ResearchUI = require(script.Parent.ResearchUI)
 local ShopUI = require(script.Parent.ShopUI)
@@ -30,7 +30,10 @@ local FULL_PULSE = TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirectio
 
 local HUD = {}
 
-local screenGui: ScreenGui
+local screenGui: Frame -- the HUD's Layout root
+local shopButton: TextButton
+local researchButton: TextButton
+local cityMeter: Frame
 local voltsLabel: TextLabel
 local stormPill: Frame
 local stormLabel: TextLabel
@@ -178,6 +181,7 @@ local function buildCityMeter()
 		Parent = screenGui,
 	})
 	UI.sizeLimits(meter, Vector2.new(150, 46), Vector2.new(250, 68))
+	cityMeter = meter
 	local title = UI.label({
 		Title = true,
 		Text = "SERVER CITY",
@@ -219,6 +223,8 @@ local function buildShopButton()
 		UI.pop(button)
 		ShopUI.toggle()
 	end)
+	UI.keyHint(button, "B", "Y")
+	shopButton = button
 end
 
 local function buildResearchButton()
@@ -237,6 +243,8 @@ local function buildResearchButton()
 		UI.pop(button)
 		ResearchUI.toggle()
 	end)
+	UI.keyHint(button, "R", "X")
+	researchButton = button
 end
 
 local function buildBottleBar()
@@ -409,18 +417,26 @@ local function render(snapshot: Types.Snapshot)
 	lastChargeCount = snapshot.chargeCount
 end
 
+-- Touch screens: the thumbstick (bottom left) and jump button (bottom
+-- right) need their corners, so the buttons move up the left edge and the
+-- bottle bar sits above both. Phone portrait has no room beside the Volts
+-- panel (or under it, where toasts go), so the placeholder city meter hides.
+local function placeForDevice()
+	local touch = Layout.isTouch()
+	shopButton.Position = UDim2.fromScale(0.015, if touch then 0.3 else 0.5)
+	researchButton.Position = UDim2.fromScale(0.015, if touch then 0.4 else 0.595)
+	bottleBar.Position = if touch then UDim2.new(0.5, 0, 0.74, 0) else UDim2.new(0.5, 0, 1, -24)
+	cityMeter.Visible = not (Layout.class == "Phone" and Layout.portrait)
+end
+
 function HUD.init()
 	-- there are no tools in this game; hide the empty hotbar
 	pcall(function()
 		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
 	end)
 
-	screenGui = UI.make(Instance.new("ScreenGui"), {
-		Name = "StormBottlerHUD",
-		ResetOnSpawn = false,
-		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-		Parent = Players.LocalPlayer:WaitForChild("PlayerGui"),
-	})
+	local _, root = Layout.screen("StormBottlerHUD", 1)
+	screenGui = root
 	displayedVolts =
 		UI.make(Instance.new("NumberValue"), { Name = "DisplayedVolts", Parent = screenGui })
 
@@ -431,6 +447,8 @@ function HUD.init()
 	buildShopButton()
 	buildResearchButton()
 	buildBottleBar()
+	placeForDevice()
+	Layout.Changed:Connect(placeForDevice)
 
 	displayedVolts.Changed:Connect(function(value: number)
 		voltsLabel.Text = Format.abbreviate(value)
