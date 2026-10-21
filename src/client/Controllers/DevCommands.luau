@@ -10,6 +10,7 @@ local RunService = game:GetService("RunService")
 
 local Net = require(ReplicatedStorage.Shared.Net)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
+local Layout = require(script.Parent.Parent.Lib.Layout)
 local UI = require(script.Parent.Parent.Lib.UI)
 
 local DevCommands = {}
@@ -27,11 +28,7 @@ function DevCommands.init()
 		return
 	end
 	local devRemote = Net.get("DevCommand")
-	local screenGui = UI.make(Instance.new("ScreenGui"), {
-		Name = "StormBottlerTest",
-		ResetOnSpawn = false,
-		Parent = Players.LocalPlayer:WaitForChild("PlayerGui"),
-	})
+	local _, screenGui = Layout.screen("StormBottlerTest", 1)
 	-- under the SHOP and RESEARCH buttons
 	local button = UI.button({
 		Name = "TestVolts",
@@ -48,6 +45,11 @@ function DevCommands.init()
 		UI.pop(button)
 		devRemote:FireServer("volts")
 	end)
+	local function placeTest()
+		button.Position = UDim2.fromScale(0.015, if Layout.isTouch() then 0.5 else 0.69)
+	end
+	placeTest()
+	Layout.Changed:Connect(placeTest)
 
 	if not RunService:IsStudio() then
 		return
@@ -63,6 +65,12 @@ function DevCommands.init()
 		Parent = screenGui,
 	})
 	UI.sizeLimits(premium, Vector2.new(96, 46), Vector2.new(150, 62))
+	-- on touch, up the left edge under SHOP and RESEARCH (HUD), clear of the thumbstick
+	local function place()
+		premium.Position = UDim2.fromScale(0.015, if Layout.isTouch() then 0.6 else 0.785)
+	end
+	place()
+	Layout.Changed:Connect(place)
 	UI.maxText(premium, 16)
 	local function pretending(): boolean
 		return player:GetAttribute(Progression.PRETEND_PREMIUM) == true
