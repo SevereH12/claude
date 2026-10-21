@@ -18,7 +18,11 @@ and stops if it isn't. To run one, say: "Do `docs/prompts/<file>`".
    time after prompt 2.
 6. `6-ui-devices.md`: makes every screen fit and work on PC, phone
    (portrait and landscape), iPad and console, and makes warnings
-   temporary pop-ups. Run it last.
+   temporary pop-ups.
+7. `7-temp-text-and-charge-size.md`: makes every on-screen message go away
+   after a few seconds (second fix, with a test), and makes bigger zones
+   fill more of the bottle per strike while always paying more Volts per
+   full bottle.
 
 Researchers (all five parts done) live in `researchers/`.
 
