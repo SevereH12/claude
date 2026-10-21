@@ -5,7 +5,6 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
@@ -279,9 +278,13 @@ local function buildCard(list: Instance, index: number, def: Types.ResearcherDef
 	UI.maxText(hire, 22)
 	hire.Activated:Connect(function()
 		local snapshot = State.current
-		if snapshot and not snapshot.researchers[def.id] and inOffice() then
-			UI.pop(hire)
-			hireRemote:FireServer(def.id)
+		if snapshot and not snapshot.researchers[def.id] then
+			if inOffice() then
+				UI.pop(hire)
+				hireRemote:FireServer(def.id)
+			else
+				UI.toast("Visit the Research Office to hire", "info")
+			end
 		end
 	end)
 
@@ -297,35 +300,6 @@ local function buildCard(list: Instance, index: number, def: Types.ResearcherDef
 		hire = hire,
 		posts = posts,
 	})
-end
-
-local function showToast(def: Types.ResearcherDef, level: number)
-	local toast = UI.panel({
-		Name = "LevelToast",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, -60),
-		Size = UDim2.fromScale(0.34, 0.07),
-		Parent = screenGui,
-	})
-	UI.sizeLimits(toast, Vector2.new(240, 44), Vector2.new(420, 60))
-	local label = UI.label({
-		Title = true,
-		Text = `{string.upper(def.name)} reached LV {level}!`,
-		TextColor3 = COLORS.volt,
-		Position = UDim2.fromScale(0.04, 0.1),
-		Size = UDim2.fromScale(0.92, 0.8),
-		Parent = toast,
-	})
-	UI.maxText(label, 26)
-	TweenService:Create(toast, UI.TWEEN.open, { Position = UDim2.new(0.5, 0, 0, 90) }):Play()
-	task.delay(3, function()
-		local out =
-			TweenService:Create(toast, UI.TWEEN.fast, { Position = UDim2.new(0.5, 0, 0, -60) })
-		out.Completed:Once(function()
-			toast:Destroy()
-		end)
-		out:Play()
-	end)
 end
 
 -- The server publishes "<post>:<level>" in Research_<RoleId> on the player;
@@ -345,7 +319,7 @@ local function watchLevels()
 			local before = knownLevels[def.id]
 			knownLevels[def.id] = level
 			if before and level > before then
-				showToast(def, level)
+				UI.toast(`{def.name} reached LV {level}!`, "volt")
 			end
 		end
 		check()

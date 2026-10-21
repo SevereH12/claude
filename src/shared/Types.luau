@@ -9,10 +9,10 @@ export type Profile = {
 	totalVolts: number, -- lifetime earnings (for stats/leaderboards later)
 	bottleTier: number, -- index into Config.BOTTLES
 	bootTier: number, -- index into Config.BOOTS
-	chargeCount: number, -- charges in the bottle (limited by capacity)
+	chargeCount: number, -- bottle units filled (limited by capacity; a strike fills its zone's chargeSize)
 	chargeValue: number, -- Volts those charges sell for
 	researchers: { [string]: ResearcherSave }, -- hired researchers by role id
-	tankCount: number, -- Chemist's overflow tank: charges held
+	tankCount: number, -- Chemist's overflow tank: bottle units held
 	tankValue: number, -- Volts those charges sell for
 }
 
@@ -69,7 +69,8 @@ export type ZoneDef = {
 	tagline: string, -- shown on the zone sign and banner
 	color: Color3, -- border, sign and warning circle colour
 	mode: ZoneMode,
-	chargeValue: number, -- Volts per caught charge
+	chargeValue: number, -- Volts per caught strike
+	chargeSize: number, -- bottle units one caught strike fills (see Config.ZONES)
 	strikeInterval: number, -- average seconds between strikes during a storm
 	order: number, -- position along its world's zone spiral (1 = closest to the hub)
 	requiresBottle: number, -- bottle tier needed to catch here (Util/Progression)

@@ -105,19 +105,40 @@ function Progression.worldLockReason(progress: Progress, world: Types.WorldDef):
 		else needsBottle(world.requiresBottle)
 end
 
--- Volts one charge caught in `zone` is worth to this player. A premium
+-- The best-paying non-premium zone this player's bottle opens.
+local function bestZone(progress: Progress): Types.ZoneDef?
+	local best: Types.ZoneDef? = nil
+	for _, other in Config.ZONES do
+		if
+			not other.premium
+			and progress.bottleTier >= other.requiresBottle
+			and (best == nil or other.chargeValue > best.chargeValue)
+		then
+			best = other
+		end
+	end
+	return best
+end
+
+-- Volts one strike caught in `zone` is worth to this player. A premium
 -- zone pays PREMIUM_VALUE_MULTIPLIER x the best other zone they can enter.
 function Progression.boltValue(progress: Progress, zone: Types.ZoneDef): number
 	if not zone.premium then
 		return zone.chargeValue
 	end
-	local best = 0
-	for _, other in Config.ZONES do
-		if not other.premium and progress.bottleTier >= other.requiresBottle then
-			best = math.max(best, other.chargeValue)
-		end
+	local best = bestZone(progress)
+	return math.round((if best then best.chargeValue else 0) * Config.PREMIUM_VALUE_MULTIPLIER)
+end
+
+-- Bottle units one strike caught in `zone` fills for this player. A
+-- premium zone fills like their best zone, so with its 1.5x value it's
+-- always the best Volts per unit.
+function Progression.chargeSize(progress: Progress, zone: Types.ZoneDef): number
+	if not zone.premium then
+		return zone.chargeSize
 	end
-	return math.round(best * Config.PREMIUM_VALUE_MULTIPLIER)
+	local best = bestZone(progress)
+	return if best then best.chargeSize else 1
 end
 
 -- Volts to buy every bottle after `current` up to and including `tier`.

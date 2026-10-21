@@ -48,6 +48,7 @@ local goalAmount: TextLabel
 local displayedVolts: NumberValue
 local fullPulse: Tween?
 local lastChargeCount = -1
+local wasFull = false
 local lastPhase: Types.StormPhase? = nil
 
 local function buildVoltsPanel()
@@ -385,12 +386,15 @@ local function render(snapshot: Types.Snapshot)
 	local fraction = math.clamp(snapshot.chargeCount / bottle.capacity, 0, 1)
 	TweenService:Create(bottleFill, UI.TWEEN.fast, { Size = UDim2.fromScale(fraction, 1) }):Play()
 
+	-- full: the bar glows and a toast says so once (the text stays a count)
 	local full = fraction >= 1
 	setFull(full)
-	bottleLabel.Text = if full
-		then "FULL! SELL AT THE POWER PLANT"
-		else `{string.upper(bottle.name)}  {snapshot.chargeCount} / {bottle.capacity}`
-	bottleValue.Text = if full then "" else `{Format.abbreviate(snapshot.chargeValue)} ⚡`
+	if full and not wasFull and lastChargeCount >= 0 then
+		UI.toastEvery("bottleFull", UI.FULL_REMINDER, UI.FULL_MESSAGE, "warn", true)
+	end
+	wasFull = full
+	bottleLabel.Text = `{string.upper(bottle.name)}  {snapshot.chargeCount} / {bottle.capacity}`
+	bottleValue.Text = `{Format.abbreviate(snapshot.chargeValue)} ⚡`
 
 	local chemist = snapshot.researchers.Chemist
 	tankLabel.Visible = chemist ~= nil

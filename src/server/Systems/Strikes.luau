@@ -115,7 +115,7 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, owner
 
 	-- everyone inside with room in their bottle (or their Chemist's tank),
 	-- closest first
-	local candidates: { { player: Player, profile: Types.Profile, distance: number, toTank: boolean } } =
+	local candidates: { { player: Player, profile: Types.Profile, distance: number, toTank: boolean, room: number } } =
 		{}
 	for _, player in Players:GetPlayers() do
 		if ownerId and player.UserId ~= ownerId then
@@ -133,18 +133,25 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, owner
 		local distance = if root then distanceInside(root, position, radius) else nil
 		if profile and distance then
 			local chemist = Research.active(player, "Chemist")
-			local tankRoom = chemist ~= nil
-				and profile.tankCount < ResearchMath.tankCapacity(chemist)
+			local tankRoom = if chemist
+				then ResearchMath.tankCapacity(chemist) - profile.tankCount
+				else 0
 			if not Formulas.isFull(profile) then
-				table.insert(
-					candidates,
-					{ player = player, profile = profile, distance = distance, toTank = false }
-				)
-			elseif tankRoom then
-				table.insert(
-					candidates,
-					{ player = player, profile = profile, distance = distance, toTank = true }
-				)
+				table.insert(candidates, {
+					player = player,
+					profile = profile,
+					distance = distance,
+					toTank = false,
+					room = Formulas.capacity(profile.bottleTier) - profile.chargeCount,
+				})
+			elseif tankRoom > 0 then
+				table.insert(candidates, {
+					player = player,
+					profile = profile,
+					distance = distance,
+					toTank = true,
+					room = tankRoom,
+				})
 			else
 				table.insert(full, player.UserId)
 			end
@@ -158,7 +165,13 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, owner
 		if zone.mode == "Single" and index > 1 then
 			break
 		end
-		local value = Progression.boltValue(candidate.profile, zone)
+		-- the strike fills the zone's chargeSize units (a partial fill pays
+		-- that fraction of the value: Formulas.fill)
+		local units, value = Formulas.fill(
+			Progression.chargeSize(candidate.profile, zone),
+			Progression.boltValue(candidate.profile, zone),
+			candidate.room
+		)
 		local base = value
 		local assayLevel = Research.active(candidate.player, "Analyst")
 		if assayLevel and random:NextNumber() < ResearchMath.assayChance(assayLevel) then
@@ -166,11 +179,11 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, owner
 			table.insert(assayed, candidate.player.UserId)
 		end
 		if candidate.toTank then
-			candidate.profile.tankCount += 1
+			candidate.profile.tankCount += units
 			candidate.profile.tankValue += value
 			table.insert(tanked, candidate.player.UserId)
 		else
-			candidate.profile.chargeCount += 1
+			candidate.profile.chargeCount += units
 			candidate.profile.chargeValue += value
 			table.insert(catchers, candidate.player.UserId)
 			table.insert(values, base)

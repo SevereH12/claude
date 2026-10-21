@@ -1,8 +1,12 @@
 --!strict
 -- Helpers for building UI in code, plus the shared look (colours, fonts,
--- animation timings) so every screen feels like the same game.
+-- animation timings) so every screen feels like the same game. Also
+-- UI.toast: the one way to put a warning, hint or notice on screen.
 
+local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+
+local ToastQueue = require(script.Parent.ToastQueue)
 
 local UI = {}
 
@@ -200,6 +204,146 @@ function UI.togglePanel(panel: GuiObject): boolean
 	scale.Scale = 0.6
 	TweenService:Create(scale, UI.TWEEN.open, { Scale = 1 }):Play()
 	return true
+end
+
+-- Toasts ---------------------------------------------------------------------------
+-- Short messages at the top centre (inside the safe area, under the HUD's
+-- Volts, storm pill and goal card, which end 212 px down). Each fades out
+-- after its time; the same text again restarts its timer; at most two at
+-- once (the oldest goes first). Bookkeeping: Lib/ToastQueue.
+
+export type ToastKind = "info" | "warn" | "good" | "volt"
+
+UI.TOAST_TIME = 3
+UI.TOAST_TOP = 222
+UI.TOAST_HEIGHT = 40
+UI.TOAST_GAP = 6
+local TOAST_MAX = 2
+local TOAST_COLORS: { [ToastKind]: Color3 } = {
+	info = UI.COLORS.text,
+	warn = UI.COLORS.red,
+	good = UI.COLORS.green,
+	volt = UI.COLORS.volt,
+}
+
+-- The bottle-full warning: when it fills, then at most every
+-- FULL_REMINDER seconds while it stays full (HUD, StrikeFX).
+UI.FULL_MESSAGE = "Bottle full! Sell at the Power Plant"
+UI.FULL_REMINDER = 20
+
+local toasts = ToastQueue.new(os.clock, TOAST_MAX)
+local toastFrames: { [number]: CanvasGroup } = {}
+local toastStack: Frame? = nil
+local lastToastAt: { [string]: number } = {}
+
+local function stack(): Frame
+	local existing = toastStack
+	if existing and existing.Parent then
+		return existing
+	end
+	local gui = UI.make(Instance.new("ScreenGui"), {
+		Name = "Toasts",
+		ResetOnSpawn = false,
+		DisplayOrder = 5,
+		ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets,
+		Parent = Players.LocalPlayer:WaitForChild("PlayerGui"),
+	})
+	local frame = UI.make(Instance.new("Frame"), {
+		Name = "Stack",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, UI.TOAST_TOP),
+		Size = UDim2.new(0.42, 0, 0, TOAST_MAX * (UI.TOAST_HEIGHT + UI.TOAST_GAP)),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	})
+	UI.sizeLimits(frame, Vector2.new(260, 0), Vector2.new(520, math.huge))
+	UI.make(Instance.new("UIListLayout"), {
+		Padding = UDim.new(0, UI.TOAST_GAP),
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = frame,
+	})
+	toastStack = frame
+	return frame
+end
+
+local function removeToast(id: number)
+	local frame = toastFrames[id]
+	if not frame then
+		return
+	end
+	toastFrames[id] = nil
+	local fade = TweenService:Create(frame, UI.TWEEN.fast, { GroupTransparency = 1 })
+	fade.Completed:Once(function()
+		frame:Destroy()
+	end)
+	fade:Play()
+end
+
+local function buildToast(entry: ToastQueue.Entry): CanvasGroup
+	local group = UI.make(Instance.new("CanvasGroup"), {
+		Name = "Toast",
+		Size = UDim2.new(1, 0, 0, UI.TOAST_HEIGHT),
+		BackgroundTransparency = 1,
+		GroupTransparency = 1,
+		LayoutOrder = entry.id,
+		Parent = stack(),
+	})
+	local panel = UI.panel({ Size = UDim2.fromScale(1, 1), Parent = group })
+	local label = UI.label({
+		Name = "Text",
+		Text = entry.text,
+		TextColor3 = TOAST_COLORS[entry.kind :: ToastKind] or UI.COLORS.text,
+		Position = UDim2.fromScale(0.04, 0.14),
+		Size = UDim2.fromScale(0.92, 0.72),
+		Parent = panel,
+	})
+	UI.maxText(label, 22)
+	TweenService:Create(group, UI.TWEEN.fast, { GroupTransparency = 0 }):Play()
+	return group
+end
+
+-- Shows a message for `seconds` (UI.TOAST_TIME by default).
+function UI.toast(text: string, kind: ToastKind?, seconds: number?)
+	local duration = seconds or UI.TOAST_TIME
+	local entry, evicted = ToastQueue.push(toasts, text, kind or "info", duration)
+	for _, old in evicted do
+		removeToast(old.id)
+	end
+	local frame = toastFrames[entry.id]
+	if frame then
+		local label = frame:FindFirstChild("Text", true)
+		if label and label:IsA("TextLabel") then
+			label.TextColor3 = TOAST_COLORS[entry.kind :: ToastKind] or UI.COLORS.text
+		end
+		UI.pop(frame, 1.06)
+	else
+		toastFrames[entry.id] = buildToast(entry)
+	end
+	local id, generation = entry.id, entry.generation
+	task.delay(duration, function()
+		if ToastQueue.hide(toasts, id, generation) then
+			removeToast(id)
+		end
+	end)
+end
+
+-- A toast that shows at most once every `cooldown` seconds for `key`, for
+-- reminders that would otherwise repeat (bottle full). `force` shows it
+-- now anyway and restarts the cooldown (the moment the bottle fills).
+function UI.toastEvery(
+	key: string,
+	cooldown: number,
+	text: string,
+	kind: ToastKind?,
+	force: boolean?
+)
+	local now = os.clock()
+	local last = lastToastAt[key]
+	if force or last == nil or now - last >= cooldown then
+		lastToastAt[key] = now
+		UI.toast(text, kind)
+	end
 end
 
 return UI

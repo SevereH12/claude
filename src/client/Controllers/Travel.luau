@@ -1,7 +1,7 @@
 --!strict
--- Portals between worlds, from your side: a welcome banner when the server
+-- Portals between worlds, from your side: a welcome toast when the server
 -- moves you to another world (Systems/Travel sets your World attribute),
--- and why a portal won't take you yet when you walk into it.
+-- and why a portal won't take you yet, once each time you walk into it.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -10,7 +10,6 @@ local Portals = require(ReplicatedStorage.Shared.Util.Portals)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local UI = require(script.Parent.Parent.Lib.UI)
 local State = require(script.Parent.State)
-local ZoneBanner = require(script.Parent.ZoneBanner)
 
 local player = Players.LocalPlayer
 
@@ -22,11 +21,7 @@ function Travel.start()
 		local world = Portals.worldOf(player)
 		if world.id ~= shown then
 			shown = world.id
-			ZoneBanner.show(
-				`WELCOME TO {string.upper(world.displayName)}`,
-				world.tagline,
-				world.color
-			)
+			UI.toast(`Welcome to {world.displayName}!`, "good", 4)
 		end
 	end)
 
@@ -41,7 +36,7 @@ function Travel.start()
 			local reason = if world then Progression.worldLockReason(snapshot, world) else nil
 			if world and reason and explained ~= world.id then
 				explained = world.id
-				ZoneBanner.show(`🔒 {string.upper(world.displayName)}`, reason, UI.COLORS.red)
+				UI.toast(`🔒 {world.displayName}: {reason}`, "warn")
 			elseif not reason then
 				explained = nil
 			end

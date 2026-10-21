@@ -1,8 +1,12 @@
 --!strict
 -- Big title card when you walk into a zone ("SHORELINE - everyone in the
--- circle catches"), a short note when you leave it (speed boost), and why a
--- zone is locked when you walk up to its gate. Other controllers use
--- ZoneBanner.show for their own news ("MESA UNLOCKED").
+-- circle catches"), plus two toasts (UI.toast): a short note when you leave
+-- a zone (speed boost) and why a zone is locked when you walk up to its
+-- gate. Every other message is a toast too; this banner is only for zone
+-- titles. Each shows once per event: the card not again for the same zone
+-- within REPEAT_TIME (walking along a zone's edge flips in and out), the
+-- leave note at most every REPEAT_TIME, the gate reason once until you've
+-- walked GATE_FAR away.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -16,11 +20,11 @@ local UI = require(script.Parent.Parent.Lib.UI)
 local State = require(script.Parent.State)
 
 local SHOW_TIME = 2.2
+local REPEAT_TIME = 10
 local GATE_NEAR = 18 -- studs from a locked gate's barrier to explain the lock
 local GATE_FAR = 28 -- and this far away before it explains again
--- The HUD stacks Volts, the storm pill and the goal card at the top centre,
--- ending 212 px down at most (their size limits); the banner starts below.
-local TOP = 228
+-- Under the HUD (Volts, storm pill, goal card) and the two toast rows.
+local TOP = UI.TOAST_TOP + 2 * (UI.TOAST_HEIGHT + UI.TOAST_GAP) + 8
 local FADE = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 local player = Players.LocalPlayer
@@ -32,6 +36,8 @@ local title: TextLabel
 local subtitle: TextLabel
 local showToken = 0
 
+-- A zone title card for SHOW_TIME seconds. Each show bumps the token; a
+-- hide only runs for the show that scheduled it, and ends invisible.
 function ZoneBanner.show(text: string, subtext: string, color: Color3)
 	showToken += 1
 	local token = showToken
@@ -43,9 +49,16 @@ function ZoneBanner.show(text: string, subtext: string, color: Color3)
 	TweenService:Create(banner, FADE, { GroupTransparency = 0 }):Play()
 	UI.pop(banner, 1.15)
 	task.delay(SHOW_TIME, function()
-		if showToken == token then
-			TweenService:Create(banner, FADE, { GroupTransparency = 1 }):Play()
+		if showToken ~= token then
+			return
 		end
+		local fade = TweenService:Create(banner, FADE, { GroupTransparency = 1 })
+		fade.Completed:Once(function()
+			if showToken == token then
+				banner.Visible = false
+			end
+		end)
+		fade:Play()
 	end)
 end
 
@@ -97,8 +110,7 @@ local function nearLockedGate(position: Vector3)
 			local distance = (barrier.Position - position).Magnitude
 			if reason and distance < GATE_NEAR and not explained[zone.id] then
 				explained[zone.id] = true
-				local color = if zone.premium then zone.color else UI.COLORS.red
-				ZoneBanner.show(`🔒 {string.upper(zone.displayName)}`, reason, color)
+				UI.toast(`🔒 {zone.displayName}: {reason}`, "warn")
 			elseif distance > GATE_FAR then
 				explained[zone.id] = nil
 			end
@@ -108,6 +120,7 @@ end
 
 function ZoneBanner.start()
 	local current: Types.ZoneDef? = nil
+	local lastCard: { [string]: number } = {} -- zone id -> when its card last showed
 	while true do
 		task.wait(0.2)
 		local character = player.Character
@@ -115,13 +128,26 @@ function ZoneBanner.start()
 		if root and root:IsA("BasePart") then
 			local zone = Zones.at(root.Position)
 			if zone ~= current then
+				local now = os.clock()
 				if zone then
-					ZoneBanner.show(string.upper(zone.displayName), zone.tagline, zone.color)
+					if now - (lastCard[zone.id] or -math.huge) >= REPEAT_TIME then
+						lastCard[zone.id] = now
+						local snapshot = State.current
+						local size = if snapshot
+							then Progression.chargeSize(snapshot, zone)
+							else zone.chargeSize
+						ZoneBanner.show(
+							string.upper(zone.displayName),
+							`{zone.tagline} · each bolt fills {size}`,
+							zone.color
+						)
+					end
 				elseif current then
-					ZoneBanner.show(
-						"SPEED BOOST",
-						"Running fast outside storm zones",
-						UI.COLORS.calm
+					UI.toastEvery(
+						"speedBoost",
+						REPEAT_TIME,
+						"Speed boost: you run fast outside storm zones",
+						"good"
 					)
 				end
 				current = zone

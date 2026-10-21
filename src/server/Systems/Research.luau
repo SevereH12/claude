@@ -205,8 +205,11 @@ local function emptyTank(player: Player, profile: Types.Profile)
 	if room <= 0 then
 		return
 	end
+	-- units and their Volts move together: all of it, or that fraction
 	local moved = math.min(room, profile.tankCount)
-	local value = profile.tankValue * moved / profile.tankCount
+	local value = if moved == profile.tankCount
+		then profile.tankValue
+		else math.floor(profile.tankValue * moved / profile.tankCount)
 	profile.chargeCount += moved
 	profile.chargeValue += value
 	profile.tankCount -= moved

@@ -21,6 +21,20 @@ function Formulas.capacity(tier: number): number
 	return Formulas.bottle(tier).capacity
 end
 
+-- A strike that fills `size` units and is worth `value`, caught into a
+-- bottle (or tank) with `room` units free: the units that fit and the Volts
+-- they pay. All of it when it fits; otherwise the room left and that
+-- fraction of the value, rounded down but at least 1.
+function Formulas.fill(size: number, value: number, room: number): (number, number)
+	local units = math.min(size, math.max(room, 0))
+	if units <= 0 then
+		return 0, 0
+	elseif units >= size then
+		return size, value
+	end
+	return units, math.max(1, math.floor(value * units / size))
+end
+
 function Formulas.isFull(state: { bottleTier: number, chargeCount: number }): boolean
 	return state.chargeCount >= Formulas.capacity(state.bottleTier)
 end

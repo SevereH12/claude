@@ -3,7 +3,7 @@
 -- with nothing solid). It's solid while you can't enter that zone, and your
 -- character is simulated on your client, so the local collision blocks you.
 -- When you unlock the zone it turns green, bursts into sparks and fades
--- away, with a banner. The server's checks are the real lock. A non-member
+-- away, with a toast. The server's checks are the real lock. A non-member
 -- who walks into a Premium zone's barrier gets Roblox's Premium offer.
 
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -15,7 +15,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Types = require(ReplicatedStorage.Shared.Types)
 local State = require(script.Parent.State)
-local ZoneBanner = require(script.Parent.ZoneBanner)
+local UI = require(script.Parent.Parent.Lib.UI)
 
 local FADE = TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local GREEN = Color3.fromRGB(90, 230, 120)
@@ -95,7 +95,7 @@ local function update(snapshot: Types.Snapshot)
 			if open and before == false then
 				-- unlocked while playing
 				dissolve(model, barrier)
-				ZoneBanner.show(`{string.upper(zone.displayName)} UNLOCKED`, zone.tagline, GREEN)
+				UI.toast(`{zone.displayName} unlocked!`, "good", 4)
 			elseif open and before == nil then
 				fadeOut(model, 0) -- already open when you joined
 			elseif not open then

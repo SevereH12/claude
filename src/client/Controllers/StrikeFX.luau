@@ -21,6 +21,7 @@ local TweenService = game:GetService("TweenService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Net = require(ReplicatedStorage.Shared.Net)
+local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Research = require(ReplicatedStorage.Shared.Util.Research)
 local Types = require(ReplicatedStorage.Shared.Types)
 local UI = require(script.Parent.Parent.Lib.UI)
@@ -34,7 +35,6 @@ local GLOW_COLOR = Color3.fromRGB(120, 175, 255)
 local BOLT_HEIGHT = 160
 local BOLT_SEGMENTS = 9
 local FLASH_DISTANCE = 220 -- strikes closer than this light up your screen
-local FULL_MESSAGE_COOLDOWN = 3
 local FORECAST_DASHES = 24
 local BALLOON_MUTED = Color3.fromRGB(120, 124, 130)
 
@@ -52,7 +52,6 @@ local screenGui: ScreenGui
 local flashFrame: Frame
 local strikeFlash: ColorCorrectionEffect
 local random = Random.new()
-local lastFullMessage = 0
 
 local StrikeFX = {}
 
@@ -503,14 +502,13 @@ local function onLanded(landed: Types.StrikeLanded)
 			popup("x2 ASSAYED", true, 0.5, 0.06)
 		end
 	elseif table.find(landed.tanked, player.UserId) then
-		popup("+1 → TANK", true, 0.42, 0.06)
+		local zone = Config.ZONES[landed.zoneId]
+		local snapshot = State.current
+		local units = if zone and snapshot then Progression.chargeSize(snapshot, zone) else 1
+		popup(`+{units} → TANK`, true, 0.42, 0.06)
 		playSound(Config.SOUNDS.CATCH, screenGui, 0.9)
 	elseif table.find(landed.full, player.UserId) then
-		local now = os.clock()
-		if now - lastFullMessage > FULL_MESSAGE_COOLDOWN then
-			lastFullMessage = now
-			popup("Bottle full! Sell at the Power Plant", false, 0.42, 0.06)
-		end
+		UI.toastEvery("bottleFull", UI.FULL_REMINDER, UI.FULL_MESSAGE, "warn")
 	end
 end
 

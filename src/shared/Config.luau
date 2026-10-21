@@ -100,6 +100,12 @@ local WORLDS: { Types.WorldDef } = {
 	},
 }
 
+-- chargeSize is how many bottle units one caught strike fills. Later zones
+-- fill more per strike, but Volts per unit (chargeValue / chargeSize) must
+-- strictly rise from each zone to the next in progression order (world,
+-- then requiresBottle, then order), so a full bottle is always worth more
+-- in a bigger zone; and a zone's required bottle must hold at least 5 of
+-- its strikes. Keep both when adding a zone (tools/harness/test_formulas).
 local ZONES: { [string]: Types.ZoneDef } = {
 	Shoreline = {
 		id = "Shoreline",
@@ -109,6 +115,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		color = Color3.fromRGB(255, 220, 80),
 		mode = "Shared",
 		chargeValue = 5,
+		chargeSize = 1,
 		strikeInterval = 0.8,
 		order = 1,
 		requiresBottle = 1, -- open to everyone
@@ -125,6 +132,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		color = Color3.fromRGB(255, 120, 60),
 		mode = "Single",
 		chargeValue = 20,
+		chargeSize = 2,
 		strikeInterval = 1.2,
 		order = 2,
 		requiresBottle = 3, -- the Flask
@@ -141,6 +149,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		color = Color3.fromRGB(176, 120, 255), -- violet; its theme trims it in gold
 		mode = "Shared",
 		chargeValue = 0, -- unused: pays PREMIUM_VALUE_MULTIPLIER x each player's best zone
+		chargeSize = 1, -- unused: a Premium zone fills like the player's best zone
 		strikeInterval = 0.6,
 		order = 3,
 		requiresBottle = 1,
@@ -159,6 +168,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		color = Color3.fromRGB(70, 160, 255), -- electric blue
 		mode = "Shared",
 		chargeValue = 60,
+		chargeSize = 3,
 		strikeInterval = 0.9,
 		order = 1,
 		requiresBottle = 5, -- the Storm Cell (the world's own entry rule)
@@ -175,6 +185,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		color = Color3.fromRGB(80, 230, 150), -- sea green
 		mode = "Shared",
 		chargeValue = 150,
+		chargeSize = 5,
 		strikeInterval = 0.8,
 		order = 2,
 		requiresBottle = 6, -- the Tempest Tank
@@ -191,6 +202,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		color = Color3.fromRGB(255, 80, 120), -- hot pink
 		mode = "Single",
 		chargeValue = 500,
+		chargeSize = 8,
 		strikeInterval = 1.2,
 		order = 3,
 		requiresBottle = 7, -- the Dynamo Drum
