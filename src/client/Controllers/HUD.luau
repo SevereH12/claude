@@ -6,8 +6,8 @@
 --   ├── StormPill    under Volts: "⚡ STORM 1:12" / "☀ CALM  storm in 0:15"
 --   ├── GoalCard     under that: the closest next goal and Volts towards it
 --   ├── CityMeter    top right: server city meter (placeholder until that update)
---   ├── ShopButton   left: opens the bottle shop
 --   └── BottleBar    bottom centre: shiny fill + "JAR 3 / 5"
+-- The MENU button (shop, research, teleport, boosts) is Controllers/Menu.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
@@ -20,8 +20,6 @@ local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Layout = require(script.Parent.Parent.Lib.Layout)
 local UI = require(script.Parent.Parent.Lib.UI)
-local ResearchUI = require(script.Parent.ResearchUI)
-local ShopUI = require(script.Parent.ShopUI)
 local State = require(script.Parent.State)
 local Storm = require(script.Parent.Storm)
 
@@ -31,8 +29,6 @@ local FULL_PULSE = TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirectio
 local HUD = {}
 
 local screenGui: Frame -- the HUD's Layout root
-local shopButton: TextButton
-local researchButton: TextButton
 local cityMeter: Frame
 local voltsLabel: TextLabel
 local stormPill: Frame
@@ -207,46 +203,6 @@ local function buildCityMeter()
 	UI.maxText(comingSoon, 13)
 end
 
-local function buildShopButton()
-	local button = UI.button({
-		Name = "ShopButton",
-		Text = "SHOP",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.fromScale(0.015, 0.5),
-		Size = UDim2.fromScale(0.1, 0.075),
-		BackgroundColor3 = COLORS.green,
-		Parent = screenGui,
-	})
-	UI.sizeLimits(button, Vector2.new(96, 46), Vector2.new(150, 62))
-	UI.maxText(button, 30)
-	button.Activated:Connect(function()
-		UI.pop(button)
-		ShopUI.toggle()
-	end)
-	UI.keyHint(button, "B", "Y")
-	shopButton = button
-end
-
-local function buildResearchButton()
-	local button = UI.button({
-		Name = "ResearchButton",
-		Text = "RESEARCH",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.fromScale(0.015, 0.595),
-		Size = UDim2.fromScale(0.1, 0.075),
-		BackgroundColor3 = COLORS.storm,
-		Parent = screenGui,
-	})
-	UI.sizeLimits(button, Vector2.new(96, 46), Vector2.new(150, 62))
-	UI.maxText(button, 24)
-	button.Activated:Connect(function()
-		UI.pop(button)
-		ResearchUI.toggle()
-	end)
-	UI.keyHint(button, "R", "X")
-	researchButton = button
-end
-
 local function buildBottleBar()
 	bottleBar = UI.panel({
 		Name = "BottleBar",
@@ -418,13 +374,10 @@ local function render(snapshot: Types.Snapshot)
 end
 
 -- Touch screens: the thumbstick (bottom left) and jump button (bottom
--- right) need their corners, so the buttons move up the left edge and the
--- bottle bar sits above both. Phone portrait has no room beside the Volts
+-- right) need their corners, so the bottle bar sits above both. Phone portrait has no room beside the Volts
 -- panel (or under it, where toasts go), so the placeholder city meter hides.
 local function placeForDevice()
 	local touch = Layout.isTouch()
-	shopButton.Position = UDim2.fromScale(0.015, if touch then 0.3 else 0.5)
-	researchButton.Position = UDim2.fromScale(0.015, if touch then 0.4 else 0.595)
 	bottleBar.Position = if touch then UDim2.new(0.5, 0, 0.74, 0) else UDim2.new(0.5, 0, 1, -24)
 	cityMeter.Visible = not (Layout.class == "Phone" and Layout.portrait)
 end
@@ -444,8 +397,6 @@ function HUD.init()
 	buildStormPill()
 	buildGoalCard()
 	buildCityMeter()
-	buildShopButton()
-	buildResearchButton()
 	buildBottleBar()
 	placeForDevice()
 	Layout.Changed:Connect(placeForDevice)

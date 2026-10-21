@@ -213,6 +213,36 @@ local ZONES: { [string]: Types.ZoneDef } = {
 	},
 }
 
+-- The Boosts store (menu). LAYOUT ONLY for now: nothing here is on sale
+-- yet, and Buy just says "coming soon". Game Passes need an id from the
+-- Creator Dashboard and code for their effect; Volts packs need a
+-- Developer Product id and a purchase receipt handler on the server.
+-- Prices are in Robux.
+local STORE = {
+	passes = {
+		{
+			name = "2x Volts",
+			icon = "⚡",
+			detail = "Double Volts every time you sell",
+			price = 199,
+		},
+		{
+			name = "Big Bottles",
+			icon = "🧪",
+			detail = "Every bottle holds 50% more",
+			price = 149,
+		},
+		{ name = "Speed Boots", icon = "👟", detail = "Run faster everywhere", price = 99 },
+		{ name = "VIP", icon = "👑", detail = "VIP tag and a golden bottle", price = 299 },
+	},
+	volts = {
+		{ name = "Pocket Charge", icon = "🔋", volts = 5_000, price = 49 },
+		{ name = "Storm Jar", icon = "⚡", volts = 25_000, price = 199 },
+		{ name = "Thunder Crate", icon = "📦", volts = 150_000, price = 899 },
+		{ name = "Lightning Vault", icon = "🏦", volts = 1_000_000, price = 3_999 },
+	},
+}
+
 return table.freeze({
 	-- Saving
 	AUTOSAVE_INTERVAL = 60, -- seconds between autosaves per player
@@ -254,6 +284,7 @@ return table.freeze({
 	BOOTS = table.freeze(BOOTS),
 	WORLDS = table.freeze(WORLDS),
 	ZONES = table.freeze(ZONES),
+	STORE = table.freeze(STORE),
 
 	-- Placeholder sounds (built into Roblox). Swap for Creator Store sounds.
 	SOUNDS = table.freeze({

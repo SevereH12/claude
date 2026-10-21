@@ -1,0 +1,260 @@
+--!strict
+-- The one MENU button on the left edge and the card it opens: four tiles,
+-- SHOP, RESEARCH, TELEPORT and BOOSTS, that pop in one after another.
+-- Picking a tile closes the card and opens that panel. The card also
+-- closes on the menu button, a click or tap anywhere else (an invisible
+-- catcher behind it), Esc or gamepad B (Controllers/Shortcuts). On a gamepad, Y opens it (a "Y" chip shows on
+-- the button for gamepad players only) and the first tile is selected.
+
+local GuiService = game:GetService("GuiService")
+local TweenService = game:GetService("TweenService")
+
+local Layout = require(script.Parent.Parent.Lib.Layout)
+local UI = require(script.Parent.Parent.Lib.UI)
+local BoostsUI = require(script.Parent.BoostsUI)
+local ResearchUI = require(script.Parent.ResearchUI)
+local ShopUI = require(script.Parent.ShopUI)
+local TeleportUI = require(script.Parent.TeleportUI)
+
+local COLORS = UI.COLORS
+local BUTTON = 76 -- the menu button is this square
+local TILE = Vector2.new(118, 90)
+local GAP = 10
+local PAD = 12
+local CARD = Vector2.new(PAD * 2 + TILE.X * 2 + GAP, PAD * 2 + TILE.Y * 2 + GAP)
+local STAGGER = 0.045
+
+local CARD_IN = TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local CARD_OUT = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+local ICON_TURN = TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+type Item = { name: string, icon: string, color: Color3, open: () -> () }
+
+local ITEMS: { Item } = {
+	{ name = "SHOP", icon = "🛒", color = COLORS.green, open = ShopUI.open },
+	{ name = "RESEARCH", icon = "🔬", color = COLORS.storm, open = ResearchUI.open },
+	{
+		name = "TELEPORT",
+		icon = "🌀",
+		color = Color3.fromRGB(165, 110, 255),
+		open = TeleportUI.open,
+	},
+	{ name = "BOOSTS", icon = "🚀", color = COLORS.volt, open = BoostsUI.open },
+}
+
+local Menu = {}
+
+local dock: Frame
+local catcher: TextButton -- invisible, behind the card: a click on it closes the card
+local menuButton: TextButton
+local icon: TextLabel
+local card: Frame
+local cardScale: UIScale
+local tileScales: { UIScale } = {}
+local isOpen = false
+local token = 0
+
+function Menu.isOpen(): boolean
+	return isOpen
+end
+
+local function setIcon(open: boolean)
+	icon.Text = if open then "✕" else "☰"
+	icon.Rotation = if open then -90 else 90
+	TweenService:Create(icon, ICON_TURN, { Rotation = 0 }):Play()
+end
+
+function Menu.open()
+	if isOpen then
+		return
+	end
+	isOpen = true
+	token += 1
+	UI.closePanels()
+	setIcon(true)
+	catcher.Visible = true
+	card.Visible = true
+	cardScale.Scale = 0.7
+	TweenService:Create(cardScale, CARD_IN, { Scale = 1 }):Play()
+	for index, scale in tileScales do
+		scale.Scale = 0
+		TweenService:Create(
+			scale,
+			TweenInfo.new(
+				0.3,
+				Enum.EasingStyle.Back,
+				Enum.EasingDirection.Out,
+				0,
+				false,
+				index * STAGGER
+			),
+			{ Scale = 1 }
+		):Play()
+	end
+	UI.selectFirst(card)
+end
+
+function Menu.close()
+	if not isOpen then
+		return
+	end
+	isOpen = false
+	token += 1
+	local mine = token
+	setIcon(false)
+	catcher.Visible = false
+	local selected = GuiService.SelectedObject
+	if selected and selected:IsDescendantOf(card) then
+		GuiService.SelectedObject = nil
+	end
+	for _, scale in tileScales do
+		TweenService:Create(scale, CARD_OUT, { Scale = 0 }):Play()
+	end
+	local shrink = TweenService:Create(cardScale, CARD_OUT, { Scale = 0.7 })
+	shrink.Completed:Once(function()
+		if token == mine then
+			card.Visible = false
+		end
+	end)
+	shrink:Play()
+end
+
+function Menu.toggle()
+	if isOpen then
+		Menu.close()
+	else
+		Menu.open()
+	end
+end
+
+local function buildTile(index: number, item: Item)
+	local col, row = (index - 1) % 2, (index - 1) // 2
+	-- a cell holds the tile so the tile can scale from its own centre
+	local cell = UI.make(Instance.new("Frame"), {
+		Name = item.name,
+		Position = UDim2.fromOffset(PAD + col * (TILE.X + GAP), PAD + row * (TILE.Y + GAP)),
+		Size = UDim2.fromOffset(TILE.X, TILE.Y),
+		BackgroundTransparency = 1,
+		Parent = card,
+	})
+	local tile = UI.button({
+		Name = "Tile",
+		Text = "",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = item.color,
+		Parent = cell,
+	})
+	local corner = tile:FindFirstChildOfClass("UICorner")
+	if corner then
+		corner.CornerRadius = UDim.new(0, 16)
+	end
+	local scale = UI.make(Instance.new("UIScale"), { Scale = 0, Parent = tile })
+	table.insert(tileScales, scale)
+	local glyph = UI.label({
+		Title = true,
+		Text = item.icon,
+		Position = UDim2.fromScale(0, -0.02),
+		Size = UDim2.fromScale(1, 0.6),
+		Parent = tile,
+	})
+	UI.maxText(glyph, 40)
+	local label = UI.label({
+		Title = true,
+		Text = item.name,
+		Position = UDim2.fromScale(0, 0.6),
+		Size = UDim2.fromScale(1, 0.36),
+		Parent = tile,
+	})
+	UI.maxText(label, 20)
+	tile.Activated:Connect(function()
+		Menu.close()
+		item.open()
+	end)
+end
+
+-- Clear of the thumbstick on touch (upper left); middle of the left edge
+-- otherwise.
+local function place()
+	dock.Position = if Layout.isTouch()
+		then UDim2.new(0, 14, 0.32, 0)
+		else UDim2.new(0, 14, 0.45, 0)
+end
+
+function Menu.init()
+	local _, root = Layout.screen("StormBottlerMenu", 2)
+	catcher = UI.make(Instance.new("TextButton"), {
+		Name = "ClickAway",
+		Text = "",
+		AutoButtonColor = false,
+		Selectable = false,
+		BackgroundTransparency = 1,
+		Position = UDim2.fromScale(-0.5, -0.5),
+		Size = UDim2.fromScale(2, 2), -- past the safe area to the screen edges
+		Visible = false,
+		ZIndex = 1,
+		Parent = root,
+	})
+	catcher.Activated:Connect(Menu.close)
+	dock = UI.make(Instance.new("Frame"), {
+		Name = "MenuDock",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Size = UDim2.fromOffset(BUTTON, BUTTON),
+		BackgroundTransparency = 1,
+		ZIndex = 2,
+		Parent = root,
+	})
+	menuButton = UI.button({
+		Name = "MenuButton",
+		Text = "",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = COLORS.panelTop,
+		Parent = dock,
+	})
+	local corner = menuButton:FindFirstChildOfClass("UICorner")
+	if corner then
+		corner.CornerRadius = UDim.new(0, 18)
+	end
+	icon = UI.label({
+		Title = true,
+		Text = "☰",
+		TextColor3 = COLORS.volt,
+		Position = UDim2.fromScale(0, -0.04),
+		Size = UDim2.fromScale(1, 0.66),
+		Parent = menuButton,
+	})
+	UI.maxText(icon, 40)
+	local caption = UI.label({
+		Title = true,
+		Text = "MENU",
+		Position = UDim2.fromScale(0, 0.6),
+		Size = UDim2.fromScale(1, 0.32),
+		Parent = menuButton,
+	})
+	UI.maxText(caption, 18)
+	UI.padHint(menuButton, "Y")
+	menuButton.Activated:Connect(function()
+		UI.pop(menuButton)
+		Menu.toggle()
+	end)
+
+	card = UI.panel({
+		Name = "MenuCard",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(1, 12, 0.5, 0),
+		Size = UDim2.fromOffset(CARD.X, CARD.Y),
+		Visible = false,
+		Parent = dock,
+	})
+	cardScale = card:FindFirstChildOfClass("UIScale")
+		or UI.make(Instance.new("UIScale"), { Parent = card })
+	for index, item in ITEMS do
+		buildTile(index, item)
+	end
+
+	place()
+	Layout.Changed:Connect(place)
+end
+
+return Menu

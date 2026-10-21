@@ -251,7 +251,67 @@ function UI.pop(target: GuiObject, amount: number?)
 	out:Play()
 end
 
+-- Panels ------------------------------------------------------------------------------
+-- One panel open at a time. Opening pops it in (scale up with a little
+-- overshoot) over a dimmed backdrop; closing shrinks it away. Tapping the
+-- backdrop, Esc or gamepad B closes it. With a gamepad, opening selects the
+-- panel's first button.
+
+local PANEL_IN = TweenInfo.new(0.32, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local PANEL_OUT = TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+local BACKDROP_FADE = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local BACKDROP_DIM = 0.45 -- backdrop transparency while a panel is open
+
 local openPanels: { [GuiObject]: boolean } = {}
+local panelTokens: { [GuiObject]: number } = {}
+local backdrop: TextButton? = nil
+
+local function panelScale(panel: GuiObject): UIScale
+	return panel:FindFirstChildOfClass("UIScale")
+		or UI.make(Instance.new("UIScale"), { Parent = panel })
+end
+
+local function getBackdrop(): TextButton
+	local existing = backdrop
+	if existing and existing.Parent then
+		return existing
+	end
+	-- its own screen just under the panels (DisplayOrder 5+) and over the HUD
+	local _, root = Layout.screen("Backdrop", 4, false)
+	local button = UI.make(Instance.new("TextButton"), {
+		Name = "Backdrop",
+		Text = "",
+		AutoButtonColor = false,
+		Selectable = false,
+		BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 1,
+		Position = UDim2.fromScale(-0.5, -0.5),
+		Size = UDim2.fromScale(2, 2), -- past the safe area to the screen edges
+		Visible = false,
+		Parent = root,
+	})
+	button.Activated:Connect(function()
+		UI.closePanels()
+	end)
+	backdrop = button
+	return button
+end
+
+local function updateBackdrop()
+	local dim = getBackdrop()
+	if next(openPanels) then
+		dim.Visible = true
+		TweenService:Create(dim, BACKDROP_FADE, { BackgroundTransparency = BACKDROP_DIM }):Play()
+	else
+		local fade = TweenService:Create(dim, BACKDROP_FADE, { BackgroundTransparency = 1 })
+		fade.Completed:Once(function()
+			if not next(openPanels) then
+				dim.Visible = false
+			end
+		end)
+		fade:Play()
+	end
+end
 
 -- The first button in a panel, top to bottom then left to right, for the
 -- gamepad selection.
@@ -272,45 +332,137 @@ local function firstButton(panel: GuiObject): GuiObject?
 	return best
 end
 
--- Opens or closes a panel with a bouncy scale. Returns the new open state.
--- With a gamepad, opening selects the panel's first button.
-function UI.togglePanel(panel: GuiObject): boolean
-	local scale = panel:FindFirstChildOfClass("UIScale")
-		or UI.make(Instance.new("UIScale"), { Parent = panel })
-	if panel.Visible then
-		panel.Visible = false
-		openPanels[panel] = nil
-		local selected = GuiService.SelectedObject
-		if selected and selected:IsDescendantOf(panel) then
-			GuiService.SelectedObject = nil
-		end
-		return false
-	end
-	panel.Visible = true
-	openPanels[panel] = true
-	scale.Scale = 0.6
-	TweenService:Create(scale, UI.TWEEN.open, { Scale = 1 }):Play()
+-- Selects `target`'s first button when playing with a gamepad.
+function UI.selectFirst(target: GuiObject)
 	if Layout.class == "Console" then
 		task.defer(function()
-			if panel.Visible then
-				GuiService.SelectedObject = firstButton(panel)
+			if target.Visible then
+				GuiService.SelectedObject = firstButton(target)
 			end
 		end)
 	end
+end
+
+local function closePanel(panel: GuiObject)
+	openPanels[panel] = nil
+	local token = (panelTokens[panel] or 0) + 1
+	panelTokens[panel] = token
+	local selected = GuiService.SelectedObject
+	if selected and selected:IsDescendantOf(panel) then
+		GuiService.SelectedObject = nil
+	end
+	local shrink = TweenService:Create(panelScale(panel), PANEL_OUT, { Scale = 0.85 })
+	shrink.Completed:Once(function()
+		if panelTokens[panel] == token then
+			panel.Visible = false
+		end
+	end)
+	shrink:Play()
+	updateBackdrop()
+end
+
+-- Opens a panel (closing any other). Does nothing if it's already open.
+function UI.openPanel(panel: GuiObject)
+	if openPanels[panel] then
+		return
+	end
+	for other in table.clone(openPanels) do
+		closePanel(other)
+	end
+	openPanels[panel] = true
+	panelTokens[panel] = (panelTokens[panel] or 0) + 1
+	local scale = panelScale(panel)
+	scale.Scale = 0.8
+	panel.Visible = true
+	TweenService:Create(scale, PANEL_IN, { Scale = 1 }):Play()
+	updateBackdrop()
+	UI.selectFirst(panel)
+end
+
+-- Opens or closes a panel. Returns the new open state.
+function UI.togglePanel(panel: GuiObject): boolean
+	if openPanels[panel] then
+		closePanel(panel)
+		return false
+	end
+	UI.openPanel(panel)
 	return true
 end
 
--- Closes every open panel (Esc, gamepad B). True if one was open.
+-- Closes the open panel (Esc, gamepad B, the backdrop). True if one was open.
 function UI.closePanels(): boolean
 	local closed = false
 	for panel in table.clone(openPanels) do
-		if panel.Visible then
-			UI.togglePanel(panel)
-			closed = true
-		end
-		openPanels[panel] = nil
+		closePanel(panel)
+		closed = true
 	end
 	return closed
+end
+
+function UI.anyPanelOpen(): boolean
+	return next(openPanels) ~= nil
+end
+
+export type Window = { panel: Frame, body: Frame, close: TextButton }
+
+-- A standard panel: a header in `color` with the title and a close button,
+-- and a body frame under it to fill. Centred, hidden until opened, with
+-- size limits, and a near-full-screen sheet on a phone (UI.sheet).
+function UI.window(
+	parent: Instance,
+	name: string,
+	title: string,
+	color: Color3,
+	size: UDim2,
+	maxSize: Vector2
+): Window
+	local panel = UI.panel({
+		Name = name,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = size,
+		Visible = false,
+		Parent = parent,
+	})
+	UI.sizeLimits(panel, Vector2.new(320, 300), maxSize)
+	local header = UI.make(Instance.new("Frame"), {
+		Name = "Header",
+		Size = UDim2.new(1, 0, 0, 58),
+		BackgroundColor3 = color,
+		Parent = panel,
+	})
+	UI.corner(header, UDim.new(0, 14))
+	UI.gradient(header, Color3.new(1, 1, 1), Color3.fromRGB(170, 170, 185))
+	local heading = UI.label({
+		Title = true,
+		Text = title,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.new(0, 18, 0.15, 0),
+		Size = UDim2.new(1, -90, 0.7, 0),
+		Parent = header,
+	})
+	UI.maxText(heading, 34)
+	local close = UI.button({
+		Name = "Close",
+		Text = "X",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -10, 0.5, 0),
+		Size = UDim2.fromOffset(42, 42),
+		BackgroundColor3 = UI.COLORS.red,
+		Parent = header,
+	})
+	close.Activated:Connect(function()
+		UI.togglePanel(panel)
+	end)
+	local body = UI.make(Instance.new("Frame"), {
+		Name = "Body",
+		Position = UDim2.new(0, 14, 0, 70),
+		Size = UDim2.new(1, -28, 1, -82),
+		BackgroundTransparency = 1,
+		Parent = panel,
+	})
+	UI.sheet(panel, size)
+	return { panel = panel, body = body, close = close }
 end
 
 -- A popup panel that becomes a near-full-screen sheet on a phone (its size
@@ -334,23 +486,23 @@ function UI.sheet(panel: GuiObject, normal: UDim2, spare: { GuiObject }?)
 	Layout.Changed:Connect(apply)
 end
 
--- A small key hint in a button's corner: the keyboard key on a PC, the
--- gamepad button on a console, nothing on touch.
-function UI.keyHint(button: GuiObject, key: string, padButton: string)
+-- A small gamepad button chip in a button's corner ("Y"), shown only to
+-- players on a gamepad (Layout class Console); nothing on PC or touch.
+function UI.padHint(button: GuiObject, padButton: string)
 	local hint = UI.label({
-		Name = "KeyHint",
+		Name = "PadHint",
+		Text = padButton,
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, 4, 0, -6),
-		Size = UDim2.fromOffset(22, 22),
+		Position = UDim2.new(1, 6, 0, -6),
+		Size = UDim2.fromOffset(24, 24),
 		BackgroundColor3 = UI.COLORS.panelDark,
 		BackgroundTransparency = 0,
 		ZIndex = 5,
 		Parent = button,
 	})
-	UI.corner(hint, UDim.new(0.3, 0))
+	UI.corner(hint, UDim.new(0.5, 0))
 	local function apply()
-		hint.Visible = not Layout.isTouch()
-		hint.Text = if Layout.class == "Console" then padButton else key
+		hint.Visible = Layout.class == "Console"
 	end
 	apply()
 	Layout.Changed:Connect(apply)

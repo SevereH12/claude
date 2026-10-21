@@ -32,9 +32,14 @@ type Tab = {
 local ShopUI = {}
 
 local panel: Frame
+local body: Frame -- under the window's header (UI.window)
 local hint: TextLabel
 local tabs: { Tab } = {}
 local current: Tab? = nil
+
+function ShopUI.open()
+	UI.openPanel(panel)
+end
 
 function ShopUI.toggle()
 	UI.togglePanel(panel)
@@ -152,23 +157,23 @@ local function buildTab(
 	local tabButton = UI.button({
 		Name = title,
 		Text = title,
-		Position = UDim2.fromScale(0.04 + (order - 1) * 0.47, 0.17),
-		Size = UDim2.fromScale(0.45, 0.08),
+		Position = UDim2.new((order - 1) * 0.5, if order == 1 then 0 else 6, 0, 0),
+		Size = UDim2.new(0.5, -6, 0, 46),
 		BackgroundColor3 = COLORS.panelDark,
-		Parent = panel,
+		Parent = body,
 	})
 	UI.maxText(tabButton, 22)
 	local list = UI.make(Instance.new("ScrollingFrame"), {
 		Name = title .. "List",
-		Position = UDim2.fromScale(0.04, 0.33),
-		Size = UDim2.fromScale(0.92, 0.64),
+		Position = UDim2.fromOffset(0, 86),
+		Size = UDim2.new(1, 0, 1, -86),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		CanvasSize = UDim2.new(),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		ScrollBarThickness = 6,
 		Visible = false,
-		Parent = panel,
+		Parent = body,
 	})
 	UI.make(Instance.new("UIListLayout"), {
 		Padding = UDim.new(0, 10),
@@ -201,54 +206,24 @@ end
 
 function ShopUI.init()
 	local _, screenGui = Layout.screen("StormBottlerShop", 5)
-	panel = UI.panel({
-		Name = "ShopPanel",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.44, 0.66),
-		Visible = false,
-		Parent = screenGui,
-	})
-	UI.sizeLimits(panel, Vector2.new(320, 300), Vector2.new(580, 560))
-
-	local header = UI.make(Instance.new("Frame"), {
-		Name = "Header",
-		Size = UDim2.fromScale(1, 0.14),
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		Parent = panel,
-	})
-	UI.corner(header, UDim.new(0, 14))
-	UI.gradient(header, COLORS.storm, COLORS.stormDeep)
-	local title = UI.label({
-		Title = true,
-		Text = "⚡ SHOP",
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromScale(0.05, 0.15),
-		Size = UDim2.fromScale(0.7, 0.7),
-		Parent = header,
-	})
-	UI.maxText(title, 36)
-	local close = UI.button({
-		Name = "Close",
-		Text = "X",
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.fromScale(0.975, 0.5),
-		Size = UDim2.fromScale(0.75, 0.75),
-		SizeConstraint = Enum.SizeConstraint.RelativeYY,
-		BackgroundColor3 = COLORS.red,
-		Parent = header,
-	})
-	close.Activated:Connect(ShopUI.toggle)
-
+	local window = UI.window(
+		screenGui,
+		"ShopPanel",
+		"🛒 SHOP",
+		COLORS.green,
+		UDim2.fromScale(0.44, 0.66),
+		Vector2.new(580, 560)
+	)
+	panel = window.panel
+	body = window.body
 	hint = UI.label({
 		Text = "",
 		TextColor3 = COLORS.subtext,
-		Position = UDim2.fromScale(0.05, 0.265),
-		Size = UDim2.fromScale(0.9, 0.055),
-		Parent = panel,
+		Position = UDim2.fromOffset(0, 54),
+		Size = UDim2.new(1, 0, 0, 24),
+		Parent = body,
 	})
 	UI.maxText(hint, 18)
-	UI.sheet(panel, UDim2.fromScale(0.44, 0.66), { hint })
 
 	local bottles = buildTab(
 		1,
