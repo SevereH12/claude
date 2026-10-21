@@ -3,11 +3,9 @@
 -- animation timings) so every screen feels like the same game. Also
 -- UI.toast: the one way to put a warning, hint or notice on screen.
 
-local GuiService = game:GetService("GuiService")
+local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 
-local Layout = require(script.Parent.Layout)
-local LayoutMath = require(script.Parent.LayoutMath)
 local ToastQueue = require(script.Parent.ToastQueue)
 
 local UI = {}
@@ -80,23 +78,9 @@ function UI.gradient(parent: Instance, top: Color3, bottom: Color3): UIGradient
 	})
 end
 
--- Every text size limit, so phones can raise the minimum (readable text).
-local textLimits: { [UITextSizeConstraint]: boolean } = setmetatable({}, { __mode = "k" }) :: any
-
 function UI.maxText(parent: Instance, size: number)
-	local limit = UI.make(Instance.new("UITextSizeConstraint"), {
-		MaxTextSize = size,
-		MinTextSize = math.min(LayoutMath.minTextSize(Layout.class), size),
-		Parent = parent,
-	})
-	textLimits[limit] = true
+	UI.make(Instance.new("UITextSizeConstraint"), { MaxTextSize = size, Parent = parent })
 end
-
-Layout.Changed:Connect(function(class)
-	for limit in textLimits do
-		limit.MinTextSize = math.min(LayoutMath.minTextSize(class), limit.MaxTextSize)
-	end
-end)
 
 function UI.sizeLimits(parent: Instance, min: Vector2, max: Vector2)
 	UI.make(Instance.new("UISizeConstraint"), { MinSize = min, MaxSize = max, Parent = parent })
@@ -208,107 +192,18 @@ function UI.pop(target: GuiObject, amount: number?)
 	out:Play()
 end
 
-local openPanels: { [GuiObject]: boolean } = {}
-
--- The first button in a panel, top to bottom then left to right, for the
--- gamepad selection.
-local function firstButton(panel: GuiObject): GuiObject?
-	local best: GuiObject? = nil
-	for _, descendant in panel:GetDescendants() do
-		if descendant:IsA("GuiButton") and descendant.Visible and descendant.Selectable then
-			local p = descendant.AbsolutePosition
-			if
-				best == nil
-				or p.Y < best.AbsolutePosition.Y - 2
-				or (math.abs(p.Y - best.AbsolutePosition.Y) <= 2 and p.X < best.AbsolutePosition.X)
-			then
-				best = descendant
-			end
-		end
-	end
-	return best
-end
-
 -- Opens or closes a panel with a bouncy scale. Returns the new open state.
--- With a gamepad, opening selects the panel's first button.
 function UI.togglePanel(panel: GuiObject): boolean
 	local scale = panel:FindFirstChildOfClass("UIScale")
 		or UI.make(Instance.new("UIScale"), { Parent = panel })
 	if panel.Visible then
 		panel.Visible = false
-		openPanels[panel] = nil
-		local selected = GuiService.SelectedObject
-		if selected and selected:IsDescendantOf(panel) then
-			GuiService.SelectedObject = nil
-		end
 		return false
 	end
 	panel.Visible = true
-	openPanels[panel] = true
 	scale.Scale = 0.6
 	TweenService:Create(scale, UI.TWEEN.open, { Scale = 1 }):Play()
-	if Layout.class == "Console" then
-		task.defer(function()
-			if panel.Visible then
-				GuiService.SelectedObject = firstButton(panel)
-			end
-		end)
-	end
 	return true
-end
-
--- Closes every open panel (Esc, gamepad B). True if one was open.
-function UI.closePanels(): boolean
-	local closed = false
-	for panel in table.clone(openPanels) do
-		if panel.Visible then
-			UI.togglePanel(panel)
-			closed = true
-		end
-		openPanels[panel] = nil
-	end
-	return closed
-end
-
--- A popup panel that becomes a near-full-screen sheet on a phone (its size
--- limits lifted), with a close button at least 44 points.
-function UI.sheet(panel: GuiObject, normal: UDim2, close: GuiObject?)
-	local limits = panel:FindFirstChildOfClass("UISizeConstraint")
-	local maxSize = if limits then limits.MaxSize else Vector2.new(math.huge, math.huge)
-	if close then
-		UI.sizeLimits(close, Vector2.new(44, 44), Vector2.new(120, 120))
-	end
-	local function apply()
-		local phone = Layout.class == "Phone"
-		panel.Size = if phone then UDim2.fromScale(0.96, 0.94) else normal
-		if limits then
-			limits.MaxSize = if phone then Vector2.new(math.huge, math.huge) else maxSize
-		end
-	end
-	apply()
-	Layout.Changed:Connect(apply)
-end
-
--- A small key hint in a button's corner: the keyboard key on a PC, the
--- gamepad button on a console, nothing on touch.
-function UI.keyHint(button: GuiObject, key: string, padButton: string)
-	local hint = UI.label({
-		Name = "KeyHint",
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, 4, 0, -6),
-		Size = UDim2.fromOffset(22, 22),
-		BackgroundColor3 = UI.COLORS.panelDark,
-		BackgroundTransparency = 0,
-		ZIndex = 5,
-		Parent = button,
-	})
-	UI.corner(hint, UDim.new(0.3, 0))
-	local function apply()
-		hint.Visible = not Layout.isTouch()
-		hint.Text = if Layout.class == "Console" then padButton else key
-	end
-	apply()
-	Layout.Changed:Connect(apply)
 end
 
 -- Toasts ---------------------------------------------------------------------------
@@ -346,7 +241,13 @@ local function stack(): Frame
 	if existing and existing.Parent then
 		return existing
 	end
-	local _, gui = Layout.screen("Toasts", 7)
+	local gui = UI.make(Instance.new("ScreenGui"), {
+		Name = "Toasts",
+		ResetOnSpawn = false,
+		DisplayOrder = 5,
+		ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets,
+		Parent = Players.LocalPlayer:WaitForChild("PlayerGui"),
+	})
 	local frame = UI.make(Instance.new("Frame"), {
 		Name = "Stack",
 		AnchorPoint = Vector2.new(0.5, 0),

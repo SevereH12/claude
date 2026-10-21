@@ -16,7 +16,6 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
-local Layout = require(script.Parent.Parent.Lib.Layout)
 local UI = require(script.Parent.Parent.Lib.UI)
 local State = require(script.Parent.State)
 
@@ -64,7 +63,12 @@ function ZoneBanner.show(text: string, subtext: string, color: Color3)
 end
 
 function ZoneBanner.init()
-	local _, screenGui = Layout.screen("ZoneBanner", 3)
+	local screenGui = UI.make(Instance.new("ScreenGui"), {
+		Name = "ZoneBanner",
+		ResetOnSpawn = false,
+		DisplayOrder = 3,
+		Parent = player:WaitForChild("PlayerGui"),
+	})
 	banner = UI.make(Instance.new("CanvasGroup"), {
 		Name = "Banner",
 		AnchorPoint = Vector2.new(0.5, 0),
