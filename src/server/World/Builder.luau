@@ -1,20 +1,30 @@
 --!strict
--- Builds the whole world in one style:
---   1. clear the old map and terrain
---   2. plan zone slots on the spiral (Layout) from Config.ZONES
---   3. create every zone's volume part (the gameplay contract; styles never do this)
---   4. call the style pack: atmosphere -> base -> hub -> per zone (ground,
---      connector, border, gate, theme) -> teaser
---   5. build each zone's Research Camp (box + style.buildCamp or Kit.researchCamp)
---   6. check the result has a SpawnLocation and a SellArea (warn if no ResearchOffice)
+-- Builds the whole game: every world in Config.WORLDS, each in its own style.
+-- Each world is built round the origin and then moved to world.offset; its
+-- zone volumes, camps, gates and ground join the shared Map.Zones,
+-- Map.ResearchCamps, Map.ZoneGates and Map.Ground (Map.Ground.<WorldId>),
+-- and the rest of its art sits in Map.<WorldId> (the first world's sits
+-- straight in Map). Per world:
+--   1. plan its zone slots on the spiral (Layout) from its Config.ZONES entries
+--   2. create every zone's volume part (the gameplay contract; styles never do this)
+--   3. call the style pack: atmosphere (first world only) -> base -> hub
+--      (with its portals) -> per zone (ground, connector, border, gate,
+--      theme) -> teaser
+--   4. build each zone's Research Camp (box + style.buildCamp or Kit.researchCamp)
+--   5. check it has a SpawnLocation, a SellArea and its portals (warn if
+--      the first world has no ResearchOffice)
+-- Only the first world's SpawnLocation is used for spawning; the others
+-- are where portals drop you (attribute World on each).
 --
--- Adding a zone = adding a Config.ZONES entry. It lands in the next slot,
--- the teaser moves one slot further out, and nothing else moves.
+-- Adding a zone = adding a Config.ZONES entry. It lands in the next slot of
+-- its world, the teaser moves one slot further out, and nothing else moves.
+-- Adding a world = adding a Config.WORLDS entry (and its zones).
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local SharedTypes = require(ReplicatedStorage.Shared.Types)
 local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Kit = require(script.Parent.Kit)
@@ -125,36 +135,57 @@ local function countParts(root: Instance): number
 	return count
 end
 
-function Builder.build(styleName: string?): Folder
-	local name = styleName or Config.WORLD_STYLE
-	local style: StylePack = (require :: any)(styleModule(name))
+type Containers = {
+	zones: Instance,
+	camps: Instance,
+	gates: Instance,
+}
 
-	local old = workspace:FindFirstChild("Map")
-	if old then
-		old:Destroy()
+type Plan = {
+	world: SharedTypes.WorldDef,
+	style: string,
+	portals: { WorldTypes.Portal },
+}
+
+local function persistentModel(name: string, parent: Instance): Model
+	local model = Instance.new("Model")
+	model.Name = name
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
+	model.Parent = parent
+	return model
+end
+
+local function taggedIn(root: Instance, tag: string): { Instance }
+	local list = {}
+	for _, tagged in CollectionService:GetTagged(tag) do
+		if tagged:IsDescendantOf(root) then
+			table.insert(list, tagged)
+		end
 	end
-	clearTemplate()
-	workspace.Terrain:Clear()
+	return list
+end
 
-	local map = folder("Map", workspace)
-	map:SetAttribute("AutoBuilt", true)
-	map:SetAttribute("Style", name)
-	map:SetAttribute("Ground", style.ground or "Terrain")
-
-	-- zone volumes stay loaded on every client even with streaming on
-	local zonesModel = Instance.new("Model")
-	zonesModel.Name = "Zones"
-	zonesModel.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
-	zonesModel.Parent = map
+-- Builds one world into `root` (art folders) and `containers`, round the
+-- origin. Returns the number of zones built.
+local function buildWorld(
+	plan: Plan,
+	root: Folder,
+	ground: Folder,
+	containers: Containers,
+	isFirst: boolean
+): number
+	local world = plan.world
+	local name = plan.style
+	local style: StylePack = (require :: any)(styleModule(name))
 
 	-- ground = what players walk on (Blocks); the strike raycast hits it
 	local folders = {
-		ground = folder("Ground", map),
-		base = folder("Base", map),
-		hub = folder("Hub", map),
-		zones = folder("ZoneArt", map),
-		connectors = folder("Connectors", map),
-		decor = folder("Decor", map),
+		ground = ground,
+		base = folder("Base", root),
+		hub = folder("Hub", root),
+		zones = folder("ZoneArt", root),
+		connectors = folder("Connectors", root),
+		decor = folder("Decor", root),
 	}
 
 	local cableAnchor = Kit.part({
@@ -166,11 +197,11 @@ function Builder.build(styleName: string?): Folder
 		CanQuery = false,
 		CanTouch = false,
 		CastShadow = false,
-		Parent = map,
+		Parent = root,
 	})
 
 	-- plan
-	local defs = Formulas.sortedZones()
+	local defs = Formulas.worldZones(world.id)
 	local footprints = {}
 	for _, def in defs do
 		table.insert(footprints, { width = def.width, depth = def.depth, floor = def.floor })
@@ -201,23 +232,27 @@ function Builder.build(styleName: string?): Folder
 	}
 
 	local ctx: Context = {
-		map = map,
+		map = root,
 		folders = folders,
 		terrain = workspace.Terrain,
 		rng = Random.new(seedFor(name)),
 		layout = style.layout,
+		world = world,
+		portals = plan.portals,
 		zones = zones,
 		teaser = teaser,
 		cableAnchor = cableAnchor,
 	}
 
 	-- build
-	style.atmosphere(ctx)
+	if isFirst then
+		style.atmosphere(ctx)
+	end
 	style.buildBase(ctx)
 	style.buildHub(ctx)
 	for _, zone in zones do
 		local def = zone.def :: any
-		zoneVolume(zonesModel, def.id, zone)
+		zoneVolume(containers.zones, def.id, zone)
 		style.buildZoneGround(ctx, zone)
 	end
 	for _, zone in zones do
@@ -233,13 +268,9 @@ function Builder.build(styleName: string?): Folder
 	style.buildTeaser(ctx, teaser)
 
 	-- Research Camps: one invisible box per zone, then the art
-	local camps = Instance.new("Model")
-	camps.Name = "ResearchCamps"
-	camps.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
-	camps.Parent = map
 	for _, zone in zones do
 		local def = zone.def :: any
-		local box = campBox(camps, def.id, zone)
+		local box = campBox(containers.camps, def.id, zone)
 		box:SetAttribute("ZoneId", def.id)
 		if style.buildCamp then
 			style.buildCamp(ctx, zone)
@@ -252,48 +283,144 @@ function Builder.build(styleName: string?): Folder
 	-- It never collides on the server; each client makes its own copy solid
 	-- while it can't enter (Controllers/ZoneGates). The real lock is on the
 	-- server (Strikes, Movement, Research).
-	local gates = Instance.new("Model")
-	gates.Name = "ZoneGates"
-	gates.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
-	gates.Parent = map
 	for _, zone in zones do
 		local def = zone.def :: any
 		local requirement = Progression.requirement(def)
 		if requirement then
-			Kit.zoneGate(gates, zone, requirement)
+			Kit.zoneGate(containers.gates, zone, requirement)
 		end
 	end
 
 	-- contracts the game relies on
-	local spawnCount, sellCount = 0, 0
-	for _, descendant in map:GetDescendants() do
+	local spawns = {}
+	for _, descendant in root:GetDescendants() do
 		if descendant:IsA("SpawnLocation") then
-			spawnCount += 1
+			table.insert(spawns, descendant)
 		end
 	end
-	for _, tagged in CollectionService:GetTagged(Kit.SELL_TAG) do
-		if tagged:IsDescendantOf(map) then
-			sellCount += 1
-		end
-	end
-	if spawnCount == 0 then
+	if #spawns == 0 then
 		error(`[World] style "{name}" built no SpawnLocation`, 0)
 	end
-	if sellCount == 0 then
+	for _, spawnLocation in spawns do
+		spawnLocation:SetAttribute("World", world.id)
+		-- only the first world's spawn is used for spawning
+		spawnLocation.Enabled = isFirst
+	end
+	if #taggedIn(root, Kit.SELL_TAG) == 0 then
 		error(`[World] style "{name}" built no SellArea (use Kit.sellArea)`, 0)
 	end
-
-	local hasOffice = false
-	for _, tagged in CollectionService:GetTagged(Kit.OFFICE_TAG) do
-		if tagged:IsDescendantOf(map) then
-			hasOffice = true
+	local portals = taggedIn(root, Kit.PORTAL_TAG)
+	for _, portal in plan.portals do
+		local found = false
+		for _, box in portals do
+			if box:GetAttribute("ToWorld") == portal.to.id then
+				found = true
+			end
+		end
+		if not found then
+			error(`[World] style "{name}" built no portal to {portal.to.id} (use Kit.portal)`, 0)
 		end
 	end
-	if not hasOffice then
+	if isFirst and #taggedIn(root, Kit.OFFICE_TAG) == 0 then
 		warn(`[World] style "{name}" built no ResearchOffice (use Kit.researchOffice)`)
 	end
+	return #zones
+end
 
-	print(`[World] built "{name}": {#zones} zones, {countParts(map)} parts`)
+-- Every world with the portals its hub needs: to the next world (locked
+-- until you own its bottle) and back to the previous one.
+local function gamePlans(): { Plan }
+	local plans: { Plan } = {}
+	for index, world in Config.WORLDS do
+		local portals: { WorldTypes.Portal } = {}
+		local nextWorld = Config.WORLDS[index + 1]
+		if nextWorld then
+			table.insert(portals, {
+				to = nextWorld,
+				back = false,
+				requirement = Progression.worldRequirement(nextWorld),
+			})
+		end
+		local previous = Config.WORLDS[index - 1]
+		if previous then
+			table.insert(portals, { to = previous, back = true, requirement = nil })
+		end
+		table.insert(plans, { world = world, style = world.style, portals = portals })
+	end
+	return plans
+end
+
+-- `previewStyle`: build only the first world's zones, in that style, with
+-- no portals (to review a style; the tools use it). nil = the whole game.
+function Builder.build(previewStyle: string?): Folder
+	local plans = if previewStyle
+		then { { world = Config.WORLDS[1], style = previewStyle, portals = {} } :: Plan }
+		else gamePlans()
+
+	local old = workspace:FindFirstChild("Map")
+	if old then
+		old:Destroy()
+	end
+	clearTemplate()
+	workspace.Terrain:Clear()
+
+	local firstStyle: StylePack = (require :: any)(styleModule(plans[1].style))
+	local map = folder("Map", workspace)
+	map:SetAttribute("AutoBuilt", true)
+	map:SetAttribute("Style", plans[1].style)
+	map:SetAttribute("Ground", firstStyle.ground or "Terrain")
+
+	-- zone volumes, camps and gates stay loaded on every client even with
+	-- streaming on
+	local shared: Containers = {
+		zones = persistentModel("Zones", map),
+		camps = persistentModel("ResearchCamps", map),
+		gates = persistentModel("ZoneGates", map),
+	}
+	local ground = folder("Ground", map)
+
+	for index, plan in plans do
+		local world = plan.world
+		if index == 1 then
+			local count = buildWorld(plan, map, ground, shared, true)
+			print(
+				`[World] built "{plan.style}" ({world.displayName}): {count} zones, {countParts(map)} parts`
+			)
+		else
+			-- build round the origin in a staging folder, move it to the
+			-- world's offset, then hand the shared pieces over
+			local root = folder(world.id, map)
+			local staging: Containers = {
+				zones = folder("Zones", root),
+				camps = folder("ResearchCamps", root),
+				gates = folder("ZoneGates", root),
+			}
+			local worldGround = folder(world.id, root)
+			local count = buildWorld(plan, root, worldGround, staging, false)
+			local parts = countParts(root)
+			for _, descendant in root:GetDescendants() do
+				if descendant:IsA("BasePart") then
+					descendant.CFrame += world.offset
+				end
+			end
+			worldGround.Parent = ground
+			for _, pair in
+				{
+					{ staging.zones, shared.zones },
+					{ staging.camps, shared.camps },
+					{ staging.gates, shared.gates },
+				}
+			do
+				for _, child in pair[1]:GetChildren() do
+					child.Parent = pair[2]
+				end
+				pair[1]:Destroy()
+			end
+			print(
+				`[World] built "{plan.style}" ({world.displayName}): {count} zones, {parts} parts`
+			)
+		end
+	end
 	return map
 end
 

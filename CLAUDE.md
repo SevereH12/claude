@@ -51,11 +51,28 @@ Rules:
 
 ## The map (world framework)
 
-`Lib/MapBuilder.build(style?)` is the entry point (the updater plugin and the
-Map system call it). It builds the world with `src/server/World/Builder.luau`
-and the style pack `src/server/World/Styles/<Config.WORLD_STYLE>` (a module,
-or a folder with `init.luau`). The live style is `WeatherLab`; `StormPunk` and
-`SkyIsles` are kept as alternates (see `docs/world-styles.md`).
+`Lib/MapBuilder.build()` is the entry point (the updater plugin and the Map
+system call it). It builds every world in `Config.WORLDS` with
+`src/server/World/Builder.luau`, each in its own style pack
+`src/server/World/Styles/<world.style>` (a module, or a folder with
+`init.luau`). `MapBuilder.build(style)` builds only the first world's zones in
+that style, to review a style (the tools use it).
+
+Worlds: world 1 is Barometer Bay (`WeatherLab`), world 2 is Voltcliff Works
+(`StormPunk`); `SkyIsles` is kept for a future world (see
+`docs/world-styles.md`). Each world is built round the origin, then moved to
+`world.offset` (5000 studs apart, so the 2048-stud seas never meet). Its zone
+volumes, camps, gates and ground join `Map.Zones`, `Map.ResearchCamps`,
+`Map.ZoneGates` and `Map.Ground.<WorldId>`; the rest of its art is in
+`Map.<WorldId>` (world 1's sits straight in `Map`). Every zone names its
+`world`, and `order` counts along that world's spiral. Each hub builds a
+`Kit.portal` for every `ctx.portals` entry (onward to the next world, locked
+until you own its `requiresBottle`, and back to the previous one); walking
+into one is a server position check (`Systems/Travel`), which moves you to
+that world's spawn and sets the player attribute `World`. Only world 1's
+SpawnLocation spawns players; you respawn in the world you're in. Lighting
+comes from world 1's style (it's global). Volts, bottles and boots carry
+over.
 
 The framework decides where things go and guarantees the gameplay contracts;
 a style pack decides how everything looks:
@@ -68,9 +85,9 @@ a style pack decides how everything looks:
   floor + 46 studs) itself, then calls the style: atmosphere, buildBase,
   buildHub, then per zone buildZoneGround/buildConnector/buildBorder/buildGate
   and `themes[def.theme]` (or `themes.Default`), then buildTeaser. It errors if
-  there is no SpawnLocation or no part tagged `SellArea`.
+  a world has no SpawnLocation, no part tagged `SellArea` or a missing portal.
 - `World/Kit.luau`: shared building pieces (parts, struts, walkways, cables,
-  signs, rocks, terrain landmasses, `Kit.sellArea`, `Kit.spawn`).
+  signs, rocks, terrain landmasses, `Kit.sellArea`, `Kit.spawn`, `Kit.portal`).
 - `World/Blocks.luau`: part-built ground (boxes, ramps, polygon discs and
   rings, strata, rocks, the sea surface). All three styles set
   `ground = "Blocks"`: their ground is SmoothPlastic parts in
@@ -100,20 +117,25 @@ detail to save parts; the build output still reports the count.
 
 `tools/harness/` runs the real modules in a stand-in DataModel with Lune
 (https://github.com/lune-org/lune):
-- `lune run tools/harness/buildmap.luau map.json` builds the map with
-  MapBuilder and fails if required pieces (zones, sell station, spawn) are missing.
-- `lune run tools/harness/test_gameplay.luau` checks gameplay contracts
-  (zone volumes, sell station detection, spawn placement, and for Blocks
+- `lune run tools/harness/buildmap.luau map.json [Game|<Style>]` builds the
+  map with MapBuilder and fails if required pieces (zones, sell station,
+  spawn, portals) are missing. It writes one file per world: `map.json` for
+  world 1, `map_<WorldId>.json` for the others.
+- `lune run tools/harness/test_gameplay.luau [Game|<Style>]` checks gameplay
+  contracts (zone volumes, sell station detection, spawn placement, portals, and for Blocks
   styles: no terrain fills and catch floors covered at floor height).
 - `python3 tools/render_map.py map.json out` draws top-down and side views
   (needs Pillow) so map layout can be reviewed as images.
 - `tools/walkcheck.py map.json out` checks you can walk from spawn to every
-  zone and sell area and that catch floors are flat and open.
+  zone, sell area, camp and portal of that world and that catch floors are
+  flat and open.
 - `python3 tools/flickercheck.py map.json` fails if two visible parts with
   different colours or materials have overlapping top faces at the same
   height (they flicker in Studio). Offset one, butt them, or match colours.
-- `tools/check_world.sh <Style> [outdir]` runs all of the above for a style.
-Run it after any map or zone change.
+- `tools/check_world.sh [Game|<Style>] [outdir]` runs all of the above,
+  each world on its own: `Game` (the default) is the real game, every world
+  in its own style; a style name previews the first world's zones in that
+  style. Run `tools/check_world.sh Game` after any map, zone or world change.
 
 ## Conventions
 

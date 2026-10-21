@@ -102,7 +102,9 @@ also the colour of its warning circles.
 - Hub props sit only on the "quiet" bearings halfway between the eight
   spiral bearings, so future zone exits are never blocked: Bottle Foundry
   with smokestacks, gasometer, water tower, storm siren, weather mast,
-  bottle kiosk, a garden with benches, planters and lamps. A brass ring
+  bottle kiosk, a garden with benches, planters and lamps. Portals to
+  other worlds take the garden's place, then the kiosk's (the two bearings
+  beside the spawn). A brass ring
   frames the pavement core, and a chained bollard promenade runs round the
   rim with gaps where trails leave.
 - Scenery: little grass-capped basalt islets on quiet bearings, each with a

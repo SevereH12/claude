@@ -1,6 +1,8 @@
 --!strict
--- Types for the world builder. A world = a hub + one zone per Config.ZONES
--- entry + a "coming soon" teaser in the next free slot. The framework
+-- Types for the world builder. The game has one or more worlds
+-- (Config.WORLDS), each built in its own style. A world = a hub + one zone
+-- per Config.ZONES entry in that world + a "coming soon" teaser in the next
+-- free slot. The framework
 -- (Builder, Layout) decides WHERE things go and guarantees the gameplay
 -- contracts; a style pack (Styles/<Name>) decides what everything LOOKS like.
 
@@ -44,6 +46,14 @@ export type Slot = {
 	camp: CFrame,
 }
 
+-- A portal the hub must build with Kit.portal: one to the next world and
+-- one back to the previous world, where those exist.
+export type Portal = {
+	to: SharedTypes.WorldDef, -- where it leads
+	back: boolean, -- the way back to the previous world
+	requirement: string?, -- what going through needs ("Needs a Storm Cell"), nil if nothing
+}
+
 -- Per-zone build context handed to style functions.
 export type ZoneContext = {
 	def: SharedTypes.ZoneDef?, -- nil for the teaser slot
@@ -72,6 +82,10 @@ export type Context = {
 	terrain: Terrain,
 	rng: Random, -- seeded: the same style always builds the same world
 	layout: LayoutParams,
+	-- The world being built. Every world is built round the origin and then
+	-- moved to world.offset, so styles never need to know where it ends up.
+	world: SharedTypes.WorldDef,
+	portals: { Portal }, -- the hub builds one Kit.portal for each
 	zones: { ZoneContext }, -- in spiral order
 	teaser: ZoneContext,
 	-- Anchor part for Beam attachments (Kit.cable). Lives at the world origin.
@@ -88,7 +102,8 @@ export type StylePack = {
 	-- ground parts at floor height); nil/"Terrain" for terrain ground.
 	ground: string?,
 
-	-- Lighting, Atmosphere, Clouds, post effects, water colour. Called first.
+	-- Lighting, Atmosphere, Clouds, post effects, water colour. Called first,
+	-- and only for the first world: lighting is shared by every world.
 	-- Name the ColorCorrectionEffect "StormGrade" so storms can tint it.
 	-- Set Lighting attributes StormBrightness (number), StormAmbient (Color3),
 	-- StormAtmosphereColor (Color3), StormCloudColor (Color3) to tune how
@@ -99,7 +114,9 @@ export type StylePack = {
 	-- Hub landmass details, hero landmark, wayfinding signs toward every
 	-- zone and the teaser. MUST create one SpawnLocation (outside every zone)
 	-- and at least one sell station: an invisible box part tagged
-	-- "SellArea" (use Kit.sellArea) over a clearly marked pad.
+	-- "SellArea" (use Kit.sellArea) over a clearly marked pad. Builds one
+	-- Kit.portal for each ctx.portals entry, near the spawn and clear of
+	-- every exit lane (a Kit.PORTAL_SPACE circle each).
 	buildHub: (ctx: Context) -> (),
 	-- The zone's landmass: terrain under and around the footprint, with the
 	-- catch floor flat at slot.floor across catchWidth x catchDepth.

@@ -4,7 +4,9 @@
 -- Checks the things the game silently depends on: every zone has a volume,
 -- strikes have ground to land on inside it, the sell station is reachable
 -- and detected by Selling, spawn is outside zones, zone volumes don't
--- overlap each other or the sell station.
+-- overlap each other or the sell station, portals lead where they say.
+-- style "Game" (or none) = every world; a style name = the first world's
+-- zones in that style.
 
 local process = require("@lune/process")
 local roblox = require("@lune/roblox")
@@ -12,7 +14,10 @@ local roblox = require("@lune/roblox")
 local World = require("./World")
 
 local Vector3 = roblox.Vector3
-local styleName = process.args[1] -- nil = Config.WORLD_STYLE
+local styleName = process.args[1] -- nil or "Game" = every world
+if styleName == "Game" then
+	styleName = nil
+end
 local world = World.new("src")
 world:require("ServerScriptService.Server.Lib.MapBuilder").build(styleName)
 world:normalizeParts()
@@ -21,6 +26,17 @@ local Config = world:require("ReplicatedStorage.Shared.Config")
 local Zones = world:require("ReplicatedStorage.Shared.Util.Zones")
 local ResearchSites = world:require("ReplicatedStorage.Shared.Util.ResearchSites")
 local Selling = world:require("ServerScriptService.Server.Systems.Selling")
+local Formulas = world:require("ReplicatedStorage.Shared.Util.Formulas")
+local Portals = world:require("ReplicatedStorage.Shared.Util.Portals")
+
+-- the zones this build has: every world's, or the first world's in a preview
+local worlds = if styleName then { Config.WORLDS[1] } else Config.WORLDS
+local builtZones = {}
+for _, w in worlds do
+	for _, def in Formulas.worldZones(w.id) do
+		builtZones[def.id] = def
+	end
+end
 
 local failures = 0
 local passes = 0
@@ -41,7 +57,7 @@ local ROOT = 3
 
 -- zones -------------------------------------------------------------------
 local zoneParts = {}
-for id, def in Config.ZONES do
+for id, def in builtZones do
 	local part = Zones.part(id)
 	check(part ~= nil, "zone part exists for " .. id)
 	if part then
@@ -84,18 +100,58 @@ for a, pa in zoneParts do
 end
 
 -- spawn -------------------------------------------------------------------
-local spawn
+-- one per world (where portals drop you); only the first world's spawns
+local spawnsByWorld = {}
 for _, inst in world.workspace:GetDescendants() do
 	if inst.ClassName == "SpawnLocation" then
-		spawn = inst
+		local id = inst:GetAttribute("World")
+		spawnsByWorld[id] = inst
+		local standing = inst.CFrame.Position + Vector3.new(0, inst.Size.Y / 2 + ROOT, 0)
+		check(Zones.at(standing) == nil, inst:GetFullName() .. " is outside every zone")
+		check(not Selling.isAtStation(standing), inst:GetFullName() .. " is not a sell station")
+		check(Portals.at(standing) == nil, inst:GetFullName() .. " is not in a portal")
+		check(
+			inst.Enabled == (id == Config.WORLDS[1].id),
+			inst:GetFullName() .. " spawns players only if it's in the first world"
+		)
 	end
 end
-check(spawn ~= nil, "a SpawnLocation exists")
-if spawn then
-	local standing = spawn.CFrame.Position + Vector3.new(0, spawn.Size.Y / 2 + ROOT, 0)
-	check(Zones.at(standing) == nil, "spawn is outside every zone")
-	check(not Selling.isAtStation(standing), "spawn is not a sell station")
+for _, w in worlds do
+	check(spawnsByWorld[w.id] ~= nil, "a SpawnLocation exists for world " .. w.id)
 end
+
+-- portals -----------------------------------------------------------------------
+local portalCount = 0
+for _, inst in world.workspace:GetDescendants() do
+	if inst:IsA("BasePart") and inst:HasTag(Portals.TAG) then
+		portalCount += 1
+		local to = inst:GetAttribute("ToWorld")
+		local name = inst:GetFullName()
+		local standing = inst.CFrame.Position - Vector3.new(0, inst.Size.Y / 2 - ROOT, 0)
+		local found = Portals.at(standing)
+		check(found ~= nil and found.id == to, "walking into " .. name .. " leads to " .. tostring(to))
+		check(spawnsByWorld[to] ~= nil, name .. " leads to a world with a spawn")
+		check(
+			inst.Transparency >= 1 and not inst.CanCollide and not inst.CanQuery,
+			name .. " is invisible and non-blocking"
+		)
+		check(Zones.at(standing) == nil, name .. " is outside every zone")
+		check(not Selling.isAtStation(standing), name .. " is not a sell station")
+		-- it stands in the hub of the world before or after the one it leads to
+		local nearest, best = nil, math.huge
+		for _, w in worlds do
+			local d = (Vector3.new(w.offset.X, 0, w.offset.Z) - Vector3.new(inst.CFrame.X, 0, inst.CFrame.Z)).Magnitude
+			if d < best then
+				nearest, best = w, d
+			end
+		end
+		check(
+			nearest ~= nil and math.abs(Formulas.worldIndex(nearest.id) - Formulas.worldIndex(to)) == 1,
+			name .. " is in the hub of a neighbouring world"
+		)
+	end
+end
+check(portalCount == 2 * (#worlds - 1), string.format("%d portals for %d worlds", portalCount, #worlds))
 
 -- selling -----------------------------------------------------------------
 local stations = {}
@@ -130,7 +186,7 @@ end
 -- research camps and office ------------------------------------------------------
 local campsModel = map and map:FindFirstChild("ResearchCamps")
 check(campsModel ~= nil, "Map.ResearchCamps exists")
-for id in Config.ZONES do
+for id in builtZones do
 	local box = campsModel and campsModel:FindFirstChild(id)
 	check(box ~= nil and box:IsA("BasePart"), "a research camp box exists for " .. id)
 	if box then

@@ -28,6 +28,7 @@ local Hub = {}
 
 local SELL_DISTANCE = 27 -- pad centre from the lighthouse
 local SPAWN_DISTANCE = 52
+local PORTAL_DISTANCE = 52 -- portals stand where a cottage would, beside the spawn
 local RING_RADIUS = 54 -- village buildings
 local BEACH_TOP = 1.2 -- the sand ring round the island
 local MOLE_TOP = BEACH_TOP + 1 -- one step up from the beach
@@ -688,7 +689,8 @@ local function village(
 	floor: number,
 	gaps: { { angle: number, half: number } },
 	coveA: number,
-	spawnA: number
+	spawnA: number,
+	portalAs: { number }
 )
 	local rng = ctx.rng
 	local cottage = 0
@@ -696,7 +698,11 @@ local function village(
 	for i, g in gaps do
 		local maxHalf = RING_RADIUS * math.sin(math.rad(g.half)) - 8
 		local isSpawn = Geo.angleDiff(g.angle, spawnA) < 1
-		if Geo.angleDiff(g.angle, coveA) > 1 and maxHalf >= 6 and not isSpawn then
+		local isPortal = false
+		for _, a in portalAs do
+			isPortal = isPortal or Geo.angleDiff(g.angle, a) < 1
+		end
+		if Geo.angleDiff(g.angle, coveA) > 1 and maxHalf >= 6 and not isSpawn and not isPortal then
 			local at = Geo.polar(g.angle, RING_RADIUS, floor)
 			local cf = CFrame.lookAt(at, Vector3.new(0, floor, 0))
 			if (i % 4 == 1) and domes < 2 then
@@ -982,6 +988,50 @@ local function shore(ctx: Context, parent: Instance, corridors: { number }, cove
 	end
 end
 
+-- Portals ----------------------------------------------------------------------------
+
+-- The gaps for the hub's portals: the ones beside the spawn's (never the
+-- harbour cove), nearest first.
+local function portalAngles(
+	ctx: Context,
+	gaps: { { angle: number, half: number } },
+	spawnA: number,
+	coveA: number
+): { number }
+	local candidates: { number } = {}
+	for _, g in gaps do
+		if Geo.angleDiff(g.angle, spawnA) > 1 and Geo.angleDiff(g.angle, coveA) > 1 then
+			table.insert(candidates, g.angle)
+		end
+	end
+	table.sort(candidates, function(a, b)
+		local da, db = Geo.angleDiff(a, spawnA), Geo.angleDiff(b, spawnA)
+		if math.abs(da - db) > 1e-6 then
+			return da < db
+		end
+		return a < b
+	end)
+	local out: { number } = {}
+	for i = 1, math.min(#ctx.portals, #candidates) do
+		out[i] = candidates[i]
+	end
+	return out
+end
+
+local function portals(ctx: Context, parent: Instance, floor: number, angles: { number })
+	for i, angle in angles do
+		local portal = ctx.portals[i]
+		local at = Geo.polar(angle, PORTAL_DISTANCE, floor)
+		Kit.portal(parent, CFrame.lookAt(at, Vector3.new(0, floor, 0)), portal, {
+			ring = C.harbor,
+			ringMaterial = Enum.Material.Metal,
+			step = Palette.stone,
+			stepMaterial = Enum.Material.Cobblestone,
+			sign = Palette.zoneSign(portal.to.color),
+		})
+	end
+end
+
 function Hub.buildHub(ctx: Context)
 	local parent = ctx.folders.hub
 	local floor = ctx.layout.hubFloor
@@ -990,12 +1040,14 @@ function Hub.buildHub(ctx: Context)
 	local spawnA = spawnAngle(ctx, gaps)
 	local coveA = coveAngle(ctx, gaps, spawnA)
 	local dir = Geo.dir(spawnA)
+	local portalAs = portalAngles(ctx, gaps, spawnA, coveA)
 
 	local lens = lighthouse(ctx, parent, floor, dir)
 	sellStation(ctx, parent, floor, dir, lens)
 	spawnDeck(parent, floor, dir)
 	fingerpost(ctx, parent, floor, dir)
-	village(ctx, parent, floor, gaps, coveA, spawnA)
+	village(ctx, parent, floor, gaps, coveA, spawnA, portalAs)
+	portals(ctx, parent, floor, portalAs)
 	plaza(ctx, parent, floor, gaps, spawnA)
 	harbour(ctx, parent, floor, coveA)
 	shore(ctx, ctx.folders.decor, corridors, coveA)
