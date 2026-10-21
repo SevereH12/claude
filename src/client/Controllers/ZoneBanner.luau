@@ -24,8 +24,6 @@ local SHOW_TIME = 2.2
 local REPEAT_TIME = 10
 local GATE_NEAR = 18 -- studs from a locked gate's barrier to explain the lock
 local GATE_FAR = 28 -- and this far away before it explains again
--- Under the HUD (Volts, storm pill, goal card) and the two toast rows.
-local TOP = UI.TOAST_TOP + 2 * (UI.TOAST_HEIGHT + UI.TOAST_GAP) + 8
 local FADE = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 local player = Players.LocalPlayer
@@ -65,14 +63,24 @@ end
 
 function ZoneBanner.init()
 	local _, screenGui = Layout.screen("ZoneBanner", 3)
+	-- the slot sits at Layout.hud.banner; the banner fills it from its centre,
+	-- so its pop grows evenly
+	local slot = UI.make(Instance.new("Frame"), {
+		Name = "BannerSlot",
+		BackgroundTransparency = 1,
+		Parent = screenGui,
+	})
+	UI.onLayout(function()
+		UI.place(slot, Layout.hud.banner)
+	end)
 	banner = UI.make(Instance.new("CanvasGroup"), {
 		Name = "Banner",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, TOP),
-		Size = UDim2.fromScale(0.5, 0.13),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
 		Visible = false,
-		Parent = screenGui,
+		Parent = slot,
 	})
 	UI.make(Instance.new("UIScale"), { Parent = banner })
 	title = UI.label({

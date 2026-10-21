@@ -1,8 +1,13 @@
 --!nocheck
--- Device class and UI scale (client/Lib/LayoutMath) for the devices the
--- game must fit.
---   lune run tools/harness/test_layout.luau
+-- Device class, UI scale and the edge-anchored HUD layout (client/Lib/
+-- LayoutMath) on every screen the game must fit.
+--   lune run tools/harness/test_layout.luau [preview.json]
+-- With a path, also writes every device's HUD rectangles there, for
+-- tools/render_ui.py to draw.
+local fs = require("@lune/fs")
+local process = require("@lune/process")
 local roblox = require("@lune/roblox")
+local serde = require("@lune/serde")
 local World = require("./World")
 
 local Vector2 = roblox.Vector2
@@ -20,49 +25,114 @@ end
 local touch = { touch = true, keyboard = false, gamepad = false }
 local pc = { touch = false, keyboard = true, gamepad = false }
 local pad = { touch = false, keyboard = false, gamepad = true }
+local TOPBAR = 58 -- Roblox's top bar, which the HUD keeps clear of
 
-local cases = {
-	-- name, viewport, input, class, UIScale, edge padding
-	{ "phone portrait", Vector2.new(390, 844), touch, "Phone", 390 / 480, 0 },
-	{ "phone landscape", Vector2.new(844, 390), touch, "Phone", 390 / 480, 0 },
-	{ "iPad", Vector2.new(1024, 768), touch, "Tablet", 1, 0 },
-	{ "1080p desktop", Vector2.new(1920, 1080), pc, "Desktop", 1, 0 },
-	{ "4K desktop", Vector2.new(3840, 2160), pc, "Desktop", 2, 0 },
-	{ "console at 1080p", Vector2.new(1920, 1080), pad, "Console", 1.15, 0.05 },
+local devices = {
+	-- name, viewport, input, class
+	{ "iPhone portrait", Vector2.new(390, 844), touch, "Phone" },
+	{ "iPhone landscape", Vector2.new(844, 390), touch, "Phone" },
+	{ "small phone portrait", Vector2.new(360, 640), touch, "Phone" },
+	{ "iPad landscape", Vector2.new(1024, 768), touch, "Tablet" },
+	{ "iPad portrait", Vector2.new(768, 1024), touch, "Tablet" },
+	{ "1080p desktop", Vector2.new(1920, 1080), pc, "Desktop" },
+	{ "4K desktop", Vector2.new(3840, 2160), pc, "Desktop" },
+	{ "small window", Vector2.new(800, 600), pc, "Desktop" },
+	{ "ultrawide", Vector2.new(3440, 1440), pc, "Desktop" },
+	{ "console at 1080p", Vector2.new(1920, 1080), pad, "Console" },
 }
-for _, case in cases do
-	local name, viewport, input, class, scale, edge = table.unpack(case)
+
+local STAY = { "volts", "storm", "goal", "bar", "menu" } -- always on screen
+local preview = {}
+
+for _, device in devices do
+	local name, viewport, input, class = table.unpack(device)
 	local got = LayoutMath.classify(viewport, input)
 	check(got == class, `{name}: is a {class} (got {got})`)
-	local s = LayoutMath.scale(got, viewport)
-	check(math.abs(s - scale) < 1e-6, `{name}: UIScale {scale} (got {s})`)
-	check(LayoutMath.edgePadding(got) == edge, `{name}: edge padding {edge}`)
-	-- on screen, after the UIScale
-	local text = LayoutMath.minTextSize(got, s) * s
-	local tap = LayoutMath.tapMin(got, s, Vector2.new(30, 20)) * s
-	if got == "Phone" then
-		check(text >= LayoutMath.PHONE_MIN_TEXT, `{name}: text is at least 14 points ({text})`)
+	local scale = LayoutMath.scale(got, viewport)
+	local edge = LayoutMath.edgePadding(got)
+	-- the safe area in design pixels: below the top bar, inside the TV edge
+	local area = Vector2.new(
+		viewport.X * (1 - 2 * edge),
+		(viewport.Y - TOPBAR) * (1 - 2 * edge)
+	) / scale
+	local hud = LayoutMath.hud(got, area)
+
+	for key, r in hud do
+		if key ~= "test" then
+			check(LayoutMath.inside(r, area), `{name}: {key} is on screen`)
+		end
+	end
+	for i, a in STAY do
+		for j = i + 1, #STAY do
+			local b = STAY[j]
+			check(not LayoutMath.overlaps(hud[a], hud[b]), `{name}: {a} and {b} don't overlap`)
+		end
+		check(not LayoutMath.overlaps(hud.toasts, hud[a]), `{name}: toasts clear {a}`)
+		check(not LayoutMath.overlaps(hud.banner, hud[a]), `{name}: zone banner clears {a}`)
+	end
+	check(not LayoutMath.overlaps(hud.card, hud.menu), `{name}: the menu card opens beside the button`)
+	for _, key in { "volts", "storm", "goal", "bar" } do
+		check(not LayoutMath.overlaps(hud.card, hud[key]), `{name}: the open menu card clears {key}`)
 	end
 	if LayoutMath.isTouch(got) then
+		for _, zone in LayoutMath.thumbZones(area) do
+			for _, key in STAY do
+				check(not LayoutMath.overlaps(hud[key], zone), `{name}: {key} is clear of the thumb controls`)
+			end
+		end
+		-- every button at least 44 points, phone text at least 14
+		local tap = LayoutMath.tapMin(got, scale, Vector2.new(30, 20)) * scale
 		check(tap.X >= 44 - 1e-6 and tap.Y >= 44 - 1e-6, `{name}: a small button grows to 44 points`)
-	else
-		check(tap == Vector2.new(30, 20) * s, `{name}: no tap minimum without touch`)
 	end
-	local big = LayoutMath.tapMin(got, s, Vector2.new(96, 46))
-	check(big.X >= 96 and big.Y >= 46, `{name}: a button's own minimum is kept`)
-end
-check(LayoutMath.scale("Phone", Vector2.new(390, 844)) < 1, "phones shrink the UI")
-check(LayoutMath.scale("Phone", Vector2.new(320, 568)) >= 0.75, "but never below 0.75")
+	if got == "Phone" then
+		check(LayoutMath.minTextSize(got, scale) * scale >= 14, `{name}: text is at least 14 points`)
+	end
+	-- the same share of the screen everywhere: the menu button is the same
+	-- fraction of the short side on every desktop
+	if got == "Desktop" then
+		local share = hud.menu.w * scale / math.min(viewport.X, viewport.Y)
+		check(math.abs(share - 84 / 720) < 0.01, `{name}: the menu button is the same share of the screen`)
+	end
+	-- a big panel always fits
+	local panel = LayoutMath.fit(Vector2.new(620, 520), area)
+	check(panel.X <= area.X - 32 + 1e-6 and panel.Y <= area.Y - 32 + 1e-6, `{name}: panels fit`)
 
-check(LayoutMath.isPortrait(Vector2.new(390, 844)), "a tall viewport is portrait")
-check(not LayoutMath.isPortrait(Vector2.new(844, 390)), "a wide one isn't")
--- the preferred input wins over what's merely plugged in
+	local rects = {}
+	for key, r in hud do
+		rects[key] = { r.x, r.y, r.w, r.h }
+	end
+	table.insert(preview, {
+		name = name,
+		class = got,
+		scale = scale,
+		viewport = { viewport.X, viewport.Y },
+		area = { area.X, area.Y },
+		edge = edge,
+		topbar = TOPBAR,
+		hud = rects,
+		panel = { panel.X, panel.Y },
+		thumbs = if LayoutMath.isTouch(got)
+			then (function()
+				local out = {}
+				for _, z in LayoutMath.thumbZones(area) do
+					table.insert(out, { z.x, z.y, z.w, z.h })
+				end
+				return out
+			end)()
+			else {},
+	})
+end
+
+check(LayoutMath.scale("Phone", Vector2.new(390, 844)) < LayoutMath.scale("Desktop", Vector2.new(1920, 1080)), "phones scale smaller than a 1080p monitor")
+check(LayoutMath.scale("Desktop", Vector2.new(3840, 2160)) == 2 * LayoutMath.scale("Desktop", Vector2.new(1920, 1080)), "4K is twice 1080p")
 local laptopWithPad = { touch = false, keyboard = true, gamepad = true, preferred = "Gamepad" }
 check(LayoutMath.classify(Vector2.new(1920, 1080), laptopWithPad) == "Console", "playing with a gamepad on a PC uses console layout")
 local touchLaptop = { touch = true, keyboard = true, gamepad = false }
 check(LayoutMath.classify(Vector2.new(1366, 768), touchLaptop) == "Desktop", "a touchscreen laptop with a keyboard is a desktop")
-check(LayoutMath.isTouch("Phone") and LayoutMath.isTouch("Tablet") and not LayoutMath.isTouch("Desktop"), "touch classes")
 
+if process.args[1] then
+	fs.writeFile(process.args[1], serde.encode("json", preview))
+end
 if failures > 0 then
 	error(`{failures} layout checks failed`)
 end

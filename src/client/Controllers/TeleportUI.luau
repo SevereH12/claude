@@ -128,14 +128,7 @@ end
 
 function TeleportUI.init()
 	local _, root = Layout.screen("StormBottlerTeleport", 5)
-	local window = UI.window(
-		root,
-		"TeleportPanel",
-		"🌀 TELEPORT",
-		PURPLE,
-		UDim2.fromScale(0.42, 0.6),
-		Vector2.new(560, 520)
-	)
+	local window = UI.window(root, "TeleportPanel", "🌀 TELEPORT", PURPLE, Vector2.new(560, 440))
 	panel = window.panel
 	local hint = UI.label({
 		Text = "Jump to the hub of any world you've unlocked.",

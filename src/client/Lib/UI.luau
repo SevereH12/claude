@@ -406,25 +406,27 @@ end
 export type Window = { panel: Frame, body: Frame, close: TextButton }
 
 -- A standard panel: a header in `color` with the title and a close button,
--- and a body frame under it to fill. Centred, hidden until opened, with
--- size limits, and a near-full-screen sheet on a phone (UI.sheet).
+-- and a body frame under it to fill. Centred, hidden until opened. It's
+-- `design` pixels, shrunk to fit smaller screens (LayoutMath.fit), so it
+-- looks the same on every device.
 function UI.window(
 	parent: Instance,
 	name: string,
 	title: string,
 	color: Color3,
-	size: UDim2,
-	maxSize: Vector2
+	design: Vector2
 ): Window
 	local panel = UI.panel({
 		Name = name,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = size,
 		Visible = false,
 		Parent = parent,
 	})
-	UI.sizeLimits(panel, Vector2.new(320, 300), maxSize)
+	UI.onLayout(function()
+		local size = LayoutMath.fit(design, Layout.area)
+		panel.Size = UDim2.fromOffset(size.X, size.Y)
+	end)
 	local header = UI.make(Instance.new("Frame"), {
 		Name = "Header",
 		Size = UDim2.new(1, 0, 0, 58),
@@ -461,29 +463,23 @@ function UI.window(
 		BackgroundTransparency = 1,
 		Parent = panel,
 	})
-	UI.sheet(panel, size)
 	return { panel = panel, body = body, close = close }
 end
 
--- A popup panel that becomes a near-full-screen sheet on a phone (its size
--- limits lifted). Its close button, like every button, stays a tap target.
--- `spare` (hint lines) hides on a phone held sideways, where the sheet is
--- too short for them under 44-point buttons.
-function UI.sheet(panel: GuiObject, normal: UDim2, spare: { GuiObject }?)
-	local limits = panel:FindFirstChildOfClass("UISizeConstraint")
-	local maxSize = if limits then limits.MaxSize else HUGE
-	local function apply()
-		local phone = Layout.class == "Phone"
-		panel.Size = if phone then UDim2.fromScale(0.96, 0.94) else normal
-		if limits then
-			limits.MaxSize = if phone then HUGE else maxSize
-		end
-		for _, item in spare or {} do
-			item.Visible = not (phone and not Layout.portrait)
-		end
-	end
+-- Puts `object` at a layout rectangle (design pixels, LayoutMath.Rect).
+function UI.place(object: GuiObject, rect: LayoutMath.Rect)
+	object.AnchorPoint = Vector2.zero
+	object.Position = UDim2.fromOffset(rect.x, rect.y)
+	object.Size = UDim2.fromOffset(rect.w, rect.h)
+end
+
+-- Runs `apply` now and again whenever the device, screen size or
+-- orientation changes.
+function UI.onLayout(apply: () -> ())
 	apply()
-	Layout.Changed:Connect(apply)
+	Layout.Changed:Connect(function()
+		apply()
+	end)
 end
 
 -- A small gamepad button chip in a button's corner ("Y"), shown only to
@@ -509,16 +505,15 @@ function UI.padHint(button: GuiObject, padButton: string)
 end
 
 -- Toasts ---------------------------------------------------------------------------
--- Short messages at the top centre (inside the safe area, under the HUD's
--- Volts, storm pill and goal card, which end 212 px down). Each fades out
+-- Short messages in the middle of the top (where Layout.hud.toasts puts
+-- them: under the bottle bar on touch screens). Each fades out
 -- after its time; the same text again restarts its timer; at most two at
 -- once (the oldest goes first). Bookkeeping: Lib/ToastQueue.
 
 export type ToastKind = "info" | "warn" | "good" | "volt"
 
 UI.TOAST_TIME = 3
-UI.TOAST_TOP = 222
-UI.TOAST_HEIGHT = 40
+UI.TOAST_HEIGHT = LayoutMath.HUD.toastHeight
 UI.TOAST_GAP = 6
 local TOAST_MAX = 2
 local TOAST_COLORS: { [ToastKind]: Color3 } = {
@@ -546,13 +541,12 @@ local function stack(): Frame
 	local _, gui = Layout.screen("Toasts", 7)
 	local frame = UI.make(Instance.new("Frame"), {
 		Name = "Stack",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, UI.TOAST_TOP),
-		Size = UDim2.new(0.42, 0, 0, TOAST_MAX * (UI.TOAST_HEIGHT + UI.TOAST_GAP)),
 		BackgroundTransparency = 1,
 		Parent = gui,
 	})
-	UI.sizeLimits(frame, Vector2.new(260, 0), Vector2.new(520, math.huge))
+	UI.onLayout(function()
+		UI.place(frame, Layout.hud.toasts)
+	end)
 	UI.make(Instance.new("UIListLayout"), {
 		Padding = UDim.new(0, UI.TOAST_GAP),
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,

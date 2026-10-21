@@ -164,14 +164,7 @@ end
 
 function BoostsUI.init()
 	local _, root = Layout.screen("StormBottlerBoosts", 5)
-	local window = UI.window(
-		root,
-		"BoostsPanel",
-		"🚀 BOOSTS",
-		COLORS.volt,
-		UDim2.fromScale(0.5, 0.74),
-		Vector2.new(680, 640)
-	)
+	local window = UI.window(root, "BoostsPanel", "🚀 BOOSTS", COLORS.volt, Vector2.new(680, 560))
 	panel = window.panel
 
 	local passes: { Card } = {}

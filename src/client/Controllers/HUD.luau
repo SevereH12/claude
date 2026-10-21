@@ -1,12 +1,12 @@
 --!strict
 -- Always-on screen UI. Shows state, never changes it.
 --
---   StormBottlerHUD (ScreenGui)
---   ├── VoltsPanel   top centre: ⚡ Volts (counts up)
---   ├── StormPill    under Volts: "⚡ STORM 1:12" / "☀ CALM  storm in 0:15"
---   ├── GoalCard     under that: the closest next goal and Volts towards it
---   ├── CityMeter    top right: server city meter (placeholder until that update)
---   └── BottleBar    bottom centre: shiny fill + "JAR 3 / 5"
+--   StormBottlerHUD (ScreenGui), every piece on a screen edge (LayoutMath.hud)
+--   ├── VoltsPanel   top left: ⚡ Volts (counts up)
+--   ├── StormPill    under Volts: "⚡ STORM 1:12" / "☀ STORM IN 0:15"
+--   ├── GoalCard     top right: the closest next goal and Volts towards it
+--   └── BottleBar    bottom centre (top centre on touch): fill + "JAR 3 / 5",
+--                    with the Chemist's TANK count beside it
 -- The MENU button (shop, research, teleport, boosts) is Controllers/Menu.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -29,7 +29,7 @@ local FULL_PULSE = TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirectio
 local HUD = {}
 
 local screenGui: Frame -- the HUD's Layout root
-local cityMeter: Frame
+local voltsPanel: Frame
 local voltsLabel: TextLabel
 local stormPill: Frame
 local stormLabel: TextLabel
@@ -53,12 +53,9 @@ local lastPhase: Types.StormPhase? = nil
 local function buildVoltsPanel()
 	local panel = UI.panel({
 		Name = "VoltsPanel",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 10),
-		Size = UDim2.fromScale(0.24, 0.085),
 		Parent = screenGui,
 	})
-	UI.sizeLimits(panel, Vector2.new(200, 50), Vector2.new(360, 76))
+	voltsPanel = panel
 
 	local icon = UI.label({
 		Title = true,
@@ -86,9 +83,6 @@ end
 local function buildStormPill()
 	stormPill = UI.make(Instance.new("Frame"), {
 		Name = "StormPill",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 92),
-		Size = UDim2.fromScale(0.2, 0.048),
 		BackgroundColor3 = COLORS.calm,
 		Parent = screenGui,
 	})
@@ -96,7 +90,6 @@ local function buildStormPill()
 	UI.stroke(stormPill, 3)
 	UI.gradient(stormPill, Color3.new(1, 1, 1), Color3.fromRGB(170, 170, 185))
 	UI.make(Instance.new("UIScale"), { Parent = stormPill })
-	UI.sizeLimits(stormPill, Vector2.new(180, 30), Vector2.new(300, 42))
 	stormLabel = UI.label({
 		Title = true,
 		Name = "Timer",
@@ -111,13 +104,9 @@ end
 local function buildGoalCard()
 	goalCard = UI.panel({
 		Name = "GoalCard",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 140),
-		Size = UDim2.fromScale(0.22, 0.085),
 		Visible = false,
 		Parent = screenGui,
 	})
-	UI.sizeLimits(goalCard, Vector2.new(210, 54), Vector2.new(330, 72))
 	goalTitle = UI.label({
 		Title = true,
 		Name = "Title",
@@ -168,50 +157,11 @@ local function buildGoalCard()
 	UI.maxText(goalAmount, 14)
 end
 
-local function buildCityMeter()
-	local meter = UI.panel({
-		Name = "CityMeter",
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -12, 0, 10),
-		Size = UDim2.fromScale(0.17, 0.08),
-		Parent = screenGui,
-	})
-	UI.sizeLimits(meter, Vector2.new(150, 46), Vector2.new(250, 68))
-	cityMeter = meter
-	local title = UI.label({
-		Title = true,
-		Text = "SERVER CITY",
-		TextColor3 = COLORS.subtext,
-		Position = UDim2.fromScale(0.06, 0.08),
-		Size = UDim2.fromScale(0.88, 0.4),
-		Parent = meter,
-	})
-	UI.maxText(title, 18)
-	local track = UI.make(Instance.new("Frame"), {
-		Position = UDim2.fromScale(0.06, 0.58),
-		Size = UDim2.fromScale(0.88, 0.28),
-		BackgroundColor3 = COLORS.panelDark,
-		Parent = meter,
-	})
-	UI.corner(track, UDim.new(0.5, 0))
-	local comingSoon = UI.label({
-		Text = "coming soon",
-		TextColor3 = COLORS.disabled,
-		Size = UDim2.fromScale(1, 1),
-		Parent = track,
-	})
-	UI.maxText(comingSoon, 13)
-end
-
 local function buildBottleBar()
 	bottleBar = UI.panel({
 		Name = "BottleBar",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -24),
-		Size = UDim2.fromScale(0.36, 0.06),
 		Parent = screenGui,
 	})
-	UI.sizeLimits(bottleBar, Vector2.new(260, 36), Vector2.new(480, 50))
 	local barCorner = bottleBar:FindFirstChildOfClass("UICorner")
 	if barCorner then
 		barCorner.CornerRadius = UDim.new(0.5, 0)
@@ -279,9 +229,8 @@ local function buildBottleBar()
 		Text = "",
 		Visible = false,
 		TextColor3 = COLORS.volt,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.new(1, 10, 0.1, 0),
-		Size = UDim2.fromScale(0.3, 0.8),
+		TextXAlignment = Enum.TextXAlignment.Right,
+		Size = UDim2.fromOffset(150, 22),
 		Parent = bottleBar,
 	})
 	UI.maxText(tankLabel, 20)
@@ -373,13 +322,19 @@ local function render(snapshot: Types.Snapshot)
 	lastChargeCount = snapshot.chargeCount
 end
 
--- Touch screens: the thumbstick (bottom left) and jump button (bottom
--- right) need their corners, so the bottle bar sits above both. Phone portrait has no room beside the Volts
--- panel (or under it, where toasts go), so the placeholder city meter hides.
+-- Every piece on its edge (LayoutMath.hud): Volts and the storm timer top
+-- left, the goal top right, the bottle bar bottom centre (top centre on
+-- touch). The TANK count sits just past the bar's right end, on the side
+-- away from the screen edge.
 local function placeForDevice()
-	local touch = Layout.isTouch()
-	bottleBar.Position = if touch then UDim2.new(0.5, 0, 0.74, 0) else UDim2.new(0.5, 0, 1, -24)
-	cityMeter.Visible = not (Layout.class == "Phone" and Layout.portrait)
+	local hud = Layout.hud
+	UI.place(voltsPanel, hud.volts)
+	UI.place(stormPill, hud.storm)
+	UI.place(goalCard, hud.goal)
+	UI.place(bottleBar, hud.bar)
+	local atBottom = not Layout.isTouch()
+	tankLabel.AnchorPoint = Vector2.new(1, if atBottom then 1 else 0)
+	tankLabel.Position = if atBottom then UDim2.new(1, -10, 0, -4) else UDim2.new(1, -10, 1, 4)
 end
 
 function HUD.init()
@@ -396,7 +351,6 @@ function HUD.init()
 	buildVoltsPanel()
 	buildStormPill()
 	buildGoalCard()
-	buildCityMeter()
 	buildBottleBar()
 	placeForDevice()
 	Layout.Changed:Connect(placeForDevice)

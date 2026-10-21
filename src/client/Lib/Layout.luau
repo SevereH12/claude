@@ -6,7 +6,9 @@
 --   * Layout.screen(name, order): a ScreenGui inside the device safe area
 --     with one UIScale, and a full-size `root` frame to build into. The root
 --     keeps clear of Roblox's top bar and, on a console, of the outer 5% of
---     the TV.
+--     the TV. Everything inside is sized in design pixels (LayoutMath).
+--   * Layout.area: the root's size in design pixels; Layout.hud: where each
+--     HUD piece goes on it (LayoutMath.hud). Both update with Changed.
 
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
@@ -26,9 +28,14 @@ Layout.class = "Desktop" :: DeviceClass
 Layout.viewport = Vector2.new(1920, 1080)
 Layout.scale = 1
 Layout.portrait = false
+Layout.area = Vector2.new(1280, 680)
+Layout.hud = LayoutMath.hud("Desktop", Layout.area)
 Layout.Changed = Signal.new() :: Signal.Signal<DeviceClass>
 
 local screens: { Screen } = {}
+-- an empty frame filling the first top-clear root's padded area: its size
+-- is the safe area every screen builds in
+local measure: Frame? = nil
 
 local function preferredInput(): string?
 	local ok, value = pcall(function()
@@ -58,6 +65,27 @@ local function applyScreen(screen: Screen)
 	screen.padding.PaddingRight = UDim.new(edge, 0)
 end
 
+-- Area and HUD from the measuring frame (or an estimate before there is
+-- one). True if the area changed.
+local function remeasure(): boolean
+	local frame = measure
+	local area
+	if frame and frame.AbsoluteSize.X > 0 then
+		area = frame.AbsoluteSize / Layout.scale
+	else
+		local edge = LayoutMath.edgePadding(Layout.class)
+		local top = GuiService.TopbarInset.Max.Y
+		area = Vector2.new(
+			Layout.viewport.X * (1 - 2 * edge),
+			(Layout.viewport.Y - top) * (1 - 2 * edge)
+		) / Layout.scale
+	end
+	local changed = (area - Layout.area).Magnitude > 0.5
+	Layout.area = area
+	Layout.hud = LayoutMath.hud(Layout.class, area)
+	return changed
+end
+
 local function refresh()
 	local cam = camera()
 	local viewport = if cam then cam.ViewportSize else Layout.viewport
@@ -75,7 +103,7 @@ local function refresh()
 	for _, screen in screens do
 		applyScreen(screen)
 	end
-	if changed then
+	if remeasure() or changed then
 		Layout.Changed:Fire(class)
 	end
 end
@@ -103,6 +131,19 @@ function Layout.screen(name: string, displayOrder: number, clearTop: boolean?): 
 	padding.Parent = root
 	local screen = { gui = gui, scale = scale, padding = padding, clearTop = clearTop ~= false }
 	table.insert(screens, screen)
+	if not measure and screen.clearTop then
+		local frame = Instance.new("Frame")
+		frame.Name = "SafeArea"
+		frame.Size = UDim2.fromScale(1, 1)
+		frame.BackgroundTransparency = 1
+		frame.Parent = root
+		measure = frame
+		frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+			if remeasure() then
+				Layout.Changed:Fire(Layout.class)
+			end
+		end)
+	end
 	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 	applyScreen(screen)
 	-- the safe-area offset is only known once it's on screen (and on rotate)

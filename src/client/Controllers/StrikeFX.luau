@@ -51,7 +51,7 @@ local forecasts: { [number]: { BasePart } } = {}
 local fxFolder: Folder
 local screenGui: ScreenGui
 local popupRoot: Frame -- pop-ups sit in the safe area (Lib/Layout)
-type Popup = { y: number, size: number }
+type Popup = { y: number, size: number } -- design pixels
 local livePopups: { Popup } = {}
 local flashFrame: Frame
 local strikeFlash: ColorCorrectionEffect
@@ -110,17 +110,23 @@ local function playSound(soundId: string, parent: Instance, speed: number?, volu
 	Debris:AddItem(sound, 5)
 end
 
--- Floating text that rises and fades. One that would land on a pop-up
--- still on screen moves down below it instead of piling on top.
+-- Floating text that rises and fades. `y` is how far down the screen it
+-- starts (0 to 1); `size` its height as a share of a 720-pixel-tall design
+-- screen, so it's the same shape on every device. One that would land on a
+-- pop-up still on screen moves down below it instead of piling on top.
+local POPUP_WIDTH = 520
+local POPUP_RISE_BY = 64
+
 local function popup(text: string, gold: boolean, y: number, size: number?)
-	local height = size or 0.08
-	local slot: Popup = { y = y, size = height }
+	local area = Layout.area
+	local height = (size or 0.08) * 720
+	local slot: Popup = { y = y * area.Y, size = height }
 	for _ = 1, 8 do
 		local moved = false
 		for _, other in livePopups do
 			local gap = (other.size + slot.size) / 2
 			if math.abs(other.y - slot.y) < gap then
-				slot.y = other.y + gap + 0.005
+				slot.y = other.y + gap + 4
 				moved = true
 			end
 		end
@@ -128,15 +134,15 @@ local function popup(text: string, gold: boolean, y: number, size: number?)
 			break
 		end
 	end
-	slot.y = math.min(slot.y, 0.9)
+	slot.y = math.min(slot.y, area.Y - height / 2)
 	table.insert(livePopups, slot)
 	local label = UI.label({
 		Title = true,
 		Text = text,
 		TextColor3 = if gold then Color3.new(1, 1, 1) else UI.COLORS.red,
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, slot.y),
-		Size = UDim2.fromScale(0.5, height),
+		Position = UDim2.new(0.5, 0, 0, slot.y),
+		Size = UDim2.fromOffset(math.min(POPUP_WIDTH, area.X - 24), height),
 		Parent = popupRoot,
 	})
 	if gold then
@@ -145,7 +151,7 @@ local function popup(text: string, gold: boolean, y: number, size: number?)
 	UI.maxText(label, 64)
 	UI.pop(label, 1.35)
 	local rise = TweenService:Create(label, POPUP_RISE, {
-		Position = UDim2.fromScale(0.5, slot.y - 0.09),
+		Position = UDim2.new(0.5, 0, 0, slot.y - POPUP_RISE_BY),
 		TextTransparency = 1,
 	})
 	rise.Completed:Once(function()

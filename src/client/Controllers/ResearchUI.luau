@@ -347,8 +347,7 @@ function ResearchUI.init()
 		"ResearchPanel",
 		"🔬 STORM SOCIETY",
 		COLORS.storm,
-		UDim2.fromScale(0.5, 0.74),
-		Vector2.new(640, 640)
+		Vector2.new(640, 560)
 	)
 	panel = window.panel
 	local hint = UI.label({

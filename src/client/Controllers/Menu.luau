@@ -17,11 +17,9 @@ local ShopUI = require(script.Parent.ShopUI)
 local TeleportUI = require(script.Parent.TeleportUI)
 
 local COLORS = UI.COLORS
-local BUTTON = 76 -- the menu button is this square
 local TILE = Vector2.new(118, 90)
 local GAP = 10
 local PAD = 12
-local CARD = Vector2.new(PAD * 2 + TILE.X * 2 + GAP, PAD * 2 + TILE.Y * 2 + GAP)
 local STAGGER = 0.045
 
 local CARD_IN = TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
@@ -174,12 +172,12 @@ local function buildTile(index: number, item: Item)
 	end)
 end
 
--- Clear of the thumbstick on touch (upper left); middle of the left edge
--- otherwise.
+-- The button and its card go where LayoutMath.hud says: the left edge,
+-- in the middle on a PC or console, higher on touch (clear of the
+-- thumbstick), with the card beside it.
 local function place()
-	dock.Position = if Layout.isTouch()
-		then UDim2.new(0, 14, 0.32, 0)
-		else UDim2.new(0, 14, 0.45, 0)
+	UI.place(dock, Layout.hud.menu)
+	UI.place(card, Layout.hud.card)
 end
 
 function Menu.init()
@@ -200,7 +198,6 @@ function Menu.init()
 	dock = UI.make(Instance.new("Frame"), {
 		Name = "MenuDock",
 		AnchorPoint = Vector2.new(0, 0.5),
-		Size = UDim2.fromOffset(BUTTON, BUTTON),
 		BackgroundTransparency = 1,
 		ZIndex = 2,
 		Parent = root,
@@ -241,11 +238,9 @@ function Menu.init()
 
 	card = UI.panel({
 		Name = "MenuCard",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(1, 12, 0.5, 0),
-		Size = UDim2.fromOffset(CARD.X, CARD.Y),
 		Visible = false,
-		Parent = dock,
+		ZIndex = 2,
+		Parent = root,
 	})
 	cardScale = card:FindFirstChildOfClass("UIScale")
 		or UI.make(Instance.new("UIScale"), { Parent = card })

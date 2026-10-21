@@ -206,14 +206,8 @@ end
 
 function ShopUI.init()
 	local _, screenGui = Layout.screen("StormBottlerShop", 5)
-	local window = UI.window(
-		screenGui,
-		"ShopPanel",
-		"🛒 SHOP",
-		COLORS.green,
-		UDim2.fromScale(0.44, 0.66),
-		Vector2.new(580, 560)
-	)
+	local window =
+		UI.window(screenGui, "ShopPanel", "🛒 SHOP", COLORS.green, Vector2.new(600, 520))
 	panel = window.panel
 	body = window.body
 	hint = UI.label({

@@ -11,6 +11,7 @@ local RunService = game:GetService("RunService")
 local Net = require(ReplicatedStorage.Shared.Net)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Layout = require(script.Parent.Parent.Lib.Layout)
+local LayoutMath = require(script.Parent.Parent.Lib.LayoutMath)
 local UI = require(script.Parent.Parent.Lib.UI)
 
 local DevCommands = {}
@@ -29,27 +30,31 @@ function DevCommands.init()
 	end
 	local devRemote = Net.get("DevCommand")
 	local _, screenGui = Layout.screen("StormBottlerTest", 1)
-	-- under the SHOP and RESEARCH buttons
+	-- under the MENU button (LayoutMath.hud.test: two rows)
 	local button = UI.button({
 		Name = "TestVolts",
 		Text = "TEST: 1T ⚡",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.fromScale(0.015, 0.69),
-		Size = UDim2.fromScale(0.1, 0.075),
 		BackgroundColor3 = UI.COLORS.volt,
 		Parent = screenGui,
 	})
-	UI.sizeLimits(button, Vector2.new(96, 46), Vector2.new(150, 62))
 	UI.maxText(button, 22)
 	button.Activated:Connect(function()
 		UI.pop(button)
 		devRemote:FireServer("volts")
 	end)
-	local function placeTest()
-		button.Position = UDim2.fromScale(0.015, if Layout.isTouch() then 0.5 else 0.69)
+	local function row(index: number): LayoutMath.Rect
+		local area = Layout.hud.test
+		local height = (area.h - LayoutMath.GAP) / 2
+		return {
+			x = area.x,
+			y = area.y + (index - 1) * (height + LayoutMath.GAP),
+			w = area.w,
+			h = height,
+		}
 	end
-	placeTest()
-	Layout.Changed:Connect(placeTest)
+	UI.onLayout(function()
+		UI.place(button, row(1))
+	end)
 
 	if not RunService:IsStudio() then
 		return
@@ -58,19 +63,12 @@ function DevCommands.init()
 	local premium = UI.button({
 		Name = "PretendPremium",
 		Text = "",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.fromScale(0.015, 0.785),
-		Size = UDim2.fromScale(0.1, 0.075),
 		BackgroundColor3 = UI.COLORS.storm,
 		Parent = screenGui,
 	})
-	UI.sizeLimits(premium, Vector2.new(96, 46), Vector2.new(150, 62))
-	-- on touch, up the left edge under SHOP and RESEARCH (HUD), clear of the thumbstick
-	local function place()
-		premium.Position = UDim2.fromScale(0.015, if Layout.isTouch() then 0.6 else 0.785)
-	end
-	place()
-	Layout.Changed:Connect(place)
+	UI.onLayout(function()
+		UI.place(premium, row(2))
+	end)
 	UI.maxText(premium, 16)
 	local function pretending(): boolean
 		return player:GetAttribute(Progression.PRETEND_PREMIUM) == true
