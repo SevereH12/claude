@@ -390,6 +390,71 @@ local BOOSTS: { Types.BoostDef } = {
 	{ key = "BigBottles", pass = "BigBottles", name = "Big Bottles", icon = "🧪" },
 }
 
+-- Boosts you can buy (Developer Products, the store's BOOSTS tab): FOR ME
+-- adds one to your own boosts, GIFT sends it to anyone the way passes are
+-- gifted (Systems/Gifts). `boosts` is what one gives (BOOSTS keys and
+-- minutes); bought or gifted time adds in full, past BOOST_CAP. The Server
+-- Storm gives everyone in the server 2x Volts instead (SERVER_STORM) and is
+-- FOR ME only. Product ids (0 = not made yet: COMING SOON) and icons from
+-- tools/store/store_ids.json; `price` is Robux, shown only until Roblox's
+-- real price loads.
+local BOOST_PRODUCTS: { Types.BoostProductDef } = {
+	{
+		key = "DoubleVoltsBoost",
+		productId = 3721137662,
+		image = 101516275083716,
+		name = "2x Volts Boost",
+		icon = "⚡",
+		detail = "Every sale pays double for 30 minutes",
+		price = 49,
+		boosts = { { key = "DoubleVolts", minutes = 30 } },
+	},
+	{
+		key = "LuckyBoost",
+		productId = 3721137679,
+		image = 96996679069158,
+		name = "Lucky Boost",
+		icon = "🍀",
+		detail = "15% of caught charges are worth double for 30 minutes",
+		price = 49,
+		boosts = { { key = "Lucky", minutes = 30 } },
+	},
+	{
+		key = "BigBottlesBoost",
+		productId = 3721137685,
+		image = 73734835193406,
+		name = "Big Bottles Boost",
+		icon = "🧪",
+		detail = "Every bottle holds 50% more for 30 minutes",
+		price = 49,
+		boosts = { { key = "BigBottles", minutes = 30 } },
+	},
+	{
+		key = "BoostBundle",
+		productId = 3721137691,
+		image = 84026702746532,
+		name = "Boost Bundle",
+		icon = "🎁",
+		detail = "2x Volts, Lucky and Big Bottles, all for 1 hour",
+		price = 149,
+		boosts = {
+			{ key = "DoubleVolts", minutes = 60 },
+			{ key = "Lucky", minutes = 60 },
+			{ key = "BigBottles", minutes = 60 },
+		},
+	},
+	{
+		key = "ServerStorm",
+		productId = 3721137706,
+		image = 128152813396668,
+		name = "Server Storm",
+		icon = "🌩️",
+		detail = "2x Volts for EVERYONE in this server for 15 minutes",
+		price = 199,
+		serverStorm = true,
+	},
+}
+
 -- The 7-day login streak (Systems/Rewards): one reward per UTC day, in a
 -- row; missing a day starts again at day 1, and so does the day after day 7.
 -- `charges` pays that many bolts from the player's best zone, so a reward is
@@ -494,7 +559,16 @@ return table.freeze({
 	VOLT_PACKS = table.freeze(VOLT_PACKS),
 	STORE = table.freeze(STORE),
 	BOOSTS = table.freeze(BOOSTS),
-	BOOST_CAP = 2 * 60 * 60, -- seconds a boost's time can stack up to
+	BOOST_CAP = 2 * 60 * 60, -- seconds reward boosts can stack up to (bought time adds in full)
+	BOOST_PRODUCTS = table.freeze(BOOST_PRODUCTS),
+	-- a Server Storm (Systems/Boosts): everyone in the server sells for this
+	-- much more (times passes and boosts); each purchase adds `minutes`, up
+	-- to `maxMinutes` left. It isn't saved: it belongs to the server.
+	SERVER_STORM = table.freeze({
+		minutes = 15,
+		maxMinutes = 60,
+		multiplier = 2,
+	}),
 	DAILY_REWARDS = table.freeze(DAILY_REWARDS),
 	PLAYTIME_GIFTS = table.freeze(PLAYTIME_GIFTS),
 	-- a boost reward for a pass the player owns pays Volts instead: this many

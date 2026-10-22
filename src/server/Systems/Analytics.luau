@@ -20,6 +20,10 @@
 --     offer key), "TrialStarted" (1) and "TrialEnded" (Volts it earned),
 --     "DailyClaimed" (streak day), "PlaytimeGift" (minutes), "GroupJoined".
 --   Economy: Volts from rewards (Source, TimedReward).
+--   Custom events "GiftSent" (the giver) and "GiftReceived" (the receiver),
+--     CustomField01 = the product key ("GiftVIP", "LuckyBoost"), and
+--     "ServerStorm" (the storm's minutes left after the purchase). Robux
+--     purchases are counted by Roblox, so only Volts are economy events.
 
 local AnalyticsService = game:GetService("AnalyticsService")
 local HttpService = game:GetService("HttpService")
@@ -317,6 +321,24 @@ function Analytics.groupJoined(player: Player)
 	send("GroupJoined", function()
 		AnalyticsService:LogCustomEvent(player, "GroupJoined", 1)
 	end)
+end
+
+-- "GiftSent" or "GiftReceived" (Systems/Gifts), with the gift's product
+-- key (a small fixed set).
+function Analytics.gift(player: Player, eventName: string, productKey: string)
+	send(eventName, function()
+		AnalyticsService:LogCustomEvent(player, eventName, 1, {
+			[Enum.AnalyticsCustomFieldKeys.CustomField01.Name] = productKey,
+		})
+	end)
+end
+
+-- A Server Storm bought (Systems/Receipts): `minutes` left after it.
+function Analytics.serverStorm(player: Player, minutes: number)
+	send("ServerStorm", function()
+		AnalyticsService:LogCustomEvent(player, "ServerStorm", minutes)
+	end)
+	Analytics.storeStep(player, 4)
 end
 
 -- Volts a reward paid (`sku`: "Daily 3", "Gift 10 min").

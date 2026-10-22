@@ -17,15 +17,16 @@
 --   (StartTrial, checked by Systems/Store: a 2x Volts boost). When any 2x
 --   Volts boost ends (the trial, a reward), a card says what it earned.
 --   Thanks: when anyone buys a pass, a chat line for everyone; the buyer
---   (of a pass or a Volts pack) gets sparks and a toast.
+--   (of a pass, a Volts pack, a boost or a Server Storm) gets sparks and a
+--   toast.
 -- Offers shown and tapped are reported for the stats (StoreEvent).
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TextChatService = game:GetService("TextChatService")
 local TweenService = game:GetService("TweenService")
 
+local BoostRules = require(ReplicatedStorage.Shared.Util.Boosts)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Net = require(ReplicatedStorage.Shared.Net)
@@ -292,23 +293,13 @@ local function onState(snapshot: Types.Snapshot)
 	lastTrialUsed = snapshot.trialUsed
 end
 
--- A line in the chat window from the game itself.
-local function systemMessage(text: string)
-	pcall(function()
-		local channels = TextChatService:FindFirstChild("TextChannels")
-		local system = channels and channels:FindFirstChild("RBXSystem")
-		if system and system:IsA("TextChannel") then
-			system:DisplaySystemMessage(text)
-		end
-	end)
-end
-
--- Someone bought a pass (everyone hears), or the local player a Volts pack.
+-- Someone bought a pass (everyone hears), or the local player a Volts
+-- pack, a boost or a Server Storm.
 local function onPurchased(userId: number, key: string, volts: number)
 	local buyer = Players:GetPlayerByUserId(userId)
 	local pass = PassRules.def(key)
 	if pass and buyer then
-		systemMessage(`⚡ {buyer.DisplayName} got {pass.name}!`)
+		UI.chatLine(`⚡ {buyer.DisplayName} got {pass.name}!`)
 	end
 	if userId ~= player.UserId then
 		return
@@ -316,6 +307,18 @@ local function onPurchased(userId: number, key: string, volts: number)
 	Celebrate.sparks()
 	if pass then
 		UI.toast(`Thank you! {pass.name} is yours`, "good", 5)
+		return
+	end
+	-- a boost for yourself (FOR ME) or a Server Storm
+	local boost = BoostRules.product(key)
+	if boost then
+		UI.toast(
+			if boost.serverStorm
+				then "Thank you! Your Server Storm is on for everyone here"
+				else `Thank you! {boost.name} is on`,
+			"good",
+			5
+		)
 		return
 	end
 	for _, pack in Config.VOLT_PACKS do

@@ -19,6 +19,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
+local BoostRules = require(ReplicatedStorage.Shared.Util.Boosts)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Net = require(ReplicatedStorage.Shared.Net)
@@ -576,9 +577,16 @@ end
 local function onSold(earned: number, count: number)
 	popup(`+{Format.abbreviate(earned)} Volts!`, true, 0.36, 0.1)
 	popup(`sold {count} charges`, false, 0.45, 0.045)
-	-- members of the game's group get more (Systems/Group)
+	-- members of the game's group get more (Systems/Group), and everyone
+	-- during a Server Storm (Systems/Boosts)
+	local y = 0.5
 	if player:GetAttribute(PassRules.GROUP) == true then
-		popup(`+{math.round(Config.GROUP_BONUS * 100)}% group bonus`, true, 0.5, 0.045)
+		popup(`+{math.round(Config.GROUP_BONUS * 100)}% group bonus`, true, y, 0.045)
+		y += 0.05
+	end
+	local ends = workspace:GetAttribute(BoostRules.STORM_ENDS)
+	if BoostRules.stormLeft(ends, workspace:GetServerTimeNow()) > 0 then
+		popup(`x{Config.SERVER_STORM.multiplier} SERVER STORM`, true, y, 0.045)
 	end
 	screenFlash(0.25)
 	cameraShake(0.2, 0.35)

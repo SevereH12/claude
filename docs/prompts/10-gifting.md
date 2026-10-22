@@ -7,7 +7,7 @@ then ticks it:
 
 - [x] Part A: gifting game passes to anyone by username (inbox,
   cross-server delivery, the gift window)
-- [ ] Part B: boosts for yourself or as gifts, the Boost Bundle, Server
+- [x] Part B: boosts for yourself or as gifts, the Boost Bundle, Server
   Storms and gift announcements
 
 **Needs prompt 8 part C and prompt 9 part A**:

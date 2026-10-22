@@ -18,9 +18,10 @@
 -- (Systems/DevCommands) count as owning the pass, in Studio only, like
 -- Pretend Premium.
 --
--- Pass effects also come from timed boosts (Systems/Boosts: rewards and the
--- free trial): capacity, payout and luck below apply owned passes plus
--- running boosts, so every place that uses them gets both.
+-- Pass effects also come from timed boosts (Systems/Boosts: rewards, the
+-- free trial, bought and gifted boosts): capacity, payout and luck below
+-- apply owned passes plus running boosts, so every place that uses them
+-- gets both. Sales also multiply by the group bonus and a Server Storm.
 --
 -- Also this session's store numbers (Sync.store, in the snapshot): what 2x
 -- Volts boosts have paid, and what 2x Volts would have paid. Lost on leaving.
@@ -181,22 +182,26 @@ function Passes.storeSession(player: Player): Types.StoreSession
 	return session
 end
 
--- Owned passes plus the group bonus, which multiplies sales like a pass.
-local function withGroup(player: Player): PassRules.Owned
+-- Owned passes plus what multiplies sales like one: the group bonus and a
+-- Server Storm (Systems/Boosts).
+local function withBonuses(player: Player): PassRules.Owned
 	local owned = Passes.owned(player)
-	if not Group.isMember(player) then
+	local member, storm = Group.isMember(player), Boosts.stormOn()
+	if not member and not storm then
 		return owned
 	end
 	local set = table.clone(owned)
-	set[PassRules.GROUP] = true
+	set[PassRules.GROUP] = if member then true else nil
+	set[PassRules.SERVER_STORM] = if storm then true else nil
 	return set
 end
 
 -- What selling a bottle worth `value` pays (passes, VIP, the group bonus,
--- boosts), and what 2x Volts would have added. Keeps this session's tallies.
+-- boosts, a Server Storm), and what 2x Volts would have added. Keeps this
+-- session's tallies.
 function Passes.payout(player: Player, value: number): (number, number)
 	local earned, missed, boostExtra =
-		PassRules.saleBreakdown(value, withGroup(player), Boosts.left(player))
+		PassRules.saleBreakdown(value, withBonuses(player), Boosts.left(player))
 	local session = Passes.storeSession(player)
 	session.missedDouble += missed
 	session.boostEarned += boostExtra

@@ -8,6 +8,9 @@
 --   │                under the storm timer, a column beside Volts on a
 --   │                sideways phone or tablet (LayoutMath.hud.boosts)
 --   ├── GoalCard     top right: the closest next goal and Volts towards it
+--   ├── StormChip    under it, while a Server Storm is on (Systems/Boosts,
+--   │                read from workspace attributes): its latest buyer and
+--   │                time left ("🌩️ SERVER 2x · Alex · 14:32")
 --   ├── BottleBar    bottom centre (top centre on touch): fill + "JAR 3 / 5",
 --   │                with the Chemist's TANK count beside it
 --   └── RemoteSell   Remote Sell pass owners: a SELL button at the bar's
@@ -22,6 +25,7 @@ local RunService = game:GetService("RunService")
 local StarterGui = game:GetService("StarterGui")
 local TweenService = game:GetService("TweenService")
 
+local BoostRules = require(ReplicatedStorage.Shared.Util.Boosts)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Net = require(ReplicatedStorage.Shared.Net)
@@ -60,6 +64,7 @@ local sellNudge: (() -> ())? = nil -- set while the locked SELL shows: what a ta
 local boostRow: Frame
 local boostList: UIListLayout
 local boostChips: { [string]: TextLabel } = {} -- by boost key
+local stormChip: TextLabel
 local sellCharging = false
 local sellReadyAt = 0
 local goalCard: Frame
@@ -296,6 +301,23 @@ local function buildBoostRow()
 	end
 end
 
+-- The Server Storm's chip under the goal card.
+local function buildStormChip()
+	stormChip = UI.label({
+		Title = true,
+		Name = "StormChip",
+		Text = "",
+		Visible = false,
+		TextColor3 = COLORS.text,
+		BackgroundColor3 = Color3.fromRGB(130, 70, 230),
+		BackgroundTransparency = 0,
+		Parent = screenGui,
+	})
+	UI.corner(stormChip, UDim.new(0.5, 0))
+	UI.stroke(stormChip, 2)
+	UI.maxText(stormChip, 18)
+end
+
 -- The SELL button's charge-up ring: an outline that fills left to right.
 local function buildSellButton()
 	sellButton = UI.button({
@@ -419,6 +441,23 @@ local function renderBoosts()
 	end
 end
 
+-- A Server Storm's latest buyer and time left, while one is on.
+local function renderServerStorm()
+	local left = math.ceil(
+		BoostRules.stormLeft(
+			workspace:GetAttribute(BoostRules.STORM_ENDS),
+			workspace:GetServerTimeNow()
+		)
+	)
+	stormChip.Visible = left > 0
+	if left > 0 then
+		local by = workspace:GetAttribute(BoostRules.STORM_BY)
+		local name = if typeof(by) == "string" then ` · {by}` else ""
+		stormChip.Text =
+			string.format("🌩️ SERVER 2x%s · %d:%02d", name, left // 60, left % 60)
+	end
+end
+
 local function renderStorm()
 	local state = Storm.current
 	if not state then
@@ -521,6 +560,7 @@ function HUD.place()
 	UI.place(voltsPanel, hud.volts)
 	UI.place(stormPill, hud.storm)
 	UI.place(goalCard, hud.goal)
+	UI.place(stormChip, hud.serverStorm)
 	-- the boosts' chips: three across a row, or stacked in a column
 	local boosts = hud.boosts
 	UI.place(boostRow, boosts)
@@ -575,6 +615,7 @@ function HUD.init()
 	buildGoalCard()
 	buildBottleBar()
 	buildBoostRow()
+	buildStormChip()
 	buildSellButton()
 	HUD.place()
 	Layout.Changed:Connect(HUD.place)
@@ -593,6 +634,7 @@ function HUD.start()
 	while true do
 		renderStorm()
 		renderBoosts()
+		renderServerStorm()
 		task.wait(0.25)
 	end
 end

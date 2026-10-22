@@ -3,12 +3,16 @@
 -- tests them). Pure: no Roblox services.
 --
 -- A pass is gifted by buying its "Gift" Developer Product (product key
--- "Gift" .. pass key). The server remembers who it's for (an intent) before
--- the purchase window opens, puts the gift in the receiver's inbox when the
--- receipt arrives, and the receiver's profile applies it once (by id).
+-- "Gift" .. pass key); a boost by buying the boost itself (its
+-- Config.BOOST_PRODUCTS key) through the gift window. The server remembers
+-- who it's for (an intent) before the purchase window opens, puts the gift
+-- in the receiver's inbox when the receipt arrives, and the receiver's
+-- profile applies it once (by id). A boost bought with nobody chosen is
+-- for the buyer (FOR ME).
 
 local Config = require(script.Parent.Parent.Config)
 local Types = require(script.Parent.Parent.Types)
+local Boosts = require(script.Parent.Boosts)
 local Store = require(script.Parent.Store)
 
 local GIFTS = Config.GIFTS
@@ -32,20 +36,68 @@ function Gifts.passFor(productKey: string): Types.PassDef?
 	return nil
 end
 
+-- The boost a gift of this product gives (a boost you can buy that isn't
+-- a Server Storm), or nil.
+function Gifts.boostFor(productKey: string): Types.BoostProductDef?
+	local product = Boosts.product(productKey)
+	return if product and product.boosts then product else nil
+end
+
 -- A gift product's Developer Product id (0 = not made yet).
 function Gifts.productId(productKey: string): number
 	local pass = Gifts.passFor(productKey)
-	return if pass then Config.GIFT_PASS_PRODUCTS[pass.key] or 0 else 0
+	if pass then
+		return Config.GIFT_PASS_PRODUCTS[pass.key] or 0
+	end
+	local boost = Gifts.boostFor(productKey)
+	return if boost then boost.productId else 0
 end
 
--- The gift product key with this Developer Product id, or nil.
+-- The gift product (a pass's or a boost) with this Developer Product id,
+-- or nil.
 function Gifts.byProductId(productId: number): string?
 	for passKey, id in Config.GIFT_PASS_PRODUCTS do
 		if id ~= 0 and id == productId then
 			return Gifts.productKey(passKey)
 		end
 	end
-	return nil
+	local boost = Boosts.productById(productId)
+	return if boost and boost.boosts then boost.key else nil
+end
+
+-- What a gift product gives, by name ("VIP", "Lucky Boost"), or nil.
+function Gifts.itemName(productKey: string): string?
+	local pass = Gifts.passFor(productKey)
+	if pass then
+		return pass.name
+	end
+	local boost = Gifts.boostFor(productKey)
+	return if boost then boost.name else nil
+end
+
+-- A gift product's Robux price before Roblox's real price loads.
+function Gifts.price(productKey: string): number
+	local pass = Gifts.passFor(productKey)
+	if pass then
+		return pass.price
+	end
+	local boost = Gifts.boostFor(productKey)
+	return if boost then boost.price else 0
+end
+
+-- An inbox entry's kind and key for a gift product: ("pass", pass key) or
+-- ("boost", boost product key).
+function Gifts.entryKind(productKey: string): (string, string)
+	local pass = Gifts.passFor(productKey)
+	if pass then
+		return "pass", pass.key
+	end
+	return "boost", productKey
+end
+
+-- The gift product an inbox entry came from ("GiftVIP", "LuckyBoost").
+function Gifts.entryProduct(entry: Types.GiftEntry): string
+	return if entry.kind == "pass" then Gifts.productKey(entry.key) else entry.key
 end
 
 -- What a player owns: real passes and gifted ones alike.
@@ -63,7 +115,7 @@ end
 -- Why a gift request can't go, before asking Roblox anything (a message
 -- for the giver), or nil.
 function Gifts.basicRefusal(giverId: number, productKey: unknown, recipientId: unknown): string?
-	if typeof(productKey) ~= "string" or not Gifts.passFor(productKey) then
+	if typeof(productKey) ~= "string" or not Gifts.itemName(productKey) then
 		return "That isn't something you can gift"
 	end
 	if
@@ -79,10 +131,10 @@ function Gifts.basicRefusal(giverId: number, productKey: unknown, recipientId: u
 	return nil
 end
 
--- Why it can't go to this receiver: `exists` (Roblox knows the player) and
--- `has` (they already have the pass, real or gifted; nil when that
--- couldn't be checked), or nil.
-function Gifts.recipientRefusal(pass: Types.PassDef, exists: boolean, has: boolean?): string?
+-- Why `itemName` can't go to this receiver: `exists` (Roblox knows the
+-- player) and `has` (they already have the pass, real or gifted; nil when
+-- that couldn't be checked; boosts stack, so always false), or nil.
+function Gifts.recipientRefusal(itemName: string, exists: boolean, has: boolean?): string?
 	if not exists then
 		return "There's no player with that name"
 	end
@@ -90,7 +142,7 @@ function Gifts.recipientRefusal(pass: Types.PassDef, exists: boolean, has: boole
 		return "Couldn't check right now. Try again in a moment"
 	end
 	if has then
-		return `They already have {pass.name}`
+		return `They already have {itemName}`
 	end
 	return nil
 end
@@ -100,26 +152,32 @@ function Gifts.intentMatches(intent: Types.GiftIntent?, productKey: string, now:
 	return intent ~= nil and intent.productKey == productKey and now < intent.expires
 end
 
--- What to do with a gift product's receipt. `purchases` are the giver's
--- handled purchase ids (nil: their profile isn't loaded); `recipientId` is
--- who it's for (from a live intent or the receipt's saved marker), nil when
--- nobody knows:
+-- What to do with a gift product's (or a boost's) receipt. `purchases` are
+-- the buyer's handled purchase ids (nil: their profile isn't loaded);
+-- `recipientId` is who it's for (from a live intent or the receipt's saved
+-- marker), nil when nobody knows:
 --   "AlreadyGranted": handled before
---   "NotProcessedYet": the giver's profile isn't here; Roblox asks again
+--   "NotProcessedYet": the buyer's profile isn't here; Roblox asks again
 --   "Inbox": put it in the receiver's inbox
---   "Credit": the giver gets a gift credit to send to anyone later
-export type ReceiptPlan = "AlreadyGranted" | "NotProcessedYet" | "Inbox" | "Credit"
+--   "Credit": a pass gift for nobody: the giver gets a gift credit to send
+--     to anyone later
+--   "ForMe": a boost for nobody: it's the buyer's own (FOR ME)
+export type ReceiptPlan = "AlreadyGranted" | "NotProcessedYet" | "Inbox" | "Credit" | "ForMe"
 
 function Gifts.receiptPlan(
 	purchases: { string }?,
 	purchaseId: string,
-	recipientId: number?
+	recipientId: number?,
+	productKey: string
 ): ReceiptPlan
 	local decision = Store.receiptDecision(purchases, purchaseId)
 	if decision ~= "Grant" then
 		return decision
 	end
-	return if recipientId then "Inbox" else "Credit"
+	if recipientId then
+		return "Inbox"
+	end
+	return if Gifts.boostFor(productKey) then "ForMe" else "Credit"
 end
 
 -- Puts a gift in an inbox list: each id once, at most Config.GIFTS.inboxCap.
@@ -152,10 +210,16 @@ function Gifts.removeFromInbox(
 end
 
 -- Applies inbox gifts to a profile, each id once (a gift applied just
--- before a crash is skipped the next time). Returns the gifts applied now,
--- and every id that can leave the inbox (applied now or before). A kind
--- this version doesn't know stays in the inbox.
-export type Receiver = { giftedPasses: { [string]: boolean }, receivedGiftIds: { string } }
+-- before a crash is skipped the next time). A pass counts as owned; a
+-- boost adds its time in full, counting down only while they play (so one
+-- received offline starts when they next join). Returns the gifts applied
+-- now, and every id that can leave the inbox (applied now or before). A
+-- kind or key this version doesn't know stays in the inbox.
+export type Receiver = {
+	giftedPasses: { [string]: boolean },
+	receivedGiftIds: { string },
+	boosts: Boosts.Left,
+}
 
 function Gifts.apply(
 	profile: Receiver,
@@ -164,10 +228,15 @@ function Gifts.apply(
 	local applied: { Types.GiftEntry } = {}
 	local done: { [string]: boolean } = {}
 	for _, entry in entries do
+		local boost = if entry.kind == "boost" then Gifts.boostFor(entry.key) else nil
 		if table.find(profile.receivedGiftIds, entry.id) then
 			done[entry.id] = true
-		elseif entry.kind == "pass" and Gifts.passFor(Gifts.productKey(entry.key)) then
-			profile.giftedPasses[entry.key] = true
+		elseif boost or (entry.kind == "pass" and Gifts.passFor(Gifts.productKey(entry.key))) then
+			if boost then
+				Boosts.grantProduct(profile.boosts, boost)
+			else
+				profile.giftedPasses[entry.key] = true
+			end
 			table.insert(profile.receivedGiftIds, entry.id)
 			while #profile.receivedGiftIds > GIFTS.receivedCap do
 				table.remove(profile.receivedGiftIds, 1)

@@ -79,6 +79,21 @@ export type BoostDef = {
 	icon: string,
 }
 
+-- A boost in the store's BOOSTS tab (Config.BOOST_PRODUCTS): a Developer
+-- Product bought for yourself (FOR ME) or as a gift. `boosts` is what it
+-- gives; a `serverStorm` product starts a Server Storm instead (FOR ME only).
+export type BoostProductDef = {
+	key: string,
+	productId: number, -- Developer Product id (0 = not created yet)
+	image: number, -- icon asset id (0 = use `icon`)
+	name: string,
+	icon: string, -- emoji fallback
+	detail: string,
+	price: number, -- Robux, a fallback until the real price loads
+	boosts: { RewardBoost }?,
+	serverStorm: boolean?,
+}
+
 -- A reward: `charges` pays that many bolts from the player's best zone
 -- (Util/Store.volts); `boosts` adds timed boosts.
 export type RewardBoost = { key: string, minutes: number }
@@ -88,7 +103,8 @@ export type Reward = { charges: number?, boosts: { RewardBoost }? }
 export type PlaytimeGift = { minutes: number, reward: Reward }
 
 -- A gift waiting in someone's inbox (Systems/Gifts). `id` is the giver's
--- PurchaseId (or a Studio test id); `kind` is "pass" and `key` a pass key.
+-- PurchaseId (or a Studio test id); `kind` is "pass" (`key`: a pass key) or
+-- "boost" (`key`: a Config.BOOST_PRODUCTS key).
 export type GiftEntry = {
 	id: string,
 	kind: string,

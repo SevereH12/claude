@@ -3,7 +3,7 @@
 -- circle catches"), plus two toasts (UI.toast): a short note when you leave
 -- a zone (speed boost) and why a zone is locked when you walk up to its
 -- gate. Every other message is a toast too; this banner is only for zone
--- titles. Each shows once per event: the card not again for the same zone
+-- titles and Server Storms (Controllers/Announcements). Each shows once per event: the card not again for the same zone
 -- within REPEAT_TIME (walking along a zone's edge flips in and out), the
 -- leave note at most every REPEAT_TIME, the gate reason once until you've
 -- walked GATE_FAR away.
@@ -35,9 +35,9 @@ local title: TextLabel
 local subtitle: TextLabel
 local showToken = 0
 
--- A zone title card for SHOW_TIME seconds. Each show bumps the token; a
--- hide only runs for the show that scheduled it, and ends invisible.
-function ZoneBanner.show(text: string, subtext: string, color: Color3)
+-- A title card for SHOW_TIME seconds (or `seconds`). Each show bumps the
+-- token; a hide only runs for the show that scheduled it, and ends invisible.
+function ZoneBanner.show(text: string, subtext: string, color: Color3, seconds: number?)
 	showToken += 1
 	local token = showToken
 	title.Text = text
@@ -47,7 +47,7 @@ function ZoneBanner.show(text: string, subtext: string, color: Color3)
 	banner.Visible = true
 	TweenService:Create(banner, FADE, { GroupTransparency = 0 }):Play()
 	UI.pop(banner, 1.15)
-	task.delay(SHOW_TIME, function()
+	task.delay(seconds or SHOW_TIME, function()
 		if showToken ~= token then
 			return
 		end

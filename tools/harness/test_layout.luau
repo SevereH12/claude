@@ -45,7 +45,7 @@ local devices = {
 	{ "console at 1080p", Vector2.new(1920, 1080), pad, "Console" },
 }
 
-local STAY = { "volts", "storm", "boosts", "goal", "bar", "menu" } -- always on screen
+local STAY = { "volts", "storm", "boosts", "goal", "serverStorm", "bar", "menu" } -- always on screen
 local preview = {}
 
 for _, device in devices do
@@ -84,7 +84,7 @@ for _, device in devices do
 		check(not LayoutMath.overlaps(hud.banner, hud[a]), `{name}: zone banner clears {a}`)
 	end
 	check(not LayoutMath.overlaps(hud.card, hud.menu), `{name}: the menu card opens beside the button`)
-	for _, key in { "volts", "storm", "boosts", "goal", "bar" } do
+	for _, key in { "volts", "storm", "boosts", "goal", "serverStorm", "bar" } do
 		check(not LayoutMath.overlaps(hud.card, hud[key]), `{name}: the open menu card clears {key}`)
 	end
 	if LayoutMath.isTouch(got) then

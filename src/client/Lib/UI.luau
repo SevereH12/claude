@@ -1,9 +1,11 @@
 --!strict
 -- Helpers for building UI in code, plus the shared look (colours, fonts,
 -- animation timings) so every screen feels like the same game. Also
--- UI.toast: the one way to put a warning, hint or notice on screen.
+-- UI.toast: the one way to put a warning, hint or notice on screen, and
+-- UI.chatLine for a line in the chat window from the game itself.
 
 local GuiService = game:GetService("GuiService")
+local TextChatService = game:GetService("TextChatService")
 local TweenService = game:GetService("TweenService")
 
 local Layout = require(script.Parent.Layout)
@@ -674,6 +676,18 @@ function UI.toastEvery(
 		lastToastAt[key] = now
 		UI.toast(text, kind)
 	end
+end
+
+-- A line in the chat window from the game itself (purchases, gifts, Server
+-- Storms).
+function UI.chatLine(text: string)
+	pcall(function()
+		local channels = TextChatService:FindFirstChild("TextChannels")
+		local system = channels and channels:FindFirstChild("RBXSystem")
+		if system and system:IsA("TextChannel") then
+			system:DisplaySystemMessage(text)
+		end
+	end)
 end
 
 return UI

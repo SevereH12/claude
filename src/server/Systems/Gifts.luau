@@ -1,20 +1,26 @@
 --!strict
--- Gifting passes to anyone, by username (the rules: Util/Gifts). Nobody can
--- buy a game pass for someone else, so each pass has a "Gift" Developer
--- Product; the receiver gets the pass's effect in this game.
+-- Gifting passes and boosts to anyone, by username (the rules: Util/Gifts).
+-- Nobody can buy a game pass for someone else, so each pass has a "Gift"
+-- Developer Product; the receiver gets the pass's effect in this game. A
+-- boost (Config.BOOST_PRODUCTS, not the Server Storm) is gifted by buying
+-- the boost itself through the gift window.
 --
 --   FindPlayer(username): who's that? GiftNews "found" with their user id,
 --     name and display name (or nil).
 --   PrepareGift(productKey, recipientId): every check (a real gift product,
---     a real player who isn't the giver and doesn't have the pass already,
---     real, gifted or waiting in their inbox), then remembers who it's for
---     for 5 minutes (the intent) and says "ready": the client opens the
---     purchase window. A receipt doesn't say who a gift is for.
---   SendCredit(productKey, recipientId): the same checks, then sends a gift
---     the giver already paid for (a credit), with no purchase.
---   Receipts: Systems/Receipts hands gift products to Gifts.processReceipt.
---     With a live intent the gift goes to the receiver's inbox; with none
---     (it expired, or this is another server) the giver gets a credit.
+--     a real player who isn't the giver and, for a pass, doesn't have it
+--     already, real, gifted or waiting in their inbox), then remembers who
+--     it's for for 5 minutes (the intent) and says "ready": the client opens
+--     the purchase window. A receipt doesn't say who a gift is for.
+--   SendCredit(productKey, recipientId): the same checks, then sends a pass
+--     gift the giver already paid for (a credit), with no purchase.
+--   CancelGift(productKey): FOR ME is about to buy this boost: forget who a
+--     gift of it was for, so this purchase stays with the buyer.
+--   Receipts: Systems/Receipts hands gift products and boosts to
+--     Gifts.processReceipt. With a live intent the gift goes to the
+--     receiver's inbox; with none (it expired, or this is another server) a
+--     pass gift becomes the giver's credit and a boost is the buyer's own
+--     (FOR ME: it's added to their boosts).
 --   The inbox (DataStore StormBottler_Gifts, key inbox_<userId>, written
 --     only with UpdateAsync): delivered on join and when MessagingService
 --     (topic Gifts) says one came: applied to the profile by id, saved, and
@@ -27,9 +33,12 @@
 -- PurchaseGranted once the giver's purchase id is saved.
 --
 -- GiftNews tells clients: "found", "ready", "refused", "sent", "credit",
--- "received". Studio: without API access the inbox lives in memory for the
--- session, and the TEST panel's "Send test gift to me" (Gifts.testGift)
--- puts a gift in your own inbox.
+-- "received". Everyone hears about gifts too (Announcement): "gifted" in the
+-- receiver's server ("Alex gifted VIP to Sam"), "giftSent" in the giver's
+-- when the receiver is elsewhere. Stats: GiftSent and GiftReceived
+-- (Analytics). Studio: without API access the inbox lives in memory for the
+-- session, and the TEST panel's "Send test gift to me" and "Send test boost
+-- gift" (Gifts.testGift) put a gift in your own inbox.
 
 local DataStoreService = game:GetService("DataStoreService")
 local HttpService = game:GetService("HttpService")
@@ -46,6 +55,8 @@ local GiftRules = require(ReplicatedStorage.Shared.Util.Gifts)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Store = require(ReplicatedStorage.Shared.Util.Store)
 local Types = require(ReplicatedStorage.Shared.Types)
+local Analytics = require(script.Parent.Analytics)
+local Boosts = require(script.Parent.Boosts)
 local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
 local Sync = require(script.Parent.Sync)
@@ -57,6 +68,8 @@ local TOPIC = "Gifts"
 local Gifts = {}
 
 local news: RemoteEvent
+local announcement: RemoteEvent
+local purchased: RemoteEvent
 local intents: { [Player]: Types.GiftIntent } = {}
 local delivering: { [Player]: boolean } = {}
 local again: { [Player]: boolean } = {}
@@ -197,6 +210,12 @@ local function deliver(player: Player, onJoin: boolean)
 			end
 			if #applied > 0 then
 				news:FireClient(player, "received", applied, onJoin)
+				for _, entry in applied do
+					local productKey = GiftRules.entryProduct(entry)
+					Analytics.gift(player, "GiftReceived", productKey)
+					local name = GiftRules.itemName(productKey) or productKey
+					announcement:FireAllClients("gifted", entry.fromName, name, player.DisplayName)
+				end
 			end
 		end
 	until not again[player] or not player.Parent
@@ -283,35 +302,50 @@ local function alreadyHas(recipientId: number, pass: Types.PassDef): boolean?
 end
 
 -- Every check before a gift may go. Returns why it can't (a message for the
--- giver), or the pass and who it's for.
+-- giver), or who it's for.
 local function check(
 	giver: Player,
 	productKey: unknown,
 	recipientId: unknown
-): (string?, Types.PassDef?, Types.FoundPlayer?)
+): (string?, Types.FoundPlayer?)
 	local refusal = GiftRules.basicRefusal(giver.UserId, productKey, recipientId)
 	if refusal then
-		return refusal, nil, nil
+		return refusal, nil
 	end
-	local pass = GiftRules.passFor(productKey :: string) :: Types.PassDef
+	local key = productKey :: string
+	local pass = GiftRules.passFor(key)
 	local found = lookUp(recipientId :: number)
-	local has = if found then alreadyHas(found.userId, pass) else false
-	refusal = GiftRules.recipientRefusal(pass, found ~= nil, has)
+	-- boosts stack, so only a pass can be one they have already
+	local has = if found and pass then alreadyHas(found.userId, pass) else false
+	refusal = GiftRules.recipientRefusal(GiftRules.itemName(key) or key, found ~= nil, has)
 	if refusal then
-		return refusal, nil, nil
+		return refusal, nil
 	end
-	return nil, pass, found
+	return nil, found
 end
 
-local function entryFor(giver: Player, id: string, pass: Types.PassDef): Types.GiftEntry
+local function entryFor(giver: Player, id: string, productKey: string): Types.GiftEntry
+	local kind, key = GiftRules.entryKind(productKey)
 	return {
 		id = id,
-		kind = "pass",
-		key = pass.key,
+		kind = kind,
+		key = key,
 		fromId = giver.UserId,
 		fromName = giver.DisplayName,
 		time = os.time(),
 	}
+end
+
+-- A gift is in `toId`'s inbox: deliver it (or tell their server), tell the
+-- giver, count it, and tell the giver's server when the receiver is elsewhere.
+local function sent(giver: Player, toId: number, toName: string, productKey: string)
+	announce(toId)
+	local here = Players:GetPlayerByUserId(toId) ~= nil
+	news:FireClient(giver, "sent", toName, here)
+	if not here then
+		announcement:FireAllClients("giftSent", giver.DisplayName)
+	end
+	Analytics.gift(giver, "GiftSent", productKey)
 end
 
 local function onFindPlayer(player: Player, username: unknown)
@@ -335,21 +369,34 @@ local function onPrepareGift(player: Player, productKey: unknown, recipientId: u
 	if not RateLimit.allow(player, "PrepareGift", 1, 3) then
 		return
 	end
-	local refusal, pass, found = check(player, productKey, recipientId)
-	if not refusal and pass and GiftRules.productId(GiftRules.productKey(pass.key)) == 0 then
+	local refusal, found = check(player, productKey, recipientId)
+	local key = productKey :: string
+	if not refusal and GiftRules.productId(key) == 0 then
 		refusal = "That gift isn't on sale yet"
 	end
-	if refusal or not pass or not found then
+	if refusal or not found then
 		news:FireClient(player, "refused", refusal or "That gift can't go right now")
 		return
 	end
 	intents[player] = {
 		recipientId = found.userId,
 		recipientName = found.displayName,
-		productKey = GiftRules.productKey(pass.key),
+		productKey = key,
 		expires = os.clock() + Config.GIFTS.intentSeconds,
 	}
-	news:FireClient(player, "ready", GiftRules.productKey(pass.key), found.userId)
+	news:FireClient(player, "ready", key, found.userId)
+end
+
+-- FOR ME is about to open the purchase window for this boost: a gift of it
+-- the player chose earlier (and didn't buy) must not take this purchase.
+local function onCancelGift(player: Player, productKey: unknown)
+	if not RateLimit.allow(player, "CancelGift", 2, 6) then
+		return
+	end
+	local intent = intents[player]
+	if intent and intent.productKey == productKey then
+		intents[player] = nil
+	end
 end
 
 -- Sends a gift the giver paid for earlier (a credit). The credit's purchase
@@ -367,33 +414,34 @@ local function onSendCredit(player: Player, productKey: unknown, recipientId: un
 		news:FireClient(player, "refused", "You don't have that gift to send")
 		return
 	end
-	local refusal, pass, found = check(player, productKey, recipientId)
-	if refusal or not pass or not found then
+	local refusal, found = check(player, productKey, recipientId)
+	if refusal or not found then
 		news:FireClient(player, "refused", refusal or "That gift can't go right now")
 		return
 	end
+	local key = productKey :: string
 	local toId, toName = claimMarker(creditId, found.userId, found.displayName)
-	if not toId or not addToInbox(toId, entryFor(player, creditId, pass)) then
+	if not toId or not addToInbox(toId, entryFor(player, creditId, key)) then
 		news:FireClient(player, "refused", "Couldn't send it right now. Try again in a moment")
 		return
 	end
-	GiftRules.removeCredit(profile.giftCredits, productKey :: string, creditId)
+	GiftRules.removeCredit(profile.giftCredits, key, creditId)
 	Sync.markDirty(player)
 	PlayerData.saveNow(player)
-	announce(toId)
-	news:FireClient(player, "sent", toName, Players:GetPlayerByUserId(toId) ~= nil)
+	sent(player, toId, toName, key)
 end
 
--- A gift product's receipt (from Systems/Receipts).
+-- A gift product's or a boost's receipt (from Systems/Receipts).
 function Gifts.processReceipt(
 	receipt: { [string]: any },
 	productKey: string
 ): Enum.ProductPurchaseDecision
 	local pass = GiftRules.passFor(productKey)
+	local boost = GiftRules.boostFor(productKey)
 	local giver = Players:GetPlayerByUserId(receipt.PlayerId)
 	local profile = if giver then PlayerData.get(giver) else nil
 	local purchaseId = tostring(receipt.PurchaseId)
-	if not pass or not giver or not profile then
+	if not (pass or boost) or not giver or not profile then
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 	if Store.receiptDecision(profile.purchases, purchaseId) == "AlreadyGranted" then
@@ -404,8 +452,8 @@ function Gifts.processReceipt(
 	local recipientId: number?, recipientName = nil, ""
 	local intent = intents[giver]
 	if intent and GiftRules.intentMatches(intent, productKey, os.clock()) then
-		-- they may have got it meanwhile: then it's a credit instead
-		if alreadyHas(intent.recipientId, pass) ~= true then
+		-- they may have got the pass meanwhile: then it's a credit instead
+		if not pass or alreadyHas(intent.recipientId, pass) ~= true then
 			recipientId, recipientName =
 				claimMarker(purchaseId, intent.recipientId, intent.recipientName)
 			if not recipientId then
@@ -425,21 +473,26 @@ function Gifts.processReceipt(
 		end
 	end
 
-	local plan = GiftRules.receiptPlan(profile.purchases, purchaseId, recipientId)
+	local plan = GiftRules.receiptPlan(profile.purchases, purchaseId, recipientId, productKey)
 	if plan == "Inbox" and recipientId then
-		if not addToInbox(recipientId, entryFor(giver, purchaseId, pass)) then
+		if not addToInbox(recipientId, entryFor(giver, purchaseId, productKey)) then
 			return Enum.ProductPurchaseDecision.NotProcessedYet
 		end
 		intents[giver] = nil
 		Store.recordPurchase(profile.purchases, purchaseId)
-		announce(recipientId)
-		news:FireClient(giver, "sent", recipientName, Players:GetPlayerByUserId(recipientId) ~= nil)
-		print(`[Gifts] {giver.Name} gifted {pass.name} to {recipientName}`)
+		sent(giver, recipientId, recipientName, productKey)
+		print(`[Gifts] {giver.Name} gifted {GiftRules.itemName(productKey)} to {recipientName}`)
 	elseif plan == "Credit" then
 		intents[giver] = nil
 		GiftRules.addCredit(profile.giftCredits, productKey, purchaseId)
 		Store.recordPurchase(profile.purchases, purchaseId)
 		news:FireClient(giver, "credit", productKey)
+	elseif plan == "ForMe" and boost then
+		Boosts.grantProduct(giver, boost)
+		Store.recordPurchase(profile.purchases, purchaseId)
+		purchased:FireClient(giver, giver.UserId, boost.key, 0)
+		Analytics.storeStep(giver, 4)
+		print(`[Gifts] {giver.Name} bought {boost.name} for themselves`)
 	end
 	Sync.markDirty(giver)
 	if PlayerData.saveNow(giver) then
@@ -448,33 +501,39 @@ function Gifts.processReceipt(
 	return Enum.ProductPurchaseDecision.NotProcessedYet
 end
 
--- Studio TEST tool: a gift from "Test Gifter" to yourself, of the first pass
--- you don't have, through your own inbox.
-function Gifts.testGift(player: Player)
-	for _, pass in Config.PASSES do
-		if not Passes.owns(player, pass.key) then
-			local entry: Types.GiftEntry = {
-				id = `test-{HttpService:GenerateGUID(false)}`,
-				kind = "pass",
-				key = pass.key,
-				fromId = player.UserId,
-				fromName = "Test Gifter",
-				time = os.time(),
-			}
-			if addToInbox(player.UserId, entry) then
-				task.spawn(deliver, player, false)
+-- Studio TEST tool: a gift from "Test Gifter" to yourself, through your own
+-- inbox: the first pass you don't have, or (`boost`) a 2x Volts Boost.
+function Gifts.testGift(player: Player, boost: boolean?)
+	local key: string? = nil
+	if boost then
+		key = Config.BOOST_PRODUCTS[1].key
+	else
+		for _, pass in Config.PASSES do
+			if not Passes.owns(player, pass.key) then
+				key = GiftRules.productKey(pass.key)
+				break
 			end
-			return
 		end
 	end
-	news:FireClient(player, "refused", "You already have every pass")
+	if not key then
+		news:FireClient(player, "refused", "You already have every pass")
+		return
+	end
+	local entry = entryFor(player, `test-{HttpService:GenerateGUID(false)}`, key)
+	entry.fromName = "Test Gifter"
+	if addToInbox(player.UserId, entry) then
+		task.spawn(deliver, player, false)
+	end
 end
 
 function Gifts.init()
 	news = Net.get("GiftNews")
+	announcement = Net.get("Announcement")
+	purchased = Net.get("Purchased")
 	Net.get("FindPlayer").OnServerEvent:Connect(onFindPlayer)
 	Net.get("PrepareGift").OnServerEvent:Connect(onPrepareGift)
 	Net.get("SendCredit").OnServerEvent:Connect(onSendCredit)
+	Net.get("CancelGift").OnServerEvent:Connect(onCancelGift)
 	PlayerData.Loaded:Connect(function(player: Player)
 		task.spawn(deliver, player, true)
 	end)

@@ -1,6 +1,6 @@
 --!strict
--- The gift window (from a pass card's GIFT button): give a pass to anyone,
--- by username or from this server's players.
+-- The gift window (from a pass or boost card's GIFT button): give a pass or
+-- a boost to anyone, by username or from this server's players.
 --   1. "Who's this for?": the other players here (avatar and display name)
 --      and a username box. FIND asks the server (FindPlayer).
 --   2. The confirm screen: "Gift VIP to DisplayName (@name)?", then BUY.
@@ -19,7 +19,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Format = require(ReplicatedStorage.Shared.Util.Format)
 local GiftRules = require(ReplicatedStorage.Shared.Util.Gifts)
 local Net = require(ReplicatedStorage.Shared.Net)
-local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Celebrate = require(script.Parent.Parent.Lib.Celebrate)
 local Layout = require(script.Parent.Parent.Lib.Layout)
@@ -46,14 +45,14 @@ local confirmText: TextLabel
 local confirmStatus: TextLabel
 local buyButton: TextButton
 
-local pass: Types.PassDef? = nil -- the pass being gifted
+local gift: string? = nil -- the gift product being given ("GiftVIP", "LuckyBoost")
 local chosen: Types.FoundPlayer? = nil
 local looking: string? = nil -- the username FIND is waiting on
 local waiting = false -- BUY/SEND is waiting on the server
 local prices: { [string]: number } = {} -- gift product key -> Robux, from Roblox
 
 local function productKey(): string
-	return if pass then GiftRules.productKey(pass.key) else ""
+	return gift or ""
 end
 
 -- Gifts already paid for, waiting for someone to send them to.
@@ -84,8 +83,9 @@ end
 
 -- The confirm screen for `found`.
 local function confirm(found: Types.FoundPlayer)
-	local gift = pass
-	if not gift then
+	local key = productKey()
+	local name = GiftRules.itemName(key)
+	if not name then
 		return
 	end
 	chosen = found
@@ -93,12 +93,11 @@ local function confirm(found: Types.FoundPlayer)
 	confirmPage.Visible = true
 	confirmAvatar.Image = ""
 	avatar(confirmAvatar, found.userId)
-	confirmText.Text = `Gift {gift.name} to {found.displayName} (@{found.name})?`
-	local key = productKey()
+	confirmText.Text = `Gift {name} to {found.displayName} (@{found.name})?`
 	if credits() > 0 then
 		buyButton.Text = "🎁 SEND (already paid)"
 	else
-		buyButton.Text = `{ROBUX} {Format.abbreviate(prices[key] or gift.price)}  BUY`
+		buyButton.Text = `{ROBUX} {Format.abbreviate(prices[key] or GiftRules.price(key))}  BUY`
 	end
 	UI.setEnabled(buyButton, true, COLORS.green)
 	setStatus(confirmStatus, "")
@@ -179,15 +178,16 @@ local function loadPrice(key: string)
 	end)
 end
 
--- Opens the window to gift `passKey`.
-function GiftUI.open(passKey: string)
-	local def = PassRules.def(passKey)
-	if not def then
+-- Opens the window to give a gift product: a pass's ("GiftVIP") or a
+-- boost ("LuckyBoost").
+function GiftUI.open(key: string)
+	local name = GiftRules.itemName(key)
+	if not name then
 		return
 	end
-	pass = def
-	loadPrice(GiftRules.productKey(passKey))
-	title.Text = `Who's this {def.name} for?`
+	gift = key
+	loadPrice(key)
+	title.Text = `Who's this {name} for?`
 	nameBox.Text = ""
 	fillPlayers()
 	showPick()
@@ -208,7 +208,7 @@ end
 -- BUY (or SEND a credit): the server checks first.
 local function buy()
 	local found = chosen
-	if waiting or not found or not pass then
+	if waiting or not found or not gift then
 		return
 	end
 	waiting = true
@@ -222,9 +222,9 @@ local function buy()
 	end
 end
 
-local function passName(key: string): string
-	local def = PassRules.def(key)
-	return if def then def.name else key
+-- What a received gift was ("VIP", "Lucky Boost").
+local function giftName(entry: Types.GiftEntry): string
+	return GiftRules.itemName(GiftRules.entryProduct(entry)) or entry.key
 end
 
 -- What the server says.
@@ -277,12 +277,11 @@ local function onNews(kind: string, a: any, b: any)
 			UI.toast("If they're not playing now, they'll get it next time they join", "info", 6)
 		end
 	elseif kind == "credit" then
-		local key = GiftRules.passFor(a)
 		UI.toast("You have a gift to send: choose who gets it", "volt", 8, {
 			text = "OPEN",
 			onTap = function()
-				if key then
-					GiftUI.open(key.key)
+				if typeof(a) == "string" then
+					GiftUI.open(a)
 				end
 			end,
 		})
@@ -290,11 +289,11 @@ local function onNews(kind: string, a: any, b: any)
 		Celebrate.sparks()
 		local gifts = a :: { Types.GiftEntry }
 		if #gifts == 1 then
-			UI.toast(`🎁 {gifts[1].fromName} gifted you {passName(gifts[1].key)}!`, "good", 6)
+			UI.toast(`🎁 {gifts[1].fromName} gifted you {giftName(gifts[1])}!`, "good", 6)
 		else
 			local list: { string } = {}
-			for _, gift in gifts do
-				table.insert(list, `{passName(gift.key)} from {gift.fromName}`)
+			for _, entry in gifts do
+				table.insert(list, `{giftName(entry)} from {entry.fromName}`)
 			end
 			UI.toast(`🎁 You received {#gifts} gifts!`, "good", 6)
 			UI.toast(table.concat(list, ", "), "info", 8)

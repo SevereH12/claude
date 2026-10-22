@@ -24,6 +24,10 @@ Passes.BOLT_ATTRIBUTE = "BoltColour"
 -- `owned` set, so the group bonus multiplies like a pass.
 Passes.GROUP = "GroupMember"
 
+-- A Server Storm is on in the player's server (Systems/Boosts): the key
+-- that marks it in an `owned` set, so it multiplies sales like a pass.
+Passes.SERVER_STORM = "ServerStorm"
+
 -- The pass with this key, or nil.
 function Passes.def(key: string): Types.PassDef?
 	for _, pass in Config.PASSES do
@@ -34,8 +38,8 @@ function Passes.def(key: string): Types.PassDef?
 	return nil
 end
 
--- What a sale pays, times this: 2x Volts, VIP and the group bonus
--- multiply (2 x 1.1 x 1.1 = 2.42).
+-- What a sale pays, times this: 2x Volts (pass or boost), VIP, the group
+-- bonus and a Server Storm multiply (2 x 1.1 x 1.1 x 2 = 4.84).
 function Passes.sellMultiplier(owned: Owned): number
 	local multiplier = 1
 	if owned.DoubleVolts then
@@ -46,6 +50,9 @@ function Passes.sellMultiplier(owned: Owned): number
 	end
 	if owned[Passes.GROUP] then
 		multiplier *= 1 + Config.GROUP_BONUS
+	end
+	if owned[Passes.SERVER_STORM] then
+		multiplier *= Config.SERVER_STORM.multiplier
 	end
 	return multiplier
 end

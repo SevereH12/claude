@@ -1,22 +1,27 @@
 --!strict
 -- Developer Product receipts: the only code that sets
--- MarketplaceService.ProcessReceipt. Gift products go to Systems/Gifts;
--- Volts packs (Config.VOLT_PACKS) are granted here. Each purchase is granted exactly
--- once: the profile remembers the newest purchase ids (Util/Store), and
--- Roblox only hears PurchaseGranted once the grant has been saved; until
--- then it asks again later (when the player rejoins), and the remembered id
--- stops a second grant.
+-- MarketplaceService.ProcessReceipt. Gift products and boosts (for the
+-- buyer or a gift) go to Systems/Gifts; a Server Storm (Systems/Boosts) and
+-- Volts packs (Config.VOLT_PACKS) are granted here, to the buyer in this
+-- server. Each purchase is granted exactly once: the profile remembers the
+-- newest purchase ids (Util/Store), and Roblox only hears PurchaseGranted
+-- once the grant has been saved; until then it asks again later (when the
+-- player rejoins, in whichever server they're in: a Server Storm bought
+-- just before leaving starts there), and the remembered id stops a second
+-- grant.
 
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local BoostRules = require(ReplicatedStorage.Shared.Util.Boosts)
 local Config = require(ReplicatedStorage.Shared.Config)
 local GiftRules = require(ReplicatedStorage.Shared.Util.Gifts)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Store = require(ReplicatedStorage.Shared.Util.Store)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Analytics = require(script.Parent.Analytics)
+local Boosts = require(script.Parent.Boosts)
 local Gifts = require(script.Parent.Gifts)
 local PlayerData = require(script.Parent.PlayerData)
 local Sync = require(script.Parent.Sync)
@@ -34,17 +39,13 @@ local function packFor(productId: number): Types.VoltPackDef?
 	return nil
 end
 
-local function processReceipt(receipt: { [string]: any }): Enum.ProductPurchaseDecision
-	-- a "Gift: <pass>" product (Systems/Gifts)
-	local giftKey = GiftRules.byProductId(receipt.ProductId)
-	if giftKey then
-		return Gifts.processReceipt(receipt, giftKey)
-	end
-	local pack = packFor(receipt.ProductId)
-	if not pack then
-		warn(`[Receipts] no Volts pack has product id {receipt.ProductId}`)
-		return Enum.ProductPurchaseDecision.NotProcessedYet
-	end
+-- A purchase for the buyer, granted once: `give` grants it while they're
+-- in this server with their profile loaded.
+local function forBuyer(
+	receipt: { [string]: any },
+	name: string,
+	give: (Player, Types.Profile) -> ()
+): Enum.ProductPurchaseDecision
 	local player = Players:GetPlayerByUserId(receipt.PlayerId)
 	local profile = if player then PlayerData.get(player) else nil
 	local purchaseId = tostring(receipt.PurchaseId)
@@ -56,21 +57,45 @@ local function processReceipt(receipt: { [string]: any }): Enum.ProductPurchaseD
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 
-	local volts = Store.packVolts(pack, profile)
-	profile.volts += volts
+	give(player, profile)
 	Store.recordPurchase(profile.purchases, purchaseId)
 	Sync.markDirty(player)
-	Analytics.packBought(player, pack, volts)
-	purchasedRemote:FireClient(player, player.UserId, pack.key, volts)
-	print(`[Receipts] {player.Name} bought {pack.name}: +{volts} Volts`)
 
 	-- only confirm once it's saved; the id is remembered either way, so
 	-- Roblox asking again can't grant it twice
 	if PlayerData.saveNow(player) then
 		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
-	warn(`[Receipts] couldn't save {player.Name}'s {pack.name} yet; Roblox will ask again`)
+	warn(`[Receipts] couldn't save {player.Name}'s {name} yet; Roblox will ask again`)
 	return Enum.ProductPurchaseDecision.NotProcessedYet
+end
+
+local function processReceipt(receipt: { [string]: any }): Enum.ProductPurchaseDecision
+	-- a "Gift: <pass>" product or a boost, for the buyer or a gift (Systems/Gifts)
+	local giftKey = GiftRules.byProductId(receipt.ProductId)
+	if giftKey then
+		return Gifts.processReceipt(receipt, giftKey)
+	end
+	local storm = BoostRules.productById(receipt.ProductId)
+	if storm and storm.serverStorm then
+		return forBuyer(receipt, storm.name, function(player)
+			local left = Boosts.startStorm(player)
+			Analytics.serverStorm(player, math.round(left / 60))
+			purchasedRemote:FireClient(player, player.UserId, storm.key, 0)
+		end)
+	end
+	local pack = packFor(receipt.ProductId)
+	if not pack then
+		warn(`[Receipts] no product has id {receipt.ProductId}`)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	return forBuyer(receipt, pack.name, function(player, profile)
+		local volts = Store.packVolts(pack, profile)
+		profile.volts += volts
+		Analytics.packBought(player, pack, volts)
+		purchasedRemote:FireClient(player, player.UserId, pack.key, volts)
+		print(`[Receipts] {player.Name} bought {pack.name}: +{volts} Volts`)
+	end)
 end
 
 function Receipts.init()

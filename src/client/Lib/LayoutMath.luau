@@ -14,7 +14,7 @@
 --
 -- The HUD sits on the screen's edges: Volts, the storm timer and the
 -- running boosts' chips top left,
--- the next goal top right, the bottle bar bottom centre (top centre on
+-- the next goal top right (a Server Storm's chip under it), the bottle bar bottom centre (top centre on
 -- touch, clear of the thumbstick and jump button; on a phone held upright
 -- under the top row, beside MENU), MENU on the left edge. Toasts and the zone banner
 -- go in the middle of the top, under whatever sits there. Pieces use the
@@ -44,6 +44,7 @@ export type Hud = {
 	storm: Rect,
 	boosts: Rect, -- timed boost chips: a row under the storm timer (a column beside Volts on a sideways phone or tablet)
 	goal: Rect,
+	serverStorm: Rect, -- a Server Storm's chip (buyer and time left), under the goal
 	bar: Rect,
 	menu: Rect,
 	card: Rect, -- the menu's tile card, beside the menu button (offers use it too)
@@ -204,9 +205,10 @@ function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?): Hud
 		else rect(M, storm.y + storm.h + G, H.statWidth, H.boostHeight)
 	local goalX = W - M - H.goalWidth
 	local goal = rect(goalX, topFor(goalX, H.goalWidth), H.goalWidth, H.goalHeight)
+	local serverStorm = rect(goalX, goal.y + goal.h + G, H.goalWidth, H.boostHeight)
 	local leftBottom = math.max(storm.y + storm.h, boosts.y + boosts.h)
 	local leftRight = math.max(volts.x + volts.w, boosts.x + boosts.w)
-	local rightBottom = goal.y + goal.h
+	local rightBottom = serverStorm.y + serverStorm.h
 
 	-- the bottle bar, and on a phone or tablet held upright MENU beside it
 	local bar
@@ -289,6 +291,7 @@ function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?): Hud
 		storm = storm,
 		boosts = boosts,
 		goal = goal,
+		serverStorm = serverStorm,
 		bar = bar,
 		menu = button,
 		card = card,

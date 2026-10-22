@@ -38,10 +38,13 @@ local OFFER_KEYS = {
 
 local Store = {}
 
--- Everything in the store a card can be: pass keys and Volts pack keys.
+-- Everything in the store a card can be: pass, boost and Volts pack keys.
 local itemKeys: { [string]: boolean } = {}
 for _, pass in Config.PASSES do
 	itemKeys[pass.key] = true
+end
+for _, product in Config.BOOST_PRODUCTS do
+	itemKeys[product.key] = true
 end
 for _, pack in Config.VOLT_PACKS do
 	itemKeys[pack.key] = true
