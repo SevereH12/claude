@@ -38,6 +38,12 @@ and stops if it isn't. To run one, say: "Do `docs/prompts/<file>`".
     across servers). Part B: boosts you can buy for yourself or gift, the
     Boost Bundle, and Server Storms (2x Volts for the whole server). All 13
     products already exist, off sale (`tools/store/store_ids.json`).
+11. `11-sound.md`: **run it three times.** Part A: original sound effects
+    generated in code from one palette (one key, one reverb, set loudness),
+    reviewed, packed into a few files and uploaded. Part B: every button,
+    strike, sale and reward plays them, with Music / Effects / Ambience
+    volume settings. Part C: licensed music (APM and DistroKid catalogues)
+    that crossfades between calm and storm tracks per world, plus ambience.
 
 Researchers (all five parts done) live in `researchers/`.
 
