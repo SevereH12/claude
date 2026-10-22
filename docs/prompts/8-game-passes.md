@@ -132,6 +132,10 @@ Multipliers multiply: 2x Volts with VIP pays 2 × 1.1 = 2.2x.
      on the client, cached and wrapped in `pcall`. Roblox price
      optimization can personalise prices, so the client must ask, and the
      Config price is only the fallback.
+   - **Icon**: each card shows the item's real icon as an ImageLabel
+     (`rbxassetid://` + the id under `icons` in `tools/store/store_ids.json`),
+     falling back to the emoji if there's no id. The art lives in
+     `tools/store/icons/` and is redrawn with `make_icons.py`.
    - **BUY** calls `MarketplaceService:PromptGamePassPurchase` on tap.
    - Owned passes show OWNED, and `id = 0` shows COMING SOON.
 6. **README**: a short "Selling passes" section:

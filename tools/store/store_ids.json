@@ -15,5 +15,19 @@
     "StormJar": 3720985707,
     "ThunderCrate": 3720985721,
     "LightningVault": 3720985735
+  },
+  "icons": {
+    "DoubleVolts": 95848544228868,
+    "RemoteSell": 136457008950452,
+    "BigBottles": 72710876564301,
+    "LuckyCharges": 121828277208800,
+    "LabGrant": 139170195972752,
+    "VIP": 107045645261408,
+    "BoltColours": 137026123419252,
+    "JetBoots": 123712582846727,
+    "PocketCharge": 127085435030754,
+    "StormJar": 134743613951662,
+    "ThunderCrate": 78950177669740,
+    "LightningVault": 94510144428546
   }
 }
