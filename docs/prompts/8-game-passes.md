@@ -77,8 +77,12 @@ Multipliers multiply: 2x Volts with VIP pays 2 × 1.1 = 2.2x.
 
 1. **Config**: replace `STORE.passes` with `PASSES`, a list of
    `{ key, id, name, icon, detail, price }` for the four part A passes.
-   `id = 0` until the user creates the pass, and the card then says COMING
-   SOON. Leave `STORE.volts` for part C.
+   - Take each `id` from `tools/store/store_ids.json` if it exists. That
+     file is written by `tools/store/create_store.py`, which creates every
+     pass and pack through Open Cloud, off sale.
+   - Otherwise `id = 0`, and the card says COMING SOON.
+   - The same file holds the ids for parts B and C.
+   - Leave `STORE.volts` for part C.
 2. **`src/shared/Util/Passes.luau` (pure)**:
    - `sellMultiplier(owned)`
    - `capacity(baseCapacity, owned)`
@@ -327,4 +331,8 @@ and tell the user.
 - In your final message, list everything the user must create on the
   Creator Dashboard (8 passes and 4 products), with the names and
   suggested prices.
+- **Turn the items on sale.** They were created off sale, so that nobody
+  could buy them before their code was live. Once all three parts work, ask
+  the user before switching them on (a PATCH of `isForSale=true` per item
+  through Open Cloud, or on the Creator Dashboard).
 - Tick part C, commit and push.

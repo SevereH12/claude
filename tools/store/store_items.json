@@ -1,0 +1,30 @@
+{
+  "passes": [
+    {"key": "DoubleVolts", "name": "2x Volts", "price": 249, "symbol": "2x", "color": [255, 196, 40],
+     "description": "Every sale at the Power Plant pays double Volts. Stacks with VIP."},
+    {"key": "RemoteSell", "name": "Remote Sell", "price": 199, "symbol": "SELL", "color": [70, 200, 120],
+     "description": "Sell your charges from anywhere with the SELL button. No more walking back to the Power Plant!"},
+    {"key": "BigBottles", "name": "Big Bottles", "price": 149, "symbol": "+50%", "color": [90, 170, 255],
+     "description": "Every bottle you own holds 50% more charges, so you catch longer before selling."},
+    {"key": "LuckyCharges", "name": "Lucky Charges", "price": 149, "symbol": "x2?", "color": [120, 220, 90],
+     "description": "Each charge you catch has a 15% chance to be worth double. Stacks with the Analyst for a rare x4 jackpot!"},
+    {"key": "LabGrant", "name": "Lab Grant", "price": 199, "symbol": "LAB", "color": [80, 205, 190],
+     "description": "Your Storm Society researchers set up instantly and gain field data twice as fast."},
+    {"key": "VIP", "name": "VIP", "price": 399, "symbol": "VIP", "color": [255, 170, 30],
+     "description": "Golden bottle, golden lightning, a VIP chat tag and title, plus 10% more Volts on every sale."},
+    {"key": "BoltColours", "name": "Bolt Colours", "price": 99, "symbol": "RGB", "color": [190, 110, 255],
+     "description": "Choose the colour of the lightning that arcs into your bottle. Everyone sees it!"},
+    {"key": "JetBoots", "name": "Jet Boots", "price": 99, "symbol": "JET", "color": [255, 110, 70],
+     "description": "Run 50% faster between zones, with a jet trail. Speed inside storm zones is unchanged."}
+  ],
+  "products": [
+    {"key": "PocketCharge", "name": "Pocket Charge", "price": 49, "symbol": "V", "color": [110, 200, 255],
+     "description": "A pocketful of Volts: 200 charges' worth from your best zone."},
+    {"key": "StormJar", "name": "Storm Jar", "price": 199, "symbol": "VV", "color": [255, 214, 60],
+     "description": "A jar of Volts: 1,000 charges' worth from your best zone."},
+    {"key": "ThunderCrate", "name": "Thunder Crate", "price": 899, "symbol": "VVV", "color": [255, 140, 50],
+     "description": "A crate of Volts: 6,000 charges' worth from your best zone."},
+    {"key": "LightningVault", "name": "Lightning Vault", "price": 3999, "symbol": "MAX", "color": [200, 90, 255],
+     "description": "A vault of Volts: 40,000 charges' worth from your best zone."}
+  ]
+}
