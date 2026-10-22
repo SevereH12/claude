@@ -1,8 +1,9 @@
 --!strict
 -- TEMPORARY test buttons: one sets your Volts to 1 trillion (shown in
 -- Studio or to the place's owner), one turns Pretend Premium on and off
--- (Studio only), and PASSES opens one "Pretend owns <pass>" toggle per Game
--- Pass (Studio only). The server (Systems/DevCommands) checks again. To
+-- (Studio only), PASSES opens one "Pretend owns <pass>" toggle per Game
+-- Pass, and REWARDS opens Next day, +5 min playtime and Clear boosts (both
+-- Studio only). The server (Systems/DevCommands) checks again. To
 -- remove it: delete this file and Systems/DevCommands.luau, and take
 -- "DevCommand" out of Shared/Remotes.
 
@@ -118,11 +119,65 @@ function DevCommands.init()
 			h = math.ceil(#Config.PASSES / 2) * 48,
 		})
 	end)
+	-- REWARDS: three test tools, in the same place (one list open at a time)
+	local rewards = UI.button({
+		Name = "RewardTools",
+		Text = "🎁 REWARDS ▸",
+		BackgroundColor3 = UI.COLORS.panelTop,
+		Parent = screenGui,
+	})
+	UI.maxText(rewards, 16)
+	local tools = UI.make(Instance.new("Frame"), {
+		Name = "RewardToolList",
+		BackgroundTransparency = 1,
+		Visible = false,
+		Parent = screenGui,
+	})
+	UI.make(Instance.new("UIListLayout"), {
+		Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = tools,
+	})
+	UI.onLayout(function()
+		UI.place(rewards, row(4))
+		local area = Layout.hud.test
+		UI.place(tools, { x = area.x + area.w + LayoutMath.GAP, y = area.y, w = 220, h = 3 * 48 })
+	end)
+	local function showLists(passesOn: boolean, rewardsOn: boolean)
+		list.Visible = passesOn
+		tools.Visible = rewardsOn
+		passes.Text = if passesOn then "🎟 PASSES ◂" else "🎟 PASSES ▸"
+		rewards.Text = if rewardsOn then "🎁 REWARDS ◂" else "🎁 REWARDS ▸"
+	end
 	passes.Activated:Connect(function()
 		UI.pop(passes)
-		list.Visible = not list.Visible
-		passes.Text = if list.Visible then "🎟 PASSES ◂" else "🎟 PASSES ▸"
+		showLists(not list.Visible, false)
 	end)
+	rewards.Activated:Connect(function()
+		UI.pop(rewards)
+		showLists(false, not tools.Visible)
+	end)
+	for index, tool in
+		{
+			{ text = "📅 Next day", command = "nextDay" },
+			{ text = "⏱ +5 min playtime", command = "playtime" },
+			{ text = "🧹 Clear boosts", command = "clearBoosts" },
+		}
+	do
+		local toolButton = UI.button({
+			Name = tool.command,
+			LayoutOrder = index,
+			Text = tool.text,
+			Size = UDim2.new(1, 0, 0, 40),
+			BackgroundColor3 = UI.COLORS.panelDark,
+			Parent = tools,
+		})
+		UI.maxText(toolButton, 16)
+		toolButton.Activated:Connect(function()
+			UI.pop(toolButton)
+			devRemote:FireServer(tool.command)
+		end)
+	end
 	for index, pass in Config.PASSES do
 		local attribute = `PretendPass_{pass.key}`
 		local toggle = UI.button({

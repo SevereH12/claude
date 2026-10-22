@@ -18,9 +18,16 @@ function Store.boltValue(progress: Progression.Progress): number
 	return if best then best.chargeValue else 0
 end
 
--- The Volts a pack gives this player: its charges x their best bolt.
+-- The Volts `charges` are worth to this player: that many bolts from their
+-- best zone. Volts packs and rewards are counted this way, so they're worth
+-- the same playtime early or late.
+function Store.volts(charges: number, progress: Progression.Progress): number
+	return charges * Store.boltValue(progress)
+end
+
+-- The Volts a pack gives this player.
 function Store.packVolts(pack: Types.VoltPackDef, progress: Progression.Progress): number
-	return pack.charges * Store.boltValue(progress)
+	return Store.volts(pack.charges, progress)
 end
 
 -- Roughly how long catching a pack's Volts takes, as "about 20 minutes" or

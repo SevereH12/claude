@@ -5,7 +5,7 @@ Follow the rules in `docs/prompts/README.md`.
 **Run it twice.** Each run does the first part below that isn't ticked,
 then ticks it:
 
-- [ ] Part A: timed boosts, the 7-day login streak, playtime gifts and the
+- [x] Part A: timed boosts, the 7-day login streak, playtime gifts and the
   REWARDS panel
 - [ ] Part B: the group bonus, "reward ready" nudges and reward stats
 

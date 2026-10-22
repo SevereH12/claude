@@ -18,6 +18,7 @@ from PIL import Image, ImageDraw
 COLORS = {
     "volts": (255, 214, 60),
     "storm": (110, 220, 140),
+    "boosts": (255, 120, 170),
     "goal": (100, 160, 255),
     "bar": (70, 90, 230),
     "menu": (44, 52, 92),
@@ -29,6 +30,7 @@ COLORS = {
 LABELS = {
     "volts": "VOLTS",
     "storm": "STORM",
+    "boosts": "BOOSTS",
     "goal": "GOAL",
     "bar": "BOTTLE",
     "menu": "MENU",
@@ -70,7 +72,7 @@ def main():
                 [(ox + x * s) * k, (oy + y * s) * k, (ox + (x + w) * s) * k, (oy + (y + h) * s) * k],
                 outline=(235, 75, 75),
             )
-        order = ["card", "banner", "toasts", "test", "volts", "storm", "goal", "bar", "menu"]
+        order = ["card", "banner", "toasts", "test", "volts", "storm", "boosts", "goal", "bar", "menu"]
         for key in order:
             x, y, w, h = d["hud"][key]
             box = [(ox + x * s) * k, (oy + y * s) * k, (ox + (x + w) * s) * k, (oy + (y + h) * s) * k]

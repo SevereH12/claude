@@ -381,6 +381,45 @@ local STORE = {
 	catchesPerMinute = 10,
 }
 
+-- Timed boosts (Util/Boosts, Systems/Boosts): each switches a Game Pass's
+-- effect on for a while. Time stacks up to BOOST_CAP and only counts down
+-- while the player is in the game.
+local BOOSTS: { Types.BoostDef } = {
+	{ key = "DoubleVolts", pass = "DoubleVolts", name = "2x Volts", icon = "⚡" },
+	{ key = "Lucky", pass = "LuckyCharges", name = "Lucky", icon = "🍀" },
+	{ key = "BigBottles", pass = "BigBottles", name = "Big Bottles", icon = "🧪" },
+}
+
+-- The 7-day login streak (Systems/Rewards): one reward per UTC day, in a
+-- row; missing a day starts again at day 1, and so does the day after day 7.
+-- `charges` pays that many bolts from the player's best zone, so a reward is
+-- worth the same playtime early or late (Util/Store.volts).
+local DAILY_REWARDS: { Types.Reward } = {
+	{ charges = 100 },
+	{ boosts = { { key = "DoubleVolts", minutes = 10 } } },
+	{ charges = 250 },
+	{ boosts = { { key = "Lucky", minutes = 15 } } },
+	{ charges = 500 },
+	{ boosts = { { key = "DoubleVolts", minutes = 20 } } },
+	{
+		charges = 1_500,
+		boosts = {
+			{ key = "DoubleVolts", minutes = 30 },
+			{ key = "BigBottles", minutes = 30 },
+		},
+	},
+}
+
+-- Playtime gifts: claimable this many minutes into every session.
+local PLAYTIME_GIFTS: { Types.PlaytimeGift } = {
+	{ minutes = 5, reward = { charges = 30 } },
+	{ minutes = 10, reward = { charges = 60 } },
+	{ minutes = 20, reward = { boosts = { { key = "Lucky", minutes = 10 } } } },
+	{ minutes = 30, reward = { charges = 150 } },
+	{ minutes = 45, reward = { boosts = { { key = "DoubleVolts", minutes = 10 } } } },
+	{ minutes = 60, reward = { charges = 400 } },
+}
+
 return table.freeze({
 	-- Saving
 	AUTOSAVE_INTERVAL = 60, -- seconds between autosaves per player
@@ -428,6 +467,13 @@ return table.freeze({
 	BOLT_COLOURS = table.freeze(BOLT_COLOURS),
 	VOLT_PACKS = table.freeze(VOLT_PACKS),
 	STORE = table.freeze(STORE),
+	BOOSTS = table.freeze(BOOSTS),
+	BOOST_CAP = 2 * 60 * 60, -- seconds a boost's time can stack up to
+	DAILY_REWARDS = table.freeze(DAILY_REWARDS),
+	PLAYTIME_GIFTS = table.freeze(PLAYTIME_GIFTS),
+	-- a boost reward for a pass the player owns pays Volts instead: this many
+	-- charges per minute of boost (about a minute of catching)
+	REWARD_SWAP_CHARGES = 10,
 
 	-- Placeholder sounds (built into Roblox). Swap for Creator Store sounds.
 	SOUNDS = table.freeze({

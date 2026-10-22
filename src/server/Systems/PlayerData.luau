@@ -18,7 +18,7 @@ local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local STORE_NAME = "StormBottler_PlayerData"
-local CURRENT_VERSION = 7
+local CURRENT_VERSION = 8
 -- A lock older than this belongs to a server that crashed; it may be taken.
 local LOCK_STALE_SECONDS = Config.AUTOSAVE_INTERVAL * 3
 local LOCKED_RETRIES = 5
@@ -54,6 +54,9 @@ local DEFAULT_PROFILE: Types.Profile = {
 	boltColour = 0,
 	purchases = {},
 	trialUsed = false,
+	boosts = {},
+	dailyStreak = 0,
+	lastDailyDay = 0,
 }
 
 -- MIGRATIONS[n] turns a version-n profile into version n+1. When the profile
@@ -91,6 +94,13 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 	[6] = function(data: any): any
 		data.purchases = {}
 		data.trialUsed = false
+		return data
+	end,
+	-- timed boosts and the login streak (prompt 9)
+	[7] = function(data: any): any
+		data.boosts = {}
+		data.dailyStreak = 0
+		data.lastDailyDay = 0
 		return data
 	end,
 }

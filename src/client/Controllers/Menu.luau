@@ -1,6 +1,8 @@
 --!strict
--- The one MENU button on the left edge and the card it opens: four tiles,
--- SHOP, RESEARCH, TELEPORT and BOOSTS, that pop in one after another.
+-- The one MENU button on the left edge and the card it opens: five tiles,
+-- SHOP, RESEARCH, TELEPORT, BOOSTS and REWARDS (three across, the last two
+-- centred under them), that pop in one after another. A red dot on REWARDS
+-- and on the MENU button means a reward is ready to claim.
 -- Picking a tile closes the card and opens that panel. The card also
 -- closes on the menu button, a click or tap anywhere else (an invisible
 -- catcher behind it), Esc or gamepad B (Controllers/Shortcuts). On a gamepad, Y opens it (a "Y" chip shows on
@@ -13,11 +15,13 @@ local Layout = require(script.Parent.Parent.Lib.Layout)
 local UI = require(script.Parent.Parent.Lib.UI)
 local BoostsUI = require(script.Parent.BoostsUI)
 local ResearchUI = require(script.Parent.ResearchUI)
+local RewardsUI = require(script.Parent.RewardsUI)
 local ShopUI = require(script.Parent.ShopUI)
 local TeleportUI = require(script.Parent.TeleportUI)
 
 local COLORS = UI.COLORS
 local TILE = Vector2.new(118, 90)
+local COLUMNS = 3
 local GAP = 10
 local PAD = 12
 local STAGGER = 0.045
@@ -38,6 +42,12 @@ local ITEMS: { Item } = {
 		open = TeleportUI.open,
 	},
 	{ name = "BOOSTS", icon = "🚀", color = COLORS.volt, open = BoostsUI.open },
+	{
+		name = "REWARDS",
+		icon = "🎁",
+		color = Color3.fromRGB(255, 120, 170),
+		open = RewardsUI.open,
+	},
 }
 
 local Menu = {}
@@ -49,6 +59,7 @@ local icon: TextLabel
 local card: Frame
 local cardScale: UIScale
 local tileScales: { UIScale } = {}
+local dots: { GuiObject } = {} -- "a reward is ready" dots: the MENU button's and the REWARDS tile's
 local isOpen = false
 local token = 0
 
@@ -125,12 +136,33 @@ function Menu.toggle()
 	end
 end
 
+-- A small red dot in a button's top-left corner (top right is the gamepad
+-- hint's), shown while a reward is ready.
+local function addDot(button: GuiObject)
+	local dot = UI.make(Instance.new("Frame"), {
+		Name = "ReadyDot",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromOffset(4, 4),
+		Size = UDim2.fromOffset(20, 20),
+		BackgroundColor3 = COLORS.red,
+		Visible = RewardsUI.isReady(),
+		ZIndex = 5,
+		Parent = button,
+	})
+	UI.corner(dot, UDim.new(0.5, 0))
+	UI.stroke(dot, 2)
+	table.insert(dots, dot)
+end
+
 local function buildTile(index: number, item: Item)
-	local col, row = (index - 1) % 2, (index - 1) // 2
+	local col, row = (index - 1) % COLUMNS, (index - 1) // COLUMNS
+	-- a short last row is centred under the full ones
+	local inRow = math.min(COLUMNS, #ITEMS - row * COLUMNS)
+	local x = PAD + (col + (COLUMNS - inRow) / 2) * (TILE.X + GAP)
 	-- a cell holds the tile so the tile can scale from its own centre
 	local cell = UI.make(Instance.new("Frame"), {
 		Name = item.name,
-		Position = UDim2.fromOffset(PAD + col * (TILE.X + GAP), PAD + row * (TILE.Y + GAP)),
+		Position = UDim2.fromOffset(x, PAD + row * (TILE.Y + GAP)),
 		Size = UDim2.fromOffset(TILE.X, TILE.Y),
 		BackgroundTransparency = 1,
 		Parent = card,
@@ -170,6 +202,9 @@ local function buildTile(index: number, item: Item)
 		Menu.close()
 		item.open()
 	end)
+	if item.open == RewardsUI.open then
+		addDot(tile)
+	end
 end
 
 -- The button and its card go where LayoutMath.hud says: the left edge,
@@ -231,6 +266,7 @@ function Menu.init()
 	})
 	UI.maxText(caption, 18)
 	UI.padHint(menuButton, "Y")
+	addDot(menuButton)
 	menuButton.Activated:Connect(function()
 		UI.pop(menuButton)
 		Menu.toggle()
@@ -250,6 +286,11 @@ function Menu.init()
 
 	place()
 	Layout.Changed:Connect(place)
+	RewardsUI.ReadyChanged:Connect(function(isReady: boolean)
+		for _, dot in dots do
+			dot.Visible = isReady
+		end
+	end)
 end
 
 return Menu

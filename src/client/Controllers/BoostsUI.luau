@@ -227,11 +227,12 @@ end
 
 -- What the 2x Volts card says under its description: only true numbers.
 local function doubleVoltsNote(snapshot: Types.Snapshot): string
-	local store = snapshot.store
-	if workspace:GetServerTimeNow() < store.trialEndsAt then
-		return "🎁 YOUR FREE TRIAL IS ON"
-	elseif store.missedDouble > 0 then
-		return `+{Format.abbreviate(store.missedDouble)} Volts this session with 2x`
+	local left = (snapshot.boosts.DoubleVolts or 0) - workspace:GetServerTimeNow()
+	if left > 0 then
+		local seconds = math.ceil(left)
+		return string.format("⚡ 2x BOOST ON: %d:%02d LEFT", seconds // 60, seconds % 60)
+	elseif snapshot.store.missedDouble > 0 then
+		return `+{Format.abbreviate(snapshot.store.missedDouble)} Volts this session with 2x`
 	end
 	return ""
 end
@@ -550,7 +551,7 @@ function BoostsUI.start()
 			renderPicker() -- VIP bought while it's open: the default swatch turns gold
 		end
 	end)
-	-- the 2x Volts card's trial note ends with the trial
+	-- the 2x Volts card's boost countdown
 	while true do
 		task.wait(1)
 		if panel.Visible then

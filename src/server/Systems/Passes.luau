@@ -15,9 +15,12 @@
 -- (Systems/DevCommands) count as owning the pass, in Studio only, like
 -- Pretend Premium.
 --
--- Also this session's store numbers (Sync.store, in the snapshot): the free
--- 2x Volts trial (Systems/Store starts it; sales pay 2x while it runs),
--- what it has paid, and what 2x Volts would have paid. All lost on leaving.
+-- Pass effects also come from timed boosts (Systems/Boosts: rewards and the
+-- free trial): capacity, payout and luck below apply owned passes plus
+-- running boosts, so every place that uses them gets both.
+--
+-- Also this session's store numbers (Sync.store, in the snapshot): what 2x
+-- Volts boosts have paid, and what 2x Volts would have paid. Lost on leaving.
 
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
@@ -29,6 +32,7 @@ local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
 local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local Types = require(ReplicatedStorage.Shared.Types)
+local Boosts = require(script.Parent.Boosts)
 local Sync = require(script.Parent.Sync)
 
 local RETRY_WAIT = 1 -- seconds before the one retry of an ownership check
@@ -147,55 +151,40 @@ function Passes.owns(player: Player, key: string): boolean
 	return Passes.owned(player)[key] == true
 end
 
--- The player's bottle capacity (Big Bottles included).
+-- The effects to apply: owned passes plus running boosts.
+local function effects(player: Player): PassRules.Owned
+	return PassRules.withBoosts(Passes.owned(player), Boosts.left(player))
+end
+
+-- The player's bottle capacity (Big Bottles, pass or boost, included).
 function Passes.capacity(player: Player, profile: Types.Profile): number
-	return PassRules.capacity(Formulas.capacity(profile.bottleTier), Passes.owned(player))
+	return PassRules.capacity(Formulas.capacity(profile.bottleTier), effects(player))
 end
 
 -- This session's store numbers for the player (created on first use).
-local function storeSession(player: Player): Types.StoreSession
+function Passes.storeSession(player: Player): Types.StoreSession
 	local session = Sync.store[player]
 	if not session then
-		session = { trialEndsAt = 0, trialEarned = 0, missedDouble = 0 }
+		session = { boostEarned = 0, missedDouble = 0 }
 		Sync.store[player] = session
 	end
 	return session
 end
 
-function Passes.trialActive(player: Player): boolean
-	local session = Sync.store[player]
-	return session ~= nil and workspace:GetServerTimeNow() < session.trialEndsAt
-end
-
--- Starts the free 2x Volts trial (Systems/Store checks it's allowed).
--- Returns this session's store numbers, which keep its tally.
-function Passes.startTrial(player: Player): Types.StoreSession
-	local session = storeSession(player)
-	session.trialEndsAt = workspace:GetServerTimeNow() + Config.STORE.trialSeconds
-	Sync.markDirty(player)
-	return session
-end
-
--- Extra Volts the trial has paid this session.
-function Passes.trialEarned(player: Player): number
-	local session = Sync.store[player]
-	return if session then session.trialEarned else 0
-end
-
--- What selling a bottle worth `value` pays (2x Volts, VIP, the trial), and
--- what 2x Volts would have added. Keeps this session's tallies.
+-- What selling a bottle worth `value` pays (passes, VIP, boosts), and what
+-- 2x Volts would have added. Keeps this session's tallies.
 function Passes.payout(player: Player, value: number): (number, number)
-	local earned, missed, trialExtra =
-		PassRules.saleBreakdown(value, Passes.owned(player), Passes.trialActive(player))
-	local session = storeSession(player)
+	local earned, missed, boostExtra =
+		PassRules.saleBreakdown(value, Passes.owned(player), Boosts.left(player))
+	local session = Passes.storeSession(player)
 	session.missedDouble += missed
-	session.trialEarned += trialExtra
+	session.boostEarned += boostExtra
 	return earned, missed
 end
 
--- The chance a caught charge is worth double (Lucky Charges).
+-- The chance a caught charge is worth double (Lucky Charges, pass or boost).
 function Passes.luckChance(player: Player): number
-	return PassRules.luckChance(Passes.owned(player))
+	return PassRules.luckChance(effects(player))
 end
 
 -- Studio TEST toggle: pretend to own (or not) a pass. Ignored outside Studio.

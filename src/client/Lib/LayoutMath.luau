@@ -12,7 +12,8 @@
 -- for viewing distance. On touch every button stays at least TAP_MIN
 -- points (tapMin) and phone text at least PHONE_MIN_TEXT points.
 --
--- The HUD sits on the screen's edges: Volts and the storm timer top left,
+-- The HUD sits on the screen's edges: Volts, the storm timer and the
+-- running boosts' chips top left,
 -- the next goal top right, the bottle bar bottom centre (top centre on
 -- touch, clear of the thumbstick and jump button; on a phone held upright
 -- under the top row, beside MENU), MENU on the left edge. Toasts and the zone banner
@@ -41,10 +42,11 @@ export type Topbar = { left: number, right: number, height: number }
 export type Hud = {
 	volts: Rect,
 	storm: Rect,
+	boosts: Rect, -- timed boost chips: a row under the storm timer (a column beside Volts on a sideways phone or tablet)
 	goal: Rect,
 	bar: Rect,
 	menu: Rect,
-	card: Rect, -- the menu's tile card, beside the menu button
+	card: Rect, -- the menu's tile card, beside the menu button (offers use it too)
 	toasts: Rect,
 	banner: Rect,
 	test: Rect, -- the owner's TEST buttons (two rows), under the menu
@@ -78,7 +80,9 @@ LayoutMath.HUD = table.freeze({
 	barWidth = 420,
 	barHeight = 52,
 	menuSize = 84,
-	cardWidth = 270, -- two tiles of 118 + gap 10 + padding 12 each side
+	boostHeight = 28, -- one boost chip
+	boostWidth = 78, -- one chip in the sideways column
+	cardWidth = 398, -- three tiles of 118 + gaps of 10 + padding 12 each side
 	cardHeight = 214, -- two rows of 90 + gap 10 + padding 12 each side
 	toastWidth = 380,
 	toastHeight = 44,
@@ -183,12 +187,25 @@ function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?): Hud
 		return M
 	end
 
-	-- top left: Volts, the storm timer under it; top right: the next goal
+	-- top left: Volts, the storm timer under it and the running boosts'
+	-- chips; top right: the next goal. The chips are a row under the storm
+	-- timer, but a phone or tablet held sideways is short of height (MENU
+	-- must stay above the thumbstick), so there they're a column beside
+	-- Volts, below a bottle bar along the top.
 	local volts = rect(M, topFor(M, H.statWidth), H.statWidth, H.voltsHeight)
 	local storm = rect(M, volts.y + volts.h + G, H.statWidth, H.stormHeight)
+	local boosts = if touch and not upright
+		then rect(
+			volts.x + volts.w + G,
+			math.max(volts.y, M + H.barHeight + G),
+			H.boostWidth,
+			3 * H.boostHeight + 2 * G
+		)
+		else rect(M, storm.y + storm.h + G, H.statWidth, H.boostHeight)
 	local goalX = W - M - H.goalWidth
 	local goal = rect(goalX, topFor(goalX, H.goalWidth), H.goalWidth, H.goalHeight)
-	local leftBottom = storm.y + storm.h
+	local leftBottom = math.max(storm.y + storm.h, boosts.y + boosts.h)
+	local leftRight = math.max(volts.x + volts.w, boosts.x + boosts.w)
 	local rightBottom = goal.y + goal.h
 
 	-- the bottle bar, and on a phone or tablet held upright MENU beside it
@@ -213,7 +230,7 @@ function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?): Hud
 	-- toasts, then the zone banner, in the middle of the top; each drops
 	-- below a corner piece it would reach sideways
 	local function belowCorners(x: number, w: number, y: number): number
-		if x < volts.x + volts.w + G then
+		if x < leftRight + G then
 			y = math.max(y, leftBottom + G)
 		end
 		if x + w > goal.x - G then
@@ -270,6 +287,7 @@ function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?): Hud
 	return {
 		volts = volts,
 		storm = storm,
+		boosts = boosts,
 		goal = goal,
 		bar = bar,
 		menu = button,

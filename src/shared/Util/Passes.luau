@@ -5,6 +5,7 @@
 
 local Config = require(script.Parent.Parent.Config)
 local Types = require(script.Parent.Parent.Types)
+local Boosts = require(script.Parent.Boosts)
 
 export type Owned = { [string]: boolean }
 
@@ -46,21 +47,38 @@ function Passes.sale(value: number, owned: Owned): number
 	return math.floor(value * Passes.sellMultiplier(owned) + 1e-6)
 end
 
--- A sale broken down: what it pays (`trial`: the free 2x Volts trial is
--- running, so it pays like 2x Volts), the extra 2x Volts would have paid
--- (when they have neither), and the extra the trial paid.
-function Passes.saleBreakdown(value: number, owned: Owned, trial: boolean): (number, number, number)
-	local plain = Passes.sale(value, owned)
+-- The passes a player owns plus the effects of their running boosts
+-- (Util/Boosts: seconds left per boost key). Everything that applies a
+-- pass effect takes this, so a boost works everywhere its pass does.
+function Passes.withBoosts(owned: Owned, boosts: Boosts.Left): Owned
+	local set = table.clone(owned)
+	for pass in Boosts.effects(boosts) do
+		set[pass] = true
+	end
+	return set
+end
+
+-- A sale broken down: what it pays (passes and running boosts), the extra
+-- 2x Volts would have paid (with neither the pass nor a 2x boost), and the
+-- extra a 2x boost paid (the free trial is one).
+function Passes.saleBreakdown(
+	value: number,
+	owned: Owned,
+	boosts: Boosts.Left
+): (number, number, number)
+	local effects = Passes.withBoosts(owned, boosts)
+	local earned = Passes.sale(value, effects)
 	if owned.DoubleVolts then
-		return plain, 0, 0
+		return earned, 0, 0
 	end
-	local withDouble = table.clone(owned)
-	withDouble.DoubleVolts = true
-	local doubled = Passes.sale(value, withDouble)
-	if trial then
-		return doubled, 0, doubled - plain
+	if effects.DoubleVolts then
+		local without = table.clone(effects)
+		without.DoubleVolts = nil
+		return earned, 0, earned - Passes.sale(value, without)
 	end
-	return plain, doubled - plain, 0
+	local with = table.clone(effects)
+	with.DoubleVolts = true
+	return earned, Passes.sale(value, with) - earned, 0
 end
 
 -- A bottle's capacity for this player: Big Bottles holds 50% more,

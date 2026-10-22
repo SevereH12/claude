@@ -18,6 +18,9 @@ export type Profile = {
 	boltColour: number, -- Bolt Colours pick: index into Config.BOLT_COLOURS, 0 = default
 	purchases: { string }, -- the newest Volts pack PurchaseIds already granted (Systems/Receipts)
 	trialUsed: boolean, -- the free 2x Volts trial has been started (once ever)
+	boosts: { [string]: number }, -- seconds left per boost key (Config.BOOSTS); count down only in game
+	dailyStreak: number, -- day of the login streak last claimed (1-7), 0 = never
+	lastDailyDay: number, -- UTC day (os.time() // 86400) of the last daily claim, 0 = never
 }
 
 -- A hired researcher. post is "Office" or a zone id.
@@ -44,14 +47,44 @@ export type Snapshot = {
 	capacity: number, -- the bottle's real capacity (Big Bottles included)
 	trialUsed: boolean, -- the free 2x Volts trial has been used
 	store: StoreSession,
+	boosts: { [string]: number }, -- active boost key -> workspace:GetServerTimeNow() when it runs out
+	daily: { streak: number, lastDay: number, dayOffset: number }, -- the login streak (Util/Rewards.daily)
+	gifts: { startedAt: number, claimed: { boolean } }, -- playtime gifts: session start (server time)
 }
 
 -- This session's store numbers, sent in the snapshot (Systems/Passes).
 export type StoreSession = {
-	trialEndsAt: number, -- workspace:GetServerTimeNow() when the free 2x trial ends, 0 = none
-	trialEarned: number, -- extra Volts the trial has paid
+	boostEarned: number, -- extra Volts 2x Volts boosts (the free trial too) have paid
 	missedDouble: number, -- extra Volts 2x Volts would have paid this session
 }
+
+-- This session's playtime gifts and the Studio "Next day" offset
+-- (Systems/Rewards).
+export type RewardSession = {
+	startedAt: number, -- workspace:GetServerTimeNow() when the session's playtime began
+	claimed: { boolean }, -- per Config.PLAYTIME_GIFTS entry
+	dayOffset: number, -- Studio only: days added to today
+}
+
+-- A timed boost (Config.BOOSTS): switches a Game Pass's effect on for a while.
+export type BoostDef = {
+	key: string,
+	pass: string, -- the pass whose effect it gives (Config.PASSES key)
+	name: string,
+	icon: string,
+}
+
+-- A reward: `charges` pays that many bolts from the player's best zone
+-- (Util/Store.volts); `boosts` adds timed boosts.
+export type RewardBoost = { key: string, minutes: number }
+export type Reward = { charges: number?, boosts: { RewardBoost }? }
+
+-- A playtime gift: claimable `minutes` into a session.
+export type PlaytimeGift = { minutes: number, reward: Reward }
+
+-- What a claimed reward gave (the Rewarded remote): Volts, boosts, and the
+-- boosts swapped for Volts because the player owns that pass.
+export type Rewarded = { volts: number, boosts: { RewardBoost }, swapped: { string } }
 
 export type StormPhase = "Storm" | "Calm"
 

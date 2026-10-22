@@ -14,14 +14,13 @@
 --   from the server), hiring a researcher or a level-up (Lab Grant), an
 --   Analyst assay (Lucky Charges).
 --   The free trial: from the 3rd sale of a session, once ever; TRY starts it
---   (StartTrial, checked by Systems/Store), and when it ends a card says
---   what it earned.
+--   (StartTrial, checked by Systems/Store: a 2x Volts boost). When any 2x
+--   Volts boost ends (the trial, a reward), a card says what it earned.
 --   Thanks: when anyone buys a pass, a chat line for everyone; the buyer
 --   (of a pass or a Volts pack) gets sparks and a toast.
 -- Offers shown and tapped are reported for the stats (StoreEvent).
 
 local CollectionService = game:GetService("CollectionService")
-local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TextChatService = game:GetService("TextChatService")
@@ -33,6 +32,7 @@ local Net = require(ReplicatedStorage.Shared.Net)
 local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
 local Store = require(ReplicatedStorage.Shared.Util.Store)
 local Types = require(ReplicatedStorage.Shared.Types)
+local Celebrate = require(script.Parent.Parent.Lib.Celebrate)
 local Layout = require(script.Parent.Parent.Lib.Layout)
 local UI = require(script.Parent.Parent.Lib.UI)
 local BoostsUI = require(script.Parent.BoostsUI)
@@ -62,8 +62,8 @@ local token = 0 -- bumped whenever the card changes, so old timers leave it alon
 
 local offerState: Store.OfferState = { sessionStart = os.clock(), lastOfferAt = nil, shown = {} }
 local sales = 0
-local lastTrialEnd = 0
-local summaryShown = false
+local lastTrialUsed: boolean? = nil -- nil until the first snapshot
+local doubleBaseline: number? = nil -- store.boostEarned when the running 2x boost began
 local researchLevels: { [string]: number }? = nil -- role -> level, to spot hires and level-ups
 
 local function uiOpen(): boolean
@@ -171,16 +171,10 @@ local function offerTrial(): boolean
 	end
 	mark("Trial")
 	local minutes = math.round(Config.STORE.trialSeconds / 60)
-	show(
-		"DoubleVolts",
-		`Try 2x Volts free for {minutes} minutes! (It stops if you leave the game.)`,
-		"TRY",
-		function()
-			storeEvent:FireServer("offerTapped", "Trial")
-			Net.get("StartTrial"):FireServer()
-		end,
-		OFFER_SECONDS
-	)
+	show("DoubleVolts", `Try 2x Volts free for {minutes} minutes of play!`, "TRY", function()
+		storeEvent:FireServer("offerTapped", "Trial")
+		Net.get("StartTrial"):FireServer()
+	end, OFFER_SECONDS)
 	return true
 end
 
@@ -231,19 +225,29 @@ local function check()
 		end
 	end
 
-	-- the trial is over: what it earned (not an offer: once, when nothing's open)
-	local ends = snapshot.store.trialEndsAt
-	if ends > 0 and workspace:GetServerTimeNow() >= ends and not summaryShown and not uiOpen() then
-		summaryShown = true
-		show(
-			"DoubleVolts",
-			`The trial earned you +{Format.abbreviate(snapshot.store.trialEarned)} Volts!`,
-			"SEE",
-			function()
-				BoostsUI.openAt("DoubleVolts")
-			end,
-			SUMMARY_SECONDS
-		)
+	-- a 2x Volts boost (the trial, a reward) is over: what it earned (not an
+	-- offer: once per boost, when nothing's open, and only if it paid)
+	local doubleEnds = snapshot.boosts.DoubleVolts
+	local doubling = doubleEnds ~= nil
+		and doubleEnds > workspace:GetServerTimeNow()
+		and not snapshot.passes.DoubleVolts
+	local baseline = doubleBaseline
+	if doubling and not baseline then
+		doubleBaseline = snapshot.store.boostEarned
+	elseif not doubling and baseline and not uiOpen() then
+		doubleBaseline = nil
+		local earned = snapshot.store.boostEarned - baseline
+		if earned > 0 then
+			show(
+				"DoubleVolts",
+				`Your 2x Volts boost earned you +{Format.abbreviate(earned)} Volts!`,
+				"SEE",
+				function()
+					BoostsUI.openAt("DoubleVolts")
+				end,
+				SUMMARY_SECONDS
+			)
+		end
 	end
 end
 
@@ -281,14 +285,11 @@ local function onState(snapshot: Types.Snapshot)
 	end
 
 	-- the trial just started
-	local ends = snapshot.store.trialEndsAt
-	if ends ~= lastTrialEnd then
-		lastTrialEnd = ends
-		if ends > workspace:GetServerTimeNow() then
-			hide()
-			UI.toast("Free 2x Volts trial: every sale pays double!", "good", 4)
-		end
+	if lastTrialUsed == false and snapshot.trialUsed then
+		hide()
+		UI.toast("Free 2x Volts trial: every sale pays double!", "good", 4)
 	end
+	lastTrialUsed = snapshot.trialUsed
 end
 
 -- A line in the chat window from the game itself.
@@ -302,29 +303,6 @@ local function systemMessage(text: string)
 	end)
 end
 
--- Gold sparks bursting off the buyer.
-local function celebrate()
-	local character = player.Character
-	local root = character and character:FindFirstChild("HumanoidRootPart")
-	if not root or not root:IsA("BasePart") then
-		return
-	end
-	local attachment = Instance.new("Attachment")
-	attachment.Parent = root
-	local sparks = Instance.new("ParticleEmitter")
-	sparks.Rate = 0
-	sparks.Lifetime = NumberRange.new(0.6, 1.1)
-	sparks.Speed = NumberRange.new(12, 20)
-	sparks.SpreadAngle = Vector2.new(180, 180)
-	sparks.Acceleration = Vector3.new(0, -20, 0)
-	sparks.Size = NumberSequence.new(0.45, 0)
-	sparks.Color = ColorSequence.new(Config.VIP_GOLD, Color3.new(1, 1, 1))
-	sparks.LightEmission = 1
-	sparks.Parent = attachment
-	sparks:Emit(60)
-	Debris:AddItem(attachment, 2)
-end
-
 -- Someone bought a pass (everyone hears), or the local player a Volts pack.
 local function onPurchased(userId: number, key: string, volts: number)
 	local buyer = Players:GetPlayerByUserId(userId)
@@ -335,7 +313,7 @@ local function onPurchased(userId: number, key: string, volts: number)
 	if userId ~= player.UserId then
 		return
 	end
-	celebrate()
+	Celebrate.sparks()
 	if pass then
 		UI.toast(`Thank you! {pass.name} is yours`, "good", 5)
 		return

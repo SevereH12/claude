@@ -1,9 +1,10 @@
 --!strict
 -- The store's server side (purchases themselves: Systems/Passes for Game
 -- Passes, Systems/Receipts for Volts packs):
---   * StartTrial: the free 3-minute 2x Volts trial, once per player ever
---     (profile.trialUsed), only without 2x Volts. Sales pay 2x while it runs
---     (Passes.payout); leaving early loses the rest.
+--   * StartTrial: the free 2x Volts trial, once per player ever
+--     (profile.trialUsed), only without 2x Volts: a 3-minute 2x Volts boost
+--     (Systems/Boosts), so like every boost it only counts down while they
+--     play. Its stats end when that boost runs out, or when they leave.
 --   * StoreEvent(kind, key): the client reports store visits and offers for
 --     the stats (Analytics): "open", "card" and "prompt" (pass or pack key)
 --     are store funnel steps 1-3; "offerShown" and "offerTapped" (offer key)
@@ -19,6 +20,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Analytics = require(script.Parent.Analytics)
+local Boosts = require(script.Parent.Boosts)
 local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
 local Sync = require(script.Parent.Sync)
@@ -45,15 +47,17 @@ for _, pack in Config.VOLT_PACKS do
 	itemKeys[pack.key] = true
 end
 
--- Trials running now (their session numbers, kept here so a leaving
--- player's trial can still be summed up).
-local trials: { [Player]: Types.StoreSession } = {}
+-- Trials running now: this session's store numbers and what 2x boosts had
+-- paid when the trial began (kept here so a leaving player's trial can
+-- still be summed up).
+type Trial = { session: Types.StoreSession, start: number }
+local trials: { [Player]: Trial } = {}
 
 local function endTrial(player: Player)
-	local session = trials[player]
-	if session then
+	local trial = trials[player]
+	if trial then
 		trials[player] = nil
-		Analytics.trialEnded(player, session.trialEarned)
+		Analytics.trialEnded(player, trial.session.boostEarned - trial.start)
 	end
 end
 
@@ -66,11 +70,12 @@ local function onStartTrial(player: Player)
 		return
 	end
 	profile.trialUsed = true
-	trials[player] = Passes.startTrial(player)
+	local session = Passes.storeSession(player)
+	trials[player] = { session = session, start = session.boostEarned }
+	Boosts.grant(player, "DoubleVolts", Config.STORE.trialSeconds)
 	Analytics.trialStarted(player)
 	Sync.markDirty(player)
 	print(`[Store] {player.Name} started the free 2x Volts trial`)
-	task.delay(Config.STORE.trialSeconds, endTrial, player)
 end
 
 local function onStoreEvent(player: Player, kind: unknown, key: unknown)
@@ -97,6 +102,11 @@ function Store.init()
 	Passes.Purchased:Connect(function(player: Player, pass: Types.PassDef)
 		purchased:FireAllClients(player.UserId, pass.key, 0)
 		Analytics.storeStep(player, 4)
+	end)
+	Boosts.Ended:Connect(function(player: Player, key: string)
+		if key == "DoubleVolts" then
+			endTrial(player)
+		end
 	end)
 	-- a trial cut short by leaving still counts as ended
 	Players.PlayerRemoving:Connect(endTrial)

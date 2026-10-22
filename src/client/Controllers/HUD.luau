@@ -4,6 +4,9 @@
 --   StormBottlerHUD (ScreenGui), every piece on a screen edge (LayoutMath.hud)
 --   ├── VoltsPanel   top left: ⚡ Volts (counts up)
 --   ├── StormPill    under Volts: "⚡ STORM 1:12" / "☀ STORM IN 0:15"
+--   ├── BoostRow     one chip per running timed boost ("⚡ 14:32"): a row
+--   │                under the storm timer, a column beside Volts on a
+--   │                sideways phone or tablet (LayoutMath.hud.boosts)
 --   ├── GoalCard     top right: the closest next goal and Volts towards it
 --   ├── BottleBar    bottom centre (top centre on touch): fill + "JAR 3 / 5",
 --   │                with the Chemist's TANK count beside it
@@ -12,8 +15,6 @@
 --                    up for 1.5s, then sells (keyboard V, gamepad L1).
 --                    Without the pass it shows locked while a full bottle is
 --                    far from a station (HUD.setSellNudge: Controllers/Offers)
--- While the free 2x Volts trial runs, a "2x TRIAL 2:41" chip sits at the
--- bar's left end.
 -- The MENU button (shop, research, teleport, boosts) is Controllers/Menu.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -56,7 +57,9 @@ local sellRing: Frame
 local sellProgress: UIGradient
 local hasRemoteSell = false
 local sellNudge: (() -> ())? = nil -- set while the locked SELL shows: what a tap does
-local trialChip: TextLabel
+local boostRow: Frame
+local boostList: UIListLayout
+local boostChips: { [string]: TextLabel } = {} -- by boost key
 local sellCharging = false
 local sellReadyAt = 0
 local goalCard: Frame
@@ -254,21 +257,43 @@ local function buildBottleBar()
 		Parent = bottleBar,
 	})
 	UI.maxText(tankLabel, 20)
+end
 
-	-- the free 2x Volts trial's time left, at the bar's other end
-	trialChip = UI.label({
-		Title = true,
-		Name = "Trial",
-		Text = "",
-		Visible = false,
-		TextColor3 = COLORS.text,
-		BackgroundColor3 = COLORS.green,
-		BackgroundTransparency = 0,
-		Size = UDim2.fromOffset(130, 24), -- room beside the TANK count on the narrowest bar
-		Parent = bottleBar,
+-- A chip per boost (Config.BOOSTS order), shown while it runs.
+local BOOST_COLORS: { [string]: Color3 } = {
+	DoubleVolts = COLORS.voltDeep,
+	Lucky = COLORS.green,
+	BigBottles = COLORS.stormDeep,
+}
+
+local function buildBoostRow()
+	boostRow = UI.make(Instance.new("Frame"), {
+		Name = "BoostRow",
+		BackgroundTransparency = 1,
+		Parent = screenGui,
 	})
-	UI.corner(trialChip, UDim.new(0.5, 0))
-	UI.maxText(trialChip, 18)
+	boostList = UI.make(Instance.new("UIListLayout"), {
+		Padding = UDim.new(0, LayoutMath.GAP),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = boostRow,
+	})
+	for index, boost in Config.BOOSTS do
+		local chip = UI.label({
+			Title = true,
+			Name = boost.key,
+			LayoutOrder = index,
+			Text = "",
+			Visible = false,
+			TextColor3 = COLORS.text,
+			BackgroundColor3 = BOOST_COLORS[boost.key] or COLORS.panelTop,
+			BackgroundTransparency = 0,
+			Parent = boostRow,
+		})
+		UI.corner(chip, UDim.new(0.5, 0))
+		UI.stroke(chip, 2)
+		UI.maxText(chip, 18)
+		boostChips[boost.key] = chip
+	end
 end
 
 -- The SELL button's charge-up ring: an outline that fills left to right.
@@ -375,13 +400,22 @@ function HUD.remoteSell()
 	end)
 end
 
-local function renderTrial()
+-- Each running boost's time left ("⚡ 14:32"; over an hour, "⚡ 1:05:00").
+local function renderBoosts()
 	local snapshot = State.current
-	local left = if snapshot then snapshot.store.trialEndsAt - workspace:GetServerTimeNow() else 0
-	trialChip.Visible = left > 0
-	if left > 0 then
-		local seconds = math.ceil(left)
-		trialChip.Text = string.format("2x TRIAL %d:%02d", seconds // 60, seconds % 60)
+	local now = workspace:GetServerTimeNow()
+	for index, boost in Config.BOOSTS do
+		local chip = boostChips[boost.key]
+		local ends = if snapshot then snapshot.boosts[boost.key] else nil
+		local left = if ends then math.ceil(ends - now) else 0
+		chip.Visible = left > 0
+		if left > 0 then
+			local clock = if left >= 3600
+				then string.format("%d:%02d:%02d", left // 3600, left // 60 % 60, left % 60)
+				else string.format("%d:%02d", left // 60, left % 60)
+			chip.Text = `{boost.icon} {clock}`
+			chip.LayoutOrder = index
+		end
 	end
 end
 
@@ -487,6 +521,19 @@ function HUD.place()
 	UI.place(voltsPanel, hud.volts)
 	UI.place(stormPill, hud.storm)
 	UI.place(goalCard, hud.goal)
+	-- the boosts' chips: three across a row, or stacked in a column
+	local boosts = hud.boosts
+	UI.place(boostRow, boosts)
+	local across = boosts.w > boosts.h
+	boostList.FillDirection = if across
+		then Enum.FillDirection.Horizontal
+		else Enum.FillDirection.Vertical
+	local chipSize = if across
+		then UDim2.new(1 / 3, -LayoutMath.GAP, 1, 0)
+		else UDim2.new(1, 0, 0, LayoutMath.HUD.boostHeight)
+	for _, chip in boostChips do
+		chip.Size = chipSize
+	end
 	local bar = hud.bar
 	local showSell = hasRemoteSell or sellNudge ~= nil
 	sellButton.Visible = showSell
@@ -510,8 +557,6 @@ function HUD.place()
 	local atBottom = not Layout.isTouch()
 	tankLabel.AnchorPoint = Vector2.new(1, if atBottom then 1 else 0)
 	tankLabel.Position = if atBottom then UDim2.new(1, -10, 0, -4) else UDim2.new(1, -10, 1, 4)
-	trialChip.AnchorPoint = Vector2.new(0, if atBottom then 1 else 0)
-	trialChip.Position = if atBottom then UDim2.new(0, 10, 0, -4) else UDim2.new(0, 10, 1, 4)
 end
 
 function HUD.init()
@@ -529,6 +574,7 @@ function HUD.init()
 	buildStormPill()
 	buildGoalCard()
 	buildBottleBar()
+	buildBoostRow()
 	buildSellButton()
 	HUD.place()
 	Layout.Changed:Connect(HUD.place)
@@ -546,7 +592,7 @@ function HUD.start()
 	Storm.Changed:Connect(renderStorm)
 	while true do
 		renderStorm()
-		renderTrial()
+		renderBoosts()
 		task.wait(0.25)
 	end
 end

@@ -1,10 +1,11 @@
 --!strict
 -- TEMPORARY test tool: the client's TEST buttons (Controllers/DevCommands)
 -- send DevCommand: "volts" sets that player's Volts, "premium" turns
--- Pretend Premium on or off, "pass" pretends to own a Game Pass. The repo
--- and client code are public, so this is the lock: it only obeys in Studio
--- play tests or, in a live server, the user who owns the place; Pretend
--- Premium and the pass toggles are Studio only. To remove it:
+-- Pretend Premium on or off, "pass" pretends to own a Game Pass, and
+-- "nextDay", "playtime" and "clearBoosts" test rewards (a day later, +5
+-- minutes of play, no boosts). The repo and client code are public, so this
+-- is the lock: it only obeys in Studio play tests or, in a live server, the
+-- user who owns the place; everything but "volts" is Studio only. To remove it:
 -- delete this file and Controllers/DevCommands.luau, and take "DevCommand"
 -- out of Shared/Remotes.
 
@@ -14,12 +15,15 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 local Net = require(ReplicatedStorage.Shared.Net)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
+local Boosts = require(script.Parent.Boosts)
 local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
+local Rewards = require(script.Parent.Rewards)
 local Sync = require(script.Parent.Sync)
 local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
 
 local INFINITE_VOLTS = 1e12
+local PLAYTIME_STEP = 5 * 60 -- seconds "+5 min playtime" adds
 
 local DevCommands = {}
 
@@ -83,6 +87,17 @@ local function onCommand(player: Player, name: unknown, value: unknown, extra: u
 		setPretendPremium(player, value)
 	elseif name == "pass" then
 		setPretendPass(player, value, extra)
+	elseif not RunService:IsStudio() then
+		return
+	elseif name == "nextDay" then
+		Rewards.nextDay(player)
+		print(`[DevCommands] {player.Name}: a day later`)
+	elseif name == "playtime" then
+		Rewards.addPlaytime(player, PLAYTIME_STEP)
+		print(`[DevCommands] {player.Name}: +5 min playtime`)
+	elseif name == "clearBoosts" then
+		Boosts.clear(player)
+		print(`[DevCommands] {player.Name}: boosts cleared`)
 	end
 end
 

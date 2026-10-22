@@ -28,15 +28,30 @@ Sync.setupUntil = {} :: { [Player]: { [string]: number } }
 Sync.passes = {} :: { [Player]: PassRules.Owned }
 Sync.store = {} :: { [Player]: Types.StoreSession }
 
-local NO_STORE: Types.StoreSession =
-	table.freeze({ trialEndsAt = 0, trialEarned = 0, missedDouble = 0 })
+-- Owned by Systems/Rewards: per player, this session's playtime gifts.
+Sync.rewards = {} :: { [Player]: Types.RewardSession }
+
+local NO_STORE: Types.StoreSession = table.freeze({ boostEarned = 0, missedDouble = 0 })
 
 function Sync.markDirty(player: Player)
 	dirty[player] = true
 end
 
+-- When each running boost ends, in server time (they count down while the
+-- player is here, so the client can count down too).
+local function boostEnds(profile: Types.Profile): { [string]: number }
+	local now = workspace:GetServerTimeNow()
+	local ends: { [string]: number } = {}
+	for key, left in profile.boosts do
+		ends[key] = now + left
+	end
+	return ends
+end
+
 local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapshot
 	local passes = Sync.passes[player] or {}
+	local effects = PassRules.withBoosts(passes, profile.boosts)
+	local rewards = Sync.rewards[player]
 	return {
 		volts = profile.volts,
 		totalVolts = profile.totalVolts,
@@ -50,9 +65,19 @@ local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapsho
 		setupUntil = Sync.setupUntil[player] or {},
 		premium = Progression.playerIsPremium(player),
 		passes = passes,
-		capacity = PassRules.capacity(Formulas.capacity(profile.bottleTier), passes),
+		capacity = PassRules.capacity(Formulas.capacity(profile.bottleTier), effects),
 		trialUsed = profile.trialUsed,
 		store = Sync.store[player] or NO_STORE,
+		boosts = boostEnds(profile),
+		daily = {
+			streak = profile.dailyStreak,
+			lastDay = profile.lastDailyDay,
+			dayOffset = if rewards then rewards.dayOffset else 0,
+		},
+		gifts = {
+			startedAt = if rewards then rewards.startedAt else workspace:GetServerTimeNow(),
+			claimed = if rewards then rewards.claimed else {},
+		},
 	}
 end
 
@@ -85,6 +110,7 @@ function Sync.init()
 		Sync.setupUntil[player] = nil
 		Sync.passes[player] = nil
 		Sync.store[player] = nil
+		Sync.rewards[player] = nil
 	end)
 end
 

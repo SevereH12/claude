@@ -139,20 +139,23 @@ check(
 )
 check(Passes.boltColour({ BoltColours = true }, 99) == nil, "an out-of-range pick: default")
 
--- a sale broken down: 2x Volts' missed extra, and the free trial's extra
+-- a sale broken down: 2x Volts' missed extra, and a 2x boost's extra
 do
-	local earned, missed, trialExtra = Passes.saleBreakdown(100, none, false)
-	check(earned == 100 and missed == 100 and trialExtra == 0, "no pass: 2x would have paid +100")
-	earned, missed, trialExtra = Passes.saleBreakdown(100, none, true)
-	check(earned == 200 and missed == 0 and trialExtra == 100, "the trial pays 2x and says so")
-	earned, missed, trialExtra = Passes.saleBreakdown(100, { DoubleVolts = true }, false)
-	check(earned == 200 and missed == 0 and trialExtra == 0, "owners miss nothing")
-	earned, missed, trialExtra = Passes.saleBreakdown(100, { DoubleVolts = true }, true)
-	check(earned == 200 and trialExtra == 0, "the trial adds nothing for owners")
-	earned, missed, trialExtra = Passes.saleBreakdown(100, { VIP = true }, false)
+	local two = { DoubleVolts = 60 } -- a running 2x boost (the free trial is one)
+	local earned, missed, boostExtra = Passes.saleBreakdown(100, none, {})
+	check(earned == 100 and missed == 100 and boostExtra == 0, "no pass: 2x would have paid +100")
+	earned, missed, boostExtra = Passes.saleBreakdown(100, none, two)
+	check(earned == 200 and missed == 0 and boostExtra == 100, "a 2x boost pays 2x and says so")
+	earned, missed, boostExtra = Passes.saleBreakdown(100, { DoubleVolts = true }, {})
+	check(earned == 200 and missed == 0 and boostExtra == 0, "owners miss nothing")
+	earned, missed, boostExtra = Passes.saleBreakdown(100, { DoubleVolts = true }, two)
+	check(earned == 200 and boostExtra == 0, "a 2x boost adds nothing for owners")
+	earned, missed, boostExtra = Passes.saleBreakdown(100, { VIP = true }, {})
 	check(earned == 110 and missed == 110, "VIP: 2x would have paid +110")
-	earned, missed, trialExtra = Passes.saleBreakdown(100, { VIP = true }, true)
-	check(earned == 220 and trialExtra == 110, "VIP on the trial: 2.2x")
+	earned, missed, boostExtra = Passes.saleBreakdown(100, { VIP = true }, two)
+	check(earned == 220 and boostExtra == 110, "VIP with a 2x boost: 2.2x")
+	earned, missed, boostExtra = Passes.saleBreakdown(100, none, { Lucky = 60 })
+	check(earned == 100 and missed == 100 and boostExtra == 0, "other boosts don't change sales")
 end
 
 -- every pass at once still works
