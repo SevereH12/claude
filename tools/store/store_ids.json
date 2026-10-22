@@ -1,0 +1,19 @@
+{
+  "universeId": 10772352394,
+  "passes": {
+    "DoubleVolts": 2048024542,
+    "RemoteSell": 2046141229,
+    "BigBottles": 2045925293,
+    "LuckyCharges": 2045049270,
+    "LabGrant": 2046189262,
+    "VIP": 2044617289,
+    "BoltColours": 2045751309,
+    "JetBoots": 2045211315
+  },
+  "products": {
+    "PocketCharge": 3720985702,
+    "StormJar": 3720985707,
+    "ThunderCrate": 3720985721,
+    "LightningVault": 3720985735
+  }
+}
