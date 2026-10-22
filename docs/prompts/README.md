@@ -28,6 +28,11 @@ and stops if it isn't. To run one, say: "Do `docs/prompts/<file>`".
    the store, and 2x Volts, Remote Sell, Big Bottles and Lucky Charges.
    Part B: Lab Grant, VIP, Bolt Colours and Jet Boots. Part C: Volts packs,
    offers when a pass would help, a free 2x Volts trial, and store stats.
+9. `9-rewards.md`: **run it twice.** Part A: timed boosts, a 7-day login
+   streak, playtime gifts and a REWARDS panel. Part B: +10% Volts for
+   members of the Super Studio group (with an in-game join button), "reward
+   ready" nudges and stats. No like rewards (Roblox can't detect likes, and
+   its rules forbid rewarding them).
 
 Researchers (all five parts done) live in `researchers/`.
 
