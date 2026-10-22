@@ -213,28 +213,63 @@ local ZONES: { [string]: Types.ZoneDef } = {
 	},
 }
 
--- The Boosts store (menu). LAYOUT ONLY for now: nothing here is on sale
--- yet, and Buy just says "coming soon". Game Passes need an id from the
--- Creator Dashboard and code for their effect; Volts packs need a
--- Developer Product id and a purchase receipt handler on the server.
+-- Game Passes (the Boosts store's GAME PASSES tab; Systems/Passes and
+-- Util/Passes). `id` is the pass's asset id from the Creator Dashboard (0 =
+-- not made yet: the card says COMING SOON); `image` its icon's asset id
+-- (0 = show `icon`). Both come from tools/store/store_ids.json. `price` is
+-- Robux, shown only until Roblox's real price loads.
+local PASSES: { Types.PassDef } = {
+	{
+		key = "DoubleVolts",
+		id = 2048024542,
+		image = 95848544228868,
+		name = "2x Volts",
+		icon = "⚡",
+		detail = "Every sale pays double Volts",
+		price = 249,
+	},
+	{
+		key = "RemoteSell",
+		id = 2046141229,
+		image = 136457008950452,
+		name = "Remote Sell",
+		icon = "📡",
+		detail = "A SELL button that works anywhere",
+		price = 199,
+	},
+	{
+		key = "BigBottles",
+		id = 2045925293,
+		image = 72710876564301,
+		name = "Big Bottles",
+		icon = "🧪",
+		detail = "Every bottle holds 50% more",
+		price = 149,
+	},
+	{
+		key = "LuckyCharges",
+		id = 2045049270,
+		image = 121828277208800,
+		name = "Lucky Charges",
+		icon = "🍀",
+		detail = "Each charge you catch has a 15% chance to be worth double",
+		price = 149,
+	},
+}
+
+-- What the passes do (Util/Passes).
+local PASS_VALUES = {
+	doubleVolts = 2, -- 2x Volts: sale multiplier
+	bigBottles = 1.5, -- Big Bottles: capacity multiplier (rounded down)
+	luckyChance = 0.15, -- Lucky Charges: chance a caught charge is worth double
+	remoteSellCooldown = 5, -- seconds between Remote Sells
+	remoteSellChargeUp = 1.5, -- seconds the SELL button charges before it fires
+}
+
+-- The Boosts store's VOLTS tab. LAYOUT ONLY for now (prompt 8 part C):
+-- Volts packs need a Developer Product id and a purchase receipt handler.
 -- Prices are in Robux.
 local STORE = {
-	passes = {
-		{
-			name = "2x Volts",
-			icon = "⚡",
-			detail = "Double Volts every time you sell",
-			price = 199,
-		},
-		{
-			name = "Big Bottles",
-			icon = "🧪",
-			detail = "Every bottle holds 50% more",
-			price = 149,
-		},
-		{ name = "Speed Boots", icon = "👟", detail = "Run faster everywhere", price = 99 },
-		{ name = "VIP", icon = "👑", detail = "VIP tag and a golden bottle", price = 299 },
-	},
 	volts = {
 		{ name = "Pocket Charge", icon = "🔋", volts = 5_000, price = 49 },
 		{ name = "Storm Jar", icon = "⚡", volts = 25_000, price = 199 },
@@ -284,6 +319,8 @@ return table.freeze({
 	BOOTS = table.freeze(BOOTS),
 	WORLDS = table.freeze(WORLDS),
 	ZONES = table.freeze(ZONES),
+	PASSES = table.freeze(PASSES),
+	PASS_VALUES = table.freeze(PASS_VALUES),
 	STORE = table.freeze(STORE),
 
 	-- Placeholder sounds (built into Roblox). Swap for Creator Store sounds.

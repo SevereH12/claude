@@ -1,29 +1,49 @@
 --!strict
 -- Boosts panel (from the menu): the store. Two tabs, GAME PASSES and VOLTS,
--- each a grid of cards (icon, name, what it gives, Robux price). LAYOUT
--- ONLY: nothing is on sale yet (Config.STORE), so Buy says "coming soon".
+-- each a grid of cards (icon, name, what it gives, Robux price).
+--   GAME PASSES: Config.PASSES. The price shown is Roblox's (GetProductInfo:
+--     price optimization can personalise it); Config's price only shows
+--     until that loads. BUY opens Roblox's purchase window, only when
+--     tapped; the server grants the pass (Systems/Passes). Owned passes say
+--     OWNED; a pass with no id yet says COMING SOON.
+--   VOLTS: LAYOUT ONLY for now (Config.STORE.volts): Buy says "coming soon".
 
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
+local Types = require(ReplicatedStorage.Shared.Types)
 local Layout = require(script.Parent.Parent.Lib.Layout)
 local UI = require(script.Parent.Parent.Lib.UI)
+local State = require(script.Parent.State)
 
 local COLORS = UI.COLORS
 local ROBUX = utf8.char(0xE002) -- Roblox's fonts draw the Robux icon for this
 local CARD_HEIGHT = 168
 local TAB_HEIGHT = 46
 
-type Card = { icon: string, name: string, detail: string, price: number }
+type Card = {
+	icon: string,
+	image: number, -- icon asset id, 0 = show the emoji
+	name: string,
+	detail: string,
+	price: number,
+}
+type CardParts = { buy: TextButton, status: TextLabel }
+type PassCard = { pass: Types.PassDef, parts: CardParts }
 type Tab = { button: TextButton, grid: ScrollingFrame }
 
 local BoostsUI = {}
 
+local player = Players.LocalPlayer
 local panel: Frame
 local tabs: { Tab } = {}
 local grids: { UIGridLayout } = {}
+local passCards: { PassCard } = {}
+local prices: { [number]: number } = {} -- pass id -> Robux, from Roblox
 
 function BoostsUI.open()
 	UI.openPanel(panel)
@@ -56,7 +76,7 @@ local function fitColumns()
 	end
 end
 
-local function buildCard(parent: Instance, order: number, card: Card)
+local function buildCard(parent: Instance, order: number, card: Card): CardParts
 	local frame = UI.make(Instance.new("Frame"), {
 		Name = card.name,
 		LayoutOrder = order,
@@ -65,20 +85,33 @@ local function buildCard(parent: Instance, order: number, card: Card)
 	})
 	UI.corner(frame, UDim.new(0, 14))
 	UI.stroke(frame, 3)
-	local icon = UI.label({
-		Title = true,
-		Text = card.icon,
-		Position = UDim2.fromOffset(10, 10),
-		Size = UDim2.fromOffset(54, 54),
-		Parent = frame,
-	})
-	UI.maxText(icon, 44)
+	if card.image ~= 0 then
+		local image = UI.make(Instance.new("ImageLabel"), {
+			Name = "Icon",
+			Image = `rbxassetid://{card.image}`,
+			BackgroundTransparency = 1,
+			ScaleType = Enum.ScaleType.Fit,
+			Position = UDim2.fromOffset(8, 8),
+			Size = UDim2.fromOffset(58, 58),
+			Parent = frame,
+		})
+		UI.corner(image, UDim.new(0, 10))
+	else
+		local icon = UI.label({
+			Title = true,
+			Text = card.icon,
+			Position = UDim2.fromOffset(10, 10),
+			Size = UDim2.fromOffset(54, 54),
+			Parent = frame,
+		})
+		UI.maxText(icon, 44)
+	end
 	local name = UI.label({
 		Title = true,
 		Text = string.upper(card.name),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.new(0, 72, 0, 12),
-		Size = UDim2.new(1, -82, 0, 26),
+		Position = UDim2.new(0, 76, 0, 12),
+		Size = UDim2.new(1, -86, 0, 26),
 		Parent = frame,
 	})
 	UI.maxText(name, 24)
@@ -88,19 +121,19 @@ local function buildCard(parent: Instance, order: number, card: Card)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextWrapped = true,
-		Position = UDim2.new(0, 72, 0, 40),
-		Size = UDim2.new(1, -82, 0, 40),
+		Position = UDim2.new(0, 76, 0, 40),
+		Size = UDim2.new(1, -86, 0, 42),
 		Parent = frame,
 	})
 	UI.maxText(detail, 17)
-	local soon = UI.label({
-		Text = "COMING SOON",
+	local status = UI.label({
+		Text = "",
 		TextColor3 = COLORS.volt,
 		Position = UDim2.new(0, 10, 0, 86),
 		Size = UDim2.new(1, -20, 0, 16),
 		Parent = frame,
 	})
-	UI.maxText(soon, 14)
+	UI.maxText(status, 14)
 	local buy = UI.button({
 		Name = "Buy",
 		Text = `{ROBUX} {Format.abbreviate(card.price)}`,
@@ -111,13 +144,77 @@ local function buildCard(parent: Instance, order: number, card: Card)
 		Parent = frame,
 	})
 	UI.maxText(buy, 24)
-	buy.Activated:Connect(function()
-		UI.pop(buy)
-		UI.toast(`{card.name} is coming soon!`, "volt")
+	return { buy = buy, status = status }
+end
+
+-- Every pass card: OWNED, COMING SOON, or its price and BUY.
+local function renderPasses()
+	local owned = if State.current then State.current.passes else {}
+	for _, card in passCards do
+		local pass, parts = card.pass, card.parts
+		if owned[pass.key] then
+			parts.buy.Text = "✓ OWNED"
+			parts.status.Text = ""
+			UI.setEnabled(parts.buy, false, COLORS.green)
+		elseif pass.id == 0 then
+			parts.buy.Text = `{ROBUX} {Format.abbreviate(pass.price)}`
+			parts.status.Text = "COMING SOON"
+			UI.setEnabled(parts.buy, false, COLORS.green)
+		else
+			parts.buy.Text = `{ROBUX} {Format.abbreviate(prices[pass.id] or pass.price)}`
+			parts.status.Text = ""
+			UI.setEnabled(parts.buy, true, COLORS.green)
+		end
+	end
+end
+
+-- Roblox's real price for a pass, once per session.
+local function loadPrice(pass: Types.PassDef)
+	if pass.id == 0 or prices[pass.id] then
+		return
+	end
+	task.spawn(function()
+		local ok, info = pcall(function()
+			return MarketplaceService:GetProductInfo(pass.id, Enum.InfoType.GamePass)
+		end)
+		if ok and typeof(info) == "table" and typeof(info.PriceInRobux) == "number" then
+			prices[pass.id] = info.PriceInRobux
+			renderPasses()
+		end
 	end)
 end
 
-local function buildTab(body: Frame, order: number, title: string, cards: { Card }): Tab
+local function buildPassCard(grid: Instance, order: number, pass: Types.PassDef)
+	local parts = buildCard(grid, order, {
+		icon = pass.icon,
+		image = pass.image,
+		name = pass.name,
+		detail = pass.detail,
+		price = pass.price,
+	})
+	parts.buy.Activated:Connect(function()
+		UI.pop(parts.buy)
+		local owned = State.current and State.current.passes[pass.key]
+		if owned then
+			return
+		elseif pass.id == 0 then
+			UI.toast(`{pass.name} is coming soon!`, "volt")
+			return
+		end
+		-- only ever because the player tapped BUY
+		local ok, err = pcall(function()
+			MarketplaceService:PromptGamePassPurchase(player, pass.id)
+		end)
+		if not ok then
+			warn(`[BoostsUI] couldn't open the purchase window: {err}`)
+			UI.toast("The store isn't available right now. Try again soon.", "warn")
+		end
+	end)
+	table.insert(passCards, { pass = pass, parts = parts })
+	loadPrice(pass)
+end
+
+local function buildTab(body: Frame, order: number, title: string): (Tab, ScrollingFrame)
 	local button = UI.button({
 		Name = title,
 		Text = title,
@@ -150,16 +247,13 @@ local function buildTab(body: Frame, order: number, title: string, cards: { Card
 		PaddingLeft = UDim.new(0, 4),
 		Parent = grid,
 	})
-	for index, card in cards do
-		buildCard(grid, index, card)
-	end
 	local tab = { button = button, grid = grid }
 	button.Activated:Connect(function()
 		UI.pop(button)
 		selectTab(tab)
 	end)
 	table.insert(tabs, tab)
-	return tab
+	return tab, grid
 end
 
 function BoostsUI.init()
@@ -167,27 +261,34 @@ function BoostsUI.init()
 	local window = UI.window(root, "BoostsPanel", "🚀 BOOSTS", COLORS.volt, Vector2.new(680, 560))
 	panel = window.panel
 
-	local passes: { Card } = {}
-	for _, pass in Config.STORE.passes do
-		table.insert(
-			passes,
-			{ icon = pass.icon, name = pass.name, detail = pass.detail, price = pass.price }
-		)
+	local first, passGrid = buildTab(window.body, 1, "GAME PASSES")
+	for index, pass in Config.PASSES do
+		buildPassCard(passGrid, index, pass)
 	end
-	local volts: { Card } = {}
-	for _, pack in Config.STORE.volts do
-		table.insert(volts, {
+	local _, voltGrid = buildTab(window.body, 2, "VOLTS")
+	for index, pack in Config.STORE.volts do
+		local parts = buildCard(voltGrid, index, {
 			icon = pack.icon,
+			image = 0,
 			name = pack.name,
 			detail = `+{Format.abbreviate(pack.volts)} ⚡ Volts`,
 			price = pack.price,
 		})
+		parts.status.Text = "COMING SOON"
+		parts.buy.Activated:Connect(function()
+			UI.pop(parts.buy)
+			UI.toast(`{pack.name} is coming soon!`, "volt")
+		end)
 	end
-	local first = buildTab(window.body, 1, "GAME PASSES", passes)
-	buildTab(window.body, 2, "VOLTS", volts)
 	selectTab(first)
 	fitColumns()
 	Layout.Changed:Connect(fitColumns)
+	renderPasses()
+end
+
+function BoostsUI.start()
+	renderPasses()
+	State.Changed:Connect(renderPasses)
 end
 
 return BoostsUI

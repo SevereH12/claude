@@ -531,7 +531,15 @@ local function onLanded(landed: Types.StrikeLanded)
 		cameraShake(0.3, 0.7)
 		popup(`+{Format.abbreviate(landed.values[caught] or landed.value)} ⚡`, true, 0.42)
 		playSound(Config.SOUNDS.CATCH, screenGui, 1.2)
-		if table.find(landed.assayed, player.UserId) then
+		-- the Analyst's assay and Lucky Charges each double it
+		local assayed = table.find(landed.assayed, player.UserId) ~= nil
+		local lucky = table.find(landed.lucky, player.UserId) ~= nil
+		if assayed and lucky then
+			popup("x4 JACKPOT", true, 0.5, 0.075)
+			cameraShake(0.25, 0.5)
+		elseif lucky then
+			popup("x2 LUCKY", true, 0.5, 0.06)
+		elseif assayed then
 			popup("x2 ASSAYED", true, 0.5, 0.06)
 		end
 	elseif table.find(landed.tanked, player.UserId) then

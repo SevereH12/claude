@@ -35,8 +35,9 @@ function Formulas.fill(size: number, value: number, room: number): (number, numb
 	return units, math.max(1, math.floor(value * units / size))
 end
 
-function Formulas.isFull(state: { bottleTier: number, chargeCount: number }): boolean
-	return state.chargeCount >= Formulas.capacity(state.bottleTier)
+-- `capacity`: the player's own (Systems/Passes.capacity: Big Bottles included).
+function Formulas.isFull(chargeCount: number, capacity: number): boolean
+	return chargeCount >= capacity
 end
 
 function Formulas.boots(tier: number): Types.BootsDef

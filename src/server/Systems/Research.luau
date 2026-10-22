@@ -16,8 +16,8 @@ local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local ResearchSites = require(ReplicatedStorage.Shared.Util.ResearchSites)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
-local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local Analytics = require(script.Parent.Analytics)
+local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
 local StormCycle = require(script.Parent.StormCycle)
 local Sync = require(script.Parent.Sync)
@@ -203,7 +203,7 @@ local function emptyTank(player: Player, profile: Types.Profile)
 	if not root or ResearchSites.campAt(root.Position) ~= save.post then
 		return
 	end
-	local room = Formulas.capacity(profile.bottleTier) - profile.chargeCount
+	local room = Passes.capacity(player, profile) - profile.chargeCount
 	if room <= 0 then
 		return
 	end

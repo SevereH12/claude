@@ -15,6 +15,7 @@ local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
 local Analytics = require(script.Parent.Analytics)
+local Passes = require(script.Parent.Passes)
 local Research = require(script.Parent.Research)
 local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local PlayerData = require(script.Parent.PlayerData)
@@ -113,6 +114,7 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, owner
 	local full: { number } = {}
 	local assayed: { number } = {}
 	local tanked: { number } = {}
+	local lucky: { number } = {}
 
 	-- everyone inside with room in their bottle (or their Chemist's tank),
 	-- closest first
@@ -137,13 +139,14 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, owner
 			local tankRoom = if chemist
 				then ResearchMath.tankCapacity(chemist) - profile.tankCount
 				else 0
-			if not Formulas.isFull(profile) then
+			local capacity = Passes.capacity(player, profile)
+			if not Formulas.isFull(profile.chargeCount, capacity) then
 				table.insert(candidates, {
 					player = player,
 					profile = profile,
 					distance = distance,
 					toTank = false,
-					room = Formulas.capacity(profile.bottleTier) - profile.chargeCount,
+					room = capacity - profile.chargeCount,
 				})
 			elseif tankRoom > 0 then
 				table.insert(candidates, {
@@ -179,6 +182,12 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, owner
 			value *= 2
 			table.insert(assayed, candidate.player.UserId)
 		end
+		-- Lucky Charges: a second, separate double (both hitting is x4)
+		local luck = Passes.luckChance(candidate.player)
+		if luck > 0 and random:NextNumber() < luck then
+			value *= 2
+			table.insert(lucky, candidate.player.UserId)
+		end
 		if candidate.toTank then
 			candidate.profile.tankCount += units
 			candidate.profile.tankValue += value
@@ -203,6 +212,7 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, owner
 		full = full,
 		assayed = assayed,
 		tanked = tanked,
+		lucky = lucky,
 		ownerId = ownerId,
 	}
 	if ownerId then

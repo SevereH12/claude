@@ -7,7 +7,8 @@
 -- does NOT use Touched: touch events depend on the player's client
 -- reporting the contact, which can silently stop working (streaming,
 -- replaced parts, touch replication). Position checks on the server can't.
--- There is no "sell" remote, so there is nothing for a client to spam.
+-- The only sell remote is RemoteSell, for owners of the Remote Sell pass
+-- (Systems/RemoteSell): it pays through Selling.payOut, like a station.
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -15,9 +16,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
+local Types = require(ReplicatedStorage.Shared.Types)
 local Volumes = require(ReplicatedStorage.Shared.Util.Volumes)
 local Analytics = require(script.Parent.Analytics)
 local Map = require(script.Parent.Map)
+local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
 local Sync = require(script.Parent.Sync)
 
@@ -28,6 +31,7 @@ local LEGACY_PAD_HEIGHT = 12
 local LEGACY_PAD_MARGIN = 2
 
 local lastSell: { [Player]: number } = {}
+local soldRemote: RemoteEvent
 
 local Selling = {}
 
@@ -68,7 +72,22 @@ local function livingRoot(player: Player): BasePart?
 	return root
 end
 
-local function sell(soldRemote: RemoteEvent, player: Player)
+-- Turns everything in the bottle into Volts (2x Volts included). Every
+-- sale, at a station or remote, goes through here.
+function Selling.payOut(player: Player, profile: Types.Profile)
+	local earned = math.floor(profile.chargeValue * Passes.sellMultiplier(player))
+	local count = profile.chargeCount
+	profile.volts += earned
+	profile.totalVolts += earned
+	profile.chargeCount = 0
+	profile.chargeValue = 0
+	Sync.markDirty(player)
+	Analytics.sold(player, earned)
+	soldRemote:FireClient(player, earned, count)
+end
+
+-- The station path: alive, inside a SellArea, with charges.
+local function sellAtStation(player: Player)
 	local profile = PlayerData.get(player)
 	if not profile or profile.chargeCount <= 0 then
 		return
@@ -82,20 +101,19 @@ local function sell(soldRemote: RemoteEvent, player: Player)
 		return
 	end
 	lastSell[player] = now
+	Selling.payOut(player, profile)
+end
 
-	local earned = profile.chargeValue
-	local count = profile.chargeCount
-	profile.volts += earned
-	profile.totalVolts += earned
-	profile.chargeCount = 0
-	profile.chargeValue = 0
-	Sync.markDirty(player)
-	Analytics.sold(player, earned)
-	soldRemote:FireClient(player, earned, count)
+-- Is this player alive (a character with health)?
+function Selling.isAlive(player: Player): boolean
+	return livingRoot(player) ~= nil
+end
+
+function Selling.init()
+	soldRemote = Net.get("Sold")
 end
 
 function Selling.start()
-	local soldRemote = Net.get("Sold")
 	if #sellAreas() == 0 and not Map.sellPad() then
 		warn(
 			`[Selling] no part tagged "{SELL_TAG}" and no Map.PowerPlant.SellPad; selling disabled`
@@ -107,7 +125,7 @@ function Selling.start()
 	while true do
 		task.wait(CHECK_INTERVAL)
 		for _, player in Players:GetPlayers() do
-			sell(soldRemote, player)
+			sellAtStation(player)
 		end
 	end
 end

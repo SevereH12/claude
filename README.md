@@ -73,6 +73,25 @@ Data only shows up after the place is published and played on Roblox, not
 from Studio, and can take a day to appear. The built-in **Retention** and
 **Engagement** pages already show D1/D7 retention and average session time.
 
+## Selling passes
+
+The Boosts store (MENU → BOOSTS) sells the Game Passes in `Config.PASSES`;
+`Systems/Passes` checks who owns what and grants purchases on the server.
+To add or change a pass:
+
+1. On the Creator Dashboard: your experience → **Monetization** →
+   **Passes** → **Create a Pass**. Upload a 512x512 image and give it a
+   name and description, then set it on sale with a price.
+   (`tools/store/create_store.py` already made all eight passes this way,
+   off sale; their ids are in `tools/store/store_ids.json`.)
+2. Copy the pass's asset id into its `id` in `Config.PASSES`. A pass with
+   `id = 0` shows COMING SOON. The store shows the price Roblox reports;
+   `price` in Config is only shown until that loads.
+3. Test in Studio with the TEST panel's **PASSES** toggles ("Pretend owns"):
+   they only work in Studio. Pressing BUY in Studio opens a purchase window
+   that says it's a test purchase, so no Robux are spent.
+4. See sales under **Monetization** → **Passes** → **Analytics**.
+
 ## Code layout
 
 - `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas, zone geometry

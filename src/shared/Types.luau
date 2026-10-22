@@ -37,6 +37,8 @@ export type Snapshot = {
 	tankValue: number,
 	setupUntil: { [string]: number }, -- role id -> workspace:GetServerTimeNow() when set up
 	premium: boolean, -- counts as Premium for zone entry (decided by the server)
+	passes: { [string]: boolean }, -- Game Passes owned, by key (Config.PASSES)
+	capacity: number, -- the bottle's real capacity (Big Bottles included)
 }
 
 export type StormPhase = "Storm" | "Calm"
@@ -95,6 +97,17 @@ export type ResearcherDef = {
 	values: { number },
 }
 
+-- A Game Pass in the Boosts store (Config.PASSES).
+export type PassDef = {
+	key: string,
+	id: number, -- game pass asset id (0 = not created yet)
+	image: number, -- icon asset id (0 = use `icon`)
+	name: string,
+	icon: string, -- emoji fallback
+	detail: string,
+	price: number, -- Robux, a fallback until the real price loads
+}
+
 export type BottleDef = {
 	name: string,
 	capacity: number,
@@ -140,6 +153,7 @@ export type StrikeLanded = {
 	full: { number },
 	assayed: { number }, -- catchers whose charge was high grade (worth double)
 	tanked: { number }, -- full players whose charge went into their Chemist's tank
+	lucky: { number }, -- Lucky Charges catchers whose roll doubled the charge
 	ownerId: number?, -- Storm Chaser balloon bolt: only this UserId could catch it
 }
 

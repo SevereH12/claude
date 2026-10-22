@@ -3,7 +3,8 @@
 -- The server creates them at startup; the client only waits for them.
 --
 -- Server -> client: StateSnapshot, StormState, StrikeWarning, StrikeLanded, Sold, Forecast
--- Client -> server: BuyBottle, BuyBoots, HireResearcher, PostResearcher, DevCommand, Teleport
+-- Client -> server: BuyBottle, BuyBoots, HireResearcher, PostResearcher, DevCommand, Teleport,
+-- RemoteSell
 
 export type RemoteName =
 	"StateSnapshot"
@@ -18,6 +19,7 @@ export type RemoteName =
 	| "PostResearcher"
 	| "DevCommand"
 	| "Teleport"
+	| "RemoteSell"
 
 local NAMES: { RemoteName } = {
 	"StateSnapshot",
@@ -32,6 +34,7 @@ local NAMES: { RemoteName } = {
 	"PostResearcher",
 	"DevCommand",
 	"Teleport",
+	"RemoteSell",
 }
 
 return table.freeze(NAMES)

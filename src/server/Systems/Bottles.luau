@@ -4,9 +4,8 @@
 -- everyone can see how full everyone else's bottle is).
 
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
+local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
 
 local BOTTLE_NAME = "Bottle"
@@ -133,7 +132,7 @@ local function updateFill(player: Player)
 	if not profile or not charge or not charge:IsA("BasePart") then
 		return
 	end
-	local fraction = math.clamp(profile.chargeCount / Formulas.capacity(profile.bottleTier), 0, 1)
+	local fraction = math.clamp(profile.chargeCount / Passes.capacity(player, profile), 0, 1)
 	local full = fraction >= 1
 	local transparency = if fraction > 0 then 0.75 - fraction * 0.6 else 1
 	if

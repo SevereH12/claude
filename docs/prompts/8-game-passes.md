@@ -5,7 +5,7 @@ Follow the rules in `docs/prompts/README.md`.
 **Run it three times.** Each run does the first part below that isn't
 ticked, then ticks it:
 
-- [ ] Part A: the pass system, the store, and 2x Volts, Remote Sell, Big
+- [x] Part A: the pass system, the store, and 2x Volts, Remote Sell, Big
   Bottles and Lucky Charges
 - [ ] Part B: Lab Grant, VIP, Bolt Colours and Jet Boots
 - [ ] Part C: Volts packs, offers at the right moment, the free trial and

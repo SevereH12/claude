@@ -1,9 +1,10 @@
 --!strict
 -- TEMPORARY test tool: the client's TEST buttons (Controllers/DevCommands)
 -- send DevCommand: "volts" sets that player's Volts, "premium" turns
--- Pretend Premium on or off. The repo and client code are public, so this
--- is the lock: it only obeys in Studio play tests or, in a live server, the
--- user who owns the place; Pretend Premium is Studio only. To remove it:
+-- Pretend Premium on or off, "pass" pretends to own a Game Pass. The repo
+-- and client code are public, so this is the lock: it only obeys in Studio
+-- play tests or, in a live server, the user who owns the place; Pretend
+-- Premium and the pass toggles are Studio only. To remove it:
 -- delete this file and Controllers/DevCommands.luau, and take "DevCommand"
 -- out of Shared/Remotes.
 
@@ -13,6 +14,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 local Net = require(ReplicatedStorage.Shared.Net)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
+local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
 local Sync = require(script.Parent.Sync)
 local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
@@ -62,7 +64,16 @@ local function setPretendPremium(player: Player, on: unknown)
 	print(`[DevCommands] {player.Name} Pretend Premium {if on then "on" else "off"}`)
 end
 
-local function onCommand(player: Player, name: unknown, value: unknown)
+-- "Pretend owns <pass>": Passes.setPretend ignores it outside Studio.
+local function setPretendPass(player: Player, key: unknown, on: unknown)
+	if not RunService:IsStudio() or typeof(key) ~= "string" or typeof(on) ~= "boolean" then
+		return
+	end
+	Passes.setPretend(player, key, on)
+	print(`[DevCommands] {player.Name} Pretend owns {key} {if on then "on" else "off"}`)
+end
+
+local function onCommand(player: Player, name: unknown, value: unknown, extra: unknown)
 	if not RateLimit.allow(player, "DevCommand", 2, 4) or not isOwner(player) then
 		return
 	end
@@ -70,6 +81,8 @@ local function onCommand(player: Player, name: unknown, value: unknown)
 		setVolts(player, value)
 	elseif name == "premium" then
 		setPretendPremium(player, value)
+	elseif name == "pass" then
+		setPretendPass(player, value, extra)
 	end
 end
 

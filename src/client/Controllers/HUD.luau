@@ -5,26 +5,34 @@
 --   ├── VoltsPanel   top left: ⚡ Volts (counts up)
 --   ├── StormPill    under Volts: "⚡ STORM 1:12" / "☀ STORM IN 0:15"
 --   ├── GoalCard     top right: the closest next goal and Volts towards it
---   └── BottleBar    bottom centre (top centre on touch): fill + "JAR 3 / 5",
---                    with the Chemist's TANK count beside it
+--   ├── BottleBar    bottom centre (top centre on touch): fill + "JAR 3 / 5",
+--   │                with the Chemist's TANK count beside it
+--   └── RemoteSell   Remote Sell pass owners: a SELL button at the bar's
+--                    right end (the bar shrinks to make room); it charges
+--                    up for 1.5s, then sells (keyboard V, gamepad L1)
 -- The MENU button (shop, research, teleport, boosts) is Controllers/Menu.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local StarterGui = game:GetService("StarterGui")
 local TweenService = game:GetService("TweenService")
 
+local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
+local Net = require(ReplicatedStorage.Shared.Net)
 local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Layout = require(script.Parent.Parent.Lib.Layout)
+local LayoutMath = require(script.Parent.Parent.Lib.LayoutMath)
 local UI = require(script.Parent.Parent.Lib.UI)
 local State = require(script.Parent.State)
 local Storm = require(script.Parent.Storm)
 
 local COLORS = UI.COLORS
 local FULL_PULSE = TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+local SELL_WIDTH = 104 -- design pixels the SELL button takes from the bar's slot
 
 local HUD = {}
 
@@ -39,6 +47,12 @@ local fillGradient: UIGradient
 local bottleLabel: TextLabel
 local bottleValue: TextLabel
 local tankLabel: TextLabel
+local sellButton: TextButton
+local sellRing: Frame
+local sellProgress: UIGradient
+local hasRemoteSell = false
+local sellCharging = false
+local sellReadyAt = 0
 local goalCard: Frame
 local goalTitle: TextLabel
 local goalDetail: TextLabel
@@ -236,6 +250,93 @@ local function buildBottleBar()
 	UI.maxText(tankLabel, 20)
 end
 
+-- The SELL button's charge-up ring: an outline that fills left to right.
+local function buildSellButton()
+	sellButton = UI.button({
+		Name = "RemoteSell",
+		Text = "SELL",
+		Visible = false,
+		BackgroundColor3 = COLORS.green,
+		Parent = screenGui,
+	})
+	UI.maxText(sellButton, 26)
+	UI.padHint(sellButton, "L1")
+	sellRing = UI.make(Instance.new("Frame"), {
+		Name = "ChargeRing",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, 10, 1, 10),
+		BackgroundTransparency = 1,
+		Visible = false,
+		ZIndex = 4,
+		Parent = sellButton,
+	})
+	UI.corner(sellRing, UDim.new(0.3, 0))
+	local stroke = UI.make(Instance.new("UIStroke"), {
+		Thickness = 4,
+		Color = COLORS.volt,
+		Parent = sellRing,
+	})
+	sellProgress = UI.make(Instance.new("UIGradient"), { Parent = stroke })
+	sellButton.Activated:Connect(function()
+		HUD.remoteSell()
+	end)
+end
+
+local function setSellProgress(fraction: number)
+	if fraction <= 0.001 then
+		sellProgress.Transparency = NumberSequence.new(1)
+	elseif fraction >= 0.999 then
+		sellProgress.Transparency = NumberSequence.new(0)
+	else
+		sellProgress.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0),
+			NumberSequenceKeypoint.new(fraction, 0),
+			NumberSequenceKeypoint.new(fraction + 0.001, 1),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+	end
+end
+
+-- Remote Sell (the SELL button, V or L1): charge up for a moment, then ask
+-- the server to sell. The server checks the pass, the charges and its own
+-- cooldown; this only keeps the button honest about when it can fire.
+function HUD.remoteSell()
+	local snapshot = State.current
+	if not hasRemoteSell or sellCharging or os.clock() < sellReadyAt or not snapshot then
+		return
+	end
+	if snapshot.chargeCount <= 0 then
+		UI.toast("Your bottle is empty: catch some lightning first", "info")
+		return
+	end
+	sellCharging = true
+	UI.pop(sellButton)
+	task.spawn(function()
+		local values = Config.PASS_VALUES
+		sellRing.Visible = true
+		sellButton.Text = "..."
+		local started = os.clock()
+		while os.clock() - started < values.remoteSellChargeUp do
+			setSellProgress((os.clock() - started) / values.remoteSellChargeUp)
+			RunService.RenderStepped:Wait()
+		end
+		sellRing.Visible = false
+		setSellProgress(0)
+		Net.get("RemoteSell"):FireServer()
+		sellCharging = false
+		-- greyed out with a countdown until the server's cooldown is over
+		sellReadyAt = os.clock() + values.remoteSellCooldown
+		UI.setEnabled(sellButton, false, COLORS.green)
+		while os.clock() < sellReadyAt do
+			sellButton.Text = tostring(math.ceil(sellReadyAt - os.clock()))
+			task.wait(0.2)
+		end
+		sellButton.Text = "SELL"
+		UI.setEnabled(sellButton, true, COLORS.green)
+	end)
+end
+
 local function renderStorm()
 	local state = Storm.current
 	if not state then
@@ -296,7 +397,8 @@ local function render(snapshot: Types.Snapshot)
 	renderGoal(snapshot)
 
 	local bottle = Formulas.bottle(snapshot.bottleTier)
-	local fraction = math.clamp(snapshot.chargeCount / bottle.capacity, 0, 1)
+	local capacity = snapshot.capacity -- Big Bottles included
+	local fraction = math.clamp(snapshot.chargeCount / capacity, 0, 1)
 	TweenService:Create(bottleFill, UI.TWEEN.fast, { Size = UDim2.fromScale(fraction, 1) }):Play()
 
 	-- full: the bar glows and a toast says so once (the text stays a count)
@@ -306,32 +408,49 @@ local function render(snapshot: Types.Snapshot)
 		UI.toastEvery("bottleFull", UI.FULL_REMINDER, UI.FULL_MESSAGE, "warn", true)
 	end
 	wasFull = full
-	bottleLabel.Text = `{string.upper(bottle.name)}  {snapshot.chargeCount} / {bottle.capacity}`
+	bottleLabel.Text = `{string.upper(bottle.name)}  {snapshot.chargeCount} / {capacity}`
 	bottleValue.Text = `{Format.abbreviate(snapshot.chargeValue)} ⚡`
 
 	local chemist = snapshot.researchers.Chemist
 	tankLabel.Visible = chemist ~= nil
 	if chemist then
-		local capacity = ResearchMath.tankCapacity(chemist.level)
-		tankLabel.Text = `TANK {snapshot.tankCount}/{capacity}`
+		local tankCapacity = ResearchMath.tankCapacity(chemist.level)
+		tankLabel.Text = `TANK {snapshot.tankCount}/{tankCapacity}`
 	end
 
 	if snapshot.chargeCount > lastChargeCount and lastChargeCount >= 0 then
 		UI.pop(bottleBar, 1.08)
 	end
 	lastChargeCount = snapshot.chargeCount
+
+	if (snapshot.passes.RemoteSell == true) ~= hasRemoteSell then
+		hasRemoteSell = snapshot.passes.RemoteSell == true
+		HUD.place()
+	end
 end
 
 -- Every piece on its edge (LayoutMath.hud): Volts and the storm timer top
 -- left, the goal top right, the bottle bar bottom centre (top centre on
 -- touch). The TANK count sits just past the bar's right end, on the side
--- away from the screen edge.
-local function placeForDevice()
+-- away from the screen edge. With Remote Sell, the SELL button takes the
+-- right end of the bar's place.
+function HUD.place()
 	local hud = Layout.hud
 	UI.place(voltsPanel, hud.volts)
 	UI.place(stormPill, hud.storm)
 	UI.place(goalCard, hud.goal)
-	UI.place(bottleBar, hud.bar)
+	local bar = hud.bar
+	sellButton.Visible = hasRemoteSell
+	if hasRemoteSell then
+		local barWidth = bar.w - SELL_WIDTH - LayoutMath.GAP
+		UI.place(bottleBar, { x = bar.x, y = bar.y, w = barWidth, h = bar.h })
+		UI.place(
+			sellButton,
+			{ x = bar.x + bar.w - SELL_WIDTH, y = bar.y, w = SELL_WIDTH, h = bar.h }
+		)
+	else
+		UI.place(bottleBar, bar)
+	end
 	local atBottom = not Layout.isTouch()
 	tankLabel.AnchorPoint = Vector2.new(1, if atBottom then 1 else 0)
 	tankLabel.Position = if atBottom then UDim2.new(1, -10, 0, -4) else UDim2.new(1, -10, 1, 4)
@@ -352,8 +471,9 @@ function HUD.init()
 	buildStormPill()
 	buildGoalCard()
 	buildBottleBar()
-	placeForDevice()
-	Layout.Changed:Connect(placeForDevice)
+	buildSellButton()
+	HUD.place()
+	Layout.Changed:Connect(HUD.place)
 
 	displayedVolts.Changed:Connect(function(value: number)
 		voltsLabel.Text = Format.abbreviate(value)

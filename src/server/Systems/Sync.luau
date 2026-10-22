@@ -8,6 +8,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Net = require(ReplicatedStorage.Shared.Net)
 local Types = require(ReplicatedStorage.Shared.Types)
+local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
+local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local PlayerData = require(script.Parent.PlayerData)
 
@@ -21,11 +23,15 @@ local Sync = {}
 -- (workspace:GetServerTimeNow()). Sent in the snapshot for the Research panel.
 Sync.setupUntil = {} :: { [Player]: { [string]: number } }
 
+-- Owned by Systems/Passes: per player, the Game Passes they own (key set).
+Sync.passes = {} :: { [Player]: PassRules.Owned }
+
 function Sync.markDirty(player: Player)
 	dirty[player] = true
 end
 
 local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapshot
+	local passes = Sync.passes[player] or {}
 	return {
 		volts = profile.volts,
 		totalVolts = profile.totalVolts,
@@ -38,6 +44,8 @@ local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapsho
 		tankValue = profile.tankValue,
 		setupUntil = Sync.setupUntil[player] or {},
 		premium = Progression.playerIsPremium(player),
+		passes = passes,
+		capacity = PassRules.capacity(Formulas.capacity(profile.bottleTier), passes),
 	}
 end
 
@@ -68,6 +76,7 @@ function Sync.init()
 	Players.PlayerRemoving:Connect(function(player)
 		dirty[player] = nil
 		Sync.setupUntil[player] = nil
+		Sync.passes[player] = nil
 	end)
 end
 

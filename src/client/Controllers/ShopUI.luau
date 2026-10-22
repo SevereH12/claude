@@ -8,6 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Net = require(ReplicatedStorage.Shared.Net)
+local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Layout = require(script.Parent.Parent.Lib.Layout)
 local UI = require(script.Parent.Parent.Lib.UI)
@@ -16,9 +17,23 @@ local State = require(script.Parent.State)
 local COLORS = UI.COLORS
 local ROW_HEIGHT = 76 -- pixels; the list scrolls when the rows don't fit
 
--- What a row shows, whichever kind of item it is.
-type Item = { name: string, price: number, badge: string, detail: string }
-type Row = { tier: number, item: Item, frame: Frame, button: TextButton }
+-- What a row shows, whichever kind of item it is. `describe`, if set,
+-- re-reads the badge and detail from the latest snapshot (Big Bottles).
+type Item = {
+	name: string,
+	price: number,
+	badge: string,
+	detail: string,
+	describe: ((Types.Snapshot) -> (string, string))?,
+}
+type Row = {
+	tier: number,
+	item: Item,
+	frame: Frame,
+	button: TextButton,
+	badge: TextLabel,
+	detail: TextLabel,
+}
 type Tab = {
 	title: string,
 	hint: string,
@@ -58,6 +73,9 @@ local function render(snapshot: Types.Snapshot)
 			else
 				row.button.Text = "LOCKED"
 				UI.setEnabled(row.button, false, COLORS.green)
+			end
+			if row.item.describe then
+				row.badge.Text, row.detail.Text = row.item.describe(snapshot)
 			end
 			-- highlight the one you're using
 			local stroke = row.frame:FindFirstChildOfClass("UIStroke")
@@ -144,7 +162,14 @@ local function buildRow(tab: Tab, tier: number, item: Item)
 		tab.remote:FireServer(tier)
 	end)
 
-	table.insert(tab.rows, { tier = tier, item = item, frame = frame, button = button })
+	table.insert(tab.rows, {
+		tier = tier,
+		item = item,
+		frame = frame,
+		button = button,
+		badge = badgeText,
+		detail = detail,
+	})
 end
 
 local function buildTab(
@@ -234,6 +259,10 @@ function ShopUI.init()
 			price = bottle.price,
 			badge = tostring(bottle.capacity),
 			detail = `Holds {bottle.capacity} charges`,
+			describe = function(snapshot)
+				local capacity = PassRules.capacity(bottle.capacity, snapshot.passes)
+				return tostring(capacity), `Holds {capacity} charges`
+			end,
 		})
 	end
 
