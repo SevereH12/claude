@@ -420,6 +420,32 @@ local PLAYTIME_GIFTS: { Types.PlaytimeGift } = {
 	{ minutes = 60, reward = { charges = 400 } },
 }
 
+-- Gifting passes (Systems/Gifts): nobody can buy a game pass for someone
+-- else, so each pass has a "Gift: <pass>" Developer Product at the same
+-- price (product key "Gift" .. pass key). Buying one unlocks the pass's
+-- effect for the receiver in this game. Product ids (0 = not made yet) and
+-- icons from tools/store/store_ids.json.
+local GIFT_PASS_PRODUCTS: { [string]: number } = {
+	DoubleVolts = 3721137563,
+	RemoteSell = 3721137576,
+	BigBottles = 3721137585,
+	LuckyCharges = 3721137597,
+	LabGrant = 3721137610,
+	VIP = 3721137629,
+	BoltColours = 3721137641,
+	JetBoots = 3721137651,
+}
+local GIFT_ICONS: { [string]: number } = {
+	GiftDoubleVolts = 112415607210263,
+	GiftRemoteSell = 71157669116473,
+	GiftBigBottles = 107201834217143,
+	GiftLuckyCharges = 139857084073545,
+	GiftLabGrant = 88822516045093,
+	GiftVIP = 134876522989863,
+	GiftBoltColours = 109747228299462,
+	GiftJetBoots = 138738735787414,
+}
+
 return table.freeze({
 	-- Saving
 	AUTOSAVE_INTERVAL = 60, -- seconds between autosaves per player
@@ -482,6 +508,14 @@ return table.freeze({
 	GROUP_NAME = "Super Studio",
 	GROUP_BONUS = 0.10,
 	GROUP_COLOR = Color3.fromRGB(80, 200, 255), -- the [Member] chat tag
+
+	GIFT_PASS_PRODUCTS = table.freeze(GIFT_PASS_PRODUCTS),
+	GIFT_ICONS = table.freeze(GIFT_ICONS),
+	GIFTS = table.freeze({
+		intentSeconds = 300, -- how long "who it's for" is remembered before buying
+		inboxCap = 100, -- undelivered gifts one player can have waiting
+		receivedCap = 200, -- delivered gift ids each profile remembers (no doubles)
+	}),
 
 	-- Placeholder sounds (built into Roblox). Swap for Creator Store sounds.
 	SOUNDS = table.freeze({

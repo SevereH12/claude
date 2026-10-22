@@ -18,7 +18,7 @@ local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local STORE_NAME = "StormBottler_PlayerData"
-local CURRENT_VERSION = 8
+local CURRENT_VERSION = 9
 -- A lock older than this belongs to a server that crashed; it may be taken.
 local LOCK_STALE_SECONDS = Config.AUTOSAVE_INTERVAL * 3
 local LOCKED_RETRIES = 5
@@ -57,6 +57,9 @@ local DEFAULT_PROFILE: Types.Profile = {
 	boosts = {},
 	dailyStreak = 0,
 	lastDailyDay = 0,
+	giftedPasses = {},
+	receivedGiftIds = {},
+	giftCredits = {},
 }
 
 -- MIGRATIONS[n] turns a version-n profile into version n+1. When the profile
@@ -103,6 +106,13 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 		data.lastDailyDay = 0
 		return data
 	end,
+	-- gifting (prompt 10)
+	[8] = function(data: any): any
+		data.giftedPasses = {}
+		data.receivedGiftIds = {}
+		data.giftCredits = {}
+		return data
+	end,
 }
 
 local storeOk, storeResult = pcall(function()
@@ -129,8 +139,12 @@ local function deepCopy<T>(value: T): T
 	return copy :: any
 end
 
+local function keyForId(userId: number): string
+	return `player_{userId}`
+end
+
 local function keyFor(player: Player): string
-	return `player_{player.UserId}`
+	return keyForId(player.UserId)
 end
 
 local function migrate(data: any): Types.Profile
@@ -369,6 +383,27 @@ end
 function PlayerData.get(player: Player): Types.Profile?
 	local session = sessions[player]
 	return if session then session.profile else nil
+end
+
+-- Someone's saved profile, read only: for a player who may not be in this
+-- server (Systems/Gifts checks what they own). Returns false if it couldn't
+-- be read, and true with nil if they have no save yet.
+function PlayerData.peek(userId: number): (boolean, Types.Profile?)
+	local dataStore = store
+	if not dataStore then
+		return false, nil
+	end
+	local ok, record = pcall(function()
+		return dataStore:GetAsync(keyForId(userId))
+	end)
+	if not ok then
+		return false, nil
+	end
+	if typeof(record) ~= "table" or typeof(record.data) ~= "table" then
+		return true, nil
+	end
+	local migrated, profile = pcall(migrate, record.data)
+	return migrated, if migrated then profile else nil
 end
 
 -- Saves the player's profile now (Systems/Receipts saves a purchase before

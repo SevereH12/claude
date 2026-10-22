@@ -21,6 +21,9 @@ export type Profile = {
 	boosts: { [string]: number }, -- seconds left per boost key (Config.BOOSTS); count down only in game
 	dailyStreak: number, -- day of the login streak last claimed (1-7), 0 = never
 	lastDailyDay: number, -- UTC day (os.time() // 86400) of the last daily claim, 0 = never
+	giftedPasses: { [string]: boolean }, -- passes others gifted this player (count as owned)
+	receivedGiftIds: { string }, -- the newest gift ids already applied (Systems/Gifts)
+	giftCredits: { [string]: { string } }, -- gifts paid for but not sent yet: product key -> purchase ids
 }
 
 -- A hired researcher. post is "Office" or a zone id.
@@ -50,6 +53,8 @@ export type Snapshot = {
 	boosts: { [string]: number }, -- active boost key -> workspace:GetServerTimeNow() when it runs out
 	daily: { streak: number, lastDay: number, dayOffset: number }, -- the login streak (Util/Rewards.daily)
 	gifts: { startedAt: number, claimed: { boolean } }, -- playtime gifts: session start (server time)
+	gifted: { [string]: boolean }, -- passes owned because someone gifted them
+	giftCredits: { [string]: number }, -- gift products paid for but not sent yet
 }
 
 -- This session's store numbers, sent in the snapshot (Systems/Passes).
@@ -81,6 +86,28 @@ export type Reward = { charges: number?, boosts: { RewardBoost }? }
 
 -- A playtime gift: claimable `minutes` into a session.
 export type PlaytimeGift = { minutes: number, reward: Reward }
+
+-- A gift waiting in someone's inbox (Systems/Gifts). `id` is the giver's
+-- PurchaseId (or a Studio test id); `kind` is "pass" and `key` a pass key.
+export type GiftEntry = {
+	id: string,
+	kind: string,
+	key: string,
+	fromId: number,
+	fromName: string,
+	time: number,
+}
+
+-- Who a gift is for: remembered from PrepareGift until the receipt.
+export type GiftIntent = {
+	recipientId: number,
+	recipientName: string,
+	productKey: string,
+	expires: number, -- os.clock()
+}
+
+-- A player found by username for the gift window (FindPlayer).
+export type FoundPlayer = { userId: number, name: string, displayName: string }
 
 -- What a claimed reward gave (the Rewarded remote): Volts, boosts, and the
 -- boosts swapped for Volts because the player owns that pass.

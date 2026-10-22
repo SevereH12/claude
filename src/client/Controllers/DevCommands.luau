@@ -2,8 +2,9 @@
 -- TEMPORARY test buttons: one sets your Volts to 1 trillion (shown in
 -- Studio or to the place's owner), one turns Pretend Premium on and off
 -- (Studio only), PASSES opens one "Pretend owns <pass>" toggle per Game
--- Pass, and REWARDS opens Next day, +5 min playtime, Clear boosts and a
--- Pretend group member toggle (both Studio only). The server (Systems/DevCommands) checks again. To
+-- Pass and a "Send test gift to me" button, and REWARDS opens Next day,
+-- +5 min playtime, Clear boosts and a Pretend group member toggle (both
+-- Studio only). The server (Systems/DevCommands) checks again. To
 -- remove it: delete this file and Systems/DevCommands.luau, and take
 -- "DevCommand" out of Shared/Remotes.
 
@@ -116,7 +117,7 @@ function DevCommands.init()
 			x = area.x + area.w + LayoutMath.GAP,
 			y = area.y,
 			w = 380,
-			h = math.ceil(#Config.PASSES / 2) * 48,
+			h = math.ceil((#Config.PASSES + 1) / 2) * 48,
 		})
 	end)
 	-- REWARDS: three test tools, in the same place (one list open at a time)
@@ -221,6 +222,19 @@ function DevCommands.init()
 			devRemote:FireServer("pass", pass.key, player:GetAttribute(attribute) ~= true)
 		end)
 	end
+	-- a gift of a pass you don't have, through your own inbox (Systems/Gifts)
+	local testGift = UI.button({
+		Name = "TestGift",
+		LayoutOrder = #Config.PASSES + 1,
+		Text = "🎁 Send test gift to me",
+		BackgroundColor3 = Color3.fromRGB(255, 120, 170),
+		Parent = list,
+	})
+	UI.maxText(testGift, 16)
+	testGift.Activated:Connect(function()
+		UI.pop(testGift)
+		devRemote:FireServer("testGift")
+	end)
 end
 
 return DevCommands

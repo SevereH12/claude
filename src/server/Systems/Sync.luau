@@ -9,6 +9,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Net = require(ReplicatedStorage.Shared.Net)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
+local GiftRules = require(ReplicatedStorage.Shared.Util.Gifts)
 local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local PlayerData = require(script.Parent.PlayerData)
@@ -78,6 +79,8 @@ local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapsho
 			startedAt = if rewards then rewards.startedAt else workspace:GetServerTimeNow(),
 			claimed = if rewards then rewards.claimed else {},
 		},
+		gifted = profile.giftedPasses,
+		giftCredits = GiftRules.creditCounts(profile.giftCredits),
 	}
 end
 

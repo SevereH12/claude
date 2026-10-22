@@ -8,7 +8,9 @@
 --     yet says COMING SOON. Bolt Colours owners get CHOOSE COLOUR instead,
 --     which opens a colour picker (SetBoltColour, checked by
 --     Systems/PassPerks). The 2x Volts card shows what 2x would really have
---     added this session (from the server).
+--     added this session (from the server). Every pass card also has GIFT
+--     (the gift window, Controllers/GiftUI; SEND when a gift is already paid
+--     for), and a pass someone gifted you says OWNED (gift).
 --   VOLTS: Config.VOLT_PACKS, each showing this player's real amount (it
 --     grows with progress: Util/Store) and about how long it takes to catch.
 -- The store reports visits, card taps and purchase windows for the stats
@@ -26,9 +28,11 @@ local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Net = require(ReplicatedStorage.Shared.Net)
 local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
 local Store = require(ReplicatedStorage.Shared.Util.Store)
+local GiftRules = require(ReplicatedStorage.Shared.Util.Gifts)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Layout = require(script.Parent.Parent.Lib.Layout)
 local UI = require(script.Parent.Parent.Lib.UI)
+local GiftUI = require(script.Parent.GiftUI)
 local State = require(script.Parent.State)
 
 local COLORS = UI.COLORS
@@ -49,7 +53,7 @@ type Card = {
 type CardParts = { frame: Frame, buy: TextButton, detail: TextLabel, status: TextLabel }
 type Tab = { button: TextButton, grid: ScrollingFrame }
 type Placed = { tab: Tab, order: number, parts: CardParts } -- where a card is, for openAt
-type PassCard = { pass: Types.PassDef, parts: CardParts }
+type PassCard = { pass: Types.PassDef, parts: CardParts, gift: TextButton }
 type PackCard = { pack: Types.VoltPackDef, parts: CardParts }
 type Swatch = { index: number, button: TextButton }
 
@@ -242,14 +246,19 @@ end
 local function render()
 	local snapshot = State.current
 	local owned = if snapshot then snapshot.passes else {}
+	local gifted = if snapshot then snapshot.gifted else {}
 	for _, card in passCards do
 		local pass, parts = card.pass, card.parts
+		local credits = if snapshot
+			then snapshot.giftCredits[GiftRules.productKey(pass.key)] or 0
+			else 0
+		card.gift.Text = if credits > 0 then `🎁 SEND ({credits})` else "🎁 GIFT"
 		if owned[pass.key] and pass.key == "BoltColours" then
 			parts.buy.Text = "🎨 CHOOSE COLOUR"
 			parts.status.Text = "✓ OWNED"
 			UI.setEnabled(parts.buy, true, COLORS.storm)
 		elseif owned[pass.key] then
-			parts.buy.Text = "✓ OWNED"
+			parts.buy.Text = if gifted[pass.key] then "✓ OWNED (gift)" else "✓ OWNED"
 			parts.status.Text = ""
 			UI.setEnabled(parts.buy, false, COLORS.green)
 		elseif pass.id == 0 then
@@ -449,7 +458,26 @@ local function buildPassCard(tab: Tab, order: number, pass: Types.PassDef)
 			end)
 		end
 	end)
-	table.insert(passCards, { pass = pass, parts = parts })
+	-- BUY on the left, GIFT on the right
+	parts.buy.AnchorPoint = Vector2.new(0, 1)
+	parts.buy.Position = UDim2.new(0, 10, 1, -10)
+	parts.buy.Size = UDim2.new(0.6, -15, 0, 48)
+	local gift = UI.button({
+		Name = "Gift",
+		Text = "🎁 GIFT",
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -10, 1, -10),
+		Size = UDim2.new(0.4, -15, 0, 48),
+		BackgroundColor3 = Color3.fromRGB(255, 120, 170),
+		Parent = parts.frame,
+	})
+	UI.maxText(gift, 20)
+	gift.Activated:Connect(function()
+		UI.pop(gift)
+		storeEvent:FireServer("card", pass.key)
+		GiftUI.open(pass.key)
+	end)
+	table.insert(passCards, { pass = pass, parts = parts, gift = gift })
 	placed[pass.key] = { tab = tab, order = order, parts = parts }
 	loadPrice(pass.key, pass.id, Enum.InfoType.GamePass)
 end

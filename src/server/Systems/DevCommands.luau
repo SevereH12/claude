@@ -3,7 +3,8 @@
 -- send DevCommand: "volts" sets that player's Volts, "premium" turns
 -- Pretend Premium on or off, "pass" pretends to own a Game Pass, and
 -- "nextDay", "playtime" and "clearBoosts" test rewards (a day later, +5
--- minutes of play, no boosts), and "group" pretends to be a group member. The repo and client code are public, so this
+-- minutes of play, no boosts), "group" pretends to be a group member, and
+-- "testGift" puts a gift of a pass you don't have in your own inbox. The repo and client code are public, so this
 -- is the lock: it only obeys in Studio play tests or, in a live server, the
 -- user who owns the place; everything but "volts" is Studio only. To remove it:
 -- delete this file and Controllers/DevCommands.luau, and take "DevCommand"
@@ -16,6 +17,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local Net = require(ReplicatedStorage.Shared.Net)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Boosts = require(script.Parent.Boosts)
+local Gifts = require(script.Parent.Gifts)
 local Group = require(script.Parent.Group)
 local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
@@ -99,6 +101,9 @@ local function onCommand(player: Player, name: unknown, value: unknown, extra: u
 	elseif name == "clearBoosts" then
 		Boosts.clear(player)
 		print(`[DevCommands] {player.Name}: boosts cleared`)
+	elseif name == "testGift" then
+		Gifts.testGift(player)
+		print(`[DevCommands] {player.Name}: a test gift is on its way`)
 	elseif name == "group" and typeof(value) == "boolean" then
 		Group.setPretend(player, value)
 		print(`[DevCommands] {player.Name} Pretend group member {if value then "on" else "off"}`)

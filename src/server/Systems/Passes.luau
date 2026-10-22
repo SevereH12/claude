@@ -8,6 +8,9 @@
 -- to report wasPurchased = false after a real purchase, so a false is
 -- re-checked once, 2 seconds later. Never because a client says so.
 --
+-- Passes someone gifted (Systems/Gifts: profile.giftedPasses) count as
+-- owned too, so every effect works for them.
+--
 -- Everyone can see what a player owns: player attributes Pass_<key> = true.
 -- The owner also gets the set in their snapshot (Sync).
 --
@@ -34,6 +37,7 @@ local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Boosts = require(script.Parent.Boosts)
 local Group = require(script.Parent.Group)
+local PlayerData = require(script.Parent.PlayerData)
 local Sync = require(script.Parent.Sync)
 
 local RETRY_WAIT = 1 -- seconds before the one retry of an ownership check
@@ -78,13 +82,18 @@ local function ownsAsync(player: Player, id: number): boolean?
 	return nil
 end
 
--- Recomputes what the player owns and tells everyone.
-local function refresh(player: Player)
+-- Recomputes what the player owns (bought, gifted, Studio toggles) and
+-- tells everyone. Systems/Gifts calls it when a gift arrives.
+function Passes.refresh(player: Player)
 	if not player.Parent then
 		return
 	end
 	local set: PassRules.Owned = {}
 	for key in bought[player] or {} do
+		set[key] = true
+	end
+	local profile = PlayerData.get(player)
+	for key in if profile then profile.giftedPasses else {} do
 		set[key] = true
 	end
 	if RunService:IsStudio() then
@@ -106,7 +115,7 @@ local function grant(player: Player, pass: Types.PassDef, purchased: boolean)
 		return
 	end
 	set[pass.key] = true
-	refresh(player)
+	Passes.refresh(player)
 	print(`[Passes] {player.Name} owns {pass.name}`)
 	if purchased then
 		Passes.Purchased:Fire(player, pass)
@@ -115,7 +124,7 @@ end
 
 local function onPlayerAdded(player: Player)
 	bought[player] = {}
-	refresh(player)
+	Passes.refresh(player)
 	for _, pass in Config.PASSES do
 		if pass.id ~= 0 then
 			task.spawn(function()
@@ -208,11 +217,13 @@ function Passes.setPretend(player: Player, key: string, on: boolean)
 	pretend[player] = set
 	set[key] = if on then true else nil
 	player:SetAttribute(Passes.PRETEND .. key, if on then true else nil)
-	refresh(player)
+	Passes.refresh(player)
 end
 
 function Passes.init()
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(onPurchaseFinished)
+	-- gifted passes come with the profile
+	PlayerData.Loaded:Connect(Passes.refresh)
 	Players.PlayerAdded:Connect(onPlayerAdded)
 	Players.PlayerRemoving:Connect(function(player)
 		bought[player] = nil

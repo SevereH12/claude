@@ -1,6 +1,7 @@
 --!strict
--- Volts packs (Developer Products, Config.VOLT_PACKS). The only code that
--- sets MarketplaceService.ProcessReceipt. Each purchase is granted exactly
+-- Developer Product receipts: the only code that sets
+-- MarketplaceService.ProcessReceipt. Gift products go to Systems/Gifts;
+-- Volts packs (Config.VOLT_PACKS) are granted here. Each purchase is granted exactly
 -- once: the profile remembers the newest purchase ids (Util/Store), and
 -- Roblox only hears PurchaseGranted once the grant has been saved; until
 -- then it asks again later (when the player rejoins), and the remembered id
@@ -11,10 +12,12 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local GiftRules = require(ReplicatedStorage.Shared.Util.Gifts)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Store = require(ReplicatedStorage.Shared.Util.Store)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Analytics = require(script.Parent.Analytics)
+local Gifts = require(script.Parent.Gifts)
 local PlayerData = require(script.Parent.PlayerData)
 local Sync = require(script.Parent.Sync)
 
@@ -32,6 +35,11 @@ local function packFor(productId: number): Types.VoltPackDef?
 end
 
 local function processReceipt(receipt: { [string]: any }): Enum.ProductPurchaseDecision
+	-- a "Gift: <pass>" product (Systems/Gifts)
+	local giftKey = GiftRules.byProductId(receipt.ProductId)
+	if giftKey then
+		return Gifts.processReceipt(receipt, giftKey)
+	end
 	local pack = packFor(receipt.ProductId)
 	if not pack then
 		warn(`[Receipts] no Volts pack has product id {receipt.ProductId}`)

@@ -5,7 +5,7 @@ Follow the rules in `docs/prompts/README.md`.
 **Run it twice.** Each run does the first part below that isn't ticked,
 then ticks it:
 
-- [ ] Part A: gifting game passes to anyone by username (inbox,
+- [x] Part A: gifting game passes to anyone by username (inbox,
   cross-server delivery, the gift window)
 - [ ] Part B: boosts for yourself or as gifts, the Boost Bundle, Server
   Storms and gift announcements
