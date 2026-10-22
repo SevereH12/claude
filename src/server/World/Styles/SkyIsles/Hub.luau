@@ -9,6 +9,8 @@
 --     giant floating storm crystal ringed with runes on top
 --   * a light trail, chevrons and a rune gateway on every active lane,
 --     a compass signpost at spawn, tethers from the spire to every island
+--   * portals to other worlds (ctx.portals) in the sectors beside the
+--     spawn's, in place of those sectors' props, facing the spawn
 
 local ServerScriptService = game:GetService("ServerScriptService")
 
@@ -29,6 +31,7 @@ local UP = Vector3.yAxis
 local LANE_HALF = 4.5 -- half width of a lane runner
 local PILLAR_RADIUS = 19
 local SPAWN_RADIUS = 36
+local PORTAL_DISTANCE = 40 -- from the hub centre, in a sector beside the spawn
 local TEASER_GLOW = Color3.fromRGB(176, 160, 226)
 
 local Hub = {}
@@ -857,7 +860,8 @@ local function buildSectors(
 	ctx: Context,
 	sectors: { number },
 	spawnAngle: number,
-	lawnSpots: { Vector3 }
+	lawnSpots: { Vector3 },
+	portalAngles: { number }
 )
 	local hub = ctx.folders.hub
 	local floor = ctx.layout.hubFloor
@@ -871,6 +875,9 @@ local function buildSectors(
 			local dir = direction(angle)
 			local right = dir:Cross(UP)
 			local spot = dir * 44 + UP * floor
+			if table.find(portalAngles, angle) then
+				continue -- a portal stands here (buildPortals)
+			end
 			if kind % 3 == 1 then
 				-- blossom grove on a star planter
 				Pieces.star(hub, spot + UP * 1.2, 9, 1.2, C.plum, Enum.Material.Slate, true)
@@ -995,17 +1002,57 @@ local function buildTethers(ctx: Context)
 	Pieces.chain(ctx, start, start + dir * 10 - UP * 24, 5)
 end
 
+-- Portals to other worlds (ctx.portals), each in a sector beside the
+-- spawn (`angles`), a Kit.PORTAL_SPACE circle clear of every lane, facing
+-- the spawn so you walk straight up to it.
+local function buildPortals(ctx: Context, angles: { number }, spawnAt: Vector3)
+	local hub = ctx.folders.hub
+	local floor = ctx.layout.hubFloor
+	for i, portal in ctx.portals do
+		local angle = angles[i]
+		if angle then
+			local center = direction(angle) * PORTAL_DISTANCE + UP * floor
+			if not Pieces.offLanes(ctx, center, Kit.PORTAL_SPACE / 2, LANE_HALF) then
+				warn(`[SkyIsles] the portal to {portal.to.id} stands on a lane`)
+			end
+			Kit.portal(
+				hub,
+				CFrame.lookAt(center, Vector3.new(spawnAt.X, floor, spawnAt.Z)),
+				portal,
+				{
+					ring = C.gold,
+					ringMaterial = Enum.Material.Metal,
+					step = C.plum,
+					stepMaterial = Enum.Material.Slate,
+					sign = Palette.signFor(portal.to.color, true),
+				}
+			)
+		end
+	end
+end
+
 function Hub.build(ctx: Context)
 	local lanes, sectors = lanesAndSectors(ctx)
 	-- spawn sits in the sector just clockwise of the first zone's lane
 	local first = math.rad(ctx.layout.firstAngle % 360)
 	local spawnAngle = sectors[1]
+	local spawnSector = 1
 	local best = math.huge
-	for _, angle in sectors do
+	for index, angle in sectors do
 		local delta = (angle - first) % (math.pi * 2)
 		if delta < best then
 			best = delta
 			spawnAngle = angle
+			spawnSector = index
+		end
+	end
+	-- portals take the sectors beside the spawn's: the next one round
+	-- (across the first zone's lane, ahead of the spawn), then the one behind
+	local n = #sectors
+	local portalAngles: { number } = {}
+	for i, angle in { sectors[(spawnSector - 2) % n + 1], sectors[spawnSector % n + 1] } do
+		if i <= #ctx.portals then
+			table.insert(portalAngles, angle)
 		end
 	end
 	-- the SELL pad lines up with the star; its text reads for someone
@@ -1019,8 +1066,9 @@ function Hub.build(ctx: Context)
 	buildAltar(ctx, sectors, direction(view))
 	buildLanes(ctx, lanes)
 	buildRose(ctx, sectors)
-	buildSpawn(ctx, spawnAngle)
-	buildSectors(ctx, sectors, sectorAngle, lawnSpots)
+	local spawnAt = buildSpawn(ctx, spawnAngle)
+	buildPortals(ctx, portalAngles, spawnAt)
+	buildSectors(ctx, sectors, sectorAngle, lawnSpots, portalAngles)
 	buildTethers(ctx)
 end
 

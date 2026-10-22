@@ -59,8 +59,7 @@ system call it). It builds every world in `Config.WORLDS` with
 that style, to review a style (the tools use it).
 
 Worlds: world 1 is Barometer Bay (`WeatherLab`), world 2 is Voltcliff Works
-(`StormPunk`); `SkyIsles` is kept for a future world (see
-`docs/world-styles.md`). Each world is built round the origin, then moved to
+(`StormPunk`), world 3 is Stormspire Isles (`SkyIsles`). Each world is built round the origin, then moved to
 `world.offset` (5000 studs apart, so the 2048-stud seas never meet). Its zone
 volumes, camps, gates and ground join `Map.Zones`, `Map.ResearchCamps`,
 `Map.ZoneGates` and `Map.Ground.<WorldId>`; the rest of its art is in

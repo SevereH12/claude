@@ -15,6 +15,8 @@ local BOTTLES: { Types.BottleDef } = {
 	{ name = "Storm Cell", capacity = 100, price = 8_000 },
 	{ name = "Tempest Tank", capacity = 250, price = 40_000 },
 	{ name = "Dynamo Drum", capacity = 600, price = 200_000 },
+	{ name = "Rune Cell", capacity = 1_500, price = 1_000_000 },
+	{ name = "Storm Core", capacity = 4_000, price = 5_000_000 },
 }
 
 -- In-zone walk speed is WALK_SPEED_IN_ZONE + speedBonus. Keep every tier
@@ -28,6 +30,8 @@ local BOOTS: { Types.BootsDef } = {
 	{ name = "Thunder Treads", speedBonus = 6, price = 10_000 },
 	{ name = "Coil Striders", speedBonus = 7, price = 35_000 },
 	{ name = "Arc Runners", speedBonus = 8, price = 150_000 },
+	{ name = "Sky Treads", speedBonus = 9, price = 600_000 },
+	{ name = "Cloud Walkers", speedBonus = 10, price = 3_000_000 },
 }
 
 local RESEARCHERS: { Types.ResearcherDef } = {
@@ -97,6 +101,15 @@ local WORLDS: { Types.WorldDef } = {
 		color = Color3.fromRGB(90, 238, 255),
 		-- far enough that the two 2048-stud seas don't meet
 		offset = Vector3.new(5000, 0, 0),
+	},
+	{
+		id = "Stormspire",
+		displayName = "Stormspire Isles",
+		tagline = "Floating isles, rune bridges, the wildest storms",
+		style = "SkyIsles",
+		requiresBottle = 7, -- the Dynamo Drum
+		color = Color3.fromRGB(190, 140, 255),
+		offset = Vector3.new(10000, 0, 0),
 	},
 }
 
@@ -209,6 +222,58 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		theme = "Canyon",
 		width = 100,
 		depth = 110,
+		floor = 20,
+	},
+	-- Stormspire Isles (world 3), in SkyIsles' own zone looks
+	Spire = {
+		id = "Spire",
+		world = "Stormspire",
+		displayName = "Rune Spire",
+		tagline = "Everyone catches the rune storms, 1,200 Volts",
+		color = Color3.fromRGB(150, 110, 255), -- rune violet
+		mode = "Shared",
+		chargeValue = 1_200,
+		chargeSize = 13,
+		strikeInterval = 0.9,
+		order = 1,
+		requiresBottle = 7, -- the Dynamo Drum (the world's own entry rule)
+		theme = "Default",
+		width = 104,
+		depth = 116,
+		floor = 12,
+	},
+	Cloudshore = {
+		id = "Cloudshore",
+		world = "Stormspire",
+		displayName = "Cloudshore",
+		tagline = "Everyone catches the cloud storms, 3,000 Volts",
+		color = Color3.fromRGB(255, 205, 70), -- sun gold
+		mode = "Shared",
+		chargeValue = 3_000,
+		chargeSize = 21,
+		strikeInterval = 0.8,
+		order = 2,
+		requiresBottle = 8, -- the Rune Cell
+		theme = "Beach",
+		width = 112,
+		depth = 132,
+		floor = 4,
+	},
+	Ember = {
+		id = "Ember",
+		world = "Stormspire",
+		displayName = "Ember Mesa",
+		tagline = "Closest scientist takes the bolt, 10,000 Volts",
+		color = Color3.fromRGB(255, 130, 50), -- ember orange
+		mode = "Single",
+		chargeValue = 10_000,
+		chargeSize = 34,
+		strikeInterval = 1.2,
+		order = 3,
+		requiresBottle = 9, -- the Storm Core
+		theme = "Canyon",
+		width = 96,
+		depth = 104,
 		floor = 20,
 	},
 }

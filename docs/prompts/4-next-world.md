@@ -22,7 +22,7 @@ done.
 | Done | World id | Name | Style | Opens with | Offset (x) |
 | --- | --- | --- | --- | --- | --- |
 | [x] | Voltcliff | Voltcliff Works | StormPunk | Storm Cell (tier 5) | 5000 |
-| [ ] | Stormspire | Stormspire Isles | SkyIsles | Dynamo Drum (tier 7) | 10000 |
+| [x] | Stormspire | Stormspire Isles | SkyIsles | Dynamo Drum (tier 7) | 10000 |
 
 Zones (all `world = <World id>`, `order` 1 to 3):
 
