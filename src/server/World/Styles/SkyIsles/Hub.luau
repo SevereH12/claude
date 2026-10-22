@@ -31,7 +31,9 @@ local UP = Vector3.yAxis
 local LANE_HALF = 4.5 -- half width of a lane runner
 local PILLAR_RADIUS = 19
 local SPAWN_RADIUS = 36
-local PORTAL_DISTANCE = 40 -- from the hub centre, in a sector beside the spawn
+local PORTAL_DISTANCE = 44 -- from the hub centre: the feature spot of a sector beside the spawn
+local PORTAL_DAIS = 18.4 -- the portal dais' diameter (its rune rim is 1.6 wider)
+local PORTAL_PILLAR_X = 8.4 -- the pillars either side of the portal's 15-stud sign
 local TEASER_GLOW = Color3.fromRGB(176, 160, 226)
 
 local Hub = {}
@@ -270,15 +272,16 @@ local function buildAltar(ctx: Context, sectors: { number }, facing: Vector3)
 	Pieces.star(hub, center + UP * (pillarTop + 1.2 - floor), 40, 0.6, C.gold, Enum.Material.Metal)
 	Pieces.star(hub, Vector3.new(0, roofTop, 0), 38, 2.4, C.plum, Enum.Material.Slate)
 
-	-- giant SELL boards hanging under the canopy on four sides
+	-- giant SELL boards hanging under the canopy on four sides, narrow
+	-- enough to read between the pillars from anywhere along a lane
 	local boardY = floor + 19
 	for k = 0, 3 do
 		local dir = direction(math.rad(k * 90))
 		local position = Vector3.new(0, boardY, 0) + dir * 10.6
 		local frame = CFrame.lookAt(position, position + dir)
-		Pieces.board(hub, frame, 18, 5.4, "SELL", "Bring your charge here", Palette.SELL_SIGN)
+		Pieces.board(hub, frame, 14, 5.4, "SELL", "Bring your charge here", Palette.SELL_SIGN)
 		for side = -1, 1, 2 do
-			local hook = frame * CFrame.new(side * 7, 3.1, 0)
+			local hook = frame * CFrame.new(side * 5.6, 3.1, 0)
 			Pieces.beam(ctx, hook.Position, hook.Position + UP * (pillarTop - boardY - 2.6), {
 				color = C.iron,
 				width = 0.3,
@@ -745,8 +748,12 @@ local function buildSpawn(ctx: Context, spawnAngle: number): Vector3
 		end
 	end
 
-	-- welcome board off to the quiet side, turned to face the spawn
-	local boardFoot = position + (quiet * 0.8 - forward * 0.25).Unit * 16
+	-- welcome board just off the spawn on the first gate's side, clear of
+	-- the first lane and of the view ahead (the portal), turned to face it
+	local boardFoot = position - quiet * 9.2 - forward * 7.5
+	if not Pieces.offLanes(ctx, boardFoot, 8, LANE_HALF) then
+		warn("[SkyIsles] the welcome board stands on a lane")
+	end
 	local boardFrame = CFrame.lookAt(boardFoot + UP * 6.5, position + UP * 6.5)
 	for side = -1, 1, 2 do
 		local post = (boardFrame * CFrame.new(side * 7.4, 0, 0)).Position
@@ -781,9 +788,11 @@ local function buildSpawn(ctx: Context, spawnAngle: number): Vector3
 		"The storm temple of the sky isles"
 	)
 
-	-- directory board a few steps ahead: one row per destination, each in
-	-- its zone colour with an arrow saying which way to turn
-	local deskFoot = position + forward * 12 + quiet * 3
+	-- directory board off to the quiet side, behind the spawn's shoulder
+	-- (out of the view ahead and of SELL's), so you read it facing the
+	-- altar: one row per destination, each in its zone colour with an
+	-- arrow saying which way to turn
+	local deskFoot = position + (quiet * 0.8 - forward * 0.25).Unit * 16
 	local deskFrame = CFrame.lookAt(deskFoot, Vector3.new(position.X, floor, position.Z))
 	local rows: { { title: string, target: Vector3, style: Kit.SignStyle } } = {
 		{ title = "SELL", target = Vector3.zero, style = Palette.SELL_SIGN },
@@ -833,12 +842,14 @@ local function buildSpawn(ctx: Context, spawnAngle: number): Vector3
 		local ahead = toward:Dot(viewer)
 		local lateral = toward:Dot(viewerRight)
 		local glyph = if ahead > 0.82
-			then "^ "
-			elseif ahead < -0.6 then "v "
-			elseif lateral > 0 then "> "
-			else "< "
-		local label = if lateral > 0 and ahead <= 0.82
-			then row.title .. "  >"
+			then "↑ "
+			elseif ahead < -0.6 then "↓ "
+			elseif lateral > 0 then "→ "
+			else "← "
+		local label = if lateral > 0
+				and ahead <= 0.82
+				and ahead >= -0.6
+			then row.title .. " →"
 			else glyph .. row.title
 		local y = top - (i - 0.5) * rowHeight
 		local plate = Pieces.block(
@@ -1002,31 +1013,125 @@ local function buildTethers(ctx: Context)
 	Pieces.chain(ctx, start, start + dir * 10 - UP * 24, 5)
 end
 
--- Portals to other worlds (ctx.portals), each in a sector beside the
--- spawn (`angles`), a Kit.PORTAL_SPACE circle clear of every lane, facing
--- the spawn so you walk straight up to it.
+-- Portals to other worlds (ctx.portals), each on the feature spot of a
+-- sector beside the spawn (`angles`), facing the spawn so you walk straight
+-- up to it. Kit.portal builds the ring, the disc, the sign and the trigger;
+-- round it the hub builds a temple gate: a dais with a glowing rune rim,
+-- two rune pillars joined by a gold crossbar the sign hangs from, crystals
+-- in the destination's colour beside the ring and on the pillar tops.
 local function buildPortals(ctx: Context, angles: { number }, spawnAt: Vector3)
 	local hub = ctx.folders.hub
 	local floor = ctx.layout.hubFloor
+	local rng = ctx.rng
 	for i, portal in ctx.portals do
 		local angle = angles[i]
 		if angle then
 			local center = direction(angle) * PORTAL_DISTANCE + UP * floor
-			if not Pieces.offLanes(ctx, center, Kit.PORTAL_SPACE / 2, LANE_HALF) then
+			if not Pieces.offLanes(ctx, center, PORTAL_DAIS / 2 + 0.8, LANE_HALF) then
 				warn(`[SkyIsles] the portal to {portal.to.id} stands on a lane`)
 			end
-			Kit.portal(
+			local frame = CFrame.lookAt(center, Vector3.new(spawnAt.X, floor, spawnAt.Z))
+			local glow = portal.to.color
+			-- tops at 0.25 (rim) and 0.35 (dais): clear of the compass rose's
+			-- rays (0.15) and under Kit.portal's step (0.45)
+			Pieces.cylinder(
 				hub,
-				CFrame.lookAt(center, Vector3.new(spawnAt.X, floor, spawnAt.Z)),
-				portal,
+				center - UP * 0.1,
+				0.35,
+				PORTAL_DAIS + 1.6,
+				C.cyan,
+				Enum.Material.Neon,
 				{
-					ring = C.gold,
-					ringMaterial = Enum.Material.Metal,
-					step = C.plum,
-					stepMaterial = Enum.Material.Slate,
-					sign = Palette.signFor(portal.to.color, true),
+					CastShadow = false,
 				}
 			)
+			Pieces.cylinder(
+				hub,
+				center - UP * 0.1,
+				0.45,
+				PORTAL_DAIS,
+				C.plumDeep,
+				Enum.Material.Slate,
+				{
+					CanCollide = true,
+				}
+			)
+			local trigger = Kit.portal(hub, frame, portal, {
+				ring = C.gold,
+				ringMaterial = Enum.Material.Metal,
+				step = C.plum,
+				stepMaterial = Enum.Material.Slate,
+				sign = Palette.signFor(glow, true),
+			})
+			-- the crossbar runs along the sign's top edge
+			local sign = (trigger.Parent :: Instance):FindFirstChild("Sign") :: BasePart
+			local barY = sign.CFrame.Position.Y + sign.Size.Y / 2 + 0.35 - floor
+			Pieces.solid(
+				hub,
+				frame * CFrame.new(0, barY, 0),
+				Vector3.new(PORTAL_PILLAR_X * 2 + 2.6, 0.7, 1.4),
+				C.gold,
+				Enum.Material.Metal
+			)
+			for _, side in { -1, 1 } do
+				local x = side * PORTAL_PILLAR_X
+				Pieces.solid(
+					hub,
+					frame * CFrame.new(x, 0.85, 0),
+					Vector3.new(2.6, 1, 2.6),
+					C.plum,
+					Enum.Material.Slate
+				)
+				local shaft = barY - 0.35 - 1.35
+				Pieces.solid(
+					hub,
+					frame * CFrame.new(x, 1.35 + shaft / 2, 0),
+					Vector3.new(1.7, shaft, 1.7),
+					C.skystone,
+					Enum.Material.Slate
+				)
+				for _, y in { 1.6, barY - 1.1 } do
+					Pieces.block(
+						hub,
+						frame * CFrame.new(x, y, 0),
+						Vector3.new(2, 0.35, 2),
+						C.gold,
+						Enum.Material.Metal
+					)
+				end
+				-- rune strips up the front and the back of each pillar
+				for _, z in { -0.88, 0.88 } do
+					for _, y in { 4.6, 9.4 } do
+						Pieces.block(
+							hub,
+							frame * CFrame.new(x, y, z),
+							Vector3.new(0.5, 3, 0.1),
+							C.cyan,
+							Enum.Material.Neon,
+							{ CastShadow = false }
+						)
+					end
+				end
+				local gem = Pieces.diamond(
+					hub,
+					(frame * CFrame.new(x, barY + 1.6, 0)).Position,
+					1.4,
+					glow,
+					Enum.Material.Neon
+				)
+				if side == 1 then
+					Pieces.light(gem, glow, 16, 1)
+				end
+				-- crystals just behind the ring's feet, between it and the pillars
+				Pieces.cluster(
+					hub,
+					rng,
+					(frame * CFrame.new(side * 6.1, 0.35, 2.6)).Position,
+					5,
+					glow,
+					3
+				)
+			end
 		end
 	end
 end

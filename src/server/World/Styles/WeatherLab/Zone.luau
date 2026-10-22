@@ -25,7 +25,7 @@ local C = Palette.colors
 
 local Zone = {}
 
-Zone.DECK_WIDTH = 10
+Zone.DECK_WIDTH = 12
 -- Decks ride this far over the ground they start and land on, so plank
 -- and grass tops never share a height.
 local LIFT = 0.2
@@ -147,7 +147,8 @@ local function samples(p: Profile, limit: number, detail: number): { number }
 	return out
 end
 
--- A rail post with a glowing cap in the trail colour. Returns the rope point.
+-- A rail post with a glowing cap in the trail colour. Returns the
+-- handrail point (the post's top).
 local function railPost(
 	parent: Instance,
 	bottom: Vector3,
@@ -175,11 +176,22 @@ local function railPost(
 	if cap ~= false then
 		Pieces.glow(Pieces.ball(parent, bottom + Vector3.new(0, 3.45, 0), 0.8, color), color)
 	end
-	return bottom + Vector3.new(0, 2.7, 0)
+	return bottom + Vector3.new(0, 2.95, 0)
 end
 
-local function rope(ctx: Context, a: Vector3, b: Vector3)
-	Kit.cable(ctx, a, b, { Color = Palette.sand, Width = 0.16, CurveSize = 0.5 })
+-- The boardwalk's border between two rail posts: a solid wooden handrail
+-- across their tops (it stops players walking off the edge) with a rope
+-- slung lower down.
+local function handrail(ctx: Context, parent: Instance, a: Vector3, b: Vector3)
+	Pieces.box(
+		parent,
+		CFrame.lookAt((a + b) / 2, b),
+		Vector3.new(0.45, 0.4, (b - a).Magnitude + 0.45),
+		C.piling,
+		Enum.Material.Wood
+	)
+	local down = Vector3.new(0, 1.3, 0)
+	Kit.cable(ctx, a - down, b - down, { Color = Palette.sand, Width = 0.16, CurveSize = 0.5 })
 end
 
 -- Arch over the start of a boardwalk with the destination's name.
@@ -283,11 +295,7 @@ function Zone.boardwalk(
 				local c = q + right * side * (wide / 2 - 0.4) + dir * (if q == a then 0.4 else -0.4)
 				table.insert(corners, railPost(parent, c, opts.color))
 			end
-			Kit.cable(ctx, corners[#corners - 1], corners[#corners], {
-				Color = Palette.sand,
-				Width = 0.16,
-				CurveSize = 0.6,
-			})
+			handrail(ctx, parent, corners[#corners - 1], corners[#corners])
 		end
 		local mid = (a + b) / 2
 		local benchSide = if rng:NextNumber() < 0.5 then -1 else 1
@@ -331,13 +339,13 @@ function Zone.boardwalk(
 					nextLantern = s + lampGap
 					lanternSide = -lanternSide
 					Pieces.lampPost(parent, bottom, 5.5, -right * side)
-					ropePoint = bottom + Vector3.new(0, 2.7, 0)
+					ropePoint = bottom + Vector3.new(0, 2.95, 0)
 				else
 					ropePoint = railPost(parent, bottom, opts.color, postCount % 2 == 1, opts.trim)
 				end
 				local previous = last[side]
 				if previous then
-					rope(ctx, previous, ropePoint)
+					handrail(ctx, parent, previous, ropePoint)
 				end
 				last[side] = ropePoint
 			end
@@ -416,8 +424,8 @@ function Zone.trail(ctx: Context, parent: Instance, angle: number, color: Color3
 	strip(24, 34, 3, 0.3, G.limestone)
 	strip(34, 46, 5, 0.3, G.limestone)
 	-- 0.15, not 0.2: the boardwalk deck starting on it sits at 0.2
-	strip(46, layout.hubRadius - 0.5, 10, 0.15, G.cobble)
-	strip(46, layout.hubRadius - 0.5, 11.6, 0.1, G.brick)
+	strip(46, layout.hubRadius - 0.5, Zone.DECK_WIDTH, 0.15, G.cobble)
+	strip(46, layout.hubRadius - 0.5, Zone.DECK_WIDTH + 1.6, 0.1, G.brick)
 	-- glowing dashes set into the paving
 	local r = 15
 	while r < layout.hubRadius - 2 do

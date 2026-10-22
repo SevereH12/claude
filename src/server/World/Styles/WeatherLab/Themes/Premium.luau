@@ -34,11 +34,14 @@ local AURORA_FADE = NumberSequence.new({
 })
 
 -- The arch stands between the lighthouse gate (1.8 in front of the field)
--- and the research camp pad (5 in front, from 5 studs right of centre),
--- its posts just clear of the 10-stud boardwalk deck.
+-- and the research camp pad (5 in front). It frames the gate: its posts
+-- stand outside the gate's lamp posts and the value plaque, and its
+-- PREMIUM board sits above the gate's lamps, so the zone sign behind it
+-- reads in full from the boardwalk.
 local ARCH_Z = 3.9
-local ARCH_X = 6.2
-local ARCH_H = 8
+local ARCH_X = 13.4
+local ARCH_H = 17.5 -- above the gate's lamps (about 15.4 over the floor)
+local ARCH_BOARD = Vector2.new(16, 3)
 local ZONE_CEILING = 46 -- the zone volume's height; the aurora flies above it
 
 local SIGN: Kit.SignStyle = {
@@ -58,52 +61,55 @@ end
 local function arch(ctx: Context, zone: ZoneContext)
 	local folder = zone.folder
 	local z = -zone.slot.depth / 2 - ARCH_Z
+	local up = Vector3.new(0, 1, 0)
+	local top = onGround(ctx, zone, 0, z).Y - zone.slot.floor + ARCH_H
 	for _, side in { -1, 1 } do
 		local bottom = onGround(ctx, zone, side * ARCH_X, z)
-		local up = Vector3.new(0, 1, 0)
+		-- each post reaches the crossbar, whatever the ground does under it
+		local height = top - (bottom.Y - zone.slot.floor)
 		Pieces.box(
 			folder,
 			CFrame.new(bottom + up * 0.3),
-			Vector3.new(1.6, 0.6, 1.6),
+			Vector3.new(2, 0.6, 2),
 			GOLD,
 			Enum.Material.Metal
 		)
 		Pieces.box(
 			folder,
-			CFrame.new(bottom + up * (ARCH_H / 2)),
-			Vector3.new(0.9, ARCH_H, 0.9),
+			CFrame.new(bottom + up * (height / 2)),
+			Vector3.new(1.2, height, 1.2),
 			VIOLET,
 			Enum.Material.SmoothPlastic
 		)
-		for _, y in { 2.2, ARCH_H - 1.2 } do
+		for _, y in { 2.2, height / 2, height - 1.2 } do
 			Pieces.box(
 				folder,
 				CFrame.new(bottom + up * y),
-				Vector3.new(1.1, 0.3, 1.1),
+				Vector3.new(1.4, 0.3, 1.4),
 				GOLD,
 				Enum.Material.Metal,
 				false
 			)
 		end
 		-- a lantern hanging inside each post
-		local hook = Geo.at(zone, side * (ARCH_X - 1.6), z, bottom.Y - zone.slot.floor + ARCH_H)
+		local hook = Geo.at(zone, side * (ARCH_X - 1.6), z, top)
 		Pieces.lantern(folder, hook - up * 2, LANTERN, 16)
 		Kit.cable(ctx, hook, hook - up * 1, { Color = C.ink, Width = 0.1 })
 	end
-	local top = onGround(ctx, zone, 0, z).Y - zone.slot.floor + ARCH_H
 	Pieces.box(
 		folder,
 		Geo.cf(zone, 0, z, top + 0.35),
-		Vector3.new(ARCH_X * 2 + 1.6, 0.7, 1.1),
+		Vector3.new(ARCH_X * 2 + 1.6, 0.7, 1.4),
 		GOLD,
 		Enum.Material.Metal,
 		false
 	)
 	Pieces.signBoard(
 		folder,
-		Geo.cf(zone, 0, z, top + 2.2), -- its bottom rail rests on the crossbar
-		ARCH_X * 2 - 2,
-		2.2,
+		-- its bottom rail (0.4 under the board) rests on the crossbar
+		Geo.cf(zone, 0, z, top + 0.7 + 0.4 + ARCH_BOARD.Y / 2),
+		ARCH_BOARD.X,
+		ARCH_BOARD.Y,
 		`{Progression.PREMIUM_ICON} PREMIUM`,
 		"members only",
 		SIGN,

@@ -564,10 +564,11 @@ local function dress(ctx: Context, zone: ZoneContext)
 			)
 		end
 	end
-	-- warning sign at the gate side
+	-- warning sign on the open side of the gate, past the value plaque (the
+	-- research camp takes the other side)
 	Pieces.signBoard(
 		folder,
-		Geo.cf(zone, 13, -hd - 4, 3),
+		Geo.cf(zone, -16.5, -hd - 4, 3),
 		5.6,
 		2.4,
 		"STRIKE ZONE",

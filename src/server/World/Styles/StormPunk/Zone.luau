@@ -38,7 +38,7 @@ Zone.GATE_OUT = 2.2 -- pillars stand this far outside the footprint edge
 Zone.GATE_ATTACH_Y = 4.2 -- border cables meet the pillars here
 Zone.POST_HEIGHT = 5.5
 Zone.POST_SPACING = 22
-Zone.DECK_WIDTH = 10
+Zone.DECK_WIDTH = 12
 -- The field slab reaches this far past the footprint (the gate pillars and
 -- the last studs of the catwalk stand on it).
 Zone.MARGIN = 4.5

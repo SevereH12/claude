@@ -128,6 +128,11 @@ detail to save parts; the build output still reports the count.
 - `tools/walkcheck.py map.json out` checks you can walk from spawn to every
   zone, sell area, camp and portal of that world and that catch floors are
   flat and open.
+- `python3 tools/render_view.py map.json out.png --eye=X,Y,Z --at=X,Y,Z`
+  draws the map from a player's eye (perspective, with sign text), and
+  `python3 tools/render_view.py map.json outdir --signs` looks at every sign
+  from where a player would stand and prints how much of it shows (0% = it
+  faces a wall or something covers it). Use it after moving signs or props.
 - `python3 tools/flickercheck.py map.json` fails if two visible parts with
   different colours or materials have overlapping top faces at the same
   height (they flicker in Studio). Offset one, butt them, or match colours.

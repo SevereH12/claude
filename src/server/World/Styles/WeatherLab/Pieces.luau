@@ -451,17 +451,34 @@ function Pieces.cottage(parent: Instance, cframe: CFrame, o: CottageOptions, rng
 			EmissionDirection = Enum.NormalId.Top,
 		})
 	end
-	-- name board over the door
+	-- name board standing on the eave over the door, clear of the awning
+	-- and the door lamp (on two short legs when the walls are low)
 	if o.name then
+		local eave = 0.8 + h
+		local bottom = math.max(eave + 0.15, 0.8 + 5.3 + 0.1)
+		local boardWidth = math.min(w - 1.5, 9)
 		Kit.sign(
 			parent,
-			cframe * CFrame.new(0, 0.8 + h - 0.9, front - 0.45) * CFrame.Angles(0, math.pi, 0),
-			math.min(w - 1.5, 9),
+			cframe * CFrame.new(0, bottom + 0.7, front - 0.5),
+			boardWidth,
 			1.4,
 			o.name,
 			nil,
 			Palette.SIGN
 		)
+		if bottom - eave > 0.3 then
+			for _, s in { -1, 1 } do
+				Pieces.box(
+					parent,
+					cframe
+						* CFrame.new(s * (boardWidth / 2 - 0.8), (eave + bottom) / 2, front - 0.3),
+					Vector3.new(0.3, bottom - eave + 0.3, 0.3),
+					C.piling,
+					Enum.Material.Wood,
+					false
+				)
+			end
+		end
 	end
 	-- roof instrument
 	local ridge = (cframe * CFrame.new(-w * 0.25, 0.8 + h + rh + 0.3, 0)).Position
@@ -1042,7 +1059,8 @@ end
 
 -- Framed sign, optionally on two posts down to groundY. `cframe` is the
 -- board centre, LookVector = reading side. With `back`, the back face gets
--- its own text (and the frame is a rim instead of a backing plate).
+-- its own text; with `back` or a two-sided style the frame is a rim instead
+-- of a backing plate, so the back text shows.
 function Pieces.signBoard(
 	parent: Instance,
 	cframe: CFrame,
@@ -1054,10 +1072,18 @@ function Pieces.signBoard(
 	groundY: number?,
 	back: { title: string, subtitle: string? }?
 ): BasePart
-	local board = Kit.sign(parent, cframe, width, height, title, subtitle, style)
+	local frontStyle = style
+	if back and style.twoSided then
+		-- the back gets its own text below, not a copy of the front
+		frontStyle = table.clone(style)
+		frontStyle.twoSided = false
+	end
+	local board = Kit.sign(parent, cframe, width, height, title, subtitle, frontStyle)
 	local thick = style.thickness or 0.6
 	if back then
 		Kit.faceText(board, Enum.NormalId.Back, back.title, back.subtitle, style)
+	end
+	if back or style.twoSided then
 		for _, s in { -1, 1 } do
 			Pieces.box(
 				parent,

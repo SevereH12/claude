@@ -64,6 +64,20 @@ for _, inst in workspace:GetDescendants() do
 		elseif inst.ClassName == "SpawnLocation" then
 			shape = "Block"
 		end
+		-- sign text (SurfaceGuis), for tools/render_view.py
+		local texts = nil
+		for _, gui in inst:GetChildren() do
+			if gui.ClassName == "SurfaceGui" then
+				local lines = {}
+				for _, label in gui:GetChildren() do
+					if label.ClassName == "TextLabel" then
+						table.insert(lines, label.Text)
+					end
+				end
+				texts = texts or {}
+				table.insert(texts, { face = gui.Face.Name, lines = lines })
+			end
+		end
 		table.insert(parts, {
 			path = inst:GetFullName(),
 			name = inst.Name,
@@ -78,6 +92,7 @@ for _, inst in workspace:GetDescendants() do
 			canTouch = inst.CanTouch,
 			canQuery = inst.CanQuery,
 			anchored = inst.Anchored,
+			texts = texts,
 		})
 	end
 end

@@ -26,8 +26,8 @@ local UP = Vector3.yAxis
 local RIM = 10 -- guaranteed flat land around the footprint
 local CHAMFER = 6 -- the plateau's corners are cut this far in
 local SOIL = 6 -- soil band under the plateau cap
-local GATE_HALF = 7 -- gate pillars sit this far either side of the bridge
-local BRIDGE_WIDTH = 10
+local GATE_HALF = 8.5 -- gate pillars sit this far either side of the bridge
+local BRIDGE_WIDTH = 12
 local BRIDGE_LIFT = 0.2 -- bridge decks sit this far above the ground they land on
 
 local Zone = {}

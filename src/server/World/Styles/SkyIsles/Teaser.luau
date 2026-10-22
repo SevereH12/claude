@@ -178,7 +178,7 @@ function Teaser.build(ctx: Context, zone: ZoneContext)
 	local to = slot.gate.Position + UP * 0.2
 	Pieces.bridge(ctx, ctx.folders.connectors, from, to, {
 		glow = GLOW,
-		width = 10,
+		width = 12,
 		startFlat = 4,
 		endFlat = 12,
 		stopAt = BUILT,
@@ -212,11 +212,12 @@ function Teaser.build(ctx: Context, zone: ZoneContext)
 			C.plum,
 			Enum.Material.Slate
 		)
-		Pieces.diamond(ctx.folders.connectors, foot + UP * 12.8, 1.4, GLOW)
+		-- a crystal on each top corner of the board, which rests on the posts
+		Pieces.diamond(ctx.folders.connectors, foot + UP * 17.9, 1.4, GLOW)
 	end
 	Pieces.board(
 		folder,
-		barrierFrame * CFrame.new(0, 13.4, 0),
+		barrierFrame * CFrame.new(0, 12 + 2.2, 0),
 		13,
 		4.4,
 		"COMING SOON",
@@ -250,7 +251,7 @@ function Teaser.build(ctx: Context, zone: ZoneContext)
 	-- a short stub reaching out from the island side
 	Pieces.bridge(ctx, folder, to, from, {
 		glow = GLOW,
-		width = 10,
+		width = 12,
 		startFlat = 6,
 		endFlat = 4,
 		stopAt = 0.14,

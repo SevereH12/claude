@@ -977,8 +977,10 @@ function Pieces.gateway(
 end
 
 -- Rune bridge from `from` to `to` (both on the walking surface): stone
--- deck with curbs, a glowing centre inlay, rail posts with crystal caps,
--- glowing rail cables and a keel underneath. Flat at both ends, ramp between.
+-- deck with curbs, a glowing centre inlay, rail posts on the curbs joined
+-- by a solid stone handrail (the border that keeps players on the bridge)
+-- with a glowing rune cable along it, and a keel underneath. Flat at both
+-- ends, ramp between.
 function Pieces.bridge(
 	ctx: Context,
 	parent: Instance,
@@ -990,7 +992,7 @@ function Pieces.bridge(
 	local run = span.Magnitude
 	local dir = span.Unit
 	local right = dir:Cross(UP)
-	local width = opts.width or 10
+	local width = opts.width or 12
 	local startFlat = math.min(opts.startFlat or 4, run * 0.25)
 	local endFlat = math.min(opts.endFlat or 12, run * 0.35)
 	local stop = run * (opts.stopAt or 1)
@@ -1078,16 +1080,28 @@ function Pieces.bridge(
 		end
 	end
 
-	-- rail posts with glowing cables between them
-	local spacing = opts.spacing or 24
-	local count = math.max(1, math.floor((math.min(run, stop) - 1) / spacing))
+	-- rail posts on the curbs every `spacing` studs and at both bends of
+	-- the ramp, so the handrail between them follows the deck exactly
+	local spacing = opts.spacing or 16
+	local last = math.min(run, stop) - 0.5
+	local marks: { number } = { startFlat, run - endFlat, last }
+	local s = 1
+	while s < last do
+		table.insert(marks, s)
+		s += spacing
+	end
+	table.sort(marks)
+	local posts: { number } = {}
+	for _, mark in marks do
+		if mark >= 1 and mark <= last and (#posts == 0 or mark - posts[#posts] >= 3) then
+			table.insert(posts, mark)
+		end
+	end
 	local previous: { [number]: Vector3 } = {}
-	local sections: { [number]: number } = {}
-	for k = 0, count do
-		local s = math.min(1 + k * spacing, stop - 0.5)
-		local deck = pointAt(s)
+	for k, at in posts do
+		local deck = pointAt(at)
 		for side = -1, 1, 2 do
-			local foot = deck + right * side * (width / 2 - 0.5) + UP * 1.8
+			local foot = deck + right * side * (width / 2 - 0.5) + UP * 0.9
 			local shaft = Pieces.solid(
 				parent,
 				CFrame.lookAt(foot + UP * 1.5, foot + UP * 1.5 + dir),
@@ -1096,25 +1110,23 @@ function Pieces.bridge(
 				Enum.Material.Cobblestone
 			)
 			shaft.Name = "RailPost"
-			if opts.lights ~= false and k % 2 == 0 and side == 1 then
+			if opts.lights ~= false and k % 3 == 1 and side == 1 then
 				Pieces.light(shaft, opts.glow, 14, 1)
 			end
-			local top = foot + UP * 2.8
-			local last = previous[side]
-			-- one cable per side across each straight stretch (flat, ramp,
-			-- flat), not one per gap: the rail reads the same with far fewer beams
-			local section = if s <= startFlat + 0.01
-				then 1
-				elseif s >= run - endFlat - 0.01 then 3
-				else 2
-			if last and (sections[side] ~= section or k == count) then
-				Pieces.runeCable(ctx, last, top, opts.glow, 0.5, 0.22)
-				previous[side] = top
-				sections[side] = section
-			elseif not last then
-				previous[side] = top
-				sections[side] = section
+			local top = foot + UP * 2.6
+			local before = previous[side]
+			if before then
+				local rail = Pieces.solid(
+					parent,
+					CFrame.lookAt((before + top) / 2, top),
+					Vector3.new(0.7, 0.6, (top - before).Magnitude + 0.7),
+					C.skystoneLight,
+					Enum.Material.Cobblestone
+				)
+				rail.Name = "BridgeRail"
+				Pieces.runeCable(ctx, before + UP * 0.42, top + UP * 0.42, opts.glow, 0.05, 0.22)
 			end
+			previous[side] = top
 		end
 	end
 end
@@ -1490,16 +1502,20 @@ function Pieces.segmentDistance(p: Vector3, a: Vector3, b: Vector3): number
 end
 
 -- Horizontal distance from p to a zone's footprint rectangle (0 inside).
-function Pieces.footprintDistance(zone: ZoneContext, p: Vector3): number
-	local slot = zone.slot
+local function slotDistance(slot: WorldTypes.Slot, p: Vector3): number
 	local l = slot.frame:PointToObjectSpace(Vector3.new(p.X, slot.floor, p.Z))
 	local dx = math.max(math.abs(l.X) - slot.width / 2, 0)
 	local dz = math.max(math.abs(l.Z) - slot.depth / 2, 0)
 	return math.sqrt(dx * dx + dz * dz)
 end
 
+function Pieces.footprintDistance(zone: ZoneContext, p: Vector3): number
+	return slotDistance(zone.slot, p)
+end
+
 -- Is a disc (centre p, radius r) clear of every other zone's footprint,
--- of every connector corridor and (with hubPad) of the hub plaza?
+-- of every Research Camp pad (its sign and its way in), of every connector
+-- corridor and (with hubPad) of the hub plaza?
 function Pieces.clearOf(
 	ctx: Context,
 	p: Vector3,
@@ -1512,6 +1528,9 @@ function Pieces.clearOf(
 			return false
 		end
 		local slot = zone.slot
+		if slotDistance(Layout.campFootprint(slot), p) < r + 1.5 then
+			return false
+		end
 		if Pieces.segmentDistance(p, slot.hubExit.Position, slot.gate.Position) < r + 7 then
 			return false
 		end

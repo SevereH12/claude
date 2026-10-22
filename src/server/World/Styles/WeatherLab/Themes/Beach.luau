@@ -219,9 +219,10 @@ local function tideTower(ctx: Context, parent: Instance, cframe: CFrame)
 	local mast = (cframe * CFrame.new(2.4, legH + 4.5, 2.2)).Position
 	Pieces.cyl(parent, mast, 5, 0.25, C.ink, Enum.Material.Metal, false)
 	Pieces.windsock(parent, mast + Vector3.new(0, 4.6, 0), C.beacon, 3)
+	-- the name stands on the roof's front edge, clear of the ladder
 	local sign = Kit.sign(
 		parent,
-		cframe * CFrame.new(0, legH - 0.6, -3.05) * CFrame.Angles(0, math.pi, 0),
+		cframe * CFrame.new(0, legH + 4.5 + 0.7, -2.4),
 		5.6,
 		1.4,
 		"TIDE WATCH",

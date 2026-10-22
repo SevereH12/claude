@@ -18,6 +18,7 @@ local Geo = require(script.Parent.Geo)
 local Land = require(script.Parent.Land)
 local Palette = require(script.Parent.Palette)
 local Pieces = require(script.Parent.Pieces)
+local Zone = require(script.Parent.Zone)
 
 type Context = WorldTypes.Context
 type ZoneContext = WorldTypes.ZoneContext
@@ -135,7 +136,7 @@ local function buildHubIsland(ctx: Context)
 			parent,
 			Geo.polar(b, 26.7, 0),
 			Geo.polar(b, R - 0.4, 0),
-			10,
+			Zone.DECK_WIDTH,
 			F,
 			G.pavement,
 			G.edging
@@ -742,6 +743,11 @@ end
 
 -- Arrow posts by the spawn: up to four arrows per post, one post per four
 -- slots, so arrows never pile up or sink however many zones there are.
+-- Fingerpost arms: the lowest at about eye height, then one every 2.6 studs,
+-- so each arm's arrow head (2.3 tall) clears the arms above and below.
+local ARM_LOW = 7
+local ARM_STEP = 2.6
+
 local function fingerPosts(parent: Instance, ctx: Context, base: Vector3, along: Vector3)
 	local slots = Geo.allSlots(ctx)
 	local perPost = 4
@@ -751,19 +757,20 @@ local function fingerPosts(parent: Instance, ctx: Context, base: Vector3, along:
 		local first = (p - 1) * perPost + 1
 		local last = math.min(#slots, p * perPost)
 		local n = last - first + 1
-		Pieces.column(parent, postBase, 9 + n * 2.2, 0.9, C.iron, M.metal, true)
+		local height = ARM_LOW + n * ARM_STEP
+		Pieces.column(parent, postBase, height, 0.9, C.iron, M.metal, true)
 		Pieces.column(parent, postBase, 1, 2, C.brass)
-		Pieces.ball(parent, postBase + UP * (9.6 + n * 2.2), 1.6, C.volt, M.neon)
+		Pieces.ball(parent, postBase + UP * (height + 0.6), 1.6, C.volt, M.neon)
 		for i = first, last do
 			local zone = slots[i]
 			local target = zone.slot.hubExit.Position
 			local dir = Vector3.new(target.X - postBase.X, 0, target.Z - postBase.Z).Unit
-			local y = 8 + (last - i) * 2.2
+			local y = ARM_LOW + (last - i) * ARM_STEP
 			Pieces.arrowSign(
 				parent,
-				postBase + UP * y + dir * 4.3,
+				postBase + UP * y + dir * 3.8,
 				dir,
-				7,
+				6,
 				1.8,
 				string.upper(slotName(zone)),
 				if zone.isTeaser then C.ceramic else zone.color
@@ -827,7 +834,7 @@ function Hub.buildHub(ctx: Context)
 	end
 	-- arrow posts on the spawn's far side from zone 1, clear of the lanes
 	local postSide = if turn >= 0 then -1 else 1
-	local postBase = spawnPos + Geo.dir(sb + 90) * (postSide * 9) + Geo.dir(sb) * 2
+	local postBase = spawnPos + Geo.dir(sb + 90) * (postSide * 13) + Geo.dir(sb) * 2
 	fingerPosts(parent, ctx, postBase, Geo.dir(sb))
 
 	-- props on the quiet bearings

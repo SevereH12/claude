@@ -485,6 +485,7 @@ end
 
 local GATE_WIDTH = 16 -- wider than any connector deck
 local GATE_HEIGHT = 12 -- higher than a jump
+local LOCK_SIGN_Y = 5.4 -- the lock sign's middle, above the deck: about eye height
 local GATE_SIGN: SignStyle = {
 	boardColor = Color3.fromRGB(28, 30, 40),
 	titleColor = Color3.fromRGB(255, 255, 255),
@@ -494,7 +495,10 @@ local GATE_SIGN: SignStyle = {
 
 -- A locked zone's gate: a shimmering barrier across the end of the
 -- connector, 1 stud outside the zone at slot.gate, between two posts, with
--- a sign saying what the zone needs. Model <ZoneId> with a "Barrier" part.
+-- a sign saying what the zone needs hung on the barrier at eye height,
+-- facing the connector (below every style's gate art, which stands above
+-- the deck: arches, name boards, ornaments). Model <ZoneId> with a
+-- "Barrier" part.
 -- Nothing in it collides or is hit by raycasts here; Controllers/ZoneGates
 -- makes the barrier solid on the client of each player who can't enter.
 function Kit.zoneGate(parent: Instance, zone: ZoneContext, requirement: string): Model
@@ -526,9 +530,9 @@ function Kit.zoneGate(parent: Instance, zone: ZoneContext, requirement: string):
 	end
 	Kit.sign(
 		model,
-		gate * CFrame.new(0, GATE_HEIGHT + 2.2, 0),
-		GATE_WIDTH - 2,
-		2.6,
+		gate * CFrame.new(0, LOCK_SIGN_Y, -(0.3 + (GATE_SIGN.thickness or 0.6) / 2 + 0.05)),
+		GATE_WIDTH - 4,
+		3,
 		`🔒 {string.upper(def.displayName)}`,
 		requirement,
 		GATE_SIGN

@@ -13,6 +13,10 @@
 --     +10% Volts. JOIN opens Roblox's group prompt (only from the tap), and
 --     a join is reported (GroupJoined) for the server to check itself
 --     (Systems/Group)
+-- Cards size themselves to the screen (fitCards): a phone held upright gets
+-- 4 days and 2 gifts a row, and on touch screens the cards grow to fit the
+-- TAP_MIN-tall CLAIM button and the larger minimum text, instead of the
+-- button covering the reward.
 -- RewardsUI.ReadyChanged tells the menu when something is ready to claim.
 -- Gentle nudges, as toasts with OPEN: the daily reward when you join (if
 -- it's ready), each playtime gift once when it's ready, and the group card
@@ -34,25 +38,34 @@ local Store = require(ReplicatedStorage.Shared.Util.Store)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Celebrate = require(script.Parent.Parent.Lib.Celebrate)
 local Layout = require(script.Parent.Parent.Lib.Layout)
+local LayoutMath = require(script.Parent.Parent.Lib.LayoutMath)
 local UI = require(script.Parent.Parent.Lib.UI)
 local State = require(script.Parent.State)
 
 local COLORS = UI.COLORS
 local PINK = Color3.fromRGB(255, 120, 170)
-local DAY_HEIGHT = 168
-local GIFT_HEIGHT = 128
 local GROUP_HEIGHT = 72
 local NUDGE_SECONDS = 6
-local HEADING = 28
+local HEADING = 36 -- section titles sit at the bottom, so sections have room between them
 local GAP = 8
+-- inside a card (design pixels)
+local PAD = 4
+local TITLE = 20
+local ICON = 40
+local BUTTON = 36 -- CLAIM's height; at least TAP_MIN points on touch
 
+-- `wide`: a gift card (the text beside the icon); otherwise a day card
+-- (title, icon, text and CLAIM stacked)
 type Card = {
 	frame: Frame,
 	image: ImageLabel,
 	text: TextLabel,
 	button: TextButton,
 	stroke: UIStroke,
+	wide: boolean,
 }
+
+type Grid = { frame: Frame, layout: UIGridLayout, count: number }
 
 local RewardsUI = {}
 
@@ -64,6 +77,8 @@ local panel: Frame
 local list: ScrollingFrame
 local dayCards: { Card } = {}
 local giftCards: { Card } = {}
+local dayGrid: Grid
+local giftGrid: Grid
 local nextLabel: TextLabel
 local groupText: TextLabel
 local groupButton: TextButton
@@ -136,8 +151,15 @@ local function describe(reward: Types.Reward, snapshot: Types.Snapshot): (string
 	return table.concat(lines, "\n"), image
 end
 
--- A day or gift card: a title, an icon, what it gives, and a button.
-local function buildCard(parent: Instance, order: number, title: string, onClaim: () -> ()): Card
+-- A day or gift card: a title, an icon, what it gives, and a button
+-- (placed by fitCards).
+local function buildCard(
+	parent: Instance,
+	order: number,
+	title: string,
+	wide: boolean,
+	onClaim: () -> ()
+): Card
 	local frame = UI.make(Instance.new("Frame"), {
 		Name = title,
 		LayoutOrder = order,
@@ -149,16 +171,14 @@ local function buildCard(parent: Instance, order: number, title: string, onClaim
 	local heading = UI.label({
 		Title = true,
 		Text = title,
-		Position = UDim2.new(0, 4, 0, 4),
-		Size = UDim2.new(1, -8, 0, 20),
+		Position = UDim2.fromOffset(PAD, PAD),
+		Size = UDim2.new(1, -2 * PAD, 0, TITLE),
 		Parent = frame,
 	})
 	UI.maxText(heading, 18)
 	local image = UI.make(Instance.new("ImageLabel"), {
 		Name = "Icon",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 26),
-		Size = UDim2.fromOffset(40, 40),
+		Size = UDim2.fromOffset(ICON, ICON),
 		BackgroundTransparency = 1,
 		ScaleType = Enum.ScaleType.Fit,
 		Parent = frame,
@@ -167,8 +187,7 @@ local function buildCard(parent: Instance, order: number, title: string, onClaim
 		Text = "",
 		TextColor3 = COLORS.subtext,
 		TextWrapped = true,
-		Position = UDim2.new(0, 4, 0, 70),
-		Size = UDim2.new(1, -8, 1, -114),
+		TextXAlignment = if wide then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center,
 		Parent = frame,
 	})
 	UI.maxText(text, 16)
@@ -177,7 +196,6 @@ local function buildCard(parent: Instance, order: number, title: string, onClaim
 		Text = "",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -6),
-		Size = UDim2.new(1, -8, 0, 36),
 		BackgroundColor3 = COLORS.green,
 		Parent = frame,
 	})
@@ -192,7 +210,49 @@ local function buildCard(parent: Instance, order: number, title: string, onClaim
 		text = text,
 		button = button,
 		stroke = stroke,
+		wide = wide,
 	}
+end
+
+-- Places a card's icon, text and CLAIM for a `button`-tall CLAIM and a
+-- `textHeight`-tall text area: a day card stacks them under its title, a
+-- gift card puts the text beside the icon. Returns the card's height.
+local function placeCard(card: Card, button: number, textHeight: number): number
+	local top = PAD + TITLE + 2
+	card.button.Size = UDim2.new(1, -2 * PAD, 0, button)
+	if card.wide then
+		card.image.AnchorPoint = Vector2.zero
+		card.image.Position = UDim2.fromOffset(PAD + 4, top + 2)
+		local left = PAD + 4 + ICON + 8
+		card.text.Position = UDim2.fromOffset(left, top)
+		card.text.Size = UDim2.new(1, -(left + PAD), 0, textHeight)
+		return math.max(top + 2 + ICON, top + textHeight) + 6 + button + 6
+	end
+	card.image.AnchorPoint = Vector2.new(0.5, 0)
+	card.image.Position = UDim2.new(0.5, 0, 0, top)
+	card.text.Position = UDim2.fromOffset(PAD, top + ICON + 4)
+	card.text.Size = UDim2.new(1, -2 * PAD, 0, textHeight)
+	return top + ICON + 4 + textHeight + 4 + button + 6
+end
+
+-- Sizes both grids for this screen: 7 days and 3 gifts a row (4 and 2 on a
+-- phone held upright); on touch the CLAIM buttons are TAP_MIN points tall
+-- and text can't shrink below 14 points, so the cards are taller there.
+local function fitCards()
+	local upright = Layout.class == "Phone" and Layout.portrait
+	local touch = Layout.isTouch()
+	local button = LayoutMath.tapMin(Layout.class, Layout.scale, Vector2.new(0, BUTTON)).Y
+	local function fit(grid: Grid, cards: { Card }, columns: number, textHeight: number)
+		local height = 0
+		for _, card in cards do
+			height = placeCard(card, button, textHeight)
+		end
+		local rows = math.ceil(grid.count / columns)
+		grid.layout.CellSize = UDim2.new(1 / columns, -GAP, 0, height)
+		grid.frame.Size = UDim2.new(1, -12, 0, rows * height + (rows - 1) * GAP)
+	end
+	fit(dayGrid, dayCards, if upright then 4 else 7, if touch then 84 else 60)
+	fit(giftGrid, giftCards, if upright then 2 else 3, if touch then 52 else 44)
 end
 
 local function setCard(
@@ -368,6 +428,7 @@ local function heading(parent: Instance, order: number, text: string): TextLabel
 		LayoutOrder = order,
 		Text = text,
 		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Bottom,
 		Size = UDim2.new(1, -12, 0, HEADING),
 		Parent = parent,
 	})
@@ -375,27 +436,20 @@ local function heading(parent: Instance, order: number, text: string): TextLabel
 	return label
 end
 
-local function grid(
-	parent: Instance,
-	order: number,
-	name: string,
-	height: number,
-	cellSize: UDim2
-): Frame
+-- A grid of `count` cards (fitCards sizes it).
+local function grid(parent: Instance, order: number, name: string, count: number): Grid
 	local frame = UI.make(Instance.new("Frame"), {
 		Name = name,
 		LayoutOrder = order,
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -12, 0, height),
 		Parent = parent,
 	})
-	UI.make(Instance.new("UIGridLayout"), {
-		CellSize = cellSize,
+	local layout = UI.make(Instance.new("UIGridLayout"), {
 		CellPadding = UDim2.fromOffset(GAP, GAP),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = frame,
 	})
-	return frame
+	return { frame = frame, layout = layout, count = count }
 end
 
 -- "Got +1.2K Volts and 2x Volts for 10 min!"
@@ -437,14 +491,21 @@ function RewardsUI.init()
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = list,
 	})
+	-- room under the last card when scrolled to the bottom
+	UI.make(Instance.new("UIPadding"), {
+		PaddingTop = UDim.new(0, 2),
+		PaddingBottom = UDim.new(0, 12),
+		PaddingLeft = UDim.new(0, 2),
+		Parent = list,
+	})
 
 	heading(list, 1, "📅 DAILY STREAK")
-	local days = grid(list, 2, "Days", DAY_HEIGHT, UDim2.new(1 / 7, -GAP, 1, 0))
+	dayGrid = grid(list, 2, "Days", #Config.DAILY_REWARDS)
 	local claimDaily = Net.get("ClaimDaily")
 	for day = 1, #Config.DAILY_REWARDS do
 		table.insert(
 			dayCards,
-			buildCard(days, day, `DAY {day}`, function()
+			buildCard(dayGrid.frame, day, `DAY {day}`, false, function()
 				claimDaily:FireServer()
 			end)
 		)
@@ -460,23 +521,17 @@ function RewardsUI.init()
 	UI.maxText(nextLabel, 18)
 
 	heading(list, 4, "⏱ PLAYTIME GIFTS (this visit)")
-	local rows = math.ceil(#Config.PLAYTIME_GIFTS / 3)
-	local gifts = grid(
-		list,
-		5,
-		"Gifts",
-		rows * GIFT_HEIGHT + (rows - 1) * GAP,
-		UDim2.new(1 / 3, -GAP, 0, GIFT_HEIGHT)
-	)
+	giftGrid = grid(list, 5, "Gifts", #Config.PLAYTIME_GIFTS)
 	local claimGift = Net.get("ClaimGift")
 	for index, gift in Config.PLAYTIME_GIFTS do
 		table.insert(
 			giftCards,
-			buildCard(gifts, index, `{gift.minutes} MIN`, function()
+			buildCard(giftGrid.frame, index, `{gift.minutes} MIN`, true, function()
 				claimGift:FireServer(index)
 			end)
 		)
 	end
+	UI.onLayout(fitCards)
 
 	heading(list, 6, `👥 {string.upper(Config.GROUP_NAME)} GROUP`)
 	local groupCard = UI.make(Instance.new("Frame"), {

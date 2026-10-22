@@ -677,9 +677,10 @@ function Pieces.arrowSign(
 	local x = d:Cross(UP)
 	local cf = CFrame.fromMatrix(center, d, UP)
 	Pieces.sign(parent, cf, length, height, title, nil, Palette.sign(color, true))
-	-- arrow head: two wedges forming a triangle in the board's plane
-	local headLength = height * 0.9
-	local half = height * 0.85
+	-- arrow head: two wedges forming a triangle in the board's plane, a
+	-- little taller than the board (1.3x) so stacked arms keep clear
+	local headLength = height * 0.8
+	local half = height * 0.65
 	local base = center + d * (length / 2)
 	for _, s in { 1, -1 } do
 		local up = UP * s
