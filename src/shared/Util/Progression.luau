@@ -106,7 +106,7 @@ function Progression.worldLockReason(progress: Progress, world: Types.WorldDef):
 end
 
 -- The best-paying non-premium zone this player's bottle opens.
-local function bestZone(progress: Progress): Types.ZoneDef?
+function Progression.bestZone(progress: Progress): Types.ZoneDef?
 	local best: Types.ZoneDef? = nil
 	for _, other in Config.ZONES do
 		if
@@ -126,7 +126,7 @@ function Progression.boltValue(progress: Progress, zone: Types.ZoneDef): number
 	if not zone.premium then
 		return zone.chargeValue
 	end
-	local best = bestZone(progress)
+	local best = Progression.bestZone(progress)
 	return math.round((if best then best.chargeValue else 0) * Config.PREMIUM_VALUE_MULTIPLIER)
 end
 
@@ -137,7 +137,7 @@ function Progression.chargeSize(progress: Progress, zone: Types.ZoneDef): number
 	if not zone.premium then
 		return zone.chargeSize
 	end
-	local best = bestZone(progress)
+	local best = Progression.bestZone(progress)
 	return if best then best.chargeSize else 1
 end
 

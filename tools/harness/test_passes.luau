@@ -139,6 +139,22 @@ check(
 )
 check(Passes.boltColour({ BoltColours = true }, 99) == nil, "an out-of-range pick: default")
 
+-- a sale broken down: 2x Volts' missed extra, and the free trial's extra
+do
+	local earned, missed, trialExtra = Passes.saleBreakdown(100, none, false)
+	check(earned == 100 and missed == 100 and trialExtra == 0, "no pass: 2x would have paid +100")
+	earned, missed, trialExtra = Passes.saleBreakdown(100, none, true)
+	check(earned == 200 and missed == 0 and trialExtra == 100, "the trial pays 2x and says so")
+	earned, missed, trialExtra = Passes.saleBreakdown(100, { DoubleVolts = true }, false)
+	check(earned == 200 and missed == 0 and trialExtra == 0, "owners miss nothing")
+	earned, missed, trialExtra = Passes.saleBreakdown(100, { DoubleVolts = true }, true)
+	check(earned == 200 and trialExtra == 0, "the trial adds nothing for owners")
+	earned, missed, trialExtra = Passes.saleBreakdown(100, { VIP = true }, false)
+	check(earned == 110 and missed == 110, "VIP: 2x would have paid +110")
+	earned, missed, trialExtra = Passes.saleBreakdown(100, { VIP = true }, true)
+	check(earned == 220 and trialExtra == 110, "VIP on the trial: 2.2x")
+end
+
 -- every pass at once still works
 check(near(Passes.sellMultiplier(all), 2.2), "all passes: 2.2x")
 check(Passes.luckChance(all) == 0.15, "all passes: 15% luck")

@@ -389,6 +389,11 @@ function UI.togglePanel(panel: GuiObject): boolean
 	return true
 end
 
+-- Is any panel open? (Offers never show over one.)
+function UI.anyPanelOpen(): boolean
+	return next(openPanels) ~= nil
+end
+
 -- Closes the open panel (Esc, gamepad B, the backdrop). True if one was open.
 function UI.closePanels(): boolean
 	local closed = false

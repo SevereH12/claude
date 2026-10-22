@@ -9,7 +9,11 @@
 --   │                with the Chemist's TANK count beside it
 --   └── RemoteSell   Remote Sell pass owners: a SELL button at the bar's
 --                    right end (the bar shrinks to make room); it charges
---                    up for 1.5s, then sells (keyboard V, gamepad L1)
+--                    up for 1.5s, then sells (keyboard V, gamepad L1).
+--                    Without the pass it shows locked while a full bottle is
+--                    far from a station (HUD.setSellNudge: Controllers/Offers)
+-- While the free 2x Volts trial runs, a "2x TRIAL 2:41" chip sits at the
+-- bar's left end.
 -- The MENU button (shop, research, teleport, boosts) is Controllers/Menu.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -51,6 +55,8 @@ local sellButton: TextButton
 local sellRing: Frame
 local sellProgress: UIGradient
 local hasRemoteSell = false
+local sellNudge: (() -> ())? = nil -- set while the locked SELL shows: what a tap does
+local trialChip: TextLabel
 local sellCharging = false
 local sellReadyAt = 0
 local goalCard: Frame
@@ -248,6 +254,21 @@ local function buildBottleBar()
 		Parent = bottleBar,
 	})
 	UI.maxText(tankLabel, 20)
+
+	-- the free 2x Volts trial's time left, at the bar's other end
+	trialChip = UI.label({
+		Title = true,
+		Name = "Trial",
+		Text = "",
+		Visible = false,
+		TextColor3 = COLORS.text,
+		BackgroundColor3 = COLORS.green,
+		BackgroundTransparency = 0,
+		Size = UDim2.fromOffset(130, 24), -- room beside the TANK count on the narrowest bar
+		Parent = bottleBar,
+	})
+	UI.corner(trialChip, UDim.new(0.5, 0))
+	UI.maxText(trialChip, 18)
 end
 
 -- The SELL button's charge-up ring: an outline that fills left to right.
@@ -279,8 +300,25 @@ local function buildSellButton()
 	})
 	sellProgress = UI.make(Instance.new("UIGradient"), { Parent = stroke })
 	sellButton.Activated:Connect(function()
-		HUD.remoteSell()
+		local nudge = sellNudge
+		if hasRemoteSell then
+			HUD.remoteSell()
+		elseif nudge then
+			UI.pop(sellButton)
+			nudge()
+		end
 	end)
+end
+
+-- Without Remote Sell: show the SELL button locked (`onTap` opens the pass
+-- in the store), or hide it again with nil.
+function HUD.setSellNudge(onTap: (() -> ())?)
+	if (sellNudge ~= nil) == (onTap ~= nil) then
+		sellNudge = onTap
+		return
+	end
+	sellNudge = onTap
+	HUD.place()
 end
 
 local function setSellProgress(fraction: number)
@@ -335,6 +373,16 @@ function HUD.remoteSell()
 		sellButton.Text = "SELL"
 		UI.setEnabled(sellButton, true, COLORS.green)
 	end)
+end
+
+local function renderTrial()
+	local snapshot = State.current
+	local left = if snapshot then snapshot.store.trialEndsAt - workspace:GetServerTimeNow() else 0
+	trialChip.Visible = left > 0
+	if left > 0 then
+		local seconds = math.ceil(left)
+		trialChip.Text = string.format("2x TRIAL %d:%02d", seconds // 60, seconds % 60)
+	end
 end
 
 local function renderStorm()
@@ -440,8 +488,16 @@ function HUD.place()
 	UI.place(stormPill, hud.storm)
 	UI.place(goalCard, hud.goal)
 	local bar = hud.bar
-	sellButton.Visible = hasRemoteSell
-	if hasRemoteSell then
+	local showSell = hasRemoteSell or sellNudge ~= nil
+	sellButton.Visible = showSell
+	if not hasRemoteSell then
+		sellButton.Text = "🔒 SELL"
+		UI.setEnabled(sellButton, true, COLORS.disabled)
+	elseif not sellCharging and os.clock() >= sellReadyAt then
+		sellButton.Text = "SELL"
+		UI.setEnabled(sellButton, true, COLORS.green)
+	end
+	if showSell then
 		local barWidth = bar.w - SELL_WIDTH - LayoutMath.GAP
 		UI.place(bottleBar, { x = bar.x, y = bar.y, w = barWidth, h = bar.h })
 		UI.place(
@@ -454,6 +510,8 @@ function HUD.place()
 	local atBottom = not Layout.isTouch()
 	tankLabel.AnchorPoint = Vector2.new(1, if atBottom then 1 else 0)
 	tankLabel.Position = if atBottom then UDim2.new(1, -10, 0, -4) else UDim2.new(1, -10, 1, 4)
+	trialChip.AnchorPoint = Vector2.new(0, if atBottom then 1 else 0)
+	trialChip.Position = if atBottom then UDim2.new(0, 10, 0, -4) else UDim2.new(0, 10, 1, 4)
 end
 
 function HUD.init()
@@ -488,6 +546,7 @@ function HUD.start()
 	Storm.Changed:Connect(renderStorm)
 	while true do
 		renderStorm()
+		renderTrial()
 		task.wait(0.25)
 	end
 end

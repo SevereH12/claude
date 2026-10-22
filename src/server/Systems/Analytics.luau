@@ -13,9 +13,14 @@
 --     "Bottle <n>", 03 = "Storm" or "Calm". Small fixed sets, well under
 --     the 8,000 combinations Roblox allows.
 --   Economy "Volts": earned at the sell station (Source), spent on bottles,
---     boots and researchers (Sink).
+--     boots and researchers (Sink), bought in Volts packs (Source, IAP).
+--   Funnel "Store": opened Boosts -> tapped a card -> purchase window
+--     opened -> bought, one funnel session per store visit (STORE_STEPS).
+--   Custom events: "OfferShown" and "OfferTapped" (CustomField01 = the
+--     offer key), "TrialStarted" (1) and "TrialEnded" (Volts it earned).
 
 local AnalyticsService = game:GetService("AnalyticsService")
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -39,6 +44,12 @@ local ONBOARDING = {
 	"Entered a second zone",
 	"Hired a researcher",
 }
+local STORE_STEPS = {
+	"Opened Boosts",
+	"Tapped a card",
+	"Purchase window opened",
+	"Bought",
+}
 local CURRENCY = "Volts"
 -- Each hub is built round its world's offset; the styles' hub radius is 60
 -- (WeatherLab) and 52 (StormPunk), so anything this close counts as the hub.
@@ -56,6 +67,7 @@ local Analytics = {}
 
 local sessions: { [Player]: Session } = {}
 local seas: { BasePart } = {}
+local storeVisits: { [Player]: string } = {} -- the current store visit's funnel session id
 
 local function fields(where: string, bottle: string, phase: string): { [string]: string }
 	return {
@@ -246,6 +258,52 @@ function Analytics.hired(player: Player, def: Types.ResearcherDef)
 	economy(player, Enum.AnalyticsEconomyFlowType.Sink, def.price, "Shop", def.name)
 end
 
+-- Store funnel step 1-4 (STORE_STEPS). Opening the store starts a new
+-- visit; the other steps belong to the current one (or start one).
+function Analytics.storeStep(player: Player, step: number)
+	local name = STORE_STEPS[step]
+	if not name then
+		return
+	end
+	local visit = storeVisits[player]
+	if step == 1 or not visit then
+		visit = HttpService:GenerateGUID(false)
+		storeVisits[player] = visit
+	end
+	local id = visit :: string
+	send(`store step {step}`, function()
+		AnalyticsService:LogFunnelStepEvent(player, "Store", id, step, name)
+	end)
+end
+
+-- "OfferShown" or "OfferTapped", with the offer key (a small fixed set).
+function Analytics.offer(player: Player, eventName: string, key: string)
+	send(eventName, function()
+		AnalyticsService:LogCustomEvent(player, eventName, 1, {
+			[Enum.AnalyticsCustomFieldKeys.CustomField01.Name] = key,
+		})
+	end)
+end
+
+function Analytics.trialStarted(player: Player)
+	send("TrialStarted", function()
+		AnalyticsService:LogCustomEvent(player, "TrialStarted", 1)
+	end)
+end
+
+-- `earned`: the extra Volts the trial paid.
+function Analytics.trialEnded(player: Player, earned: number)
+	send("TrialEnded", function()
+		AnalyticsService:LogCustomEvent(player, "TrialEnded", earned)
+	end)
+end
+
+-- A Volts pack bought with Robux (Systems/Receipts).
+function Analytics.packBought(player: Player, pack: Types.VoltPackDef, volts: number)
+	economy(player, Enum.AnalyticsEconomyFlowType.Source, volts, "IAP", pack.name)
+	Analytics.storeStep(player, 4)
+end
+
 local function onLoaded(player: Player, profile: Types.Profile)
 	local session: Session = { joinedAt = os.clock(), profile = profile, reached = {} }
 	sessions[player] = session
@@ -260,6 +318,7 @@ local function onLoaded(player: Player, profile: Types.Profile)
 end
 
 local function onRemoving(player: Player)
+	storeVisits[player] = nil
 	local session = sessions[player]
 	sessions[player] = nil
 	if not session then

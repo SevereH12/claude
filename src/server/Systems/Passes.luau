@@ -14,6 +14,10 @@
 -- Studio testing: the TEST panel's "Pretend owns <pass>" toggles
 -- (Systems/DevCommands) count as owning the pass, in Studio only, like
 -- Pretend Premium.
+--
+-- Also this session's store numbers (Sync.store, in the snapshot): the free
+-- 2x Volts trial (Systems/Store starts it; sales pay 2x while it runs),
+-- what it has paid, and what 2x Volts would have paid. All lost on leaving.
 
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
@@ -23,6 +27,7 @@ local RunService = game:GetService("RunService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
+local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Sync = require(script.Parent.Sync)
 
@@ -33,6 +38,10 @@ local Passes = {}
 
 Passes.ATTRIBUTE = PassRules.ATTRIBUTE -- .. key: true when the player owns it
 Passes.PRETEND = "PretendPass_" -- .. key: the Studio toggle is on
+
+-- Fires when a player buys a pass in game (not for passes they already
+-- owned when they joined, or Studio toggles).
+Passes.Purchased = Signal.new() :: Signal.Signal<Player, Types.PassDef>
 
 local bought: { [Player]: PassRules.Owned } = {} -- real ownership
 local pretend: { [Player]: PassRules.Owned } = {} -- Studio toggles
@@ -85,7 +94,8 @@ local function refresh(player: Player)
 	Sync.markDirty(player)
 end
 
-local function grant(player: Player, pass: Types.PassDef)
+-- `purchased`: bought just now (not an ownership check on joining).
+local function grant(player: Player, pass: Types.PassDef, purchased: boolean)
 	local set = bought[player]
 	if not set or set[pass.key] then
 		return
@@ -93,6 +103,9 @@ local function grant(player: Player, pass: Types.PassDef)
 	set[pass.key] = true
 	refresh(player)
 	print(`[Passes] {player.Name} owns {pass.name}`)
+	if purchased then
+		Passes.Purchased:Fire(player, pass)
+	end
 end
 
 local function onPlayerAdded(player: Player)
@@ -102,7 +115,7 @@ local function onPlayerAdded(player: Player)
 		if pass.id ~= 0 then
 			task.spawn(function()
 				if ownsAsync(player, pass.id) then
-					grant(player, pass)
+					grant(player, pass, false)
 				end
 			end)
 		end
@@ -115,12 +128,12 @@ local function onPurchaseFinished(player: Player, id: number, wasPurchased: bool
 		return
 	end
 	if wasPurchased then
-		grant(player, pass)
+		grant(player, pass, true)
 		return
 	end
 	task.delay(RECHECK_DELAY, function()
 		if player.Parent and ownsAsync(player, id) then
-			grant(player, pass)
+			grant(player, pass, true)
 		end
 	end)
 end
@@ -139,9 +152,45 @@ function Passes.capacity(player: Player, profile: Types.Profile): number
 	return PassRules.capacity(Formulas.capacity(profile.bottleTier), Passes.owned(player))
 end
 
--- The Volts a bottle worth `value` sells for (2x Volts and VIP).
-function Passes.sale(player: Player, value: number): number
-	return PassRules.sale(value, Passes.owned(player))
+-- This session's store numbers for the player (created on first use).
+local function storeSession(player: Player): Types.StoreSession
+	local session = Sync.store[player]
+	if not session then
+		session = { trialEndsAt = 0, trialEarned = 0, missedDouble = 0 }
+		Sync.store[player] = session
+	end
+	return session
+end
+
+function Passes.trialActive(player: Player): boolean
+	local session = Sync.store[player]
+	return session ~= nil and workspace:GetServerTimeNow() < session.trialEndsAt
+end
+
+-- Starts the free 2x Volts trial (Systems/Store checks it's allowed).
+-- Returns this session's store numbers, which keep its tally.
+function Passes.startTrial(player: Player): Types.StoreSession
+	local session = storeSession(player)
+	session.trialEndsAt = workspace:GetServerTimeNow() + Config.STORE.trialSeconds
+	Sync.markDirty(player)
+	return session
+end
+
+-- Extra Volts the trial has paid this session.
+function Passes.trialEarned(player: Player): number
+	local session = Sync.store[player]
+	return if session then session.trialEarned else 0
+end
+
+-- What selling a bottle worth `value` pays (2x Volts, VIP, the trial), and
+-- what 2x Volts would have added. Keeps this session's tallies.
+function Passes.payout(player: Player, value: number): (number, number)
+	local earned, missed, trialExtra =
+		PassRules.saleBreakdown(value, Passes.owned(player), Passes.trialActive(player))
+	local session = storeSession(player)
+	session.missedDouble += missed
+	session.trialEarned += trialExtra
+	return earned, missed
 end
 
 -- The chance a caught charge is worth double (Lucky Charges).

@@ -18,7 +18,7 @@ local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local STORE_NAME = "StormBottler_PlayerData"
-local CURRENT_VERSION = 6
+local CURRENT_VERSION = 7
 -- A lock older than this belongs to a server that crashed; it may be taken.
 local LOCK_STALE_SECONDS = Config.AUTOSAVE_INTERVAL * 3
 local LOCKED_RETRIES = 5
@@ -52,6 +52,8 @@ local DEFAULT_PROFILE: Types.Profile = {
 	tankValue = 0,
 	onboardStep = 0,
 	boltColour = 0,
+	purchases = {},
+	trialUsed = false,
 }
 
 -- MIGRATIONS[n] turns a version-n profile into version n+1. When the profile
@@ -83,6 +85,12 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 	-- Bolt Colours (prompt 8): no colour picked yet
 	[5] = function(data: any): any
 		data.boltColour = 0
+		return data
+	end,
+	-- Volts packs and the free 2x Volts trial (prompt 8 part C)
+	[6] = function(data: any): any
+		data.purchases = {}
+		data.trialUsed = false
 		return data
 	end,
 }
@@ -208,16 +216,20 @@ local function claim(
 end
 
 -- Writes the profile. release = true also clears the lock (player left).
-local function save(session: Session, release: boolean)
+-- True if it was written.
+local function save(session: Session, release: boolean): boolean
 	local dataStore = store
 	if not session.canSave or not dataStore then
-		return
+		return false
 	end
 	local data = deepCopy(session.profile)
 	local player = session.player
+	local wrote = false
 
-	withRetry(if release then 5 else 2, function()
+	local ok = withRetry(if release then 5 else 2, function()
 		dataStore:UpdateAsync(keyFor(player), function(old: any): any
+			-- this function can run more than once; reset the result every time
+			wrote = false
 			-- only the session holding the lock may write
 			if
 				typeof(old) ~= "table"
@@ -231,9 +243,11 @@ local function save(session: Session, release: boolean)
 				data = data,
 				lock = if release then nil else newLock(session.id),
 			}
+			wrote = true
 			return record
 		end)
 	end)
+	return ok and wrote
 end
 
 local function release(session: Session)
@@ -345,6 +359,14 @@ end
 function PlayerData.get(player: Player): Types.Profile?
 	local session = sessions[player]
 	return if session then session.profile else nil
+end
+
+-- Saves the player's profile now (Systems/Receipts saves a purchase before
+-- confirming it). True if it was written; false if it failed, or for a
+-- temporary Studio profile, which never saves.
+function PlayerData.saveNow(player: Player): boolean
+	local session = sessions[player]
+	return session ~= nil and save(session, false)
 end
 
 function PlayerData.start()

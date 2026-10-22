@@ -92,6 +92,25 @@ To add or change a pass:
    that says it's a test purchase, so no Robux are spent.
 4. See sales under **Monetization** → **Passes** → **Analytics**.
 
+The VOLTS tab sells the Volts packs in `Config.VOLT_PACKS` (Developer
+Products, granted by `Systems/Receipts`, each purchase once). A pack gives
+`charges` × the bolt value of the buyer's best zone, so it grows as they
+progress. To add or change a pack:
+
+1. On the Creator Dashboard: your experience → **Monetization** →
+   **Developer Products** → **Create a Developer Product**. Give it an
+   image, name, description and price. (`create_store.py` made all four
+   packs this way too, off sale; their ids are in `store_ids.json`.)
+2. Copy its product id into the pack's `productId` in `Config.VOLT_PACKS`
+   (`0` shows COMING SOON).
+3. Test in Studio: BUY opens a test purchase window (no Robux spent) and
+   the Volts arrive once. Studio only saves them if **Enable Studio Access
+   to API Services** is on (see Testing saving in Studio).
+4. See sales under **Monetization** → **Developer Products** →
+   **Analytics**, and the store funnel, offers and trial under
+   **Analytics** (Funnels: Store; Custom events: OfferShown, OfferTapped,
+   TrialStarted, TrialEnded).
+
 ## Code layout
 
 - `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas, zone geometry

@@ -321,16 +321,64 @@ local BOLT_COLOURS: { Types.BoltColourDef } = {
 	{ name = "Frost White", color = Color3.fromRGB(235, 245, 255) },
 }
 
--- The Boosts store's VOLTS tab. LAYOUT ONLY for now (prompt 8 part C):
--- Volts packs need a Developer Product id and a purchase receipt handler.
--- Prices are in Robux.
-local STORE = {
-	volts = {
-		{ name = "Pocket Charge", icon = "🔋", volts = 5_000, price = 49 },
-		{ name = "Storm Jar", icon = "⚡", volts = 25_000, price = 199 },
-		{ name = "Thunder Crate", icon = "📦", volts = 150_000, price = 899 },
-		{ name = "Lightning Vault", icon = "🏦", volts = 1_000_000, price = 3_999 },
+-- Volts packs: Developer Products in the Boosts store's VOLTS tab, granted
+-- by Systems/Receipts. A pack gives `charges` x the bolt value of the best
+-- non-premium zone the player can enter (Util/Store), so it's worth the
+-- same playtime however far they've got. `productId` is the Developer
+-- Product id (0 = not made yet: the card says COMING SOON) and `image` its
+-- icon, both from tools/store/store_ids.json. `price` is Robux, shown only
+-- until Roblox's real price loads.
+local VOLT_PACKS: { Types.VoltPackDef } = {
+	{
+		key = "PocketCharge",
+		productId = 3720985702,
+		image = 127085435030754,
+		name = "Pocket Charge",
+		icon = "🔋",
+		charges = 200,
+		price = 49,
 	},
+	{
+		key = "StormJar",
+		productId = 3720985707,
+		image = 134743613951662,
+		name = "Storm Jar",
+		icon = "⚡",
+		charges = 1_000,
+		price = 199,
+	},
+	{
+		key = "ThunderCrate",
+		productId = 3720985721,
+		image = 78950177669740,
+		name = "Thunder Crate",
+		icon = "📦",
+		charges = 6_000,
+		price = 899,
+	},
+	{
+		key = "LightningVault",
+		productId = 3720985735,
+		image = 94510144428546,
+		name = "Lightning Vault",
+		icon = "🏦",
+		charges = 40_000,
+		price = 3_999,
+	},
+}
+
+-- Offers, the free 2x Volts trial and purchases (Controllers/Offers,
+-- Systems/Store, Systems/Receipts, Util/Store).
+local STORE = {
+	offerFirstAfter = 180, -- seconds into a session before any offer shows
+	offerGap = 300, -- seconds between two offers
+	offerFarFromSell = 60, -- studs: a full bottle this far from a sell station suggests Remote Sell
+	trialAfterSales = 3, -- the free trial is offered from this many sales into a session
+	trialSeconds = 180, -- how long the free 2x Volts trial lasts
+	purchaseHistory = 100, -- Volts pack purchase ids each profile remembers
+	-- for "about N minutes of catching" on a pack: bolts a steady player
+	-- catches a minute, selling trips included (an estimate: tune it)
+	catchesPerMinute = 10,
 }
 
 return table.freeze({
@@ -378,6 +426,7 @@ return table.freeze({
 	PASS_VALUES = table.freeze(PASS_VALUES),
 	VIP_GOLD = VIP_GOLD,
 	BOLT_COLOURS = table.freeze(BOLT_COLOURS),
+	VOLT_PACKS = table.freeze(VOLT_PACKS),
 	STORE = table.freeze(STORE),
 
 	-- Placeholder sounds (built into Roblox). Swap for Creator Store sounds.

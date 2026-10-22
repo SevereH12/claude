@@ -16,6 +16,8 @@ export type Profile = {
 	tankValue: number, -- Volts those charges sell for
 	onboardStep: number, -- onboarding funnel steps already sent (Systems/Analytics)
 	boltColour: number, -- Bolt Colours pick: index into Config.BOLT_COLOURS, 0 = default
+	purchases: { string }, -- the newest Volts pack PurchaseIds already granted (Systems/Receipts)
+	trialUsed: boolean, -- the free 2x Volts trial has been started (once ever)
 }
 
 -- A hired researcher. post is "Office" or a zone id.
@@ -40,6 +42,15 @@ export type Snapshot = {
 	premium: boolean, -- counts as Premium for zone entry (decided by the server)
 	passes: { [string]: boolean }, -- Game Passes owned, by key (Config.PASSES)
 	capacity: number, -- the bottle's real capacity (Big Bottles included)
+	trialUsed: boolean, -- the free 2x Volts trial has been used
+	store: StoreSession,
+}
+
+-- This session's store numbers, sent in the snapshot (Systems/Passes).
+export type StoreSession = {
+	trialEndsAt: number, -- workspace:GetServerTimeNow() when the free 2x trial ends, 0 = none
+	trialEarned: number, -- extra Volts the trial has paid
+	missedDouble: number, -- extra Volts 2x Volts would have paid this session
 }
 
 export type StormPhase = "Storm" | "Calm"
@@ -106,6 +117,17 @@ export type PassDef = {
 	name: string,
 	icon: string, -- emoji fallback
 	detail: string,
+	price: number, -- Robux, a fallback until the real price loads
+}
+
+-- A Volts pack in the Boosts store (Config.VOLT_PACKS).
+export type VoltPackDef = {
+	key: string,
+	productId: number, -- Developer Product id (0 = not created yet)
+	image: number, -- icon asset id (0 = use `icon`)
+	name: string,
+	icon: string, -- emoji fallback
+	charges: number, -- worth this many bolts from the buyer's best zone
 	price: number, -- Robux, a fallback until the real price loads
 }
 

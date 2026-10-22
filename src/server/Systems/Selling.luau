@@ -72,10 +72,12 @@ local function livingRoot(player: Player): BasePart?
 	return root
 end
 
--- Turns everything in the bottle into Volts (2x Volts and VIP included).
--- Every sale, at a station or remote, goes through here.
+-- Turns everything in the bottle into Volts (2x Volts, VIP and the free
+-- trial included). Every sale, at a station or remote, goes through here.
+-- The Sold pop-up also gets what 2x Volts would have added (Controllers/
+-- Offers uses it).
 function Selling.payOut(player: Player, profile: Types.Profile)
-	local earned = Passes.sale(player, profile.chargeValue)
+	local earned, missed = Passes.payout(player, profile.chargeValue)
 	local count = profile.chargeCount
 	profile.volts += earned
 	profile.totalVolts += earned
@@ -83,7 +85,7 @@ function Selling.payOut(player: Player, profile: Types.Profile)
 	profile.chargeValue = 0
 	Sync.markDirty(player)
 	Analytics.sold(player, earned)
-	soldRemote:FireClient(player, earned, count)
+	soldRemote:FireClient(player, earned, count, missed)
 end
 
 -- The station path: alive, inside a SellArea, with charges.

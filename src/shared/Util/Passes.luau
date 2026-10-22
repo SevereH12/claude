@@ -46,6 +46,23 @@ function Passes.sale(value: number, owned: Owned): number
 	return math.floor(value * Passes.sellMultiplier(owned) + 1e-6)
 end
 
+-- A sale broken down: what it pays (`trial`: the free 2x Volts trial is
+-- running, so it pays like 2x Volts), the extra 2x Volts would have paid
+-- (when they have neither), and the extra the trial paid.
+function Passes.saleBreakdown(value: number, owned: Owned, trial: boolean): (number, number, number)
+	local plain = Passes.sale(value, owned)
+	if owned.DoubleVolts then
+		return plain, 0, 0
+	end
+	local withDouble = table.clone(owned)
+	withDouble.DoubleVolts = true
+	local doubled = Passes.sale(value, withDouble)
+	if trial then
+		return doubled, 0, doubled - plain
+	end
+	return plain, doubled - plain, 0
+end
+
 -- A bottle's capacity for this player: Big Bottles holds 50% more,
 -- rounded down.
 function Passes.capacity(baseCapacity: number, owned: Owned): number

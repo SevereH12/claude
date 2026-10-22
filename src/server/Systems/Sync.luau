@@ -23,8 +23,13 @@ local Sync = {}
 -- (workspace:GetServerTimeNow()). Sent in the snapshot for the Research panel.
 Sync.setupUntil = {} :: { [Player]: { [string]: number } }
 
--- Owned by Systems/Passes: per player, the Game Passes they own (key set).
+-- Owned by Systems/Passes: per player, the Game Passes they own (key set),
+-- and this session's store numbers (the free trial, 2x Volts tallies).
 Sync.passes = {} :: { [Player]: PassRules.Owned }
+Sync.store = {} :: { [Player]: Types.StoreSession }
+
+local NO_STORE: Types.StoreSession =
+	table.freeze({ trialEndsAt = 0, trialEarned = 0, missedDouble = 0 })
 
 function Sync.markDirty(player: Player)
 	dirty[player] = true
@@ -46,6 +51,8 @@ local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapsho
 		premium = Progression.playerIsPremium(player),
 		passes = passes,
 		capacity = PassRules.capacity(Formulas.capacity(profile.bottleTier), passes),
+		trialUsed = profile.trialUsed,
+		store = Sync.store[player] or NO_STORE,
 	}
 end
 
@@ -77,6 +84,7 @@ function Sync.init()
 		dirty[player] = nil
 		Sync.setupUntil[player] = nil
 		Sync.passes[player] = nil
+		Sync.store[player] = nil
 	end)
 end
 
