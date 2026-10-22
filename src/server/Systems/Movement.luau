@@ -10,6 +10,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
+local Analytics = require(script.Parent.Analytics)
 local PlayerData = require(script.Parent.PlayerData)
 
 local CHECK_INTERVAL = 0.2
@@ -43,6 +44,7 @@ local function update(player: Player)
 		end
 		zone = nil
 	end
+	Analytics.inZone(player, zone)
 	local speed = Formulas.walkSpeed(zone ~= nil, if profile then profile.bootTier else 1)
 	if humanoid.WalkSpeed ~= speed then
 		humanoid.WalkSpeed = speed

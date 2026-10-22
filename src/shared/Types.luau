@@ -14,6 +14,7 @@ export type Profile = {
 	researchers: { [string]: ResearcherSave }, -- hired researchers by role id
 	tankCount: number, -- Chemist's overflow tank: bottle units held
 	tankValue: number, -- Volts those charges sell for
+	onboardStep: number, -- onboarding funnel steps already sent (Systems/Analytics)
 }
 
 -- A hired researcher. post is "Office" or a zone id.

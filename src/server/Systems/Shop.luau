@@ -7,6 +7,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
+local Analytics = require(script.Parent.Analytics)
 local PlayerData = require(script.Parent.PlayerData)
 local Sync = require(script.Parent.Sync)
 local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
@@ -39,6 +40,7 @@ local function onBuyBottle(player: Player, tier: unknown)
 	profile.volts -= bottle.price
 	profile.bottleTier = tier
 	Sync.markDirty(player)
+	Analytics.boughtBottle(player, tier - 1)
 end
 
 local function onBuyBoots(player: Player, tier: unknown)
@@ -67,6 +69,7 @@ local function onBuyBoots(player: Player, tier: unknown)
 	profile.volts -= boots.price
 	profile.bootTier = tier
 	Sync.markDirty(player)
+	Analytics.boughtBoots(player)
 end
 
 function Shop.init()
