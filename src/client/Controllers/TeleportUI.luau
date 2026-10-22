@@ -1,7 +1,10 @@
 --!strict
 -- Teleport panel (from the menu): one row per world. GO takes you to that
--- world's hub; a world you haven't unlocked shows what it needs. The
--- server checks every teleport (Systems/Travel).
+-- world's hub; a world you haven't unlocked shows what it needs, the one
+-- you're in says YOU ARE HERE (and can't be picked), and after a trip every
+-- GO counts down the cooldown (Config.TELEPORT_COOLDOWN). The rule is
+-- Util/Portals.teleportRefusal; the server checks every teleport
+-- (Systems/Travel).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -32,21 +35,38 @@ function TeleportUI.open()
 	UI.openPanel(panel)
 end
 
+-- When the server says the next teleport can go (server time; 0 = now).
+local function readyAt(): number
+	local value = player:GetAttribute(Portals.READY_ATTRIBUTE)
+	return if typeof(value) == "number" then value else 0
+end
+
 local function render()
 	local snapshot = State.current
 	local here = Portals.worldOf(player).id
+	local wait = Portals.cooldownLeft(workspace:GetServerTimeNow(), readyAt())
 	for _, row in rows do
-		local open = snapshot ~= nil and Progression.canEnterWorld(snapshot, row.world)
-		UI.setEnabled(row.button, open, PURPLE)
-		row.button.Text = if open then "GO" else "🔒"
-		row.status.Text = if row.world.id == here
-			then "You're here"
-			elseif open then "Unlocked"
-			else Progression.worldRequirement(row.world) or ""
-		row.status.TextColor3 = if row.world.id == here
+		local world = row.world
+		local isHere = world.id == here
+		local locked = if snapshot
+			then Progression.worldLockReason(snapshot, world)
+			else Progression.worldRequirement(world)
+		UI.setEnabled(row.button, not isHere and not locked and wait == 0, PURPLE)
+		row.button.Selectable = not isHere
+		row.button.Text = if isHere
+			then "HERE"
+			elseif locked then "🔒"
+			elseif wait > 0 then `{wait}s`
+			else "GO"
+		row.status.Text = if isHere
+			then "YOU ARE HERE"
+			elseif locked then locked
+			elseif wait > 0 then `Teleport ready in {wait}s`
+			else "Unlocked"
+		row.status.TextColor3 = if isHere
 			then COLORS.calm
-			elseif open then COLORS.subtext
-			else COLORS.red
+			elseif locked then COLORS.red
+			else COLORS.subtext
 	end
 end
 
@@ -109,18 +129,20 @@ local function buildRow(list: Instance, index: number, world: Types.WorldDef)
 	local remote = Net.get("Teleport")
 	button.Activated:Connect(function()
 		local snapshot = State.current
-		if snapshot and Progression.canEnterWorld(snapshot, world) then
+		local here = Portals.worldOf(player).id
+		if not snapshot or world.id == here then
+			return -- YOU ARE HERE can't be picked
+		end
+		local now = workspace:GetServerTimeNow()
+		local refusal = Portals.teleportRefusal(snapshot, world.id, here, now, readyAt())
+		if refusal and Progression.worldLockReason(snapshot, world) then
+			UI.toast(`🔒 {world.displayName}: {refusal}`, "warn")
+		elseif refusal then
+			UI.toast(`⏱ {refusal}`, "info")
+		else
 			UI.pop(button)
 			remote:FireServer(world.id)
 			UI.closePanels()
-			if Portals.worldOf(player).id == world.id then
-				UI.toast(`Back to the {world.displayName} hub`, "good")
-			end
-		else
-			UI.toast(
-				`🔒 {world.displayName}: {Progression.worldRequirement(world) or "Locked"}`,
-				"warn"
-			)
 		end
 	end)
 	table.insert(rows, { world = world, status = status, button = button })
@@ -167,6 +189,14 @@ function TeleportUI.start()
 	render()
 	State.Changed:Connect(render)
 	player:GetAttributeChangedSignal(Portals.WORLD_ATTRIBUTE):Connect(render)
+	player:GetAttributeChangedSignal(Portals.READY_ATTRIBUTE):Connect(render)
+	-- the cooldown counts down while the panel is open
+	while true do
+		task.wait(0.5)
+		if panel.Visible then
+			render()
+		end
+	end
 end
 
 return TeleportUI

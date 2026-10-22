@@ -1,22 +1,30 @@
 --!strict
 -- The one MENU button on the left edge and the card it opens: five tiles,
 -- SHOP, RESEARCH, TELEPORT, BOOSTS and REWARDS (three across, the last two
--- centred under them), that pop in one after another. A red dot on REWARDS
--- and on the MENU button means a reward is ready to claim.
+-- centred under them), that pop in one after another over a dimmed
+-- screen. A red dot on REWARDS and on the MENU button means a reward is
+-- ready to claim; a yellow dot on SHOP means you can afford the next bottle
+-- or boots, on RESEARCH the next researcher.
 -- Picking a tile closes the card and opens that panel. The card also
--- closes on the menu button, a click or tap anywhere else (an invisible
--- catcher behind it), Esc or gamepad B (Controllers/Shortcuts). On a gamepad, Y opens it (a "Y" chip shows on
--- the button for gamepad players only) and the first tile is selected.
+-- closes on the menu button, a click or tap anywhere else (the dim
+-- backdrop behind it), Esc or gamepad B (Controllers/Shortcuts). On a
+-- gamepad, Y opens it and the first tile is selected. Shortcut chips show
+-- the gamepad button to gamepad players only ("Y" on MENU) and the key to
+-- PC players only (M, and B, R, T, P on the tiles); none on touch.
 
 local GuiService = game:GetService("GuiService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
+local Config = require(ReplicatedStorage.Shared.Config)
+local Types = require(ReplicatedStorage.Shared.Types)
 local Layout = require(script.Parent.Parent.Lib.Layout)
 local UI = require(script.Parent.Parent.Lib.UI)
 local BoostsUI = require(script.Parent.BoostsUI)
 local ResearchUI = require(script.Parent.ResearchUI)
 local RewardsUI = require(script.Parent.RewardsUI)
 local ShopUI = require(script.Parent.ShopUI)
+local State = require(script.Parent.State)
 local TeleportUI = require(script.Parent.TeleportUI)
 
 local COLORS = UI.COLORS
@@ -29,19 +37,23 @@ local STAGGER = 0.045
 local CARD_IN = TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local CARD_OUT = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 local ICON_TURN = TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local DIM_FADE = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local DIM = 0.55 -- the backdrop's transparency while the card is open
 
-type Item = { name: string, icon: string, color: Color3, open: () -> () }
+-- `key`: its PC shortcut (Controllers/Shortcuts), shown on PC only
+type Item = { name: string, icon: string, color: Color3, key: string?, open: () -> () }
 
 local ITEMS: { Item } = {
-	{ name = "SHOP", icon = "🛒", color = COLORS.green, open = ShopUI.open },
-	{ name = "RESEARCH", icon = "🔬", color = COLORS.storm, open = ResearchUI.open },
+	{ name = "SHOP", icon = "🛒", color = COLORS.green, key = "B", open = ShopUI.open },
+	{ name = "RESEARCH", icon = "🔬", color = COLORS.storm, key = "R", open = ResearchUI.open },
 	{
 		name = "TELEPORT",
 		icon = "🌀",
 		color = Color3.fromRGB(165, 110, 255),
+		key = "T",
 		open = TeleportUI.open,
 	},
-	{ name = "BOOSTS", icon = "🚀", color = COLORS.volt, open = BoostsUI.open },
+	{ name = "BOOSTS", icon = "🚀", color = COLORS.volt, key = "P", open = BoostsUI.open },
 	{
 		name = "REWARDS",
 		icon = "🎁",
@@ -53,13 +65,14 @@ local ITEMS: { Item } = {
 local Menu = {}
 
 local dock: Frame
-local catcher: TextButton -- invisible, behind the card: a click on it closes the card
+local catcher: TextButton -- the dim backdrop behind the card: a click on it closes the card
 local menuButton: TextButton
 local icon: TextLabel
 local card: Frame
 local cardScale: UIScale
 local tileScales: { UIScale } = {}
 local dots: { GuiObject } = {} -- "a reward is ready" dots: the MENU button's and the REWARDS tile's
+local buyDots: { [string]: GuiObject } = {} -- "you can afford the next one": SHOP's and RESEARCH's
 local isOpen = false
 local token = 0
 
@@ -82,6 +95,7 @@ function Menu.open()
 	UI.closePanels()
 	setIcon(true)
 	catcher.Visible = true
+	TweenService:Create(catcher, DIM_FADE, { BackgroundTransparency = DIM }):Play()
 	card.Visible = true
 	cardScale.Scale = 0.7
 	TweenService:Create(cardScale, CARD_IN, { Scale = 1 }):Play()
@@ -111,7 +125,13 @@ function Menu.close()
 	token += 1
 	local mine = token
 	setIcon(false)
-	catcher.Visible = false
+	local undim = TweenService:Create(catcher, DIM_FADE, { BackgroundTransparency = 1 })
+	undim.Completed:Once(function()
+		if token == mine then
+			catcher.Visible = false
+		end
+	end)
+	undim:Play()
 	local selected = GuiService.SelectedObject
 	if selected and selected:IsDescendantOf(card) then
 		GuiService.SelectedObject = nil
@@ -136,22 +156,52 @@ function Menu.toggle()
 	end
 end
 
--- A small red dot in a button's top-left corner (top right is the gamepad
--- hint's), shown while a reward is ready.
-local function addDot(button: GuiObject)
+-- A small dot in a button's top-left corner (top right is the shortcut
+-- chip's): red while a reward is ready, or (`color`) another badge.
+local function addDot(button: GuiObject, color: Color3?): Frame
 	local dot = UI.make(Instance.new("Frame"), {
 		Name = "ReadyDot",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromOffset(4, 4),
 		Size = UDim2.fromOffset(20, 20),
-		BackgroundColor3 = COLORS.red,
-		Visible = RewardsUI.isReady(),
+		BackgroundColor3 = color or COLORS.red,
+		Visible = if color then false else RewardsUI.isReady(),
 		ZIndex = 5,
 		Parent = button,
 	})
 	UI.corner(dot, UDim.new(0.5, 0))
 	UI.stroke(dot, 2)
-	table.insert(dots, dot)
+	if not color then
+		table.insert(dots, dot)
+	end
+	return dot
+end
+
+-- Can the player afford the next bottle or boots (SHOP), and the next
+-- researcher to hire (RESEARCH: they're hired in order)?
+local function canAfford(snapshot: Types.Snapshot): (boolean, boolean)
+	local bottle = Config.BOTTLES[snapshot.bottleTier + 1]
+	local boots = Config.BOOTS[snapshot.bootTier + 1]
+	local shop = (bottle ~= nil and snapshot.volts >= bottle.price)
+		or (boots ~= nil and snapshot.volts >= boots.price)
+	local research = false
+	for _, def in Config.RESEARCHERS do
+		if not snapshot.researchers[def.id] then
+			research = snapshot.volts >= def.price
+			break
+		end
+	end
+	return shop, research
+end
+
+local function renderBadges(snapshot: Types.Snapshot)
+	local shop, research = canAfford(snapshot)
+	if buyDots.SHOP then
+		buyDots.SHOP.Visible = shop
+	end
+	if buyDots.RESEARCH then
+		buyDots.RESEARCH.Visible = research
+	end
 end
 
 local function buildTile(index: number, item: Item)
@@ -204,6 +254,11 @@ local function buildTile(index: number, item: Item)
 	end)
 	if item.open == RewardsUI.open then
 		addDot(tile)
+	elseif item.name == "SHOP" or item.name == "RESEARCH" then
+		buyDots[item.name] = addDot(tile, COLORS.volt)
+	end
+	if item.key then
+		UI.padHint(tile, nil, item.key)
 	end
 end
 
@@ -222,6 +277,7 @@ function Menu.init()
 		Text = "",
 		AutoButtonColor = false,
 		Selectable = false,
+		BackgroundColor3 = Color3.new(0, 0, 0),
 		BackgroundTransparency = 1,
 		Position = UDim2.fromScale(-0.5, -0.5),
 		Size = UDim2.fromScale(2, 2), -- past the safe area to the screen edges
@@ -265,7 +321,7 @@ function Menu.init()
 		Parent = menuButton,
 	})
 	UI.maxText(caption, 18)
-	UI.padHint(menuButton, "Y")
+	UI.padHint(menuButton, "Y", "M")
 	addDot(menuButton)
 	menuButton.Activated:Connect(function()
 		UI.pop(menuButton)
@@ -291,6 +347,13 @@ function Menu.init()
 			dot.Visible = isReady
 		end
 	end)
+end
+
+function Menu.start()
+	if State.current then
+		renderBadges(State.current)
+	end
+	State.Changed:Connect(renderBadges)
 end
 
 return Menu

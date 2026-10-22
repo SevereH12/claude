@@ -1,12 +1,15 @@
 --!strict
--- Keyboard and gamepad shortcuts. Only gamepad players see a hint (the "Y"
--- chip on the MENU button); PC keys just work.
---   PC:      M menu, B shop, R research, T teleport, V Remote Sell, Esc closes
+-- Keyboard and gamepad shortcuts. Small chips on the buttons name them:
+-- gamepad buttons for gamepad players only, keys for PC players only
+-- (UI.padHint), nothing on touch.
+--   PC:      M menu, B shop, R research, T teleport, P passes and boosts
+--            (the store), V Remote Sell, Esc closes
 --   Gamepad: Y menu (the first tile is selected), B closes, L1 Remote Sell
 
 local UserInputService = game:GetService("UserInputService")
 
 local UI = require(script.Parent.Parent.Lib.UI)
+local BoostsUI = require(script.Parent.BoostsUI)
 local HUD = require(script.Parent.HUD)
 local Menu = require(script.Parent.Menu)
 local ResearchUI = require(script.Parent.ResearchUI)
@@ -43,6 +46,8 @@ function Shortcuts.start()
 			openFrom(ResearchUI.open)
 		elseif typed == Enum.KeyCode.T then
 			openFrom(TeleportUI.open)
+		elseif typed == Enum.KeyCode.P then
+			openFrom(BoostsUI.open)
 		elseif key == Enum.KeyCode.ButtonL1 or typed == Enum.KeyCode.V then
 			HUD.remoteSell() -- does nothing without the Remote Sell pass
 		end

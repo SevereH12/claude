@@ -6,9 +6,13 @@ Follow the rules in `docs/prompts/README.md`. Run this after prompts 1 to
 **Run it twice.** Each run does the first part below that isn't ticked,
 then ticks it:
 
-- [ ] Part A: one menu button, with Shop, Research, Teleport (worlds) and
+- [x] Part A: one menu button, with Shop, Research, Teleport (worlds) and
   Passes (coming soon) flying out of it
-- [ ] Part B: every screen fits and works on every device
+- [x] Part B: every screen fits and works on every device
+
+(Done with two changes the user chose: the MENU button opens a card of
+tiles instead of a ring, and the PASSES placeholder became prompt 8's real
+store, the BOOSTS tile.)
 
 ## Part A: one menu button (run 1)
 

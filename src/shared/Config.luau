@@ -541,6 +541,10 @@ return table.freeze({
 	-- Selling
 	SELL_COOLDOWN = 1, -- seconds between sells per player
 
+	-- The menu's Teleport panel: seconds between trips (walking through a
+	-- portal has its own short cooldown in Systems/Travel)
+	TELEPORT_COOLDOWN = 10,
+
 	-- Researchers (Storm Society)
 	RESEARCH_LEVELS = table.freeze({ 0, 40, 150, 400, 1000 }), -- field data needed for level 1..5
 	RESEARCH_SETUP_TIME = 8, -- seconds a newly posted researcher needs before the perk works

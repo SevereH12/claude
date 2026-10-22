@@ -5,8 +5,11 @@
 -- check here on the server, never Touched; the client only explains a
 -- locked portal (Controllers/Travel). The world you're in is the player
 -- attribute World, and you respawn there. It isn't saved: every visit
--- starts in the first world. The menu's Teleport panel asks to go to a
--- world's hub (remote Teleport): same rule, checked here.
+-- starts in the first world. The menu's Teleport panel asks to go to
+-- another world's hub (remote Teleport): the same unlock rule, while alive,
+-- and at most once every Config.TELEPORT_COOLDOWN seconds (the rule:
+-- Portals.teleportRefusal; the player attribute TeleportReadyAt tells the
+-- panel when it can go again), checked here.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -91,27 +94,30 @@ local function onPlayerAdded(player: Player)
 	end)
 end
 
--- Teleport panel: go to the hub (spawn) of a world you can enter.
+-- Teleport panel: go to the hub (spawn) of another world you can enter.
 local function onTeleport(player: Player, worldId: unknown)
 	if not RateLimit.allow(player, "Teleport", 1, 3) then
 		return
 	end
-	if typeof(worldId) ~= "string" then
-		return
-	end
-	local world = nil
-	for _, candidate in Config.WORLDS do
-		if candidate.id == worldId then
-			world = candidate
-		end
-	end
 	local profile = PlayerData.get(player)
-	if not world or not profile or not Progression.canEnterWorld(profile, world) then
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not profile or not humanoid or humanoid.Health <= 0 then
 		return
 	end
-	if os.clock() - (lastTrip[player] or -math.huge) < COOLDOWN then
+	local now = workspace:GetServerTimeNow()
+	local readyAt = player:GetAttribute(Portals.READY_ATTRIBUTE)
+	local refusal, world = Portals.teleportRefusal(
+		profile,
+		worldId,
+		Portals.worldOf(player).id,
+		now,
+		if typeof(readyAt) == "number" then readyAt else 0
+	)
+	if refusal or not world then
 		return
 	end
+	player:SetAttribute(Portals.READY_ATTRIBUTE, now + Config.TELEPORT_COOLDOWN)
 	lastTrip[player] = os.clock()
 	task.spawn(sendTo, player, world.id)
 end

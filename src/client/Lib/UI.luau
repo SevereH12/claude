@@ -492,12 +492,14 @@ function UI.onLayout(apply: () -> ())
 	end)
 end
 
--- A small gamepad button chip in a button's corner ("Y"), shown only to
--- players on a gamepad (Layout class Console); nothing on PC or touch.
-function UI.padHint(button: GuiObject, padButton: string)
+-- A small chip in a button's corner naming its shortcut: the gamepad
+-- button ("Y") for players on a gamepad (Layout class Console), the key
+-- ("M") for players on a PC (Desktop); nothing on touch, or where that
+-- device has no shortcut (nil).
+function UI.padHint(button: GuiObject, padButton: string?, key: string?)
 	local hint = UI.label({
 		Name = "PadHint",
-		Text = padButton,
+		Text = "",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, 6, 0, -6),
 		Size = UDim2.fromOffset(24, 24),
@@ -508,7 +510,12 @@ function UI.padHint(button: GuiObject, padButton: string)
 	})
 	UI.corner(hint, UDim.new(0.5, 0))
 	local function apply()
-		hint.Visible = Layout.class == "Console"
+		local text = if Layout.class == "Console"
+			then padButton
+			elseif Layout.class == "Desktop" then key
+			else nil
+		hint.Text = text or ""
+		hint.Visible = text ~= nil
 	end
 	apply()
 	Layout.Changed:Connect(apply)
