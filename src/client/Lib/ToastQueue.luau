@@ -93,6 +93,16 @@ function ToastQueue.hide(queue: Queue, id: number, generation: number): boolean
 	return true
 end
 
+-- Takes a toast down now (it was tapped), whatever its timer says.
+function ToastQueue.dismiss(queue: Queue, id: number)
+	for i, entry in queue.entries do
+		if entry.id == id then
+			table.remove(queue.entries, i)
+			return
+		end
+	end
+end
+
 -- The toasts on screen now, oldest first.
 function ToastQueue.active(queue: Queue): { Entry }
 	prune(queue)

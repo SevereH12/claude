@@ -85,6 +85,14 @@ t = 60
 check(texts(q) == "", "an expired toast isn't listed")
 check(ToastQueue.hide(q, quiet.id, quiet.generation), "and its late hide still clears its frame")
 
+-- a tapped toast (one with an action) goes at once
+t = 70
+q = ToastQueue.new(clock, 2)
+local tapped = ToastQueue.push(q, "tap me", "info", 5)
+ToastQueue.dismiss(q, tapped.id)
+check(texts(q) == "", "a tapped toast goes at once")
+check(ToastQueue.hide(q, tapped.id, tapped.generation), "and its timer's hide finds nothing left")
+
 if failures > 0 then
 	error(`{failures} toast checks failed`)
 end

@@ -17,7 +17,9 @@
 --   Funnel "Store": opened Boosts -> tapped a card -> purchase window
 --     opened -> bought, one funnel session per store visit (STORE_STEPS).
 --   Custom events: "OfferShown" and "OfferTapped" (CustomField01 = the
---     offer key), "TrialStarted" (1) and "TrialEnded" (Volts it earned).
+--     offer key), "TrialStarted" (1) and "TrialEnded" (Volts it earned),
+--     "DailyClaimed" (streak day), "PlaytimeGift" (minutes), "GroupJoined".
+--   Economy: Volts from rewards (Source, TimedReward).
 
 local AnalyticsService = game:GetService("AnalyticsService")
 local HttpService = game:GetService("HttpService")
@@ -296,6 +298,30 @@ function Analytics.trialEnded(player: Player, earned: number)
 	send("TrialEnded", function()
 		AnalyticsService:LogCustomEvent(player, "TrialEnded", earned)
 	end)
+end
+
+-- Rewards (Systems/Rewards): the daily streak and playtime gifts.
+function Analytics.dailyClaimed(player: Player, day: number)
+	send("DailyClaimed", function()
+		AnalyticsService:LogCustomEvent(player, "DailyClaimed", day)
+	end)
+end
+
+function Analytics.giftClaimed(player: Player, minutes: number)
+	send("PlaytimeGift", function()
+		AnalyticsService:LogCustomEvent(player, "PlaytimeGift", minutes)
+	end)
+end
+
+function Analytics.groupJoined(player: Player)
+	send("GroupJoined", function()
+		AnalyticsService:LogCustomEvent(player, "GroupJoined", 1)
+	end)
+end
+
+-- Volts a reward paid (`sku`: "Daily 3", "Gift 10 min").
+function Analytics.rewardVolts(player: Player, volts: number, sku: string)
+	economy(player, Enum.AnalyticsEconomyFlowType.Source, volts, "TimedReward", sku)
 end
 
 -- A Volts pack bought with Robux (Systems/Receipts).

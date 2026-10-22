@@ -475,6 +475,14 @@ return table.freeze({
 	-- charges per minute of boost (about a minute of catching)
 	REWARD_SWAP_CHARGES = 10,
 
+	-- The group that owns the game (Systems/Group): members get GROUP_BONUS
+	-- more Volts on every sale. To use another group, change GROUP_ID (and
+	-- GROUP_NAME, which the REWARDS panel shows).
+	GROUP_ID = 7889739,
+	GROUP_NAME = "Super Studio",
+	GROUP_BONUS = 0.10,
+	GROUP_COLOR = Color3.fromRGB(80, 200, 255), -- the [Member] chat tag
+
 	-- Placeholder sounds (built into Roblox). Swap for Creator Store sounds.
 	SOUNDS = table.freeze({
 		STRIKE = "rbxasset://sounds/collide.wav",

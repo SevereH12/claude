@@ -9,9 +9,19 @@
 -- best zone, and a boost for a pass they own says so and pays Volts instead
 -- (Util/Rewards.resolve). CLAIM only asks (ClaimDaily, ClaimGift); the
 -- server decides (Systems/Rewards) and Rewarded brings a celebration.
+--   * the group card: members of the game's group (Config.GROUP_ID) get
+--     +10% Volts. JOIN opens Roblox's group prompt (only from the tap), and
+--     a join is reported (GroupJoined) for the server to check itself
+--     (Systems/Group)
 -- RewardsUI.ReadyChanged tells the menu when something is ready to claim.
+-- Gentle nudges, as toasts with OPEN: the daily reward when you join (if
+-- it's ready), each playtime gift once when it's ready, and the group card
+-- once a visit after your first sale.
 
+local GroupService = game:GetService("GroupService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
@@ -31,6 +41,8 @@ local COLORS = UI.COLORS
 local PINK = Color3.fromRGB(255, 120, 170)
 local DAY_HEIGHT = 168
 local GIFT_HEIGHT = 128
+local GROUP_HEIGHT = 72
+local NUDGE_SECONDS = 6
 local HEADING = 28
 local GAP = 8
 
@@ -47,14 +59,34 @@ local RewardsUI = {}
 -- Fires true when something becomes ready to claim, false when nothing is.
 RewardsUI.ReadyChanged = Signal.new() :: Signal.Signal<boolean>
 
+local player = Players.LocalPlayer
 local panel: Frame
+local list: ScrollingFrame
 local dayCards: { Card } = {}
 local giftCards: { Card } = {}
 local nextLabel: TextLabel
+local groupText: TextLabel
+local groupButton: TextButton
 local ready = false
+local joining = false -- the group prompt is open
+local joinTapped = false -- JOIN was tapped this visit
+local requestPending = false -- the group needs approval and the request is in
+-- nudges already shown this visit
+local dailyNudged = false
+local giftNudged: { [number]: boolean } = {}
+local groupNudged = false
 
 function RewardsUI.open()
 	UI.openPanel(panel)
+end
+
+-- Opens the panel scrolled down to the group card.
+local function openAtGroup()
+	RewardsUI.open()
+	task.spawn(function()
+		RunService.Heartbeat:Wait()
+		list.CanvasPosition = Vector2.new(0, list.AbsoluteCanvasSize.Y)
+	end)
 end
 
 function RewardsUI.isReady(): boolean
@@ -183,12 +215,65 @@ local function setCard(
 	card.stroke.Thickness = if canClaim then 5 else 3
 end
 
--- Everything from the snapshot and the clock; returns whether anything is
--- ready to claim.
-local function render(): boolean
+-- The group card: active, a request sent, or JOIN.
+local function renderGroup()
+	local percent = math.round(Config.GROUP_BONUS * 100)
+	if player:GetAttribute(PassRules.GROUP) == true then
+		groupText.Text = `✓ Group bonus active: +{percent}% Volts`
+		groupButton.Visible = false
+	elseif requestPending then
+		groupText.Text = "Join request sent"
+		groupButton.Visible = true
+		groupButton.Text = "SENT"
+		UI.setEnabled(groupButton, false, COLORS.storm)
+	else
+		groupText.Text = `Join {Config.GROUP_NAME} for +{percent}% Volts forever`
+		groupButton.Visible = true
+		groupButton.Text = "JOIN"
+		UI.setEnabled(groupButton, true, COLORS.storm)
+	end
+end
+
+-- JOIN: Roblox's own group prompt (only ever from the tap). The server
+-- checks the membership itself; Roblox may take a moment to agree.
+local function joinGroup()
+	if joining then
+		return
+	end
+	joining = true
+	joinTapped = true
+	task.spawn(function()
+		local ok, status = pcall(function()
+			return GroupService:PromptJoinAsync(Config.GROUP_ID)
+		end)
+		joining = false
+		if not ok then
+			warn(`[RewardsUI] the group prompt failed: {status}`)
+			UI.toast("Couldn't open the group window. Try again soon.", "warn")
+			return
+		end
+		if
+			status == Enum.GroupMembershipStatus.Joined
+			or status == Enum.GroupMembershipStatus.AlreadyMember
+		then
+			Net.get("GroupJoined"):FireServer()
+			if player:GetAttribute(PassRules.GROUP) ~= true then
+				UI.toast("Your bonus will switch on in a moment", "info", 4)
+			end
+		elseif status == Enum.GroupMembershipStatus.JoinRequestPending then
+			requestPending = true
+		end
+		renderGroup()
+	end)
+end
+
+-- Everything from the snapshot and the clock. Returns whether anything is
+-- ready to claim, whether that's the daily reward, and which gifts are.
+local function render(): (boolean, boolean, { number })
 	local snapshot = State.current
+	local readyGifts: { number } = {}
 	if not snapshot then
-		return false
+		return false, false, readyGifts
 	end
 	local now = workspace:GetServerTimeNow()
 	local anyReady = false
@@ -223,6 +308,7 @@ local function render(): boolean
 		elseif RewardRules.giftReady(gift, elapsed, false) then
 			setCard(card, image, text, "CLAIM", true, false)
 			anyReady = true
+			table.insert(readyGifts, index)
 		else
 			local left = math.ceil(gift.minutes * 60 - elapsed)
 			setCard(
@@ -235,7 +321,44 @@ local function render(): boolean
 			)
 		end
 	end
-	return anyReady
+	return anyReady, canClaim, readyGifts
+end
+
+-- The toasts: the daily reward once when you join (if it's ready), each
+-- gift once when it's ready.
+local function nudge(dailyReady: boolean, readyGifts: { number })
+	if not dailyNudged then
+		dailyNudged = true
+		if dailyReady then
+			UI.toast("🎁 Your daily reward is ready!", "good", NUDGE_SECONDS, {
+				text = "OPEN",
+				onTap = RewardsUI.open,
+			})
+		end
+	end
+	for _, index in readyGifts do
+		if not giftNudged[index] then
+			giftNudged[index] = true
+			local minutes = Config.PLAYTIME_GIFTS[index].minutes
+			UI.toast(`🎁 Your {minutes}-minute gift is ready!`, "good", NUDGE_SECONDS, {
+				text = "OPEN",
+				onTap = RewardsUI.open,
+			})
+		end
+	end
+end
+
+-- After the first sale of a visit, non-members hear about the group once.
+local function onSold()
+	if groupNudged or player:GetAttribute(PassRules.GROUP) == true then
+		return
+	end
+	groupNudged = true
+	local percent = math.round(Config.GROUP_BONUS * 100)
+	UI.toast(`Join {Config.GROUP_NAME} for +{percent}% Volts forever!`, "volt", NUDGE_SECONDS, {
+		text = "OPEN",
+		onTap = openAtGroup,
+	})
 end
 
 local function heading(parent: Instance, order: number, text: string): TextLabel
@@ -299,7 +422,7 @@ function RewardsUI.init()
 	local window = UI.window(root, "RewardsPanel", "🎁 REWARDS", PINK, Vector2.new(680, 560))
 	panel = window.panel
 	-- one scrolling column: it all fits on a monitor, and scrolls on a phone
-	local list = UI.make(Instance.new("ScrollingFrame"), {
+	list = UI.make(Instance.new("ScrollingFrame"), {
 		Name = "List",
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
@@ -354,16 +477,64 @@ function RewardsUI.init()
 			end)
 		)
 	end
+
+	heading(list, 6, `👥 {string.upper(Config.GROUP_NAME)} GROUP`)
+	local groupCard = UI.make(Instance.new("Frame"), {
+		Name = "Group",
+		LayoutOrder = 7,
+		BackgroundColor3 = COLORS.panelDark,
+		Size = UDim2.new(1, -12, 0, GROUP_HEIGHT),
+		Parent = list,
+	})
+	UI.corner(groupCard, UDim.new(0, 12))
+	UI.stroke(groupCard, 3, Config.GROUP_COLOR)
+	groupText = UI.label({
+		Title = true,
+		Text = "",
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextWrapped = true,
+		Position = UDim2.new(0, 14, 0, 8),
+		Size = UDim2.new(0.68, -14, 1, -16),
+		Parent = groupCard,
+	})
+	UI.maxText(groupText, 22)
+	groupButton = UI.button({
+		Name = "Join",
+		Text = "JOIN",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -10, 0.5, 0),
+		Size = UDim2.new(0.28, 0, 0, 48),
+		BackgroundColor3 = COLORS.storm,
+		Parent = groupCard,
+	})
+	UI.maxText(groupButton, 24)
+	groupButton.Activated:Connect(function()
+		UI.pop(groupButton)
+		joinGroup()
+	end)
+	renderGroup()
+	player:GetAttributeChangedSignal(PassRules.GROUP):Connect(function()
+		renderGroup()
+		local percent = math.round(Config.GROUP_BONUS * 100)
+		if joinTapped and player:GetAttribute(PassRules.GROUP) == true then
+			Celebrate.sparks()
+			UI.toast(`Group bonus active: +{percent}% Volts!`, "good", 5)
+		end
+	end)
 end
 
 function RewardsUI.start()
 	Net.get("Rewarded").OnClientEvent:Connect(onRewarded)
+	Net.get("Sold").OnClientEvent:Connect(onSold)
 	State.Changed:Connect(function()
 		render()
 	end)
-	-- countdowns, and the menu's dot
+	-- countdowns, the menu's dot and the nudges
 	while true do
-		local nowReady = render()
+		local nowReady, dailyReady, readyGifts = render()
+		if State.current then
+			nudge(dailyReady, readyGifts)
+		end
 		if nowReady ~= ready then
 			ready = nowReady
 			RewardsUI.ReadyChanged:Fire(ready)

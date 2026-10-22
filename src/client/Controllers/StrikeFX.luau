@@ -576,6 +576,10 @@ end
 local function onSold(earned: number, count: number)
 	popup(`+{Format.abbreviate(earned)} Volts!`, true, 0.36, 0.1)
 	popup(`sold {count} charges`, false, 0.45, 0.045)
+	-- members of the game's group get more (Systems/Group)
+	if player:GetAttribute(PassRules.GROUP) == true then
+		popup(`+{math.round(Config.GROUP_BONUS * 100)}% group bonus`, true, 0.5, 0.045)
+	end
 	screenFlash(0.25)
 	cameraShake(0.2, 0.35)
 	playSound(Config.SOUNDS.SELL, screenGui, 0.8)

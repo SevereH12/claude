@@ -5,7 +5,8 @@
 -- Server -> client: StateSnapshot, StormState, StrikeWarning, StrikeLanded, Sold, Forecast,
 -- Purchased, Rewarded
 -- Client -> server: BuyBottle, BuyBoots, HireResearcher, PostResearcher, DevCommand, Teleport,
--- RemoteSell, SetBoltColour, StartTrial, StoreEvent, ClaimDaily, ClaimGift
+-- RemoteSell, SetBoltColour, StartTrial, StoreEvent, ClaimDaily, ClaimGift,
+-- GroupJoined
 
 export type RemoteName =
 	"StateSnapshot"
@@ -28,6 +29,7 @@ export type RemoteName =
 	| "ClaimDaily"
 	| "ClaimGift"
 	| "Rewarded"
+	| "GroupJoined"
 
 local NAMES: { RemoteName } = {
 	"StateSnapshot",
@@ -50,6 +52,7 @@ local NAMES: { RemoteName } = {
 	"ClaimDaily",
 	"ClaimGift",
 	"Rewarded",
+	"GroupJoined",
 }
 
 return table.freeze(NAMES)

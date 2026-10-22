@@ -111,6 +111,35 @@ progress. To add or change a pack:
    **Analytics** (Funnels: Store; Custom events: OfferShown, OfferTapped,
    TrialStarted, TrialEnded).
 
+## Rewards
+
+The REWARDS panel (MENU → 🎁 REWARDS; a red dot means something is ready):
+
+- **7-day login streak**: one reward per day (a new day starts at
+  midnight UTC). Coming back the next day continues the streak; missing a
+  day, or the day after day 7, starts again at day 1
+  (`Config.DAILY_REWARDS`).
+- **Playtime gifts**: six gifts every visit, at 5, 10, 20, 30, 45 and 60
+  minutes of play (`Config.PLAYTIME_GIFTS`).
+- Volts rewards are counted in charges × the bolt value of the player's
+  best zone, so they're worth the same playtime early or late. Boost
+  rewards (2x Volts, Lucky, Big Bottles) give a pass's effect for a while;
+  they only count down while playing and stack up to 2 hours. A boost for
+  a pass the player owns pays Volts instead.
+- **Group bonus**: members of the group that owns the game get +10% Volts
+  on every sale (`Config.GROUP_BONUS`), and a `[Member]` chat tag. The
+  panel's group card has a JOIN button that opens Roblox's own join
+  window; the server checks membership itself. To use a different group,
+  change `Config.GROUP_ID` (the number in the group's web address) and
+  `Config.GROUP_NAME`.
+- Short reminders (toasts with OPEN): the daily reward when you join, each
+  gift when it's ready, and the group once a visit after your first sale.
+
+Test in Studio with the TEST panel's **🎁 REWARDS** tools: Next day, +5 min
+playtime, Clear boosts and Pretend group member (Studio only). Stats are
+under **Analytics**: custom events DailyClaimed, PlaytimeGift and
+GroupJoined, and reward Volts in Economy (TimedReward).
+
 ## Code layout
 
 - `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas, zone geometry

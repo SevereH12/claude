@@ -33,6 +33,7 @@ local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
 local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Boosts = require(script.Parent.Boosts)
+local Group = require(script.Parent.Group)
 local Sync = require(script.Parent.Sync)
 
 local RETRY_WAIT = 1 -- seconds before the one retry of an ownership check
@@ -171,11 +172,22 @@ function Passes.storeSession(player: Player): Types.StoreSession
 	return session
 end
 
--- What selling a bottle worth `value` pays (passes, VIP, boosts), and what
--- 2x Volts would have added. Keeps this session's tallies.
+-- Owned passes plus the group bonus, which multiplies sales like a pass.
+local function withGroup(player: Player): PassRules.Owned
+	local owned = Passes.owned(player)
+	if not Group.isMember(player) then
+		return owned
+	end
+	local set = table.clone(owned)
+	set[PassRules.GROUP] = true
+	return set
+end
+
+-- What selling a bottle worth `value` pays (passes, VIP, the group bonus,
+-- boosts), and what 2x Volts would have added. Keeps this session's tallies.
 function Passes.payout(player: Player, value: number): (number, number)
 	local earned, missed, boostExtra =
-		PassRules.saleBreakdown(value, Passes.owned(player), Boosts.left(player))
+		PassRules.saleBreakdown(value, withGroup(player), Boosts.left(player))
 	local session = Passes.storeSession(player)
 	session.missedDouble += missed
 	session.boostEarned += boostExtra

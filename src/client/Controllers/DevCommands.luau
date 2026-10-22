@@ -2,8 +2,8 @@
 -- TEMPORARY test buttons: one sets your Volts to 1 trillion (shown in
 -- Studio or to the place's owner), one turns Pretend Premium on and off
 -- (Studio only), PASSES opens one "Pretend owns <pass>" toggle per Game
--- Pass, and REWARDS opens Next day, +5 min playtime and Clear boosts (both
--- Studio only). The server (Systems/DevCommands) checks again. To
+-- Pass, and REWARDS opens Next day, +5 min playtime, Clear boosts and a
+-- Pretend group member toggle (both Studio only). The server (Systems/DevCommands) checks again. To
 -- remove it: delete this file and Systems/DevCommands.luau, and take
 -- "DevCommand" out of Shared/Remotes.
 
@@ -141,7 +141,7 @@ function DevCommands.init()
 	UI.onLayout(function()
 		UI.place(rewards, row(4))
 		local area = Layout.hud.test
-		UI.place(tools, { x = area.x + area.w + LayoutMath.GAP, y = area.y, w = 220, h = 3 * 48 })
+		UI.place(tools, { x = area.x + area.w + LayoutMath.GAP, y = area.y, w = 220, h = 4 * 48 })
 	end)
 	local function showLists(passesOn: boolean, rewardsOn: boolean)
 		list.Visible = passesOn
@@ -178,6 +178,27 @@ function DevCommands.init()
 			devRemote:FireServer(tool.command)
 		end)
 	end
+	-- Pretend group member: the group bonus without joining (Systems/Group)
+	local groupToggle = UI.button({
+		Name = "PretendGroup",
+		LayoutOrder = 4,
+		Text = "",
+		Size = UDim2.new(1, 0, 0, 40),
+		BackgroundColor3 = UI.COLORS.panelDark,
+		Parent = tools,
+	})
+	UI.maxText(groupToggle, 16)
+	local function showGroup()
+		local on = player:GetAttribute("PretendGroup") == true
+		groupToggle.Text = `👥 Group member: {if on then "ON" else "OFF"}`
+		groupToggle.BackgroundColor3 = if on then UI.COLORS.green else UI.COLORS.panelDark
+	end
+	showGroup()
+	player:GetAttributeChangedSignal("PretendGroup"):Connect(showGroup)
+	groupToggle.Activated:Connect(function()
+		UI.pop(groupToggle)
+		devRemote:FireServer("group", player:GetAttribute("PretendGroup") ~= true)
+	end)
 	for index, pass in Config.PASSES do
 		local attribute = `PretendPass_{pass.key}`
 		local toggle = UI.button({

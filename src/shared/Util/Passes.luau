@@ -19,6 +19,11 @@ local Passes = {}
 Passes.ATTRIBUTE = "Pass_"
 Passes.BOLT_ATTRIBUTE = "BoltColour"
 
+-- A member of the game's group (Config.GROUP_ID, Systems/Group): the
+-- player attribute everyone can read, and the key that marks one in an
+-- `owned` set, so the group bonus multiplies like a pass.
+Passes.GROUP = "GroupMember"
+
 -- The pass with this key, or nil.
 function Passes.def(key: string): Types.PassDef?
 	for _, pass in Config.PASSES do
@@ -29,7 +34,8 @@ function Passes.def(key: string): Types.PassDef?
 	return nil
 end
 
--- What a sale pays, times this: 2x Volts and VIP multiply (2 x 1.1 = 2.2).
+-- What a sale pays, times this: 2x Volts, VIP and the group bonus
+-- multiply (2 x 1.1 x 1.1 = 2.42).
 function Passes.sellMultiplier(owned: Owned): number
 	local multiplier = 1
 	if owned.DoubleVolts then
@@ -37,6 +43,9 @@ function Passes.sellMultiplier(owned: Owned): number
 	end
 	if owned.VIP then
 		multiplier *= VALUES.vipVolts
+	end
+	if owned[Passes.GROUP] then
+		multiplier *= 1 + Config.GROUP_BONUS
 	end
 	return multiplier
 end

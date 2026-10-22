@@ -8,6 +8,10 @@
 -- so it's worth the same playtime early or late) and timed boosts
 -- (Systems/Boosts); a boost for a pass they own pays Volts instead. The
 -- Rewarded remote tells the client what came, for its celebration.
+-- GroupJoined: the client says the player just joined the game's group
+-- from the panel; Systems/Group checks for itself.
+-- Stats (Analytics): DailyClaimed, PlaytimeGift, GroupJoined, and the
+-- Volts as a TimedReward economy source.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -17,7 +21,9 @@ local Net = require(ReplicatedStorage.Shared.Net)
 local RewardRules = require(ReplicatedStorage.Shared.Util.Rewards)
 local Store = require(ReplicatedStorage.Shared.Util.Store)
 local Types = require(ReplicatedStorage.Shared.Types)
+local Analytics = require(script.Parent.Analytics)
 local Boosts = require(script.Parent.Boosts)
+local Group = require(script.Parent.Group)
 local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
 local Sync = require(script.Parent.Sync)
@@ -33,10 +39,14 @@ local function today(player: Player): number
 	return RewardRules.today(os.time()) + (if session then session.dayOffset else 0)
 end
 
-local function give(player: Player, profile: Types.Profile, reward: Types.Reward)
+-- `sku` names it in the economy stats ("Daily 3", "Gift 10 min").
+local function give(player: Player, profile: Types.Profile, reward: Types.Reward, sku: string)
 	local resolved = RewardRules.resolve(reward, Passes.owned(player))
 	local volts = Store.volts(resolved.charges, profile)
 	profile.volts += volts
+	if volts > 0 then
+		Analytics.rewardVolts(player, volts, sku)
+	end
 	for _, boost in resolved.boosts do
 		Boosts.grant(player, boost.key, boost.minutes * 60)
 	end
@@ -64,7 +74,8 @@ local function onClaimDaily(player: Player)
 	end
 	profile.dailyStreak = streak
 	profile.lastDailyDay = day
-	give(player, profile, Config.DAILY_REWARDS[streak])
+	give(player, profile, Config.DAILY_REWARDS[streak], `Daily {streak}`)
+	Analytics.dailyClaimed(player, streak)
 end
 
 local function onClaimGift(player: Player, index: unknown)
@@ -90,7 +101,8 @@ local function onClaimGift(player: Player, index: unknown)
 		return
 	end
 	session.claimed[index] = true
-	give(player, profile, gift.reward)
+	give(player, profile, gift.reward, `Gift {gift.minutes} min`)
+	Analytics.giftClaimed(player, gift.minutes)
 end
 
 -- Studio TEST tools (Systems/DevCommands only calls these in Studio).
@@ -110,10 +122,18 @@ function Rewards.addPlaytime(player: Player, seconds: number)
 	end
 end
 
+local function onGroupJoined(player: Player)
+	if RateLimit.allow(player, "GroupJoined", 1, 2) then
+		Group.recheck(player)
+	end
+end
+
 function Rewards.init()
 	rewardedRemote = Net.get("Rewarded")
 	Net.get("ClaimDaily").OnServerEvent:Connect(onClaimDaily)
 	Net.get("ClaimGift").OnServerEvent:Connect(onClaimGift)
+	Net.get("GroupJoined").OnServerEvent:Connect(onGroupJoined)
+	Group.Joined:Connect(Analytics.groupJoined)
 	PlayerData.Loaded:Connect(function(player: Player)
 		Sync.rewards[player] = {
 			startedAt = workspace:GetServerTimeNow(),

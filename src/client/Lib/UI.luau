@@ -519,6 +519,8 @@ end
 -- once (the oldest goes first). Bookkeeping: Lib/ToastQueue.
 
 export type ToastKind = "info" | "warn" | "good" | "volt"
+-- A toast can carry one action ("OPEN"): tapping anywhere on it does it.
+export type ToastAction = { text: string, onTap: () -> () }
 
 UI.TOAST_TIME = 3
 UI.TOAST_HEIGHT = LayoutMath.HUD.toastHeight
@@ -578,7 +580,7 @@ local function removeToast(id: number)
 	fade:Play()
 end
 
-local function buildToast(entry: ToastQueue.Entry): CanvasGroup
+local function buildToast(entry: ToastQueue.Entry, action: ToastAction?): CanvasGroup
 	local group = UI.make(Instance.new("CanvasGroup"), {
 		Name = "Toast",
 		Size = UDim2.new(1, 0, 0, UI.TOAST_HEIGHT),
@@ -597,12 +599,42 @@ local function buildToast(entry: ToastQueue.Entry): CanvasGroup
 		Parent = panel,
 	})
 	UI.maxText(label, 22)
+	if action then
+		-- the whole toast is the button (it's bigger than a button that fits
+		-- in it); the action's name sits on the right
+		label.Size = UDim2.fromScale(0.68, 0.72)
+		local hint = UI.label({
+			Title = true,
+			Name = "Action",
+			Text = `{action.text} ›`,
+			TextColor3 = UI.COLORS.volt,
+			TextXAlignment = Enum.TextXAlignment.Right,
+			Position = UDim2.fromScale(0.72, 0.14),
+			Size = UDim2.fromScale(0.25, 0.72),
+			Parent = panel,
+		})
+		UI.maxText(hint, 22)
+		local tap = UI.make(Instance.new("TextButton"), {
+			Name = "Tap",
+			Text = "",
+			BackgroundTransparency = 1,
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = 5,
+			Parent = group,
+		})
+		tap.Activated:Connect(function()
+			ToastQueue.dismiss(toasts, entry.id)
+			removeToast(entry.id)
+			action.onTap()
+		end)
+	end
 	TweenService:Create(group, UI.TWEEN.fast, { GroupTransparency = 0 }):Play()
 	return group
 end
 
--- Shows a message for `seconds` (UI.TOAST_TIME by default).
-function UI.toast(text: string, kind: ToastKind?, seconds: number?)
+-- Shows a message for `seconds` (UI.TOAST_TIME by default), with an
+-- optional action (tap the toast to do it).
+function UI.toast(text: string, kind: ToastKind?, seconds: number?, action: ToastAction?)
 	local duration = seconds or UI.TOAST_TIME
 	local entry, evicted = ToastQueue.push(toasts, text, kind or "info", duration)
 	for _, old in evicted do
@@ -616,7 +648,7 @@ function UI.toast(text: string, kind: ToastKind?, seconds: number?)
 		end
 		UI.pop(frame, 1.06)
 	else
-		toastFrames[entry.id] = buildToast(entry)
+		toastFrames[entry.id] = buildToast(entry, action)
 	end
 	local id, generation = entry.id, entry.generation
 	task.delay(duration, function()

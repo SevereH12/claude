@@ -7,7 +7,7 @@ then ticks it:
 
 - [x] Part A: timed boosts, the 7-day login streak, playtime gifts and the
   REWARDS panel
-- [ ] Part B: the group bonus, "reward ready" nudges and reward stats
+- [x] Part B: the group bonus, "reward ready" nudges and reward stats
 
 **Needs prompt 8 part A**: `src/shared/Util/Passes.luau` must exist. If it
 doesn't, stop and tell the user.
