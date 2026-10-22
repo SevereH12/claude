@@ -14,6 +14,7 @@ local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local ResearchSites = require(ReplicatedStorage.Shared.Util.ResearchSites)
 local Types = require(ReplicatedStorage.Shared.Types)
 local ResearcherModels = require(script.Parent.Parent.Lib.ResearcherModels)
+local Layout = require(script.Parent.Parent.Lib.Layout)
 local UI = require(script.Parent.Parent.Lib.UI)
 local State = require(script.Parent.State)
 
@@ -34,7 +35,7 @@ type Card = {
 
 local ResearchUI = {}
 
-local screenGui: ScreenGui
+local screenGui: Frame -- the panel's Layout root
 local panel: Frame
 local cards: { Card } = {}
 local hireRemote: RemoteEvent
@@ -45,6 +46,10 @@ local knownLevels: { [string]: number } = {}
 
 function ResearchUI.toggle()
 	UI.togglePanel(panel)
+end
+
+function ResearchUI.open()
+	UI.openPanel(panel)
 end
 
 local function perkText(def: Types.ResearcherDef, level: number): string
@@ -335,70 +340,35 @@ function ResearchUI.init()
 		postNames[zone.id] = zone.displayName
 	end
 
-	screenGui = UI.make(Instance.new("ScreenGui"), {
-		Name = "StormBottlerResearch",
-		ResetOnSpawn = false,
-		DisplayOrder = 6, -- above the shop if both are open
-		Parent = Players.LocalPlayer:WaitForChild("PlayerGui"),
-	})
-	panel = UI.panel({
-		Name = "ResearchPanel",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.5, 0.74),
-		Visible = false,
-		Parent = screenGui,
-	})
-	UI.sizeLimits(panel, Vector2.new(340, 320), Vector2.new(640, 640))
-
-	local header = UI.make(Instance.new("Frame"), {
-		Name = "Header",
-		Size = UDim2.fromScale(1, 0.12),
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		Parent = panel,
-	})
-	UI.corner(header, UDim.new(0, 14))
-	UI.gradient(header, COLORS.storm, COLORS.stormDeep)
-	local title = UI.label({
-		Title = true,
-		Text = "🔬 STORM SOCIETY",
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromScale(0.05, 0.15),
-		Size = UDim2.fromScale(0.7, 0.7),
-		Parent = header,
-	})
-	UI.maxText(title, 36)
-	local close = UI.button({
-		Name = "Close",
-		Text = "X",
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.fromScale(0.975, 0.5),
-		Size = UDim2.fromScale(0.75, 0.75),
-		SizeConstraint = Enum.SizeConstraint.RelativeYY,
-		BackgroundColor3 = COLORS.red,
-		Parent = header,
-	})
-	close.Activated:Connect(ResearchUI.toggle)
-
+	local _, root = Layout.screen("StormBottlerResearch", 6) -- above the shop if both are open
+	screenGui = root
+	local window = UI.window(
+		screenGui,
+		"ResearchPanel",
+		"🔬 STORM SOCIETY",
+		COLORS.storm,
+		Vector2.new(640, 560)
+	)
+	panel = window.panel
 	local hint = UI.label({
-		Text = "Hire at the Research Center (the island at the end of the north boardwalk), then post them at a zone.",
+		Text = "Hire researchers at the Research Center island, then post them at a zone.",
 		TextColor3 = COLORS.subtext,
-		Position = UDim2.fromScale(0.05, 0.135),
-		Size = UDim2.fromScale(0.9, 0.05),
-		Parent = panel,
+		TextWrapped = true,
+		Size = UDim2.new(1, 0, 0, 34),
+		Parent = window.body,
 	})
 	UI.maxText(hint, 16)
 
 	local list = UI.make(Instance.new("ScrollingFrame"), {
 		Name = "List",
-		Position = UDim2.fromScale(0.04, 0.2),
-		Size = UDim2.fromScale(0.92, 0.78),
+		Position = UDim2.fromOffset(0, 42),
+		Size = UDim2.new(1, 0, 1, -42),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		CanvasSize = UDim2.new(),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		ScrollBarThickness = 6,
-		Parent = panel,
+		Parent = window.body,
 	})
 	UI.make(Instance.new("UIListLayout"), {
 		Padding = UDim.new(0, 10),

@@ -10,6 +10,8 @@ local RunService = game:GetService("RunService")
 
 local Net = require(ReplicatedStorage.Shared.Net)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
+local Layout = require(script.Parent.Parent.Lib.Layout)
+local LayoutMath = require(script.Parent.Parent.Lib.LayoutMath)
 local UI = require(script.Parent.Parent.Lib.UI)
 
 local DevCommands = {}
@@ -27,26 +29,31 @@ function DevCommands.init()
 		return
 	end
 	local devRemote = Net.get("DevCommand")
-	local screenGui = UI.make(Instance.new("ScreenGui"), {
-		Name = "StormBottlerTest",
-		ResetOnSpawn = false,
-		Parent = Players.LocalPlayer:WaitForChild("PlayerGui"),
-	})
-	-- under the SHOP and RESEARCH buttons
+	local _, screenGui = Layout.screen("StormBottlerTest", 1)
+	-- under the MENU button (LayoutMath.hud.test: two rows)
 	local button = UI.button({
 		Name = "TestVolts",
 		Text = "TEST: 1T ⚡",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.fromScale(0.015, 0.69),
-		Size = UDim2.fromScale(0.1, 0.075),
 		BackgroundColor3 = UI.COLORS.volt,
 		Parent = screenGui,
 	})
-	UI.sizeLimits(button, Vector2.new(96, 46), Vector2.new(150, 62))
 	UI.maxText(button, 22)
 	button.Activated:Connect(function()
 		UI.pop(button)
 		devRemote:FireServer("volts")
+	end)
+	local function row(index: number): LayoutMath.Rect
+		local area = Layout.hud.test
+		local height = (area.h - LayoutMath.GAP) / 2
+		return {
+			x = area.x,
+			y = area.y + (index - 1) * (height + LayoutMath.GAP),
+			w = area.w,
+			h = height,
+		}
+	end
+	UI.onLayout(function()
+		UI.place(button, row(1))
 	end)
 
 	if not RunService:IsStudio() then
@@ -56,13 +63,12 @@ function DevCommands.init()
 	local premium = UI.button({
 		Name = "PretendPremium",
 		Text = "",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.fromScale(0.015, 0.785),
-		Size = UDim2.fromScale(0.1, 0.075),
 		BackgroundColor3 = UI.COLORS.storm,
 		Parent = screenGui,
 	})
-	UI.sizeLimits(premium, Vector2.new(96, 46), Vector2.new(150, 62))
+	UI.onLayout(function()
+		UI.place(premium, row(2))
+	end)
 	UI.maxText(premium, 16)
 	local function pretending(): boolean
 		return player:GetAttribute(Progression.PRETEND_PREMIUM) == true

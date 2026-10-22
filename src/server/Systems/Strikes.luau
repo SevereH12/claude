@@ -14,6 +14,7 @@ local Net = require(ReplicatedStorage.Shared.Net)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
+local Analytics = require(script.Parent.Analytics)
 local Research = require(script.Parent.Research)
 local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local PlayerData = require(script.Parent.PlayerData)
@@ -189,6 +190,7 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, owner
 			table.insert(values, base)
 		end
 		Sync.markDirty(candidate.player)
+		Analytics.caught(candidate.player)
 	end
 
 	local landed: Types.StrikeLanded = {

@@ -17,6 +17,7 @@ local ResearchSites = require(ReplicatedStorage.Shared.Util.ResearchSites)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
 local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
+local Analytics = require(script.Parent.Analytics)
 local PlayerData = require(script.Parent.PlayerData)
 local StormCycle = require(script.Parent.StormCycle)
 local Sync = require(script.Parent.Sync)
@@ -98,6 +99,7 @@ local function onHire(player: Player, roleId: unknown)
 	profile.volts -= def.price
 	profile.researchers[roleId] = { level = 1, data = 0, post = "Office" }
 	changed(player)
+	Analytics.hired(player, def)
 end
 
 local function onPost(player: Player, roleId: unknown, post: unknown)

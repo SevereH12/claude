@@ -16,6 +16,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Volumes = require(ReplicatedStorage.Shared.Util.Volumes)
+local Analytics = require(script.Parent.Analytics)
 local Map = require(script.Parent.Map)
 local PlayerData = require(script.Parent.PlayerData)
 local Sync = require(script.Parent.Sync)
@@ -89,6 +90,7 @@ local function sell(soldRemote: RemoteEvent, player: Player)
 	profile.chargeCount = 0
 	profile.chargeValue = 0
 	Sync.markDirty(player)
+	Analytics.sold(player, earned)
 	soldRemote:FireClient(player, earned, count)
 end
 

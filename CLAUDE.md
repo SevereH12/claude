@@ -132,6 +132,11 @@ detail to save parts; the build output still reports the count.
 - `python3 tools/flickercheck.py map.json` fails if two visible parts with
   different colours or materials have overlapping top faces at the same
   height (they flicker in Studio). Offset one, butt them, or match colours.
+- `lune run tools/harness/test_layout.luau preview.json` checks the HUD
+  layout (Lib/LayoutMath) on phones, tablets, monitors and a console: every
+  piece on screen, nothing overlapping or under the thumb controls; then
+  `python3 tools/render_ui.py preview.json out.png` draws it per device.
+  The UI is laid out in design pixels and scaled by one UIScale per screen.
 - `tools/check_world.sh [Game|<Style>] [outdir]` runs all of the above,
   each world on its own: `Game` (the default) is the real game, every world
   in its own style; a style name previews the first world's zones in that

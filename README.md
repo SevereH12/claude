@@ -51,6 +51,28 @@ The updater rebuilds the map each time while `Workspace.Map` has the
 attribute `AutoBuilt = true`. Delete that attribute once you start editing
 the map by hand and the updater will leave it alone.
 
+## Reading the stats
+
+`Systems/Analytics` sends overall stats to the Roblox Creator Dashboard
+(create.roblox.com → your experience → **Analytics**):
+
+- **Funnels**: the Onboarding funnel. Joined → Entered a zone → First catch
+  → First sell → First upgrade → Entered a second zone → Hired a researcher.
+  Each player counts once per step, ever.
+- **Progression**: the Bottles and Boots tiers bought, and the Zones each
+  bottle unlocks.
+- **Custom events**: `SessionMinutes` (average minutes per session) and
+  `Left` (number of players who left). Split them by Custom Field 1 for
+  where players were when they left (a zone, `Camp:<Zone>`, `SellStation`,
+  `ResearchCenter`, `Hub`, `Boardwalk`, `Water` or `Respawning`), Field 2
+  for their bottle (`Bottle <n>`) and Field 3 for `Storm` or `Calm`.
+- **Economy**: Volts earned at the sell station (Source) and spent on
+  bottles, boots and researchers (Sink), per item.
+
+Data only shows up after the place is published and played on Roblox, not
+from Studio, and can take a day to appear. The built-in **Retention** and
+**Engagement** pages already show D1/D7 retention and average session time.
+
 ## Code layout
 
 - `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas, zone geometry

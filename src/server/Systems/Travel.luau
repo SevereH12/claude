@@ -5,15 +5,19 @@
 -- check here on the server, never Touched; the client only explains a
 -- locked portal (Controllers/Travel). The world you're in is the player
 -- attribute World, and you respawn there. It isn't saved: every visit
--- starts in the first world.
+-- starts in the first world. The menu's Teleport panel asks to go to a
+-- world's hub (remote Teleport): same rule, checked here.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local Net = require(ReplicatedStorage.Shared.Net)
 local Portals = require(ReplicatedStorage.Shared.Util.Portals)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local PlayerData = require(script.Parent.PlayerData)
+local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
 
 local CHECK_INTERVAL = 0.1 -- portal boxes are 6 deep: no one runs through between checks
 local COOLDOWN = 2 -- seconds after a trip before a portal takes you again
@@ -87,10 +91,36 @@ local function onPlayerAdded(player: Player)
 	end)
 end
 
+-- Teleport panel: go to the hub (spawn) of a world you can enter.
+local function onTeleport(player: Player, worldId: unknown)
+	if not RateLimit.allow(player, "Teleport", 1, 3) then
+		return
+	end
+	if typeof(worldId) ~= "string" then
+		return
+	end
+	local world = nil
+	for _, candidate in Config.WORLDS do
+		if candidate.id == worldId then
+			world = candidate
+		end
+	end
+	local profile = PlayerData.get(player)
+	if not world or not profile or not Progression.canEnterWorld(profile, world) then
+		return
+	end
+	if os.clock() - (lastTrip[player] or -math.huge) < COOLDOWN then
+		return
+	end
+	lastTrip[player] = os.clock()
+	task.spawn(sendTo, player, world.id)
+end
+
 function Travel.init()
 	Players.PlayerRemoving:Connect(function(player)
 		lastTrip[player] = nil
 	end)
+	Net.get("Teleport").OnServerEvent:Connect(onTeleport)
 end
 
 function Travel.start()
