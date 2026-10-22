@@ -33,6 +33,11 @@ and stops if it isn't. To run one, say: "Do `docs/prompts/<file>`".
    members of the Super Studio group (with an in-game join button), "reward
    ready" nudges and stats. No like rewards (Roblox can't detect likes, and
    its rules forbid rewarding them).
+10. `10-gifting.md`: **run it twice.** Part A: gift any game pass to anyone
+    by username (a matching "Gift:" product, a safe inbox, live delivery
+    across servers). Part B: boosts you can buy for yourself or gift, the
+    Boost Bundle, and Server Storms (2x Volts for the whole server). All 13
+    products already exist, off sale (`tools/store/store_ids.json`).
 
 Researchers (all five parts done) live in `researchers/`.
 

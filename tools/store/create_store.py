@@ -9,9 +9,11 @@ import json, os, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 API = "https://apis.roblox.com"
+from items import GROUP_KIND, load
+
 KINDS = {
-    "passes": ("game-passes/v1/universes/{u}/game-passes", "gamePasses", "gamePassId"),
-    "products": ("developer-products/v2/universes/{u}/developer-products", "developerProducts", "productId"),
+    "pass": ("game-passes/v1/universes/{u}/game-passes", "gamePasses", "gamePassId"),
+    "product": ("developer-products/v2/universes/{u}/developer-products", "developerProducts", "productId"),
 }
 
 
@@ -39,11 +41,18 @@ def existing(path, listKey, idKey):
 
 def main():
     universe, icons = sys.argv[1], sys.argv[2]
-    items = json.load(open(os.path.join(HERE, "store_items.json")))
-    ids = {"universeId": int(universe), "passes": {}, "products": {}}
-    for group, (path, listKey, idKey) in KINDS.items():
+    items = load()
+    path_file = os.path.join(HERE, "store_ids.json")
+    ids = json.load(open(path_file)) if os.path.exists(path_file) else {}
+    ids["universeId"] = int(universe)
+    have_by_kind = {}
+    for group, kind in GROUP_KIND.items():
+        path, listKey, idKey = KINDS[kind]
         path = path.format(u=universe)
-        have = existing(path, listKey, idKey)
+        if kind not in have_by_kind:
+            have_by_kind[kind] = existing(path, listKey, idKey)
+        have = have_by_kind[kind]
+        ids.setdefault(group, {})
         for item in items[group]:
             if item["name"] in have:
                 ids[group][item["key"]] = have[item["name"]]
@@ -58,7 +67,7 @@ def main():
             made = curl(["-X", "POST", f"{API}/{path}", *form])
             ids[group][item["key"]] = made[idKey]
             print(f"created  {item['name']}: {made[idKey]}")
-    with open(os.path.join(HERE, "store_ids.json"), "w") as f:
+    with open(path_file, "w") as f:
         json.dump(ids, f, indent=2)
         f.write("\n")
     print("ids written to tools/store/store_ids.json")
