@@ -24,6 +24,10 @@ and stops if it isn't. To run one, say: "Do `docs/prompts/<file>`".
    after a few seconds (second fix, with a test), and makes bigger zones
    fill more of the bottle per strike while always paying more Volts per
    full bottle.
+8. `8-game-passes.md`: **run it three times.** Part A: the pass system,
+   the store, and 2x Volts, Remote Sell, Big Bottles and Lucky Charges.
+   Part B: Lab Grant, VIP, Bolt Colours and Jet Boots. Part C: Volts packs,
+   offers when a pass would help, a free 2x Volts trial, and store stats.
 
 Researchers (all five parts done) live in `researchers/`.
 
