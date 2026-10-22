@@ -6,7 +6,8 @@
 --   StrikeWarning -> glowing ring + light pillar; inner disc fills until the bolt lands
 --   StrikeLanded  -> forked, flickering bolt; area lights up; sparks,
 --                    shockwave, scorch mark, thunder. Arcs into each
---                    catcher's bottle. If we caught it: screen flash,
+--                    catcher's bottle, in their bolt colour (Bolt Colours
+--                    pick, else VIP gold). If we caught it: screen flash,
 --                    camera shake, "+5" popup ("x2 ASSAYED" if high grade).
 --   Sold          -> big "+Volts" popup
 --   (ambient)     -> the Power Plant's tesla coil crackles
@@ -21,6 +22,7 @@ local TweenService = game:GetService("TweenService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Net = require(ReplicatedStorage.Shared.Net)
+local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Research = require(ReplicatedStorage.Shared.Util.Research)
 local Types = require(ReplicatedStorage.Shared.Types)
@@ -213,8 +215,11 @@ local function jaggedPath(a: Vector3, b: Vector3, segments: number, wobble: numb
 	return points
 end
 
--- Draws a glowing line along the points and returns its parts.
-local function drawPath(points: { Vector3 }, thickness: number, into: { BasePart })
+-- Draws a glowing line along the points and returns its parts. `tint`
+-- colours it (a player's bolt colour); white-blue when nil.
+local function drawPath(points: { Vector3 }, thickness: number, into: { BasePart }, tint: Color3?)
+	local glowColor = tint or GLOW_COLOR
+	local coreColor = if tint then tint:Lerp(CORE_COLOR, 0.5) else CORE_COLOR
 	for i = 1, #points - 1 do
 		local a, b = points[i], points[i + 1]
 		local length = (b - a).Magnitude
@@ -225,7 +230,7 @@ local function drawPath(points: { Vector3 }, thickness: number, into: { BasePart
 				Name = "BoltCore",
 				Size = Vector3.new(thickness, thickness, length + thickness),
 				CFrame = cframe,
-				Color = CORE_COLOR,
+				Color = coreColor,
 				Parent = fxFolder,
 			})
 		)
@@ -235,7 +240,7 @@ local function drawPath(points: { Vector3 }, thickness: number, into: { BasePart
 				Name = "BoltGlow",
 				Size = Vector3.new(thickness * 3.5, thickness * 3.5, length),
 				CFrame = cframe,
-				Color = GLOW_COLOR,
+				Color = glowColor,
 				Transparency = 0.72,
 				Parent = fxFolder,
 			})
@@ -264,10 +269,10 @@ local function flickerAndFade(parts: { BasePart })
 	end)
 end
 
-local function bolt(from: Vector3, to: Vector3, thickness: number, branches: number)
+local function bolt(from: Vector3, to: Vector3, thickness: number, branches: number, tint: Color3?)
 	local parts: { BasePart } = {}
 	local main = jaggedPath(from, to, BOLT_SEGMENTS, (from - to).Magnitude * 0.06)
-	drawPath(main, thickness, parts)
+	drawPath(main, thickness, parts, tint)
 	for _ = 1, branches do
 		local startIndex = random:NextInteger(2, math.max(2, #main - 3))
 		local start = main[startIndex]
@@ -278,7 +283,7 @@ local function bolt(from: Vector3, to: Vector3, thickness: number, branches: num
 				-reach,
 				random:NextNumber(-1, 1) * reach
 			)
-		drawPath(jaggedPath(start, finish, 4, reach * 0.25), thickness * 0.5, parts)
+		drawPath(jaggedPath(start, finish, 4, reach * 0.25), thickness * 0.5, parts, tint)
 	end
 	flickerAndFade(parts)
 end
@@ -367,6 +372,21 @@ local function bottlePosition(userId: number): Vector3?
 		return bottle:GetPivot().Position
 	end
 	return nil
+end
+
+-- A catcher's arc colour, from their player attributes: their Bolt Colours
+-- pick, else VIP gold, else nil (the default).
+local function arcColour(userId: number): Color3?
+	local catcher = Players:GetPlayerByUserId(userId)
+	if not catcher then
+		return nil
+	end
+	local owned = {
+		VIP = catcher:GetAttribute(PassRules.ATTRIBUTE .. "VIP") == true,
+		BoltColours = catcher:GetAttribute(PassRules.ATTRIBUTE .. "BoltColours") == true,
+	}
+	local choice = catcher:GetAttribute(PassRules.BOLT_ATTRIBUTE)
+	return PassRules.boltColour(owned, if typeof(choice) == "number" then choice else 0)
 end
 
 -- The level of your own researcher if they'd be working right now (posted to
@@ -521,7 +541,7 @@ local function onLanded(landed: Types.StrikeLanded)
 	for _, userId in landed.catchers do
 		local target = bottlePosition(userId)
 		if target then
-			bolt(landed.position + Vector3.new(0, 1, 0), target, 0.18, 0)
+			bolt(landed.position + Vector3.new(0, 1, 0), target, 0.18, 0, arcColour(userId))
 		end
 	end
 

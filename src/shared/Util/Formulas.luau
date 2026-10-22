@@ -4,6 +4,7 @@
 
 local Config = require(script.Parent.Parent.Config)
 local Types = require(script.Parent.Parent.Types)
+local PassRules = require(script.Parent.Passes)
 
 local Formulas = {}
 
@@ -51,10 +52,11 @@ function Formulas.nextBoots(tier: number): Types.BootsDef?
 end
 
 -- Boots only help inside storm zones; between zones everyone walks at
--- WALK_SPEED_OUTSIDE.
-function Formulas.walkSpeed(inZone: boolean, bootTier: number): number
+-- WALK_SPEED_OUTSIDE (50% faster with the Jet Boots pass, in `owned`, the
+-- player's Game Pass keys).
+function Formulas.walkSpeed(inZone: boolean, bootTier: number, owned: PassRules.Owned?): number
 	if not inZone then
-		return Config.WALK_SPEED_OUTSIDE
+		return PassRules.outsideSpeed(Config.WALK_SPEED_OUTSIDE, owned or {})
 	end
 	return Config.WALK_SPEED_IN_ZONE + Formulas.boots(bootTier).speedBonus
 end

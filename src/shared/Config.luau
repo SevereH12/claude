@@ -255,6 +255,42 @@ local PASSES: { Types.PassDef } = {
 		detail = "Each charge you catch has a 15% chance to be worth double",
 		price = 149,
 	},
+	{
+		key = "LabGrant",
+		id = 2046189262,
+		image = 139170195972752,
+		name = "Lab Grant",
+		icon = "🔬",
+		detail = "Researchers set up instantly and gain field data 2x as fast",
+		price = 199,
+	},
+	{
+		key = "VIP",
+		id = 2044617289,
+		image = 107045645261408,
+		name = "VIP",
+		icon = "👑",
+		detail = "Golden bottle and lightning, a VIP chat tag and title, and 10% more Volts",
+		price = 399,
+	},
+	{
+		key = "BoltColours",
+		id = 2045751309,
+		image = 137026123419252,
+		name = "Bolt Colours",
+		icon = "🌈",
+		detail = "Choose the colour of the lightning that arcs into your bottle",
+		price = 99,
+	},
+	{
+		key = "JetBoots",
+		id = 2045211315,
+		image = 123712582846727,
+		name = "Jet Boots",
+		icon = "🚀",
+		detail = "50% faster outside storm zones, with a jet trail. Zone speed is unchanged",
+		price = 99,
+	},
 }
 
 -- What the passes do (Util/Passes).
@@ -264,6 +300,25 @@ local PASS_VALUES = {
 	luckyChance = 0.15, -- Lucky Charges: chance a caught charge is worth double
 	remoteSellCooldown = 5, -- seconds between Remote Sells
 	remoteSellChargeUp = 1.5, -- seconds the SELL button charges before it fires
+	vipVolts = 1.1, -- VIP: sale multiplier (times 2x Volts if owned too)
+	labGrantData = 2, -- Lab Grant: field data multiplier (and no set-up time)
+	jetBoots = 1.5, -- Jet Boots: walk speed multiplier outside storm zones
+}
+
+-- VIP's gold: the bottle's glass and charge, and its lightning arcs.
+local VIP_GOLD = Color3.fromRGB(255, 196, 40)
+
+-- Bolt Colours: the lightning colours an owner can pick (the profile saves
+-- the index; 0 = the default). All bright enough to read in a storm.
+local BOLT_COLOURS: { Types.BoltColourDef } = {
+	{ name = "Plasma Pink", color = Color3.fromRGB(255, 70, 200) },
+	{ name = "Toxic Green", color = Color3.fromRGB(80, 255, 90) },
+	{ name = "Solar Orange", color = Color3.fromRGB(255, 140, 30) },
+	{ name = "Ion Violet", color = Color3.fromRGB(170, 90, 255) },
+	{ name = "Arc Cyan", color = Color3.fromRGB(50, 240, 255) },
+	{ name = "Ruby Red", color = Color3.fromRGB(255, 55, 70) },
+	{ name = "Royal Blue", color = Color3.fromRGB(70, 120, 255) },
+	{ name = "Frost White", color = Color3.fromRGB(235, 245, 255) },
 }
 
 -- The Boosts store's VOLTS tab. LAYOUT ONLY for now (prompt 8 part C):
@@ -321,6 +376,8 @@ return table.freeze({
 	ZONES = table.freeze(ZONES),
 	PASSES = table.freeze(PASSES),
 	PASS_VALUES = table.freeze(PASS_VALUES),
+	VIP_GOLD = VIP_GOLD,
+	BOLT_COLOURS = table.freeze(BOLT_COLOURS),
 	STORE = table.freeze(STORE),
 
 	-- Placeholder sounds (built into Roblox). Swap for Creator Store sounds.

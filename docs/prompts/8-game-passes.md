@@ -7,7 +7,7 @@ ticked, then ticks it:
 
 - [x] Part A: the pass system, the store, and 2x Volts, Remote Sell, Big
   Bottles and Lucky Charges
-- [ ] Part B: Lab Grant, VIP, Bolt Colours and Jet Boots
+- [x] Part B: Lab Grant, VIP, Bolt Colours and Jet Boots
 - [ ] Part C: Volts packs, offers at the right moment, the free trial and
   store stats
 

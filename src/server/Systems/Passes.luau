@@ -31,7 +31,7 @@ local RECHECK_DELAY = 2 -- seconds before re-checking a "not purchased"
 
 local Passes = {}
 
-Passes.ATTRIBUTE = "Pass_" -- .. key: true when the player owns it
+Passes.ATTRIBUTE = PassRules.ATTRIBUTE -- .. key: true when the player owns it
 Passes.PRETEND = "PretendPass_" -- .. key: the Studio toggle is on
 
 local bought: { [Player]: PassRules.Owned } = {} -- real ownership
@@ -139,9 +139,9 @@ function Passes.capacity(player: Player, profile: Types.Profile): number
 	return PassRules.capacity(Formulas.capacity(profile.bottleTier), Passes.owned(player))
 end
 
--- What a sale pays, times this (2x Volts).
-function Passes.sellMultiplier(player: Player): number
-	return PassRules.sellMultiplier(Passes.owned(player))
+-- The Volts a bottle worth `value` sells for (2x Volts and VIP).
+function Passes.sale(player: Player, value: number): number
+	return PassRules.sale(value, Passes.owned(player))
 end
 
 -- The chance a caught charge is worth double (Lucky Charges).

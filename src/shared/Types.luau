@@ -15,6 +15,7 @@ export type Profile = {
 	tankCount: number, -- Chemist's overflow tank: bottle units held
 	tankValue: number, -- Volts those charges sell for
 	onboardStep: number, -- onboarding funnel steps already sent (Systems/Analytics)
+	boltColour: number, -- Bolt Colours pick: index into Config.BOLT_COLOURS, 0 = default
 }
 
 -- A hired researcher. post is "Office" or a zone id.
@@ -106,6 +107,12 @@ export type PassDef = {
 	icon: string, -- emoji fallback
 	detail: string,
 	price: number, -- Robux, a fallback until the real price loads
+}
+
+-- A lightning colour Bolt Colours owners can pick (Config.BOLT_COLOURS).
+export type BoltColourDef = {
+	name: string,
+	color: Color3,
 }
 
 export type BottleDef = {

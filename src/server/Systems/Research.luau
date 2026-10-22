@@ -11,6 +11,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
+local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
 local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local ResearchSites = require(ReplicatedStorage.Shared.Util.ResearchSites)
@@ -51,15 +52,18 @@ local function refreshAttributes(player: Player)
 	end
 end
 
+-- A researcher posted to a zone needs RESEARCH_SETUP_TIME before their perk
+-- works (none with the Lab Grant pass).
 local function startSetup(player: Player, roleId: string, post: string)
 	local timers = Sync.setupUntil[player]
 	if not timers then
 		timers = {}
 		Sync.setupUntil[player] = timers
 	end
-	timers[roleId] = if post == "Office"
+	local seconds = PassRules.setupTime(Config.RESEARCH_SETUP_TIME, Passes.owned(player))
+	timers[roleId] = if post == "Office" or seconds <= 0
 		then nil
-		else workspace:GetServerTimeNow() + Config.RESEARCH_SETUP_TIME
+		else workspace:GetServerTimeNow() + seconds
 end
 
 local function changed(player: Player)
@@ -136,6 +140,14 @@ local function onLoaded(player: Player, profile: Types.Profile)
 		startSetup(player, roleId, save.post)
 	end
 	changed(player)
+	-- Lab Grant bought (or its Studio toggle turned on) mid-setup: every
+	-- researcher is ready at once
+	player:GetAttributeChangedSignal(Passes.ATTRIBUTE .. "LabGrant"):Connect(function()
+		if Passes.owns(player, "LabGrant") and Sync.setupUntil[player] then
+			table.clear(Sync.setupUntil[player])
+			changed(player)
+		end
+	end)
 end
 
 -- The researcher's level if they are posted to the zone the player is
@@ -160,7 +172,8 @@ function Research.active(player: Player, roleId: string): number?
 end
 
 -- Called once per landed strike. Every researcher posted to that zone watches
--- it for their owner: +1 data, or +3 if the owner caught it.
+-- it for their owner: +1 data, or +3 if the owner caught it (double with
+-- the Lab Grant pass).
 function Research.onStrikeLanded(zoneId: string, catchers: { number })
 	local caughtBy: { [number]: boolean } = {}
 	for _, userId in catchers do
@@ -170,11 +183,15 @@ function Research.onStrikeLanded(zoneId: string, catchers: { number })
 		local profile = PlayerData.get(player)
 		if profile then
 			local gained = false
+			local owned = Passes.owned(player)
 			for _, save in profile.researchers do
 				if save.post == zoneId then
-					save.data += if caughtBy[player.UserId]
-						then Config.RESEARCH_DATA_CATCH
-						else Config.RESEARCH_DATA_WATCH
+					save.data += PassRules.fieldData(
+						if caughtBy[player.UserId]
+							then Config.RESEARCH_DATA_CATCH
+							else Config.RESEARCH_DATA_WATCH,
+						owned
+					)
 					save.level = math.max(save.level, ResearchMath.levelFor(save.data))
 					gained = true
 				end

@@ -5,7 +5,9 @@
 --     price optimization can personalise it); Config's price only shows
 --     until that loads. BUY opens Roblox's purchase window, only when
 --     tapped; the server grants the pass (Systems/Passes). Owned passes say
---     OWNED; a pass with no id yet says COMING SOON.
+--     OWNED; a pass with no id yet says COMING SOON. Bolt Colours owners
+--     get CHOOSE COLOUR instead, which opens a colour picker (SetBoltColour,
+--     checked by Systems/PassPerks).
 --   VOLTS: LAYOUT ONLY for now (Config.STORE.volts): Buy says "coming soon".
 
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -15,6 +17,8 @@ local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
+local Net = require(ReplicatedStorage.Shared.Net)
+local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Layout = require(script.Parent.Parent.Lib.Layout)
 local UI = require(script.Parent.Parent.Lib.UI)
@@ -24,6 +28,8 @@ local COLORS = UI.COLORS
 local ROBUX = utf8.char(0xE002) -- Roblox's fonts draw the Robux icon for this
 local CARD_HEIGHT = 168
 local TAB_HEIGHT = 46
+local SWATCH_HEIGHT = 56
+local DEFAULT_BOLT = Color3.fromRGB(120, 175, 255) -- StrikeFX's default glow
 
 type Card = {
 	icon: string,
@@ -35,6 +41,7 @@ type Card = {
 type CardParts = { buy: TextButton, status: TextLabel }
 type PassCard = { pass: Types.PassDef, parts: CardParts }
 type Tab = { button: TextButton, grid: ScrollingFrame }
+type Swatch = { index: number, button: TextButton }
 
 local BoostsUI = {}
 
@@ -44,8 +51,12 @@ local tabs: { Tab } = {}
 local grids: { UIGridLayout } = {}
 local passCards: { PassCard } = {}
 local prices: { [number]: number } = {} -- pass id -> Robux, from Roblox
+local picker: Frame
+local pickerGrid: UIGridLayout
+local swatches: { Swatch } = {}
 
 function BoostsUI.open()
+	picker.Visible = false
 	UI.openPanel(panel)
 end
 
@@ -66,7 +77,8 @@ local function selectTab(selected: Tab)
 	end
 end
 
--- Two cards a row, one on a phone held upright.
+-- Two cards a row, one on a phone held upright (colour swatches: three
+-- a row, two upright).
 local function fitColumns()
 	local one = Layout.class == "Phone" and Layout.portrait
 	for _, grid in grids do
@@ -74,6 +86,9 @@ local function fitColumns()
 			then UDim2.new(1, -8, 0, CARD_HEIGHT)
 			else UDim2.new(0.5, -10, 0, CARD_HEIGHT)
 	end
+	pickerGrid.CellSize = if one
+		then UDim2.new(0.5, -10, 0, SWATCH_HEIGHT)
+		else UDim2.new(1 / 3, -10, 0, SWATCH_HEIGHT)
 end
 
 local function buildCard(parent: Instance, order: number, card: Card): CardParts
@@ -152,7 +167,11 @@ local function renderPasses()
 	local owned = if State.current then State.current.passes else {}
 	for _, card in passCards do
 		local pass, parts = card.pass, card.parts
-		if owned[pass.key] then
+		if owned[pass.key] and pass.key == "BoltColours" then
+			parts.buy.Text = "🎨 CHOOSE COLOUR"
+			parts.status.Text = "✓ OWNED"
+			UI.setEnabled(parts.buy, true, COLORS.storm)
+		elseif owned[pass.key] then
 			parts.buy.Text = "✓ OWNED"
 			parts.status.Text = ""
 			UI.setEnabled(parts.buy, false, COLORS.green)
@@ -166,6 +185,122 @@ local function renderPasses()
 			UI.setEnabled(parts.buy, true, COLORS.green)
 		end
 	end
+end
+
+-- The picker's swatches: the current pick ticked and outlined in gold. The
+-- default swatch is VIP gold for a VIP.
+local function renderPicker()
+	local current = player:GetAttribute(PassRules.BOLT_ATTRIBUTE)
+	local picked = if typeof(current) == "number" then current else 0
+	local vip = State.current ~= nil and State.current.passes.VIP == true
+	for _, swatch in swatches do
+		local name = if swatch.index > 0
+			then Config.BOLT_COLOURS[swatch.index].name
+			elseif vip then "VIP Gold"
+			else "Default"
+		local selected = swatch.index == picked
+		swatch.button.Text = if selected then `✓ {name}` else name
+		if swatch.index == 0 then
+			swatch.button.BackgroundColor3 = if vip then Config.VIP_GOLD else DEFAULT_BOLT
+		end
+		local stroke = swatch.button:FindFirstChildOfClass("UIStroke")
+		if stroke then
+			stroke.Color = if selected then COLORS.volt else COLORS.stroke
+			stroke.Thickness = if selected then 5 else 3
+		end
+	end
+end
+
+local function openPicker()
+	renderPicker()
+	picker.Visible = true
+end
+
+-- Bolt Colours owners: the default and Config.BOLT_COLOURS as swatches, over
+-- the store's tabs.
+local function buildPicker(body: Frame)
+	picker = UI.make(Instance.new("Frame"), {
+		Name = "BoltColourPicker",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = COLORS.panelDark,
+		Active = true, -- taps don't fall through to the cards underneath
+		Visible = false,
+		ZIndex = 10,
+		Parent = body,
+	})
+	UI.corner(picker, UDim.new(0, 14))
+	UI.stroke(picker, 3)
+	local title = UI.label({
+		Title = true,
+		Text = "🎨 CHOOSE YOUR LIGHTNING",
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromOffset(14, 10),
+		Size = UDim2.new(1, -86, 0, 36),
+		Parent = picker,
+	})
+	UI.maxText(title, 26)
+	local close = UI.button({
+		Name = "Close",
+		Text = "✕",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -10, 0, 8),
+		Size = UDim2.fromOffset(52, 42),
+		BackgroundColor3 = COLORS.red,
+		Parent = picker,
+	})
+	close.Activated:Connect(function()
+		UI.pop(close)
+		picker.Visible = false
+	end)
+	local hint = UI.label({
+		Text = "Your lightning arcs and bottle glow in this colour. Everyone sees it!",
+		TextColor3 = COLORS.subtext,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromOffset(14, 52),
+		Size = UDim2.new(1, -28, 0, 20),
+		Parent = picker,
+	})
+	UI.maxText(hint, 17)
+	local grid = UI.make(Instance.new("ScrollingFrame"), {
+		Name = "Swatches",
+		Position = UDim2.fromOffset(10, 82),
+		Size = UDim2.new(1, -20, 1, -92),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollBarThickness = 6,
+		Parent = picker,
+	})
+	pickerGrid = UI.make(Instance.new("UIGridLayout"), {
+		CellPadding = UDim2.fromOffset(10, 10),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = grid,
+	})
+	UI.make(Instance.new("UIPadding"), {
+		PaddingTop = UDim.new(0, 4),
+		PaddingLeft = UDim.new(0, 4),
+		Parent = grid,
+	})
+	local remote = Net.get("SetBoltColour")
+	for index = 0, #Config.BOLT_COLOURS do
+		local button = UI.button({
+			Name = `Colour{index}`,
+			LayoutOrder = index,
+			Text = "",
+			BackgroundColor3 = if index == 0
+				then DEFAULT_BOLT
+				else Config.BOLT_COLOURS[index].color,
+			Parent = grid,
+		})
+		UI.maxText(button, 20)
+		button.Activated:Connect(function()
+			UI.pop(button)
+			remote:FireServer(index)
+		end)
+		table.insert(swatches, { index = index, button = button })
+	end
+	player:GetAttributeChangedSignal(PassRules.BOLT_ATTRIBUTE):Connect(renderPicker)
 end
 
 -- Roblox's real price for a pass, once per session.
@@ -195,7 +330,10 @@ local function buildPassCard(grid: Instance, order: number, pass: Types.PassDef)
 	parts.buy.Activated:Connect(function()
 		UI.pop(parts.buy)
 		local owned = State.current and State.current.passes[pass.key]
-		if owned then
+		if owned and pass.key == "BoltColours" then
+			openPicker()
+			return
+		elseif owned then
 			return
 		elseif pass.id == 0 then
 			UI.toast(`{pass.name} is coming soon!`, "volt")
@@ -280,6 +418,7 @@ function BoostsUI.init()
 			UI.toast(`{pack.name} is coming soon!`, "volt")
 		end)
 	end
+	buildPicker(window.body)
 	selectTab(first)
 	fitColumns()
 	Layout.Changed:Connect(fitColumns)
@@ -288,7 +427,12 @@ end
 
 function BoostsUI.start()
 	renderPasses()
-	State.Changed:Connect(renderPasses)
+	State.Changed:Connect(function()
+		renderPasses()
+		if picker.Visible then
+			renderPicker() -- VIP bought while it's open: the default swatch turns gold
+		end
+	end)
 end
 
 return BoostsUI

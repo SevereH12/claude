@@ -12,6 +12,12 @@ local VALUES = Config.PASS_VALUES
 
 local Passes = {}
 
+-- Player attributes everyone can read: ATTRIBUTE .. key is true while the
+-- player owns that pass (Systems/Passes); BOLT_ATTRIBUTE is their Bolt
+-- Colours pick (Systems/PassPerks).
+Passes.ATTRIBUTE = "Pass_"
+Passes.BOLT_ATTRIBUTE = "BoltColour"
+
 -- The pass with this key, or nil.
 function Passes.def(key: string): Types.PassDef?
 	for _, pass in Config.PASSES do
@@ -22,9 +28,22 @@ function Passes.def(key: string): Types.PassDef?
 	return nil
 end
 
--- What a sale pays, times this.
+-- What a sale pays, times this: 2x Volts and VIP multiply (2 x 1.1 = 2.2).
 function Passes.sellMultiplier(owned: Owned): number
-	return if owned.DoubleVolts then VALUES.doubleVolts else 1
+	local multiplier = 1
+	if owned.DoubleVolts then
+		multiplier *= VALUES.doubleVolts
+	end
+	if owned.VIP then
+		multiplier *= VALUES.vipVolts
+	end
+	return multiplier
+end
+
+-- The Volts a bottle worth `value` sells for, rounded down. (The tiny
+-- nudge keeps 10 x 1.1 at 11 when floating point lands just under.)
+function Passes.sale(value: number, owned: Owned): number
+	return math.floor(value * Passes.sellMultiplier(owned) + 1e-6)
 end
 
 -- A bottle's capacity for this player: Big Bottles holds 50% more,
@@ -39,6 +58,44 @@ end
 -- The chance a caught charge is worth double (Lucky Charges).
 function Passes.luckChance(owned: Owned): number
 	return if owned.LuckyCharges then VALUES.luckyChance else 0
+end
+
+-- Seconds a newly posted researcher needs to set up: none with Lab Grant.
+function Passes.setupTime(baseSeconds: number, owned: Owned): number
+	return if owned.LabGrant then 0 else baseSeconds
+end
+
+-- Field data a researcher gains: double with Lab Grant.
+function Passes.fieldData(baseData: number, owned: Owned): number
+	return if owned.LabGrant then baseData * VALUES.labGrantData else baseData
+end
+
+-- Walk speed between storm zones: 50% faster with Jet Boots. (Speed inside
+-- zones never changes: Formulas.walkSpeed.)
+function Passes.outsideSpeed(baseSpeed: number, owned: Owned): number
+	return if owned.JetBoots then baseSpeed * VALUES.jetBoots else baseSpeed
+end
+
+-- Is this a Bolt Colours pick a client may ask for? 0 (the default) or an
+-- index into Config.BOLT_COLOURS.
+function Passes.isValidColour(index: unknown): boolean
+	return typeof(index) == "number"
+		and index == math.floor(index)
+		and index >= 0
+		and index <= #Config.BOLT_COLOURS
+end
+
+-- The colour of a player's lightning arcs and bottle charge, or nil for the
+-- default: a picked colour (Bolt Colours) wins over VIP gold, and VIP gold
+-- wins over the default. `choice` is their saved pick (0 = none).
+function Passes.boltColour(owned: Owned, choice: number?): Color3?
+	if owned.BoltColours and choice and choice >= 1 and Passes.isValidColour(choice) then
+		return Config.BOLT_COLOURS[choice].color
+	end
+	if owned.VIP then
+		return Config.VIP_GOLD
+	end
+	return nil
 end
 
 return Passes

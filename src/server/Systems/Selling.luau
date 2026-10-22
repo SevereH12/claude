@@ -72,10 +72,10 @@ local function livingRoot(player: Player): BasePart?
 	return root
 end
 
--- Turns everything in the bottle into Volts (2x Volts included). Every
--- sale, at a station or remote, goes through here.
+-- Turns everything in the bottle into Volts (2x Volts and VIP included).
+-- Every sale, at a station or remote, goes through here.
 function Selling.payOut(player: Player, profile: Types.Profile)
-	local earned = math.floor(profile.chargeValue * Passes.sellMultiplier(player))
+	local earned = Passes.sale(player, profile.chargeValue)
 	local count = profile.chargeCount
 	profile.volts += earned
 	profile.totalVolts += earned

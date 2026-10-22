@@ -1,16 +1,22 @@
 --!strict
 -- Every character carries a bottle in their right hand, always. No tool to
 -- equip. The bottle glows brighter as it fills (set here on the server, so
--- everyone can see how full everyone else's bottle is).
+-- everyone can see how full everyone else's bottle is). VIP glass is gold;
+-- the charge glows in the player's bolt colour (Bolt Colours pick, else VIP
+-- gold, else the default blue that turns gold when full).
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
 local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
 
 local BOTTLE_NAME = "Bottle"
 local EMPTY_COLOR = Color3.fromRGB(110, 185, 255)
 local FULL_COLOR = Color3.fromRGB(255, 210, 70)
+local GLASS_COLOR = Color3.fromRGB(190, 230, 255)
+local VIP_GLASS_COLOR = Color3.fromRGB(255, 214, 110)
 
 local Bottles = {}
 
@@ -41,7 +47,7 @@ local function makeBottle(): Model
 		CFrame = upright,
 		Material = Enum.Material.Glass,
 		Transparency = 0.35,
-		Color = Color3.fromRGB(190, 230, 255),
+		Color = GLASS_COLOR,
 	})
 	body.Parent = model
 
@@ -59,7 +65,7 @@ local function makeBottle(): Model
 		CFrame = CFrame.new(0, 1, 0) * upright,
 		Material = Enum.Material.Glass,
 		Transparency = 0.35,
-		Color = Color3.fromRGB(190, 230, 255),
+		Color = GLASS_COLOR,
 	})
 	neck.Parent = model
 
@@ -123,25 +129,32 @@ local function attach(character: Model)
 	bottle.Parent = character
 end
 
--- Glow to match how full the bottle is.
+-- Glow to match how full the bottle is, in the player's colours.
 local function updateFill(player: Player)
 	local character = player.Character
 	local profile = PlayerData.get(player)
 	local bottle = character and character:FindFirstChild(BOTTLE_NAME)
 	local charge = bottle and bottle:FindFirstChild("Charge")
-	if not profile or not charge or not charge:IsA("BasePart") then
+	if not bottle or not profile or not charge or not charge:IsA("BasePart") then
 		return
 	end
+	local owned = Passes.owned(player)
+	local bolt = PassRules.boltColour(owned, profile.boltColour)
 	local fraction = math.clamp(profile.chargeCount / Passes.capacity(player, profile), 0, 1)
 	local full = fraction >= 1
 	local transparency = if fraction > 0 then 0.75 - fraction * 0.6 else 1
-	if
-		math.abs(charge.Transparency - transparency) < 0.01
-		and (charge.Color == FULL_COLOR) == full
-	then
-		return -- nothing changed
+	-- what the bottle should look like; skip the work when it already does
+	local look = `{math.floor(transparency * 100 + 0.5)}|{full}|{bolt}|{owned.VIP == true}`
+	if bottle:GetAttribute("Look") == look then
+		return
 	end
-	local color = if full then FULL_COLOR else EMPTY_COLOR
+	bottle:SetAttribute("Look", look)
+
+	-- full: the default blue turns gold; a bolt colour turns bright
+	local color = if bolt
+		then (if full then bolt:Lerp(Color3.new(1, 1, 1), 0.45) else bolt)
+		elseif full then FULL_COLOR
+		else EMPTY_COLOR
 	charge.Transparency = transparency
 	charge.Color = color
 	local glow = charge:FindFirstChild("Glow")
@@ -152,6 +165,15 @@ local function updateFill(player: Player)
 	local sparkles = charge:FindFirstChild("FullSparkles")
 	if sparkles and sparkles:IsA("ParticleEmitter") then
 		sparkles.Enabled = full
+		sparkles.Color = ColorSequence.new(color)
+	end
+	-- VIP: golden glass
+	local glass = if owned.VIP then VIP_GLASS_COLOR else GLASS_COLOR
+	for _, name in { "Body", "Neck" } do
+		local part = bottle:FindFirstChild(name)
+		if part and part:IsA("BasePart") then
+			part.Color = glass
+		end
 	end
 end
 

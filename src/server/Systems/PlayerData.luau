@@ -18,7 +18,7 @@ local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local STORE_NAME = "StormBottler_PlayerData"
-local CURRENT_VERSION = 5
+local CURRENT_VERSION = 6
 -- A lock older than this belongs to a server that crashed; it may be taken.
 local LOCK_STALE_SECONDS = Config.AUTOSAVE_INTERVAL * 3
 local LOCKED_RETRIES = 5
@@ -51,6 +51,7 @@ local DEFAULT_PROFILE: Types.Profile = {
 	tankCount = 0,
 	tankValue = 0,
 	onboardStep = 0,
+	boltColour = 0,
 }
 
 -- MIGRATIONS[n] turns a version-n profile into version n+1. When the profile
@@ -77,6 +78,11 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 	-- the onboarding funnel (Systems/Analytics) starts from step 0
 	[4] = function(data: any): any
 		data.onboardStep = 0
+		return data
+	end,
+	-- Bolt Colours (prompt 8): no colour picked yet
+	[5] = function(data: any): any
+		data.boltColour = 0
 		return data
 	end,
 }

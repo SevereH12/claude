@@ -2,17 +2,23 @@
 -- Every character wears boots, coloured by the boot tier they own (set here
 -- on the server, so everyone sees everyone's boots). Above the starter pair
 -- they leave a faint cyan spark trail while the player moves inside a storm
--- zone, the only place boots make you faster.
+-- zone, the only place boots make you faster. Jet Boots pass owners get heel
+-- flames and a jet trail while they run between zones, where the pass makes
+-- them faster.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
+local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
 
 local BOOTS_NAME = "Boots"
 local SOLE_COLOR = Color3.fromRGB(45, 40, 38)
 local SPARK_COLOR = Color3.fromRGB(110, 230, 255)
+local JET_CORE = Color3.fromRGB(255, 236, 170)
+local JET_COLOR = Color3.fromRGB(255, 140, 50)
+local JET_TAIL = Color3.fromRGB(255, 70, 40)
 
 -- Boot colour per tier, in Config.BOOTS order; tiers past the end reuse the last.
 local TIER_COLORS = {
@@ -76,6 +82,45 @@ local function makeBoot(model: Model, foot: BasePart, isR15: boolean, color: Col
 	sparks.Color = ColorSequence.new(SPARK_COLOR)
 	sparks.LightEmission = 1
 	sparks.Parent = sole
+
+	-- Jet Boots: off until update() turns them on
+	local flame = Instance.new("ParticleEmitter")
+	flame.Name = "JetFlame"
+	flame.Enabled = false
+	flame.Rate = 45
+	flame.Lifetime = NumberRange.new(0.12, 0.25)
+	flame.Speed = NumberRange.new(5, 8)
+	flame.SpreadAngle = Vector2.new(15, 15)
+	flame.EmissionDirection = Enum.NormalId.Back
+	flame.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.35),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	flame.Transparency = NumberSequence.new(0.15, 1)
+	flame.Color = ColorSequence.new(JET_CORE, JET_COLOR)
+	flame.LightEmission = 1
+	flame.Parent = sole
+	local top = Instance.new("Attachment")
+	top.Name = "JetTrailTop"
+	top.Position = Vector3.new(0, 0.5, 0.15)
+	top.Parent = sole
+	local base = Instance.new("Attachment")
+	base.Name = "JetTrailBottom"
+	base.Position = Vector3.new(0, 0, 0.15)
+	base.Parent = sole
+	local trail = Instance.new("Trail")
+	trail.Name = "JetTrail"
+	trail.Enabled = false
+	trail.Attachment0 = top
+	trail.Attachment1 = base
+	trail.Lifetime = 0.35
+	trail.MinLength = 0.05
+	trail.FaceCamera = true
+	trail.LightEmission = 1
+	trail.Color = ColorSequence.new(JET_COLOR, JET_TAIL)
+	trail.Transparency = NumberSequence.new(0.25, 1)
+	trail.WidthScale = NumberSequence.new(1, 0.2)
+	trail.Parent = sole
 end
 
 -- Replaces the character's boots with a pair for `tier`.
@@ -112,8 +157,9 @@ local function attach(player: Player, character: Model)
 	dress(character, tierOf(player))
 end
 
--- Keeps each pair matching the owned tier, and the sparks on only while
--- moving inside a zone with better-than-starter boots.
+-- Keeps each pair matching the owned tier, the sparks on only while moving
+-- inside a zone with better-than-starter boots, and the jets on only while
+-- a Jet Boots owner moves between zones.
 local function update(player: Player)
 	local character = player.Character
 	local model = character and character:FindFirstChild(BOOTS_NAME)
@@ -130,15 +176,22 @@ local function update(player: Player)
 	end
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	local root = character:FindFirstChild("HumanoidRootPart")
-	local sparking = tier > 1
-		and humanoid ~= nil
+	local moving = humanoid ~= nil
+		and humanoid.Health > 0
 		and humanoid.MoveDirection.Magnitude > 0.1
 		and root ~= nil
 		and root:IsA("BasePart")
-		and Zones.at(root.Position) ~= nil
+	local inZone = moving and Zones.at((root :: BasePart).Position) ~= nil
+	local sparking = tier > 1 and inZone
+	local jetting = moving and not inZone and Passes.owns(player, "JetBoots")
 	for _, descendant in model:GetDescendants() do
-		if descendant:IsA("ParticleEmitter") and descendant.Enabled ~= sparking then
-			descendant.Enabled = sparking
+		if descendant:IsA("ParticleEmitter") then
+			local on = if descendant.Name == "JetFlame" then jetting else sparking
+			if descendant.Enabled ~= on then
+				descendant.Enabled = on
+			end
+		elseif descendant:IsA("Trail") and descendant.Enabled ~= jetting then
+			descendant.Enabled = jetting
 		end
 	end
 end
