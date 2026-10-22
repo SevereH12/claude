@@ -8,9 +8,11 @@ import json, os, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 API = "https://apis.roblox.com"
+from items import GROUP_KIND
+
 PATHS = {
-    "passes": "game-passes/v1/universes/{u}/game-passes/{id}",
-    "products": "developer-products/v2/universes/{u}/developer-products/{id}",
+    "pass": "game-passes/v1/universes/{u}/game-passes/{id}",
+    "product": "developer-products/v2/universes/{u}/developer-products/{id}",
 }
 
 
@@ -20,8 +22,9 @@ def main():
     key = os.environ.get("ROBLOX_API_KEY")
     header = ["-H", f"x-api-key: {key}"] if key else []
     failed = 0
-    for group, path in PATHS.items():
-        for name, item_id in ids[group].items():
+    for group, kind in GROUP_KIND.items():
+        path = PATHS[kind]
+        for name, item_id in ids.get(group, {}).items():
             url = f"{API}/" + path.format(u=ids["universeId"], id=item_id)
             icon = os.path.join(icons, f"{name}.png")
             out = subprocess.run(

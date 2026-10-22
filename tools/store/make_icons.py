@@ -5,8 +5,10 @@ text (UI.FONT_TITLE). Symbols stay inside the middle circle, because Roblox
 shows game pass icons cropped to a circle.
    python3 tools/store/make_icons.py <outdir> [LuckiestGuy-Regular.ttf]
 Without the font file, text falls back to DejaVu Sans Bold."""
-import json, math, os, sys
+import math, os, sys
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
+
+from items import GROUP_KIND, load
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = 512
@@ -58,12 +60,12 @@ def rrect(d, x0, y0, x1, y1, r, fill, outline=STROKE, width=W):
     d.rounded_rectangle([P(x0, y0), P(x1, y1)], radius=r * N, fill=fill, outline=outline, width=width)
 
 
-def text(d, s, cx, cy, size, fill):
+def text(d, s, cx, cy, size, fill, stroke=W):
     f = font(size)
-    box = d.textbbox((0, 0), s, font=f, stroke_width=W)
+    box = d.textbbox((0, 0), s, font=f, stroke_width=stroke)
     w, h = box[2] - box[0], box[3] - box[1]
     d.text((cx * N - w / 2 - box[0], cy * N - h / 2 - box[1]), s, font=f, fill=fill,
-           stroke_width=W, stroke_fill=STROKE)
+           stroke_width=stroke, stroke_fill=STROKE)
 
 
 def bolt_pts(cx, cy, s, deg=0):
@@ -199,6 +201,49 @@ def lightning_vault(d, c):
     bolt(d, 0.5, 0.5, 0.24)
 
 
+def gift_badge(d):
+    # a small present in the corner: this is a gift version of an item
+    red = (235, 75, 75)
+    rrect(d, 0.75, 0.79, 0.95, 0.96, 0.02, red, width=int(W * 0.8))
+    rrect(d, 0.73, 0.74, 0.97, 0.81, 0.02, red, width=int(W * 0.8))
+    d.rectangle([P(0.835, 0.75), P(0.865, 0.95)], fill=VOLT)
+    ellipse(d, 0.82, 0.71, 0.035, 0.027, VOLT, width=int(W * 0.6))
+    ellipse(d, 0.88, 0.71, 0.035, 0.027, VOLT, width=int(W * 0.6))
+
+
+def timer_badge(d, label):
+    # a stopwatch in the top corner: this is a timed boost
+    ellipse(d, 0.76, 0.24, 0.13, 0.13, WHITE)
+    rrect(d, 0.73, 0.07, 0.79, 0.12, 0.01, WHITE)
+    text(d, label, 0.76, 0.25, 0.10, (34, 44, 66), stroke=0)
+
+
+def boost(draw, label):
+    def f(d, c):
+        draw(d, c)
+        timer_badge(d, label)
+    return f
+
+
+def bundle(d, c):
+    bolt(d, 0.30, 0.52, 0.36)
+    leaf = (90, 200, 90)
+    for dx, dy in ((0, -0.06), (0.06, 0), (0, 0.06), (-0.06, 0)):
+        ellipse(d, 0.70 + dx, 0.54 + dy, 0.06, 0.06, leaf)
+    bottle(d, 0.50, 0.52, 0.55)
+    timer_badge(d, "1H")
+
+
+def server_storm(d, c):
+    cloud = (200, 210, 235)
+    for x, y, r in ((0.36, 0.40, 0.12), (0.52, 0.33, 0.16), (0.68, 0.41, 0.12)):
+        ellipse(d, x, y, r, r, cloud)
+    rrect(d, 0.26, 0.38, 0.78, 0.52, 0.07, cloud)
+    for x, deg in ((0.34, -12), (0.52, 0), (0.70, 12)):
+        bolt(d, x, 0.66, 0.30, deg=deg)
+    text(d, "ALL", 0.5, 0.86, 0.12, VOLT)
+
+
 DRAW = {
     "DoubleVolts": double_volts,
     "RemoteSell": remote_sell,
@@ -212,18 +257,25 @@ DRAW = {
     "StormJar": storm_jar,
     "ThunderCrate": thunder_crate,
     "LightningVault": lightning_vault,
+    "DoubleVoltsBoost": boost(double_volts, "30"),
+    "LuckyBoost": boost(lucky_charges, "30"),
+    "BigBottlesBoost": boost(big_bottles, "30"),
+    "BoostBundle": bundle,
+    "ServerStorm": server_storm,
 }
 
 
 def main():
     out = sys.argv[1]
     os.makedirs(out, exist_ok=True)
-    items = json.load(open(os.path.join(HERE, "store_items.json")))
-    for group in ("passes", "products"):
+    items = load()
+    for group in GROUP_KIND:
         for item in items[group]:
             color = tuple(item["color"])
             img, d = background(color)
-            DRAW[item["key"]](d, color)
+            DRAW[item.get("pass", item["key"])](d, color)
+            if "pass" in item:
+                gift_badge(d)
             img.resize((OUT, OUT), Image.LANCZOS).save(os.path.join(out, f"{item['key']}.png"))
     print(f"icons written to {out}")
 
