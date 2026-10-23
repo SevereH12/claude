@@ -31,7 +31,9 @@ local UP = Vector3.yAxis
 local LANE_HALF = 4.5 -- half width of a lane runner
 local PILLAR_RADIUS = 19
 local SPAWN_RADIUS = 45 -- the middle of its sector, clear of both lanes (the pad is 14.5 across)
-local BOARD_GAP = 12 -- from the spawn to the island board, on the sector's compass ray
+local POST_GAP = 13 -- from the spawn to the fingerpost, toward the altar on the sector's compass ray
+local ARM_LOW = 7 -- the fingerpost's lowest arm, then one every ARM_STEP up
+local ARM_STEP = 2.7 -- an arm's arrow head is 2.6 tall
 local PORTAL_DISTANCE = 44 -- from the hub centre: the feature spot of a sector beside the spawn
 local PORTAL_DAIS = 18.4 -- the portal dais' diameter (its rune rim is 1.6 wider)
 local PORTAL_PILLAR_X = 8.4 -- the pillars either side of the portal's 15-stud sign
@@ -710,13 +712,17 @@ local function buildSpawn(ctx: Context, spawnAngle: number): Vector3
 	local rng = ctx.rng
 	local dir = direction(spawnAngle)
 	local position = dir * SPAWN_RADIUS + UP * floor
-	-- face between the altar and the first zone's gateway, so the first
-	-- frame shows the SELL boards on one side and the first zone's trail,
-	-- the portal and the gateway on the other
+	-- face the altar, turned (at most 36 degrees, as in the other worlds)
+	-- toward the first zone's gateway
 	local firstGate = ctx.zones[1].slot.hubExit.Position * Vector3.new(1, 0, 1)
 	local toAltar = (-position * Vector3.new(1, 0, 1)).Unit
 	local toGate = ((firstGate - position) * Vector3.new(1, 0, 1)).Unit
-	local forward = (toAltar + toGate).Unit
+	local turn = math.clamp(
+		math.atan2(toAltar:Cross(toGate).Y, toAltar:Dot(toGate)),
+		-math.rad(36),
+		math.rad(36)
+	)
+	local forward = CFrame.Angles(0, turn, 0):VectorToWorldSpace(toAltar)
 
 	Pieces.cylinder(
 		hub,
@@ -750,105 +756,60 @@ local function buildSpawn(ctx: Context, spawnAngle: number): Vector3
 		end
 	end
 
-	-- the island board, between the spawn and the altar on the sector's
-	-- compass ray: the island's name over one row per destination, each in
-	-- its zone colour with an arrow saying which way to turn as you read
-	-- it. Its top stays about 11 studs up, so the camera behind the spawn
-	-- sees over it to the SELL boards under the canopy.
-	local deskFoot = dir * (SPAWN_RADIUS - BOARD_GAP) + UP * floor
-	local deskFrame = CFrame.lookAt(deskFoot, Vector3.new(position.X, floor, position.Z))
-	local rows: { { title: string, target: Vector3, style: Kit.SignStyle } } = {
-		{ title = "SELL", target = Vector3.zero, style = Palette.SELL_SIGN },
-	}
+	-- fingerpost toward the altar, like the other worlds' signposts: far
+	-- enough out that no arm reaches over the spawn pad. One arm per zone
+	-- (the first on top) and one for the next isle, each in its colour.
+	local postFoot = dir * (SPAWN_RADIUS - POST_GAP) + UP * floor
+	local arms: { { title: string, target: Vector3, color: Color3 } } = {}
 	for _, zone in ctx.zones do
 		local def = zone.def :: any
-		table.insert(rows, {
+		table.insert(arms, {
 			title = string.upper(def.displayName),
 			target = zone.slot.hubExit.Position,
-			style = Palette.signFor(zone.color),
+			color = zone.color,
 		})
 	end
-	table.insert(rows, {
+	table.insert(arms, {
 		title = "COMING SOON",
 		target = ctx.teaser.slot.hubExit.Position,
-		style = Palette.signFor(TEASER_GLOW),
+		color = TEASER_GLOW,
 	})
-	local rowHeight = math.min(1.5, 7.5 / #rows)
-	local bottom = 1.2
-	local rowsTop = bottom + #rows * rowHeight
-	local header = 1.9
-	local top = rowsTop + header
-	for side = -1, 1, 2 do
-		Pieces.solid(
-			hub,
-			deskFrame * CFrame.new(side * 4.5, (top + 0.3) / 2, 0),
-			Vector3.new(0.8, top + 0.3, 0.8),
-			C.plum,
-			Enum.Material.Slate
-		)
-		Pieces.diamond(
-			hub,
-			(deskFrame * CFrame.new(side * 4.5, top + 1.6, 0)).Position,
-			1,
-			C.gold,
-			Enum.Material.Metal
-		)
-	end
+	local height = ARM_LOW + #arms * ARM_STEP
+	Pieces.solid(
+		hub,
+		CFrame.new(postFoot + UP * 0.5),
+		Vector3.new(2.4, 1, 2.4),
+		C.plum,
+		Enum.Material.Slate
+	)
+	Pieces.solid(
+		hub,
+		CFrame.new(postFoot + UP * (height / 2)),
+		Vector3.new(0.9, height, 0.9),
+		C.skystone,
+		Enum.Material.Slate
+	)
 	Pieces.block(
 		hub,
-		deskFrame * CFrame.new(0, top + 0.6, 0),
-		Vector3.new(10.2, 0.7, 1.2),
+		CFrame.new(postFoot + UP * (height + 0.2)),
+		Vector3.new(1.4, 0.4, 1.4),
 		C.gold,
 		Enum.Material.Metal
 	)
-	Pieces.block(
-		hub,
-		deskFrame * CFrame.new(0, (bottom - 0.2 + top) / 2, 0.1),
-		Vector3.new(8.2, top - bottom + 0.2, 0.3),
-		C.plumDeep,
-		Enum.Material.Slate
-	)
-	local title = Pieces.block(
-		hub,
-		deskFrame * CFrame.new(0, rowsTop + header / 2, -0.1),
-		Vector3.new(8, header - 0.25, 0.2),
-		Palette.SIGN.boardColor,
-		Enum.Material.SmoothPlastic,
-		{ Name = "IslandBoard" }
-	)
-	Kit.faceText(
-		title,
-		Enum.NormalId.Front,
-		"STORMSPIRE",
-		"The storm temple of the sky isles",
-		Palette.SIGN
-	)
-	local viewer = -deskFrame.LookVector
-	local viewerRight = viewer:Cross(UP)
-	for i, row in rows do
-		local toward = ((row.target - deskFoot) * Vector3.new(1, 0, 1)).Unit
-		local ahead = toward:Dot(viewer)
-		local lateral = toward:Dot(viewerRight)
-		local glyph = if ahead > 0.82
-			then "↑ "
-			elseif ahead < -0.6 then "↓ "
-			elseif lateral > 0 then "→ "
-			else "← "
-		local label = if lateral > 0
-				and ahead <= 0.82
-				and ahead >= -0.6
-			then row.title .. " →"
-			else glyph .. row.title
-		local y = rowsTop - (i - 0.5) * rowHeight
-		local plate = Pieces.block(
+	local gem = Pieces.diamond(hub, postFoot + UP * (height + 1.4), 1.4, C.cyan, Enum.Material.Neon)
+	Pieces.light(gem, C.cyan, 14, 1)
+	for i, arm in arms do
+		local toward = (arm.target - postFoot) * Vector3.new(1, 0, 1)
+		local y = ARM_LOW + (#arms - i) * ARM_STEP
+		Pieces.arrow(
 			hub,
-			deskFrame * CFrame.new(0, y, -0.1),
-			Vector3.new(8, rowHeight - 0.25, 0.2),
-			row.style.boardColor,
-			Enum.Material.SmoothPlastic,
-			{ Name = "DirectoryRow" }
+			postFoot + UP * y + toward.Unit * 3.5,
+			toward,
+			6,
+			1.4,
+			arm.title,
+			Palette.signFor(arm.color)
 		)
-		Kit.faceText(plate, Enum.NormalId.Front, label, nil, row.style)
 	end
 	return position
 end
@@ -1002,12 +963,12 @@ local function buildTethers(ctx: Context)
 end
 
 -- Portals to other worlds (ctx.portals), each on the feature spot of a
--- sector beside the spawn (`angles`), facing the spawn so you walk straight
--- up to it. Kit.portal builds the ring, the disc, the sign and the trigger;
+-- sector beside the spawn (`angles`), facing the altar like the other
+-- worlds' portals. Kit.portal builds the ring, the disc, the sign and the trigger;
 -- round it the hub builds a temple gate: a dais with a glowing rune rim,
 -- two rune pillars joined by a gold crossbar the sign hangs from, crystals
 -- in the destination's colour beside the ring and on the pillar tops.
-local function buildPortals(ctx: Context, angles: { number }, spawnAt: Vector3)
+local function buildPortals(ctx: Context, angles: { number })
 	local hub = ctx.folders.hub
 	local floor = ctx.layout.hubFloor
 	local rng = ctx.rng
@@ -1018,7 +979,7 @@ local function buildPortals(ctx: Context, angles: { number }, spawnAt: Vector3)
 			if not Pieces.offLanes(ctx, center, PORTAL_DAIS / 2 + 0.8, LANE_HALF) then
 				warn(`[SkyIsles] the portal to {portal.to.id} stands on a lane`)
 			end
-			local frame = CFrame.lookAt(center, Vector3.new(spawnAt.X, floor, spawnAt.Z))
+			local frame = CFrame.lookAt(center, Vector3.new(0, floor, 0))
 			local glow = portal.to.color
 			-- tops at 0.25 (rim) and 0.35 (dais): clear of the compass rose's
 			-- rays (0.15) and under Kit.portal's step (0.45)
@@ -1155,8 +1116,8 @@ function Hub.build(ctx: Context)
 	buildAltar(ctx, sectors, direction(view))
 	buildLanes(ctx, lanes, direction(spawnAngle) * SPAWN_RADIUS + UP * ctx.layout.hubFloor)
 	buildRose(ctx, sectors)
-	local spawnAt = buildSpawn(ctx, spawnAngle)
-	buildPortals(ctx, portalAngles, spawnAt)
+	buildSpawn(ctx, spawnAngle)
+	buildPortals(ctx, portalAngles)
 	buildSectors(ctx, sectors, spawnAngle, lawnSpots, portalAngles)
 	buildTethers(ctx)
 end
