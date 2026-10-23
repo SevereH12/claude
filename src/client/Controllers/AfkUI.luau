@@ -9,15 +9,23 @@
 --   (they count down while AFK). Players without Premium see a small
 --   "Premium members earn 15% here" line; tapping it opens Roblox's Premium
 --   signup (never by itself). Before AFK starts it counts down.
--- Also pulses the lounge's charge tank (parts tagged AfkPulse).
+-- Also pulses the lounge's charge tank (parts tagged AfkPulse), and keeps
+-- an AFK player connected: Roblox disconnects after about 20 idle minutes,
+-- so while AFK (only then) Players.LocalPlayer.Idled is answered with
+-- VirtualUser. If that errors (logged once), or the idle time reaches
+-- Config.AFK.idleRejoinMinutes, it asks the server for the backup
+-- (AfkRejoin: a move to a fresh server, back in the lounge; Systems/Afk).
+-- AfkUI.simulateIdle runs the same handler (the Studio TEST button).
 
 local CollectionService = game:GetService("CollectionService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local VirtualUser = game:GetService("VirtualUser")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local Net = require(ReplicatedStorage.Shared.Net)
 local Types = require(ReplicatedStorage.Shared.Types)
 local BoostRules = require(ReplicatedStorage.Shared.Util.Boosts)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
@@ -46,6 +54,8 @@ local toggle: TextButton
 local details: Frame
 local expanded = false
 local lines = 0
+local virtualFailed = false
+local lastRejoinAsk = -math.huge
 
 -- 1234567 -> "1,234,567"
 local function commas(n: number): string
@@ -179,6 +189,41 @@ local function pulse(part: Instance)
 	end
 end
 
+-- Players.LocalPlayer.Idled: `idleSeconds` without input so far.
+function AfkUI.onIdle(idleSeconds: number)
+	local snapshot = State.current
+	local afk = snapshot and snapshot.afk
+	if not afk or not afk.active then
+		return -- the normal idle kick stays everywhere but the lounge
+	end
+	local ok, err = pcall(function()
+		VirtualUser:CaptureController()
+		VirtualUser:ClickButton2(Vector2.new())
+	end)
+	if ok then
+		print(`[AfkUI] idle {math.floor(idleSeconds / 60)} min while AFK: VirtualUser nudge sent`)
+	elseif not virtualFailed then
+		virtualFailed = true
+		warn(`[AfkUI] VirtualUser failed ({err}); using the server-hop backup`)
+	end
+	local tooLong = idleSeconds >= Config.AFK.idleRejoinMinutes * 60
+	if (tooLong or not ok) and os.clock() - lastRejoinAsk > 60 then
+		lastRejoinAsk = os.clock()
+		print("[AfkUI] asking the server to move us to a fresh server (AfkRejoin)")
+		Net.get("AfkRejoin"):FireServer()
+	end
+end
+
+-- Studio TEST: as if Roblox reported idleRejoinMinutes without input.
+function AfkUI.simulateIdle()
+	local snapshot = State.current
+	if not (snapshot and snapshot.afk and snapshot.afk.active) then
+		UI.toast("Stand in the AFK Lounge until AFK starts, then try again", "info")
+		return
+	end
+	AfkUI.onIdle(Config.AFK.idleRejoinMinutes * 60)
+end
+
 function AfkUI.init()
 	local _, root = Layout.screen("StormBottlerAfk", 3)
 	card = UI.panel({
@@ -267,6 +312,7 @@ end
 
 function AfkUI.start()
 	State.Changed:Connect(render)
+	player.Idled:Connect(AfkUI.onIdle)
 	for _, part in CollectionService:GetTagged("AfkPulse") do
 		pulse(part)
 	end

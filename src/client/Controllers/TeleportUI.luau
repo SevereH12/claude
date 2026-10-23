@@ -4,7 +4,8 @@
 -- you're in says YOU ARE HERE (and can't be picked), and after a trip every
 -- GO counts down the cooldown (Config.TELEPORT_COOLDOWN). The rule is
 -- Util/Portals.teleportRefusal; the server checks every teleport
--- (Systems/Travel).
+-- (Systems/Travel). Under the worlds, an AFK Lounge row goes to the lounge
+-- in the first world on the same cooldown (Portals.loungeRefusal).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -24,7 +25,7 @@ local ROW_HEIGHT = 86
 
 local player = Players.LocalPlayer
 
-type Row = { world: Types.WorldDef, status: TextLabel, button: TextButton }
+type Row = { world: Types.WorldDef?, status: TextLabel, button: TextButton }
 
 local TeleportUI = {}
 
@@ -47,6 +48,18 @@ local function render()
 	local wait = Portals.cooldownLeft(workspace:GetServerTimeNow(), readyAt())
 	for _, row in rows do
 		local world = row.world
+		if not world then
+			-- the AFK Lounge row
+			local inLounge = snapshot ~= nil and snapshot.afk ~= nil
+			UI.setEnabled(row.button, not inLounge and wait == 0, PURPLE)
+			row.button.Text = if inLounge then "HERE" elseif wait > 0 then `{wait}s` else "GO"
+			row.status.Text = if inLounge
+				then "YOU ARE HERE"
+				elseif wait > 0 then `Teleport ready in {wait}s`
+				else `In {Config.WORLDS[1].displayName}`
+			row.status.TextColor3 = if inLounge then COLORS.calm else COLORS.subtext
+			continue
+		end
 		local isHere = world.id == here
 		local locked = if snapshot
 			then Progression.worldLockReason(snapshot, world)
@@ -70,9 +83,17 @@ local function render()
 	end
 end
 
-local function buildRow(list: Instance, index: number, world: Types.WorldDef)
+-- A row's frame, stripe, name, tagline, status line and GO button.
+local function rowFrame(
+	list: Instance,
+	index: number,
+	id: string,
+	title: string,
+	tagline: string,
+	color: Color3
+): (TextLabel, TextButton)
 	local frame = UI.make(Instance.new("Frame"), {
-		Name = world.id,
+		Name = id,
 		LayoutOrder = index,
 		Size = UDim2.new(1, -12, 0, ROW_HEIGHT),
 		BackgroundColor3 = COLORS.panelDark,
@@ -84,29 +105,29 @@ local function buildRow(list: Instance, index: number, world: Types.WorldDef)
 		Name = "Stripe",
 		Position = UDim2.fromOffset(8, 10),
 		Size = UDim2.new(0, 8, 1, -20),
-		BackgroundColor3 = world.color,
+		BackgroundColor3 = color,
 		Parent = frame,
 	})
 	UI.corner(stripe, UDim.new(0.5, 0))
 	local name = UI.label({
 		Title = true,
-		Text = string.upper(world.displayName),
-		TextColor3 = world.color,
+		Text = title,
+		TextColor3 = color,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = UDim2.new(0, 26, 0, 8),
 		Size = UDim2.new(0.68, -26, 0, 30),
 		Parent = frame,
 	})
 	UI.maxText(name, 28)
-	local tagline = UI.label({
-		Text = world.tagline,
+	local line = UI.label({
+		Text = tagline,
 		TextColor3 = COLORS.text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = UDim2.new(0, 26, 0, 40),
 		Size = UDim2.new(0.68, -26, 0, 20),
 		Parent = frame,
 	})
-	UI.maxText(tagline, 18)
+	UI.maxText(line, 18)
 	local status = UI.label({
 		Text = "",
 		TextColor3 = COLORS.subtext,
@@ -126,6 +147,41 @@ local function buildRow(list: Instance, index: number, world: Types.WorldDef)
 		Parent = frame,
 	})
 	UI.maxText(button, 26)
+	return status, button
+end
+
+-- The AFK Lounge row, under the worlds.
+local function buildLoungeRow(list: Instance, index: number)
+	local status, button = rowFrame(
+		list,
+		index,
+		Portals.AFK_LOUNGE,
+		"💤 AFK LOUNGE",
+		"Earn Volts while you rest",
+		Color3.fromRGB(150, 140, 255)
+	)
+	local remote = Net.get("Teleport")
+	button.Activated:Connect(function()
+		local snapshot = State.current
+		if not snapshot then
+			return
+		end
+		local refusal =
+			Portals.loungeRefusal(snapshot.afk ~= nil, workspace:GetServerTimeNow(), readyAt())
+		if refusal then
+			UI.toast(`⏱ {refusal}`, "info")
+			return
+		end
+		UI.pop(button)
+		remote:FireServer(Portals.AFK_LOUNGE)
+		UI.closePanels()
+	end)
+	table.insert(rows, { world = nil, status = status, button = button })
+end
+
+local function buildRow(list: Instance, index: number, world: Types.WorldDef)
+	local status, button =
+		rowFrame(list, index, world.id, string.upper(world.displayName), world.tagline, world.color)
 	local remote = Net.get("Teleport")
 	button.Activated:Connect(function()
 		local snapshot = State.current
@@ -183,6 +239,7 @@ function TeleportUI.init()
 	for index, world in Config.WORLDS do
 		buildRow(list, index, world)
 	end
+	buildLoungeRow(list, #Config.WORLDS + 1)
 end
 
 function TeleportUI.start()

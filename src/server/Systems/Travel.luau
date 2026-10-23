@@ -9,7 +9,9 @@
 -- another world's hub (remote Teleport): the same unlock rule, while alive,
 -- and at most once every Config.TELEPORT_COOLDOWN seconds (the rule:
 -- Portals.teleportRefusal; the player attribute TeleportReadyAt tells the
--- panel when it can go again), checked here.
+-- panel when it can go again), checked here. The panel's AFK Lounge entry
+-- (Portals.AFK_LOUNGE) goes to the lounge in the first world on the same
+-- cooldown (Portals.loungeRefusal; Systems/Afk.sendToLounge).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -19,6 +21,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Portals = require(ReplicatedStorage.Shared.Util.Portals)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
+local Afk = require(script.Parent.Afk)
 local PlayerData = require(script.Parent.PlayerData)
 local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
 
@@ -107,6 +110,19 @@ local function onTeleport(player: Player, worldId: unknown)
 	end
 	local now = workspace:GetServerTimeNow()
 	local readyAt = player:GetAttribute(Portals.READY_ATTRIBUTE)
+	if worldId == Portals.AFK_LOUNGE then
+		local root = character:FindFirstChild("HumanoidRootPart")
+		local inLounge = root ~= nil and root:IsA("BasePart") and Afk.isInLounge(root.Position)
+		if
+			Portals.loungeRefusal(inLounge, now, if typeof(readyAt) == "number" then readyAt else 0)
+		then
+			return
+		end
+		player:SetAttribute(Portals.READY_ATTRIBUTE, now + Config.TELEPORT_COOLDOWN)
+		lastTrip[player] = os.clock()
+		task.spawn(Afk.sendToLounge, player)
+		return
+	end
 	local refusal, world = Portals.teleportRefusal(
 		profile,
 		worldId,

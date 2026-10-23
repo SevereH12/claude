@@ -140,6 +140,32 @@ playtime, Clear boosts and Pretend group member (Studio only). Stats are
 under **Analytics**: custom events DailyClaimed, PlaytimeGift and
 GroupJoined, and reward Volts in Economy (TimedReward).
 
+## AFK Lounge
+
+The Night Shift Lounge in Barometer Bay's village (or MENU → 🌀 TELEPORT →
+AFK LOUNGE) pays Volts while you rest. Stand on its rug for 10 seconds and
+you earn **10% of what you'd make grinding your best zone** (15% for
+Roblox Premium members), paid every minute:
+
+- The grinding rate counts your bottle (and Big Bottles), your boots (how
+  many strikes you can reach), your best zone's bolt value, and everything
+  that multiplies a sale: 2x Volts, VIP, Lucky Charges, running boosts,
+  the group bonus and a Server Storm. It's worked out again every 15
+  seconds, so a boost running out or a new purchase shows straight away.
+  The AFK card's "How is this worked out?" shows every step.
+- Boosts keep counting down while you're AFK (they're being used).
+- Roblox normally disconnects you after 20 idle minutes. In the lounge the
+  game keeps you connected; if that ever fails, it saves and moves you to
+  a fresh server, back in the lounge.
+- To tune it: `Config.AFK.rateFraction` (0.10) and `premiumRateFraction`
+  (0.15). Stats: custom events AfkMinutes and AfkRejoin, and AFK Volts in
+  Economy (Gameplay, AFK).
+
+Test in Studio: stand in the lounge, then try the TEST panel's pretend
+passes and Pretend Premium (the rate changes within 15 seconds) and
+**🎁 REWARDS → 💤 Simulate idle 17 min** (teleports don't work in Studio,
+so the backup only logs its attempt in the Output).
+
 ## Code layout
 
 - `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas, zone geometry

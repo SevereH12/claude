@@ -7,7 +7,7 @@ then ticks it:
 
 - [x] Part A: the AFK rate maths, the lounge on the map, earning, and the
   AFK screen
-- [ ] Part B: never getting kicked for being idle (with a backup), the
+- [x] Part B: never getting kicked for being idle (with a backup), the
   Teleport entry, and stats
 
 **Needs prompts 8, 9 and 10**: `src/shared/Util/Passes.luau` (with

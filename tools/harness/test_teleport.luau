@@ -55,6 +55,12 @@ check(refusal == nil, "after the cooldown it goes")
 refusal = Portals.teleportRefusal(starter, second.id, first.id, readyAt - 3, readyAt)
 check(refusal and string.find(refusal, "Needs", 1, true) ~= nil, "a locked world says what it needs before the wait")
 
+-- the AFK Lounge entry ------------------------------------------------------------------
+check(Portals.loungeRefusal(false, 100, 0) == nil, "the AFK Lounge entry goes when off cooldown")
+check(Portals.loungeRefusal(true, 100, 0) ~= nil, "not when you're already in the lounge")
+check(Portals.loungeRefusal(false, readyAt - 3, readyAt) == "Teleport ready in 3s", "it shares the cooldown")
+check(Portals.world(Portals.AFK_LOUNGE) == nil, "the lounge id is not a world id")
+
 if failures > 0 then
 	error(`{failures} teleport checks failed`)
 end

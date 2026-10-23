@@ -67,6 +67,22 @@ function Portals.teleportRefusal(
 	return nil, world
 end
 
+-- The Teleport panel's AFK Lounge entry (in the first world): the id it
+-- sends (remote Teleport), and why it can't go now (the same cooldown as
+-- the worlds; nil when it can). `inLounge`: already there.
+Portals.AFK_LOUNGE = "AfkLounge"
+
+function Portals.loungeRefusal(inLounge: boolean, now: number, readyAt: number): string?
+	if inLounge then
+		return "You're already here"
+	end
+	local wait = Portals.cooldownLeft(now, readyAt)
+	if wait > 0 then
+		return `Teleport ready in {wait}s`
+	end
+	return nil
+end
+
 -- The world the portal at this position leads to, or nil.
 function Portals.at(position: Vector3): Types.WorldDef?
 	for _, instance in CollectionService:GetTagged(Portals.TAG) do

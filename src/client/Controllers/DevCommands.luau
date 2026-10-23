@@ -4,7 +4,8 @@
 -- (Studio only), PASSES opens one "Pretend owns <pass>" toggle per Game
 -- Pass and "Send test gift to me" and "Send test boost gift" buttons, and
 -- REWARDS opens Next day, +5 min playtime, Clear boosts (and the Server
--- Storm), Start Server Storm and a Pretend group member toggle (both
+-- Storm), Start Server Storm, Simulate idle 17 min (the AFK Lounge's
+-- idle handler, Controllers/AfkUI) and a Pretend group member toggle (all
 -- Studio only). The server (Systems/DevCommands) checks again. To
 -- remove it: delete this file and Systems/DevCommands.luau, and take
 -- "DevCommand" out of Shared/Remotes.
@@ -19,6 +20,7 @@ local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Layout = require(script.Parent.Parent.Lib.Layout)
 local LayoutMath = require(script.Parent.Parent.Lib.LayoutMath)
 local UI = require(script.Parent.Parent.Lib.UI)
+local AfkUI = require(script.Parent.AfkUI)
 
 local DevCommands = {}
 
@@ -143,7 +145,7 @@ function DevCommands.init()
 	UI.onLayout(function()
 		UI.place(rewards, row(4))
 		local area = Layout.hud.test
-		UI.place(tools, { x = area.x + area.w + LayoutMath.GAP, y = area.y, w = 220, h = 5 * 48 })
+		UI.place(tools, { x = area.x + area.w + LayoutMath.GAP, y = area.y, w = 220, h = 6 * 48 })
 	end)
 	local function showLists(passesOn: boolean, rewardsOn: boolean)
 		list.Visible = passesOn
@@ -179,6 +181,23 @@ function DevCommands.init()
 		toolButton.Activated:Connect(function()
 			UI.pop(toolButton)
 			devRemote:FireServer(tool.command)
+		end)
+	end
+	-- Simulate idle 17 min (Studio only): runs the AFK idle handler, so the
+	-- VirtualUser nudge and the server-hop backup can be checked
+	if RunService:IsStudio() then
+		local idle = UI.button({
+			Name = "SimulateIdle",
+			LayoutOrder = 6,
+			Text = `💤 Simulate idle {Config.AFK.idleRejoinMinutes} min`,
+			Size = UDim2.new(1, 0, 0, 40),
+			BackgroundColor3 = UI.COLORS.panelDark,
+			Parent = tools,
+		})
+		UI.maxText(idle, 16)
+		idle.Activated:Connect(function()
+			UI.pop(idle)
+			AfkUI.simulateIdle()
 		end)
 	end
 	-- Pretend group member: the group bonus without joining (Systems/Group)

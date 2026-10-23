@@ -662,6 +662,11 @@ return table.freeze({
 		enterSeconds = 10, -- seconds inside before AFK starts
 		payEverySeconds = 60,
 		recomputeSeconds = 15,
+		-- Roblox disconnects after about 20 idle minutes. While AFK the client
+		-- answers Idled with VirtualUser; at this much idle time (or if that
+		-- fails) the server moves you to a fresh server, back in the lounge.
+		idleRejoinMinutes = 17,
+		rejoinRetrySeconds = 30, -- a failed move is tried once more after this
 	}),
 
 	GIFT_PASS_PRODUCTS = table.freeze(GIFT_PASS_PRODUCTS),

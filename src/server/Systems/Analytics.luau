@@ -20,7 +20,8 @@
 --     offer key), "TrialStarted" (1) and "TrialEnded" (Volts it earned),
 --     "DailyClaimed" (streak day), "PlaytimeGift" (minutes), "GroupJoined".
 --   Economy: Volts from rewards (Source, TimedReward) and the AFK Lounge
---     (Source, Gameplay, "AFK").
+--     (Source, Gameplay, "AFK"). Custom events "AfkMinutes" (minutes AFK,
+--     when it ends or the player leaves) and "AfkRejoin" (1).
 --   Custom events "GiftSent" (the giver) and "GiftReceived" (the receiver),
 --     CustomField01 = the product key ("GiftVIP", "LuckyBoost"), and
 --     "ServerStorm" (the storm's minutes left after the purchase). Robux
@@ -343,6 +344,24 @@ function Analytics.serverStorm(player: Player, minutes: number)
 end
 
 -- Volts a reward paid (`sku`: "Daily 3", "Gift 10 min").
+-- AfkMinutes: minutes an AFK session earned for (sent when it ends or the
+-- player leaves).
+function Analytics.afkMinutes(player: Player, minutes: number)
+	if minutes <= 0 then
+		return
+	end
+	send("AfkMinutes", function()
+		AnalyticsService:LogCustomEvent(player, "AfkMinutes", math.floor(minutes * 10 + 0.5) / 10)
+	end)
+end
+
+-- AfkRejoin: the backup moved an idle AFK player to a fresh server.
+function Analytics.afkRejoin(player: Player)
+	send("AfkRejoin", function()
+		AnalyticsService:LogCustomEvent(player, "AfkRejoin", 1)
+	end)
+end
+
 function Analytics.afkEarned(player: Player, volts: number)
 	economy(player, Enum.AnalyticsEconomyFlowType.Source, volts, "Gameplay", "AFK")
 end
