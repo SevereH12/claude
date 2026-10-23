@@ -17,14 +17,18 @@ exist. If they don't, stop and tell the user.
 ## The rule
 
 A player standing in the AFK Lounge earns Volts at a steady rate equal to
-**10% of what they'd earn grinding** (90% less), worked out from **their
-best zone**, their bottle, their boots, **and every pass and running
-boost**. AFK is always worth it, and always clearly worse than playing.
+**10% of what they'd earn grinding** (90% less), or **15% for Roblox
+Premium members**. It's worked out from **their best zone**, their bottle,
+their boots, **and every pass and running boost**. AFK is always worth it,
+and always clearly worse than playing.
 
 ## The maths (one pure function: `src/shared/Util/Afk.luau`)
 
-`Afk.rate(progress, effects)` returns Volts per second plus a breakdown for
-the UI. `effects` is the exact set the sale path uses:
+`Afk.rate(progress, effects, premium)` returns Volts per second plus a
+breakdown for the UI.
+- `premium` comes from `Progression.playerIsPremium(player)`, the same
+  check the Premium zone uses, so Studio's Pretend Premium toggle works
+  too. `effects` is the exact set the sale path uses:
 `Passes.withBoosts(owned, boosts)` plus the group bonus and a running Server
 Storm. Find how `Selling` builds it and reuse that; never rebuild it
 differently.
@@ -40,7 +44,7 @@ differently.
 | Chance a strike is reachable | `p = min(1, π × reach² / strikeArea)`, where `strikeArea = (width − 2 × (STRIKE_RADIUS + 2)) × (depth − 2 × (STRIKE_RADIUS + 2))`, the rectangle `Strikes` picks strike centres from |
 | Time to fill a bag | `fill = strikes × strikeInterval / p × (STORM_DURATION + CALM_DURATION) / STORM_DURATION` (strikes only fall during storms) |
 | Grinding rate | `grind = bag / fill` |
-| AFK rate | `afk = grind × Config.AFK.rateFraction` (0.10) |
+| AFK rate | `afk = grind × (premium and Config.AFK.premiumRateFraction or Config.AFK.rateFraction)`: 0.15 for Premium members, otherwise 0.10 |
 
 Notes:
 - "Closest catcher wins" zones are counted as if the player were alone
@@ -53,7 +57,9 @@ Notes:
 **Expected results.** `tools/harness/test_afk.luau` must reproduce these
 (Volts per hour, within 1%). They use the current Config, a typical bottle
 and boots for each stage, and passes as named. "All passes" means 2x Volts,
-VIP, Lucky Charges and Big Bottles.
+VIP, Lucky Charges and Big Bottles. These are the non-Premium (10%) rates;
+a Premium member gets exactly 1.5× each number (15%), and the test checks
+both.
 
 | Best zone | Boots | Bottle | No passes | 2x Volts | All passes | All + group | + Server Storm |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -88,6 +94,8 @@ with the formula and say so, rather than forcing the old numbers.
 1. **`Config.AFK`**:
    - `rateFraction = 0.10`: 90% less than grinding (the user's choice; the
      formula's grinding rate is already higher than real play)
+   - `premiumRateFraction = 0.15` for Roblox Premium members (the user's
+     choice)
    - `enterSeconds = 10`: seconds inside before AFK starts
    - `payEverySeconds = 60`
    - `recomputeSeconds = 15`
@@ -98,6 +106,7 @@ with the formula and say so, rather than forcing the old numbers.
    - picking the best zone
    - Big Bottles changing only the rounding of the strike count
    - an expiring boost lowering the rate
+   - Premium paying exactly 1.5× the normal rate
 3. **The lounge**:
    - **Kit**: `Kit.afkZone(parent, pad)`, modelled on `Kit.sellArea`: an
      invisible box tagged `AfkZone` over a clearly marked area.
@@ -117,8 +126,9 @@ with the formula and say so, rather than forcing the old numbers.
    - **Starting**: a position check every second, like `Selling`. After
      `enterSeconds` inside, the player is AFK.
    - **The rate**: recomputed every `recomputeSeconds` with `Afk.rate`, so a
-     boost running out, a purchase or a Server Storm changes it straight
-     away.
+     boost running out, a purchase, a Server Storm or a new Premium
+     membership changes it straight away. Also recompute on
+     `Players.PlayerMembershipChanged`.
    - **Paying**: whole Volts every `payEverySeconds`, with the fraction
      carried over, added to `volts` and `totalVolts`, then
      `Sync.markDirty`. Log it as an economy Source `"AFK"`.
@@ -130,6 +140,12 @@ with the formula and say so, rather than forcing the old numbers.
 5. **The AFK screen** (client): while AFK, a calm full-width card.
    - **Headline**: "💤 AFK: +12,345 Volts/hour", with "10% of your best
      grinding (Ember Mesa)" under it.
+     - Premium members see "15% of your best grinding" plus the Premium icon
+       (`utf8.char(0xE001)`) and "Premium bonus".
+     - Everyone else sees a small line, "Premium members earn 15% here".
+       Tapping it opens Roblox's Premium signup
+       (`MarketplaceService:PromptPremiumPurchase`), the same upsell the
+       Premium zone gate uses. It's tap-only and never opens by itself.
    - **Earned so far**: Volts earned, and time AFK.
    - **"How is this worked out?"**, which expands the breakdown: best zone,
      bottle and capacity, strikes to fill, fill time, bag value, and each
@@ -148,6 +164,7 @@ with the formula and say so, rather than forcing the old numbers.
 - If the Studio MCP is connected:
   - stand in the lounge for 70 s and get paid once, at the shown rate
   - turn on a pretend pass, and the rate jumps within 15 s
+  - turn on Pretend Premium, and the rate becomes 1.5× within 15 s
 - Tick part A, commit and push.
 
 ## Part B: never kicked for idling, Teleport entry, stats (run 2)
@@ -199,7 +216,8 @@ stop and tell the user.
 5. **Studio testing**: a "Simulate idle 17 min" TEST button (Studio only)
    that runs the idle handler, so the VirtualUser path and the backup can
    both be checked without waiting.
-6. **README**: a short "AFK Lounge" section covering the 10% rule, what
+6. **README**: a short "AFK Lounge" section covering the 10% rule (15%
+   for Premium members), what
    counts (passes, boosts, the group, Server Storm), and
    `Config.AFK.rateFraction` for tuning.
 
