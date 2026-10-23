@@ -653,9 +653,12 @@ local function spawnDeck(parent: Instance, floor: number, dir: Vector3)
 	)
 end
 
+-- The fingerpost stands off the spawn deck's right shoulder, a little
+-- toward the lighthouse: far enough that no arm reaches over the deck,
+-- and clear of the sell pad's corner.
 local function fingerpost(ctx: Context, parent: Instance, floor: number, dir: Vector3)
 	local right = Vector3.new(-dir.Z, 0, dir.X)
-	local base = dir * SPAWN_DISTANCE + right * 9.5 + Vector3.new(0, floor, 0)
+	local base = dir * (SPAWN_DISTANCE - 5) + right * 17 + Vector3.new(0, floor, 0)
 	Pieces.cyl(parent, base, 0.8, 2.2, Palette.stone, Enum.Material.Cobblestone)
 	local all = table.clone(ctx.zones)
 	table.insert(all, ctx.teaser)
@@ -798,9 +801,9 @@ local function plaza(
 	for _, g in gaps do
 		local d = Geo.dir(g.angle)
 		-- the spawn axis keeps a clear view of the sell arch: its lamp
-		-- stands to one side
+		-- stands to one side, past the fingerpost
 		if Geo.angleDiff(g.angle, spawnA) < 1 then
-			d = Geo.dir(g.angle + 22)
+			d = Geo.dir(g.angle + 34)
 		end
 		local bottom = d * 44 + Vector3.new(0, floor, 0)
 		Pieces.lampPost(parent, bottom, 7, -d, true)
