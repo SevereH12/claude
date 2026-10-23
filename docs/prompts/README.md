@@ -51,6 +51,13 @@ and stops if it isn't. To run one, say: "Do `docs/prompts/<file>`".
     pass, boost, group bonus and Server Storm counted), and an AFK screen
     that shows the maths. Part B: stays connected overnight (VirtualUser,
     with a server-hop backup), a Teleport entry and stats.
+13. `13-research-prestige.md`: **run it twice.** Researchers need a rank
+    to work in each new zone tier. Promoting needs level 5 (more data per
+    rank) plus Glints, earned by catching bolts in the new zone. It resets
+    them to level 1 and gives +10% perk per rank, with all five ready about
+    halfway through each zone. Part A: the rules, Glints, the save migration
+    and a balance calculator. Part B: the Promote screen, rank stars and the
+    promotion moment.
 
 Researchers (all five parts done) live in `researchers/`.
 
