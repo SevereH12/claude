@@ -45,7 +45,7 @@ and stops if it isn't. To run one, say: "Do `docs/prompts/<file>`".
     volume settings. Part C: licensed music (APM and DistroKid catalogues)
     that crossfades between calm and storm tracks per world, plus ambience.
 12. `12-afk-zone.md`: **run it twice.** Part A: the AFK Lounge in the
-    hub, paying 20% of the player's grinding rate in their best zone (bag
+    hub, paying 10% of the player's grinding rate in their best zone (bag
     value ÷ time to fill, from strikes needed and boot speed, with every
     pass, boost, group bonus and Server Storm counted), and an AFK screen
     that shows the maths. Part B: stays connected overnight (VirtualUser,

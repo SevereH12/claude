@@ -17,7 +17,7 @@ exist. If they don't, stop and tell the user.
 ## The rule
 
 A player standing in the AFK Lounge earns Volts at a steady rate equal to
-**20% of what they'd earn grinding** (80% less), worked out from **their
+**10% of what they'd earn grinding** (90% less), worked out from **their
 best zone**, their bottle, their boots, **and every pass and running
 boost**. AFK is always worth it, and always clearly worse than playing.
 
@@ -40,7 +40,7 @@ differently.
 | Chance a strike is reachable | `p = min(1, π × reach² / strikeArea)`, where `strikeArea = (width − 2 × (STRIKE_RADIUS + 2)) × (depth − 2 × (STRIKE_RADIUS + 2))`, the rectangle `Strikes` picks strike centres from |
 | Time to fill a bag | `fill = strikes × strikeInterval / p × (STORM_DURATION + CALM_DURATION) / STORM_DURATION` (strikes only fall during storms) |
 | Grinding rate | `grind = bag / fill` |
-| AFK rate | `afk = grind × Config.AFK.rateFraction` (0.20) |
+| AFK rate | `afk = grind × Config.AFK.rateFraction` (0.10) |
 
 Notes:
 - "Closest catcher wins" zones are counted as if the player were alone
@@ -57,11 +57,11 @@ VIP, Lucky Charges and Big Bottles.
 
 | Best zone | Boots | Bottle | No passes | 2x Volts | All passes | All + group | + Server Storm |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Shoreline | +0 | Jar | 1,149 | 2,299 | 2,908 | 3,199 | 6,398 |
-| Mesa | +3 | Flask | 6,035 | 12,069 | 16,285 | 17,914 | 35,828 |
-| Generator Yard | +4 | Storm Cell | 21,660 | 43,320 | 55,896 | 61,485 | 122,970 |
-| Thunderhead Mesa | +7 | Dynamo Drum | 193,449 | 386,898 | 487,260 | 535,986 | 1,071,972 |
-| Ember Mesa | +10 | Storm Core | 4,894,408 | 9,788,815 | 12,382,851 | 13,621,137 | 27,242,273 |
+| Shoreline | +0 | Jar | 575 | 1,149 | 1,454 | 1,600 | 3,199 |
+| Mesa | +3 | Flask | 3,017 | 6,035 | 8,143 | 8,957 | 17,914 |
+| Generator Yard | +4 | Storm Cell | 10,830 | 21,660 | 27,948 | 30,743 | 61,485 |
+| Thunderhead Mesa | +7 | Dynamo Drum | 96,724 | 193,449 | 243,630 | 267,993 | 535,986 |
+| Ember Mesa | +10 | Storm Core | 2,447,204 | 4,894,408 | 6,191,426 | 6,810,568 | 13,621,137 |
 
 If Config numbers have changed since this table was written, recompute it
 with the formula and say so, rather than forcing the old numbers.
@@ -86,7 +86,8 @@ with the formula and say so, rather than forcing the old numbers.
 ### Build
 
 1. **`Config.AFK`**:
-   - `rateFraction = 0.20`
+   - `rateFraction = 0.10`: 90% less than grinding (the user's choice; the
+     formula's grinding rate is already higher than real play)
    - `enterSeconds = 10`: seconds inside before AFK starts
    - `payEverySeconds = 60`
    - `recomputeSeconds = 15`
@@ -127,7 +128,7 @@ with the formula and say so, rather than forcing the old numbers.
    - **Snapshot**: AFK state, the rate and Volts earned this AFK session go
      in it.
 5. **The AFK screen** (client): while AFK, a calm full-width card.
-   - **Headline**: "💤 AFK: +12,345 Volts/hour", with "20% of your best
+   - **Headline**: "💤 AFK: +12,345 Volts/hour", with "10% of your best
      grinding (Ember Mesa)" under it.
    - **Earned so far**: Volts earned, and time AFK.
    - **"How is this worked out?"**, which expands the breakdown: best zone,
@@ -198,7 +199,7 @@ stop and tell the user.
 5. **Studio testing**: a "Simulate idle 17 min" TEST button (Studio only)
    that runs the idle handler, so the VirtualUser path and the backup can
    both be checked without waiting.
-6. **README**: a short "AFK Lounge" section covering the 20% rule, what
+6. **README**: a short "AFK Lounge" section covering the 10% rule, what
    counts (passes, boosts, the group, Server Storm), and
    `Config.AFK.rateFraction` for tuning.
 
