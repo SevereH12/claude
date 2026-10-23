@@ -196,6 +196,13 @@ local function withBonuses(player: Player): PassRules.Owned
 	return set
 end
 
+-- Everything that multiplies a sale, as one set: owned passes, running
+-- boosts, the group bonus and a Server Storm (what Passes.payout applies).
+-- Systems/Afk works its rate out from this.
+function Passes.saleEffects(player: Player): PassRules.Owned
+	return PassRules.withBoosts(withBonuses(player), Boosts.left(player))
+end
+
 -- What selling a bottle worth `value` pays (passes, VIP, the group bonus,
 -- boosts, a Server Storm), and what 2x Volts would have added. Keeps this
 -- session's tallies.

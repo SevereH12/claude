@@ -5,7 +5,7 @@ Follow the rules in `docs/prompts/README.md`.
 **Run it twice.** Each run does the first part below that isn't ticked,
 then ticks it:
 
-- [ ] Part A: the AFK rate maths, the lounge on the map, earning, and the
+- [x] Part A: the AFK rate maths, the lounge on the map, earning, and the
   AFK screen
 - [ ] Part B: never getting kicked for being idle (with a backup), the
   Teleport entry, and stats
@@ -71,6 +71,10 @@ both.
 
 If Config numbers have changed since this table was written, recompute it
 with the formula and say so, rather than forcing the old numbers.
+
+(Recomputed in part A: with the Dynamo Drum the best zone is now Rune Spire,
+1,200 per strike, not Thunderhead Mesa, so that row is 271,380 / 542,761 /
+691,496 / 760,646 / 1,521,292. Every other row matches.)
 
 ## Part A: maths, lounge, earning, AFK screen (run 1)
 

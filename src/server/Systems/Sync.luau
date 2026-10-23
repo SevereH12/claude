@@ -32,6 +32,9 @@ Sync.store = {} :: { [Player]: Types.StoreSession }
 -- Owned by Systems/Rewards: per player, this session's playtime gifts.
 Sync.rewards = {} :: { [Player]: Types.RewardSession }
 
+-- Owned by Systems/Afk: per player in the AFK Lounge, its state.
+Sync.afk = {} :: { [Player]: Types.AfkState }
+
 local NO_STORE: Types.StoreSession = table.freeze({ boostEarned = 0, missedDouble = 0 })
 
 function Sync.markDirty(player: Player)
@@ -81,6 +84,7 @@ local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapsho
 		},
 		gifted = profile.giftedPasses,
 		giftCredits = GiftRules.creditCounts(profile.giftCredits),
+		afk = Sync.afk[player],
 	}
 end
 

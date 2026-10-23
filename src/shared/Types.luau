@@ -55,6 +55,29 @@ export type Snapshot = {
 	gifts: { startedAt: number, claimed: { boolean } }, -- playtime gifts: session start (server time)
 	gifted: { [string]: boolean }, -- passes owned because someone gifted them
 	giftCredits: { [string]: number }, -- gift products paid for but not sent yet
+	afk: AfkState?, -- in the AFK Lounge (Systems/Afk), nil when not
+}
+
+-- The player's AFK Lounge state, sent in the snapshot (Systems/Afk). The
+-- numbers are Util/Afk.rate's breakdown, ready for the AFK screen.
+export type AfkState = {
+	active: boolean, -- earning (false while waiting to start)
+	startsAt: number, -- workspace:GetServerTimeNow() when earning starts (or started)
+	earned: number, -- Volts paid this AFK session
+	perHour: number,
+	fraction: number, -- of the grinding rate
+	premium: boolean,
+	zone: string, -- best zone's display name
+	bottle: string,
+	baseCapacity: number,
+	capacity: number,
+	chargeSize: number,
+	strikes: number,
+	fillSeconds: number,
+	bag: number,
+	multipliers: { { label: string, value: number } },
+	luck: number,
+	bigBottles: boolean,
 }
 
 -- This session's store numbers, sent in the snapshot (Systems/Passes).

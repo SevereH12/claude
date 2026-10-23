@@ -234,6 +234,30 @@ for _, office in offices do
 	)
 end
 
+-- the AFK Lounge -----------------------------------------------------------
+local lounges = {}
+for _, inst in world.workspace:GetDescendants() do
+	if inst:IsA("BasePart") and inst:HasTag("AfkZone") then
+		table.insert(lounges, inst)
+	end
+end
+if map and map:GetAttribute("Style") == "WeatherLab" then
+	check(#lounges > 0, "WeatherLab has an AFK Lounge (AfkZone)")
+end
+for _, box in lounges do
+	check(box.Transparency >= 1 and not box.CanCollide, box:GetFullName() .. " is invisible and non-blocking")
+	-- the whole box, not just the middle
+	for _, sx in { -1, 0, 1 } do
+		for _, sz in { -1, 0, 1 } do
+			local p = box.CFrame:PointToWorldSpace(
+				Vector3.new(sx * box.Size.X / 2, -box.Size.Y / 2 + 1 + ROOT, sz * box.Size.Z / 2)
+			)
+			check(Zones.at(p) == nil, box:GetFullName() .. " is outside every zone")
+			check(not Selling.isAtStation(p), box:GetFullName() .. " is not a sell station")
+		end
+	end
+end
+
 -- catch floors must stay clear -------------------------------------------
 -- Strike circles can appear anywhere inside a zone except its outer 2-stud
 -- band, so nothing visible may stand above the floor there.

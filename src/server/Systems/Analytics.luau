@@ -19,7 +19,8 @@
 --   Custom events: "OfferShown" and "OfferTapped" (CustomField01 = the
 --     offer key), "TrialStarted" (1) and "TrialEnded" (Volts it earned),
 --     "DailyClaimed" (streak day), "PlaytimeGift" (minutes), "GroupJoined".
---   Economy: Volts from rewards (Source, TimedReward).
+--   Economy: Volts from rewards (Source, TimedReward) and the AFK Lounge
+--     (Source, Gameplay, "AFK").
 --   Custom events "GiftSent" (the giver) and "GiftReceived" (the receiver),
 --     CustomField01 = the product key ("GiftVIP", "LuckyBoost"), and
 --     "ServerStorm" (the storm's minutes left after the purchase). Robux
@@ -342,6 +343,10 @@ function Analytics.serverStorm(player: Player, minutes: number)
 end
 
 -- Volts a reward paid (`sku`: "Daily 3", "Gift 10 min").
+function Analytics.afkEarned(player: Player, volts: number)
+	economy(player, Enum.AnalyticsEconomyFlowType.Source, volts, "Gameplay", "AFK")
+end
+
 function Analytics.rewardVolts(player: Player, volts: number, sku: string)
 	economy(player, Enum.AnalyticsEconomyFlowType.Source, volts, "TimedReward", sku)
 end

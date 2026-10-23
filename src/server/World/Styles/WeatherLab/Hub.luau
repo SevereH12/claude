@@ -674,6 +674,259 @@ local function fingerpost(ctx: Context, parent: Instance, floor: number, dir: Ve
 	Pieces.weatherVane(parent, base + Vector3.new(0, h, 0), 1.2)
 end
 
+-- Night Shift Lounge (the AFK Lounge) ------------------------------------------------
+
+local LOUNGE_W, LOUNGE_D = 18, 13 -- the deck (side to side, front to back)
+local LOUNGE_POST = 8 -- post height above the deck
+
+-- Which village gap the lounge takes: the cottage gap nearest the spawn
+-- (the domes keep theirs), so it's easy to find and never on a corridor.
+local function loungeAngle(
+	gaps: { { angle: number, half: number } },
+	coveA: number,
+	spawnA: number,
+	portalAs: { number }
+): number?
+	local best: number? = nil
+	for i, g in gaps do
+		local maxHalf = RING_RADIUS * math.sin(math.rad(g.half)) - 8
+		local taken = Geo.angleDiff(g.angle, spawnA) < 1 or Geo.angleDiff(g.angle, coveA) < 1
+		for _, a in portalAs do
+			taken = taken or Geo.angleDiff(g.angle, a) < 1
+		end
+		if not taken and maxHalf >= LOUNGE_W / 2 - 1 and i % 4 ~= 1 then
+			if
+				best == nil
+				or Geo.angleDiff(g.angle, spawnA) < Geo.angleDiff(best :: number, spawnA)
+			then
+				best = g.angle
+			end
+		end
+	end
+	return best
+end
+
+-- A covered pavilion on a deck facing the plaza: hammocks and benches under
+-- warm lanterns, a lightning rod feeding a glass tank (its core, tagged
+-- AfkPulse, pulses on the client), the sign over the way in, and the
+-- marked rug the AfkZone box sits over.
+local function lounge(ctx: Context, parent: Instance, floor: number, angle: number)
+	local at = Geo.polar(angle, RING_RADIUS, floor)
+	local cf = CFrame.lookAt(at, Vector3.new(0, floor, 0)) -- LookVector: out to the plaza
+	local hw, hd = LOUNGE_W / 2, LOUNGE_D / 2
+	local deck = 0.5
+	Pieces.box(
+		parent,
+		cf * CFrame.new(0, deck / 2, 0),
+		Vector3.new(LOUNGE_W, deck, LOUNGE_D),
+		C.driftwood,
+		Enum.Material.WoodPlanks
+	)
+	-- the marked rest area: a navy rug with a glowing seafoam edge
+	local rug = Pieces.box(
+		parent,
+		cf * CFrame.new(0, deck + 0.05, 0.5),
+		Vector3.new(LOUNGE_W - 4, 0.1, LOUNGE_D - 4),
+		C.ink,
+		Enum.Material.Fabric,
+		false
+	)
+	rug.Name = "AfkRug"
+	for _, side in { -1, 1 } do
+		Pieces.glow(
+			Pieces.box(
+				parent,
+				cf * CFrame.new(side * (hw - 2.3), deck + 0.12, 0.5),
+				Vector3.new(0.4, 0.04, LOUNGE_D - 4),
+				C.seafoam,
+				nil,
+				false
+			),
+			C.seafoam
+		)
+		Pieces.glow(
+			Pieces.box(
+				parent,
+				cf * CFrame.new(0, deck + 0.12, 0.5 + side * (hd - 2.3)),
+				Vector3.new(LOUNGE_W - 5, 0.04, 0.4),
+				C.seafoam,
+				nil,
+				false
+			),
+			C.seafoam
+		)
+	end
+	Kit.afkZone(parent, rug, 10)
+	-- posts, beams and a gabled slate roof
+	local top = deck + LOUNGE_POST
+	for _, x in { -hw + 0.5, 0, hw - 0.5 } do
+		for _, z in { -hd + 0.5, hd - 0.5 } do
+			if x ~= 0 or z > 0 then
+				Pieces.box(
+					parent,
+					cf * CFrame.new(x, deck + LOUNGE_POST / 2, z),
+					Vector3.new(0.8, LOUNGE_POST, 0.8),
+					C.piling,
+					Enum.Material.Wood
+				)
+			end
+		end
+	end
+	for _, z in { -hd + 0.5, hd - 0.5 } do
+		Pieces.box(
+			parent,
+			cf * CFrame.new(0, top - 0.3, z),
+			Vector3.new(LOUNGE_W, 0.6, 0.6),
+			C.piling,
+			Enum.Material.Wood,
+			false
+		)
+	end
+	local rh, over = 3.4, 0.8
+	local half = hd + over
+	for _, s in { -1, 1 } do
+		local wedge = cf * CFrame.new(0, top + rh / 2, s * half / 2)
+		if s == 1 then
+			wedge *= CFrame.Angles(0, math.pi, 0)
+		end
+		Pieces.wedge(
+			parent,
+			wedge,
+			Vector3.new(LOUNGE_W + over * 2, rh, half),
+			C.harbor,
+			Enum.Material.Slate
+		)
+	end
+	-- a low rail along the back and the sides (open to the plaza)
+	for _, x in { -hw + 0.3, hw - 0.3 } do
+		Pieces.box(
+			parent,
+			cf * CFrame.new(x, deck + 1.4, 0),
+			Vector3.new(0.3, 0.3, LOUNGE_D - 1),
+			C.piling,
+			Enum.Material.Wood,
+			false
+		)
+	end
+	Pieces.box(
+		parent,
+		cf * CFrame.new(0, deck + 1.4, hd - 0.3),
+		Vector3.new(LOUNGE_W - 1, 0.3, 0.3),
+		C.piling,
+		Enum.Material.Wood,
+		false
+	)
+	-- two hammocks along the back, on wooden stands
+	for _, side in { -1, 1 } do
+		local x = side * 4.7
+		for _, e in { -1, 1 } do
+			Pieces.box(
+				parent,
+				cf * CFrame.new(x + e * 3.4, deck + 1.6, 3.6),
+				Vector3.new(0.4, 3.2, 0.4),
+				C.piling,
+				Enum.Material.Wood
+			)
+		end
+		local cloth = cf * CFrame.new(x, deck + 1.6, 3.6)
+		Pieces.box(
+			parent,
+			cloth,
+			Vector3.new(4.6, 0.25, 1.8),
+			if side == 1 then C.seafoam else C.beacon,
+			Enum.Material.Fabric,
+			false
+		)
+		Pieces.box(
+			parent,
+			cloth * CFrame.new(0, 0.14, 0),
+			Vector3.new(4.6, 0.06, 0.5),
+			C.sailcloth,
+			Enum.Material.Fabric,
+			false
+		)
+		for _, e in { -1, 1 } do
+			Kit.cable(
+				ctx,
+				(cf * CFrame.new(x + e * 3.4, deck + 3.1, 3.6)).Position,
+				(cloth * CFrame.new(e * 2.3, 0, 0)).Position,
+				{ Color = Palette.sand, Width = 0.12 }
+			)
+		end
+	end
+	-- benches by the way in, facing each other
+	for _, side in { -1, 1 } do
+		Pieces.bench(
+			parent,
+			cf * CFrame.new(side * 6.6, deck, -2) * CFrame.Angles(0, side * math.pi / 2, 0)
+		)
+	end
+	-- warm lanterns hanging from the beams
+	for _, x in { -6, 6 } do
+		for _, z in { -hd + 0.5, hd - 0.5 } do
+			local hook = (cf * CFrame.new(x, top - 0.6, z)).Position
+			Pieces.lantern(parent, hook - Vector3.new(0, 1.6, 0), nil, 14)
+		end
+	end
+	-- the glass charge tank between the hammocks and its lightning rod
+	local tankBase = (cf * CFrame.new(0, deck, 3.8)).Position
+	Pieces.cyl(parent, tankBase, 0.6, 3.6, C.harbor, Enum.Material.Metal)
+	local core = Pieces.cyl(
+		parent,
+		tankBase + Vector3.new(0, 0.6, 0),
+		3.4,
+		1.4,
+		C.spark,
+		Enum.Material.Neon,
+		false
+	)
+	core.Name = "AfkPulse"
+	core:AddTag("AfkPulse")
+	Kit.light(core, C.spark, 16, 1.2)
+	local glass = Pieces.cyl(
+		parent,
+		tankBase + Vector3.new(0, 0.6, 0),
+		3.6,
+		3,
+		C.sailcloth,
+		Enum.Material.Glass,
+		false
+	)
+	glass.Transparency = 0.6
+	Pieces.cyl(
+		parent,
+		tankBase + Vector3.new(0, 4.2, 0),
+		0.4,
+		3.6,
+		C.harbor,
+		Enum.Material.Metal,
+		false
+	)
+	local rodTop = tankBase + Vector3.new(0, top + rh + 6, 0)
+	Pieces.rod(parent, tankBase + Vector3.new(0, 4.6, 0), rodTop, 0.35, C.ink, Enum.Material.Metal)
+	Pieces.glow(Pieces.ball(parent, rodTop + Vector3.new(0, 0.4, 0), 0.9, C.spark), C.spark)
+	-- the sign over the way in
+	Pieces.signBoard(
+		parent,
+		cf * CFrame.new(0, top + 0.9, -hd - 0.1),
+		12,
+		2.2,
+		"AFK LOUNGE",
+		"earn Volts while you rest",
+		Palette.SIGN
+	)
+	-- a lantern post either side of the steps
+	for _, side in { -1, 1 } do
+		Pieces.lampPost(
+			parent,
+			(cf * CFrame.new(side * (hw + 1.6), 0, -hd + 1)).Position,
+			6,
+			-cf.LookVector,
+			true
+		)
+	end
+end
+
 -- Village ring -------------------------------------------------------------------------
 
 type CottageLook = { name: string, roof: string, chimney: boolean, instrument: string? }
@@ -693,7 +946,8 @@ local function village(
 	gaps: { { angle: number, half: number } },
 	coveA: number,
 	spawnA: number,
-	portalAs: { number }
+	portalAs: { number },
+	loungeA: number?
 )
 	local rng = ctx.rng
 	local cottage = 0
@@ -708,7 +962,9 @@ local function village(
 		if Geo.angleDiff(g.angle, coveA) > 1 and maxHalf >= 6 and not isSpawn and not isPortal then
 			local at = Geo.polar(g.angle, RING_RADIUS, floor)
 			local cf = CFrame.lookAt(at, Vector3.new(0, floor, 0))
-			if (i % 4 == 1) and domes < 2 then
+			if loungeA and Geo.angleDiff(g.angle, loungeA) < 1 then
+				lounge(ctx, parent, floor, g.angle)
+			elseif (i % 4 == 1) and domes < 2 then
 				domes += 1
 				local diameter = math.min(12, maxHalf * 2 - 1)
 				Pieces.dome(parent, cf, diameter, domes == 1)
@@ -794,7 +1050,8 @@ local function plaza(
 	parent: Instance,
 	floor: number,
 	gaps: { { angle: number, half: number } },
-	spawnA: number
+	spawnA: number,
+	loungeA: number?
 )
 	local rng = ctx.rng
 	local lampTops = {}
@@ -804,6 +1061,8 @@ local function plaza(
 		-- stands to one side, past the fingerpost
 		if Geo.angleDiff(g.angle, spawnA) < 1 then
 			d = Geo.dir(g.angle + 34)
+		elseif loungeA and Geo.angleDiff(g.angle, loungeA) < 1 then
+			d = Geo.dir(g.angle + 22) -- clear of the lounge's way in
 		end
 		local bottom = d * 44 + Vector3.new(0, floor, 0)
 		Pieces.lampPost(parent, bottom, 7, -d, true)
@@ -1049,9 +1308,10 @@ function Hub.buildHub(ctx: Context)
 	sellStation(ctx, parent, floor, dir, lens)
 	spawnDeck(parent, floor, dir)
 	fingerpost(ctx, parent, floor, dir)
-	village(ctx, parent, floor, gaps, coveA, spawnA, portalAs)
+	local loungeA = loungeAngle(gaps, coveA, spawnA, portalAs)
+	village(ctx, parent, floor, gaps, coveA, spawnA, portalAs, loungeA)
 	portals(ctx, parent, floor, portalAs)
-	plaza(ctx, parent, floor, gaps, spawnA)
+	plaza(ctx, parent, floor, gaps, spawnA, loungeA)
 	harbour(ctx, parent, floor, coveA)
 	shore(ctx, ctx.folders.decor, corridors, coveA)
 end

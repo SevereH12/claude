@@ -12,7 +12,7 @@ only stand where there is HEADROOM above. Water is not walkable.
 
 Checks (exit 1 if any fail):
   * every zone's catch floor is reachable on foot from spawn
-  * every sell area, research office, research camp and portal is reachable on foot from spawn
+  * every sell area, research office, research camp, portal and AFK Lounge is reachable on foot from spawn
   * each catch floor is flat: >= 90% of its cells within 1.5 studs of the floor
   * each catch floor is open: >= 90% of its cells are standable
 Writes out_prefix_walk.png (reachable cells green, catch floors outlined).
@@ -165,11 +165,11 @@ def main():
 
     zones = [p for p in parts if ".Zones." in p["path"]]
     sells = [p for p in parts if p["name"] == "SellArea"]
-    # research offices, camps and portals must be reachable like sell areas
+    # research offices, camps, portals and the AFK Lounge must be reachable like sell areas
     sites = [
         p
         for p in parts
-        if p["name"] in ("ResearchOffice", "Portal") or ".ResearchCamps." in p["path"]
+        if p["name"] in ("ResearchOffice", "Portal", "AfkZone") or ".ResearchCamps." in p["path"]
     ]
     spawns = [p for p in parts if p["class"] == "SpawnLocation"]
     if not spawns:

@@ -12,6 +12,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Afk = require(ReplicatedStorage.Shared.Util.Afk)
 local Portals = require(ReplicatedStorage.Shared.Util.Portals)
 local ResearchSites = require(ReplicatedStorage.Shared.Util.ResearchSites)
 local Blocks = require(script.Parent.Blocks)
@@ -25,6 +26,7 @@ local Kit = {}
 Kit.SELL_TAG = "SellArea"
 Kit.OFFICE_TAG = "ResearchOffice"
 Kit.PORTAL_TAG = Portals.TAG
+Kit.AFK_TAG = Afk.TAG
 -- Ground a hub keeps clear for each portal (Kit.portal): a circle this wide.
 Kit.PORTAL_SPACE = 14
 
@@ -461,6 +463,25 @@ function Kit.sellArea(parent: Instance, pad: BasePart, height: number?): BasePar
 		Parent = parent,
 	})
 	area:AddTag(Kit.SELL_TAG)
+	return area
+end
+
+-- Invisible box over the AFK Lounge's marked floor, tagged AfkZone: standing
+-- inside it is what Systems/Afk checks (by position, like sellArea).
+function Kit.afkZone(parent: Instance, pad: BasePart, height: number?): BasePart
+	local h = height or 10
+	local area = Kit.part({
+		Name = "AfkZone",
+		Size = Vector3.new(pad.Size.X + 2, h, pad.Size.Z + 2),
+		CFrame = pad.CFrame * CFrame.new(0, pad.Size.Y / 2 + h / 2 - 1, 0),
+		Transparency = 1,
+		CanCollide = false,
+		CanQuery = false,
+		CanTouch = false,
+		CastShadow = false,
+		Parent = parent,
+	})
+	area:AddTag(Afk.TAG)
 	return area
 end
 

@@ -652,6 +652,18 @@ return table.freeze({
 	GROUP_BONUS = 0.10,
 	GROUP_COLOR = Color3.fromRGB(80, 200, 255), -- the [Member] chat tag
 
+	-- The AFK Lounge (Systems/Afk, Util/Afk): standing in it pays this
+	-- fraction of the player's best grinding rate (passes, boosts, the group
+	-- and a Server Storm all count). The grinding rate in Util/Afk is already
+	-- higher than real play, so 10% is clearly worse than playing.
+	AFK = table.freeze({
+		rateFraction = 0.10, -- 90% less than grinding
+		premiumRateFraction = 0.15, -- Roblox Premium members
+		enterSeconds = 10, -- seconds inside before AFK starts
+		payEverySeconds = 60,
+		recomputeSeconds = 15,
+	}),
+
 	GIFT_PASS_PRODUCTS = table.freeze(GIFT_PASS_PRODUCTS),
 	GIFT_ICONS = table.freeze(GIFT_ICONS),
 	GIFTS = table.freeze({
