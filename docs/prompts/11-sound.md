@@ -5,7 +5,7 @@ Follow the rules in `docs/prompts/README.md`.
 **Run it three times.** Each run does the first part below that isn't
 ticked, then ticks it:
 
-- [ ] Part A: make every sound effect (original, generated in code),
+- [x] Part A: make every sound effect (original, generated in code),
   review it, upload it
 - [ ] Part B: play them everywhere in the game, with volume settings
 - [ ] Part C: licensed music that follows the weather, ambience, and the

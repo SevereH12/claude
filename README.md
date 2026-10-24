@@ -186,6 +186,24 @@ and checks Config is within 10%. Run it again whenever zones, bottles or
 strike settings change. Studio TEST tools: **+500 research data** and
 **+100 Glints (this tier)** under 🎁 REWARDS.
 
+## Sound effects
+
+Every effect and ambience loop is original, made in code by
+`tools/audio/sfx.py` from one palette (`tools/audio/palette.py`: C major
+pentatonic, a glassy shimmer, an electric crackle, one small room, a
+loudness target per group). To change a sound, edit its function in
+`sfx.py`, then run:
+
+```
+python3 tools/audio/sfx.py      # WAVs in tools/audio/out/ (listen to them there)
+python3 tools/audio/review.py   # review.png + review.md; fails on a bad peak, level, loop seam or note
+python3 tools/audio/pack.py     # 3 effect sheets + 4 loops as .ogg, layout in sheets.json
+python3 tools/audio/upload.py   # uploads changed files to the group, writes sound_ids.json and SoundBank.luau
+```
+
+Uploads cost one of the 10 a month an unverified account gets, so only
+changed files are sent. Running `upload.py` again also re-checks moderation.
+
 ## Code layout
 
 - `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas, zone geometry
