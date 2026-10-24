@@ -5,9 +5,9 @@
 -- Pass and "Send test gift to me" and "Send test boost gift" buttons, and
 -- REWARDS opens Next day, +5 min playtime, Clear boosts (and the Server
 -- Storm), Start Server Storm, +500 research data, +100 Glints, Simulate idle 17 min (the AFK Lounge's
--- idle handler, Controllers/AfkUI), a Pretend group member toggle and the
--- Sound board, which plays every sound in order with its name (all Studio
--- only). The server (Systems/DevCommands) checks again. To
+-- idle handler, Controllers/AfkUI), a Pretend group member toggle, the
+-- Sound board, which plays every sound in order with its name, and the Music
+-- audition, every shortlisted track for 20 s (all Studio only). The server (Systems/DevCommands) checks again. To
 -- remove it: delete this file and Systems/DevCommands.luau, and take
 -- "DevCommand" out of Shared/Remotes.
 
@@ -23,6 +23,7 @@ local LayoutMath = require(script.Parent.Parent.Lib.LayoutMath)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
 local AfkUI = require(script.Parent.AfkUI)
+local Music = require(script.Parent.Music)
 
 local DevCommands = {}
 
@@ -147,7 +148,7 @@ function DevCommands.init()
 	UI.onLayout(function()
 		UI.place(rewards, row(4))
 		local area = Layout.hud.test
-		UI.place(tools, { x = area.x + area.w + LayoutMath.GAP, y = area.y, w = 220, h = 9 * 48 })
+		UI.place(tools, { x = area.x + area.w + LayoutMath.GAP, y = area.y, w = 220, h = 10 * 48 })
 	end)
 	local function showLists(passesOn: boolean, rewardsOn: boolean)
 		list.Visible = passesOn
@@ -246,6 +247,23 @@ function DevCommands.init()
 					board.Text = "🔊 Sound board"
 				end
 			end)
+		end)
+	end
+	-- Music audition (Studio only): every shortlisted track for 20 s with its
+	-- name (docs/audio/music-shortlist.md); tap again to stop
+	if RunService:IsStudio() then
+		local audition = UI.button({
+			Name = "MusicAudition",
+			LayoutOrder = 10,
+			Text = "🎵 Music audition",
+			Size = UDim2.new(1, 0, 0, 40),
+			BackgroundColor3 = UI.COLORS.panelDark,
+			Parent = tools,
+		})
+		UI.maxText(audition, 16)
+		audition.Activated:Connect(function()
+			UI.pop(audition)
+			Music.audition()
 		end)
 	end
 	-- Pretend group member: the group bonus without joining (Systems/Group)

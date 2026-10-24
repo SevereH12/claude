@@ -6,11 +6,14 @@
 -- nothing is created per play.
 --
 -- Every sound plays in a SoundGroup (Music, Ambience, SFX, UI) whose volume
--- is Config.SOUND_MIX times the player's setting (the SETTINGS panel).
+-- is Config.SOUND_MIX times the player's setting (the SETTINGS panel). Big
+-- moments (fanfares, a jackpot, a Server Storm) duck the music for a moment.
+-- Sfx.loop makes a long-lived looping Sound (ambience) for its caller to fade.
 
 local ContentProvider = game:GetService("ContentProvider")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
+local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local SoundBank = require(ReplicatedStorage.Shared.SoundBank)
@@ -22,11 +25,23 @@ local MIN_GAP = 0.05 -- seconds: the same sound plays at most this often
 local GAPS: { [string]: number } = { volts_tick = 0.08 } -- per-sound minimum gaps
 local VARY = 0.04 -- ±4% random pitch on repeated sounds
 local ROLLOFF_MIN, ROLLOFF_MAX = 12, 450 -- studs, for 3D sounds
+-- these duck the music (Config.MUSIC_DUCK) while they play
+local DUCKERS: { [string]: boolean } = {
+	unlock = true,
+	level_up = true,
+	daily = true,
+	gift_received = true,
+	jackpot = true,
+	server_storm = true,
+}
+local DUCK_IN = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local DUCK_OUT = TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
 
 export type Options = {
 	pitch: number?, -- playback speed (1 = as made)
 	volume: number?, -- times the sound's default volume
 	offset: number?, -- seconds into the sound to start from
+	background: boolean?, -- ambience: doesn't count for Sfx.recent
 }
 
 type Pool = { sounds: { Sound }, next: number }
@@ -40,6 +55,9 @@ local lastAt: { [string]: number } = {}
 local lastAny = -math.huge
 local random = Random.new()
 local settings: Types.SoundSettings? = nil
+local duck = Instance.new("NumberValue") -- the music's ducking (1 = none)
+duck.Value = 1
+local duckToken = 0
 
 local function group(name: string): SoundGroup
 	local existing = groups[name]
@@ -92,6 +110,43 @@ local function pool(entry: SoundBank.Entry, positional: boolean): Pool
 	return made
 end
 
+-- Dips the music (about -6 dB) for a moment under a big sound.
+function Sfx.duck()
+	duckToken += 1
+	local mine = duckToken
+	TweenService:Create(duck, DUCK_IN, { Value = Config.MUSIC_DUCK }):Play()
+	task.delay(Config.MUSIC_DUCK_SECONDS, function()
+		if duckToken == mine then
+			TweenService:Create(duck, DUCK_OUT, { Value = 1 }):Play()
+		end
+	end)
+end
+
+-- A looping Sound of its own (ambience), silent until its caller fades it in
+-- (Sfx.volumeOf(name) is its full volume). `parent`: a part or attachment
+-- for a 3D loop; nil plays it 2D.
+function Sfx.loop(name: string, parent: Instance?): Sound?
+	local entry = SoundBank[name]
+	if not entry then
+		warn(`[Sfx] no sound called {name}`)
+		return nil
+	end
+	local sound = Instance.new("Sound")
+	sound.Name = name
+	sound.SoundId = entry.id
+	sound.Looped = true
+	sound.Volume = 0
+	sound.SoundGroup = group(entry.group)
+	sound.Parent = parent or SoundService
+	return sound
+end
+
+-- A sound's default volume.
+function Sfx.volumeOf(name: string): number
+	local entry = SoundBank[name]
+	return if entry then entry.volume else 0
+end
+
 -- The next Sound in the pool, ready to play `name` (nil: unknown name or
 -- played too recently).
 local function prepare(
@@ -109,7 +164,12 @@ local function prepare(
 		return nil, nil
 	end
 	lastAt[name] = now
-	lastAny = now
+	if not (opts and opts.background) then
+		lastAny = now
+	end
+	if DUCKERS[name] then
+		Sfx.duck()
+	end
 	local list = pool(entry, positional)
 	local sound = list.sounds[list.next]
 	list.next = list.next % #list.sounds + 1
@@ -177,7 +237,7 @@ function Sfx.apply(newSettings: Types.SoundSettings)
 	settings = newSettings
 	local mute = if newSettings.muted then 0 else 1
 	local mix = Config.SOUND_MIX
-	group("Music").Volume = mix.Music * newSettings.musicVolume * mute
+	group("Music").Volume = mix.Music * newSettings.musicVolume * mute * duck.Value
 	group("Ambience").Volume = mix.Ambience * newSettings.ambienceVolume * mute
 	group("SFX").Volume = mix.SFX * newSettings.sfxVolume * mute
 	group("UI").Volume = mix.UI * newSettings.sfxVolume * mute
@@ -203,5 +263,8 @@ function Sfx.preload()
 end
 
 Sfx.apply(table.clone(Config.SOUND_SETTINGS))
+duck.Changed:Connect(function()
+	Sfx.apply(Sfx.current())
+end)
 
 return Sfx

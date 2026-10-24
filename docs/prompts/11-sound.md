@@ -8,7 +8,7 @@ ticked, then ticks it:
 - [x] Part A: make every sound effect (original, generated in code),
   review it, upload it
 - [x] Part B: play them everywhere in the game, with volume settings
-- [ ] Part C: licensed music that follows the weather, ambience, and the
+- [x] Part C: licensed music that follows the weather, ambience, and the
   final mix
 
 Today the game has only three placeholder sounds (`Config.SOUNDS`: a

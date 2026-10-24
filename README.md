@@ -213,6 +213,37 @@ Ambience, SFX, UI): `Config.SOUND_MIX` sets their volumes, and the players'
 In Studio, TEST > 🎁 REWARDS > **🔊 Sound board** plays every sound in turn
 with its name.
 
+### Music and ambience
+
+- **Music** (`Controllers/Music`) plays the world you're in, calm or storm:
+  `Config.MUSIC[<world id>].Calm / .Storm`, shuffled, crossfading over
+  `Config.MUSIC_FADE` seconds when the weather or world changes, and dipping
+  for big moments (`MUSIC_DUCK`). The tracks are Roblox's licensed partner
+  music (APMOfficial, DistrokidOfficial only). `python3
+  tools/audio/music_search.py` searches the Creator Store for each slot and
+  writes `docs/audio/music-shortlist.md`; TEST > 🎁 REWARDS > **🎵 Music
+  audition** (Studio) plays every candidate for 20 s so you can pick.
+- **Ambience** (`Controllers/Ambience`): wind and waves when calm; rain,
+  gusts and distant rumbles in a storm; a hum at every sell station.
+  Volumes in `Config.AMBIENCE`.
+
+**Where each volume lives**
+
+| What | Where |
+| --- | --- |
+| A group's overall level (Music, Ambience, SFX, UI) | `Config.SOUND_MIX` |
+| A player's own sliders and mute | ⚙️ SETTINGS on the menu (saved in their profile) |
+| One sound's level | `VOLUME` / `VOLUME_OVERRIDE` in `tools/audio/bank.py` (then run it) |
+| The loudness every effect is made at | `GROUPS` in `tools/audio/palette.py` |
+| Calm and storm ambience, gusts, the hum's reach | `Config.AMBIENCE` |
+| The music's tracks, crossfade and ducking | `Config.MUSIC`, `MUSIC_FADE`, `MUSIC_DUCK` |
+
+The mix, worked out: gameplay effects land at about -21 dBFS, thunder -15,
+rewards -19, UI -33 (the quietest), music about -24 (licensed tracks are
+mastered near -14, times 0.32), rain about -31 and calm waves -36, so the
+music sits under the effects and the ambience under the music, and a storm's
+thunder is the loudest thing in the game.
+
 ## Code layout
 
 - `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas, zone geometry

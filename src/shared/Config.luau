@@ -690,7 +690,43 @@ return table.freeze({
 
 	-- Sound (the sounds themselves: Shared/SoundBank, made by tools/audio).
 	-- SOUND_MIX: each SoundGroup's volume before the player's sliders.
-	SOUND_MIX = table.freeze({ Music = 0.5, Ambience = 0.6, SFX = 1, UI = 0.8 }),
+	-- (the mix: music under the effects, UI the quietest, storms big)
+	SOUND_MIX = table.freeze({ Music = 0.32, Ambience = 0.55, SFX = 1, UI = 0.7 }),
+	-- Background music per world and weather: Roblox's licensed partner
+	-- tracks (APMOfficial, DistrokidOfficial; tools/audio/music_search.py,
+	-- docs/audio/music-shortlist.md). Each list plays shuffled (Controllers/Music).
+	MUSIC = table.freeze({
+		Bay = table.freeze({
+			-- Playful Pixel Adventure; Seaside View; Ambient Adventure Trail
+			Calm = { 94734731611772, 136150243866984, 129196538853609 },
+			-- Driving Shadows (Electronic Music 2025); Electro Chase; Upbeat Synthpop
+			Storm = { 125777738272639, 1836021063, 71868660197528 },
+		}),
+		Voltcliff = table.freeze({
+			-- Steampunk Clockworks; Time Traveller; Clockwork Symphony
+			Calm = { 97805011981124, 9039372102, 116123343811105 },
+			-- Ecos de Titán (Industrial & Electronic Rock); Refresh; Dubstep Action Gaming Music – Heavy Drops & Energy
+			Storm = { 70881491117119, 79863038732814, 136266951088751 },
+		}),
+		Stormspire = table.freeze({
+			-- Dreamy midnight flight; Dreamy Flights; Floating Islands
+			Calm = { 95537109377454, 82631091427646, 111480456898998 },
+			-- Phantom Nova (Underscore Version); 21st Centurion A; Aeon Driver (Underscore Version)
+			Storm = { 116315815173589, 1847492487, 117596024497708 },
+		}),
+	}),
+	MUSIC_FADE = 3, -- seconds to crossfade on a weather or world change
+	MUSIC_DUCK = 0.5, -- music volume (x) under big moments: about -6 dB
+	MUSIC_DUCK_SECONDS = 1.5,
+	-- ambience: the loops' volumes (x) in each weather, and how often a gust
+	-- or a distant rumble comes in a storm
+	AMBIENCE = table.freeze({
+		calmVolume = 0.6,
+		stormRainVolume = 1,
+		stormCalmVolume = 0.15, -- the waves stay faintly under the rain
+		eventEvery = { 6, 15 }, -- seconds between gusts and rumbles in a storm
+		humRadius = 60, -- studs: the power plant's hum is heard this far away
+	}),
 	-- the SETTINGS panel's starting values (0 to 1; they scale SOUND_MIX)
 	SOUND_SETTINGS = table.freeze({
 		musicVolume = 1,

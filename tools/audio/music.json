@@ -1,0 +1,374 @@
+{
+ "Bay_Calm": [
+  {
+   "id": 94734731611772,
+   "title": "Playful Pixel Adventure",
+   "artist": "\u70c8\u65e5\u51c9\u5fc3 Scorching sun cools the heart",
+   "creator": "DistrokidOfficial",
+   "seconds": 121,
+   "genre": "pop",
+   "query": "playful adventure",
+   "score": 0.6956521739130436
+  },
+  {
+   "id": 136150243866984,
+   "title": "Seaside View",
+   "artist": "Bossa Nova Mar\u00e9",
+   "creator": "DistrokidOfficial",
+   "seconds": 165,
+   "genre": "world",
+   "query": "seaside",
+   "score": 0.5714285714285714
+  },
+  {
+   "id": 129196538853609,
+   "title": "Ambient Adventure Trail",
+   "artist": "Reading Music Studio",
+   "creator": "DistrokidOfficial",
+   "seconds": 123,
+   "genre": "world",
+   "query": "light adventure",
+   "score": 0.5128205128205128
+  },
+  {
+   "id": 136012265808588,
+   "title": "Happy Ukulele Day",
+   "artist": "lil piff",
+   "creator": "DistrokidOfficial",
+   "seconds": 135,
+   "genre": "dance",
+   "query": "happy ukulele",
+   "score": 0.5
+  },
+  {
+   "id": 120416151765277,
+   "title": "Seaside Smile",
+   "artist": "V.O. Tropical Island Bossa",
+   "creator": "DistrokidOfficial",
+   "seconds": 134,
+   "genre": "jazz",
+   "query": "seaside",
+   "score": 0.49689440993788825
+  },
+  {
+   "id": 137535734242043,
+   "title": "Light Adventure Echo",
+   "artist": "Reading Music Studio",
+   "creator": "DistrokidOfficial",
+   "seconds": 109,
+   "genre": "world",
+   "query": "light adventure",
+   "score": 0.4597701149425288
+  }
+ ],
+ "Bay_Storm": [
+  {
+   "id": 125777738272639,
+   "title": "Driving Shadows (Electronic Music 2025)",
+   "artist": "RogXQ",
+   "creator": "DistrokidOfficial",
+   "seconds": 203,
+   "genre": "dance",
+   "query": "driving electronic",
+   "score": 1.0
+  },
+  {
+   "id": 1836021063,
+   "title": "Electro Chase",
+   "artist": "Nicolas Baudino",
+   "creator": "APMOfficial",
+   "seconds": 190,
+   "genre": "breakbeat",
+   "query": "electro chase",
+   "score": 0.5714285714285714
+  },
+  {
+   "id": 71868660197528,
+   "title": "Upbeat Synthpop",
+   "artist": "Jerome Chauvel",
+   "creator": "DistrokidOfficial",
+   "seconds": 150,
+   "genre": "rock",
+   "query": "upbeat synth",
+   "score": 0.4347826086956522
+  },
+  {
+   "id": 1841266692,
+   "title": "Fresh News",
+   "artist": "KPM Main Series",
+   "creator": "APMOfficial",
+   "seconds": 225,
+   "genre": "club",
+   "query": "synth action",
+   "score": 0.38095238095238093
+  },
+  {
+   "id": 73905859114793,
+   "title": "Synthesized Shadows",
+   "artist": "Beyond Bassline",
+   "creator": "DistrokidOfficial",
+   "seconds": 111,
+   "genre": "dance",
+   "query": "electro chase",
+   "score": 0.35714285714285715
+  },
+  {
+   "id": 9043224162,
+   "title": "Cynics",
+   "artist": "Bruton",
+   "creator": "APMOfficial",
+   "seconds": 252,
+   "genre": "pop",
+   "query": "upbeat synth",
+   "score": 0.3125
+  }
+ ],
+ "Voltcliff_Calm": [
+  {
+   "id": 97805011981124,
+   "title": "Steampunk Clockworks",
+   "artist": "LemmyLada",
+   "creator": "DistrokidOfficial",
+   "seconds": 128,
+   "genre": "soundtracks",
+   "query": "steampunk",
+   "score": 1.8
+  },
+  {
+   "id": 9039372102,
+   "title": "Time Traveller",
+   "artist": "Cezame",
+   "creator": "APMOfficial",
+   "seconds": 150,
+   "genre": "scores-orchestral",
+   "query": "steampunk",
+   "score": 0.8695652173913044
+  },
+  {
+   "id": 116123343811105,
+   "title": "Clockwork Symphony",
+   "artist": "Tori Mama",
+   "creator": "DistrokidOfficial",
+   "seconds": 196,
+   "genre": "pop",
+   "query": "steampunk",
+   "score": 0.7843803056027164
+  },
+  {
+   "id": 9047610291,
+   "title": "Follow The Footprints - Underscore",
+   "artist": "Shaun Chasin",
+   "creator": "APMOfficial",
+   "seconds": 126,
+   "genre": "film-score",
+   "query": "steampunk",
+   "score": 0.7692307692307692
+  },
+  {
+   "id": 9039373061,
+   "title": "The Cthulhu Myth Alternate",
+   "artist": "Cezame",
+   "creator": "APMOfficial",
+   "seconds": 145,
+   "genre": "scores-orchestral",
+   "query": "steampunk",
+   "score": 0.6896551724137931
+  },
+  {
+   "id": 72006124559764,
+   "title": "Cog Assembly",
+   "artist": "NeuRay",
+   "creator": "DistrokidOfficial",
+   "seconds": 172,
+   "genre": "pop",
+   "query": "steampunk",
+   "score": 0.625
+  }
+ ],
+ "Voltcliff_Storm": [
+  {
+   "id": 70881491117119,
+   "title": "Ecos de Tit\u00e1n (Industrial & Electronic Rock)",
+   "artist": "Bruno Rizzetto",
+   "creator": "DistrokidOfficial",
+   "seconds": 268,
+   "genre": "rock-en-espa\u00f1ol",
+   "query": "industrial electronic",
+   "score": 1.0
+  },
+  {
+   "id": 79863038732814,
+   "title": "Refresh",
+   "artist": "Keith Bacharach",
+   "creator": "DistrokidOfficial",
+   "seconds": 216,
+   "genre": "new-age",
+   "query": "industrial electronic",
+   "score": 0.6896551724137931
+  },
+  {
+   "id": 136266951088751,
+   "title": "Dubstep Action Gaming Music \u2013 Heavy Drops & Energy",
+   "artist": "Love Sleep Repeat",
+   "creator": "DistrokidOfficial",
+   "seconds": 182,
+   "genre": "dance",
+   "query": "dubstep action",
+   "score": 0.5
+  },
+  {
+   "id": 1847588120,
+   "title": "Epic Steps A",
+   "artist": "Anselm Kreuzer",
+   "creator": "APMOfficial",
+   "seconds": 132,
+   "genre": "dubstep",
+   "query": "dubstep action",
+   "score": 0.4347826086956522
+  },
+  {
+   "id": 122770769791748,
+   "title": "Alarm Glock NO DRM KT",
+   "artist": "Adrian Nicholas Valdez",
+   "creator": "APMOfficial",
+   "seconds": 158,
+   "genre": "film-score",
+   "query": "industrial action",
+   "score": 0.4166666666666667
+  },
+  {
+   "id": 1847805060,
+   "title": "Hijacker A",
+   "artist": "Biggie",
+   "creator": "APMOfficial",
+   "seconds": 98,
+   "genre": "dubstep",
+   "query": "dubstep action",
+   "score": 0.3846153846153846
+  }
+ ],
+ "Stormspire_Calm": [
+  {
+   "id": 95537109377454,
+   "title": "Dreamy midnight flight",
+   "artist": "Music for cozy reading",
+   "creator": "DistrokidOfficial",
+   "seconds": 165,
+   "genre": "world",
+   "query": "dreamy flight",
+   "score": 0.6666666666666666
+  },
+  {
+   "id": 82631091427646,
+   "title": "Dreamy Flights",
+   "artist": "Succinct Studio Records",
+   "creator": "DistrokidOfficial",
+   "seconds": 240,
+   "genre": "world",
+   "query": "dreamy flight",
+   "score": 0.5797101449275363
+  },
+  {
+   "id": 111480456898998,
+   "title": "Floating Islands",
+   "artist": "Terra Fantasy",
+   "creator": "DistrokidOfficial",
+   "seconds": 191,
+   "genre": "alternative",
+   "query": "floating islands",
+   "score": 0.5714285714285714
+  },
+  {
+   "id": 95112044170649,
+   "title": "Dreamy Night Flight",
+   "artist": "Just Listen Darling",
+   "creator": "DistrokidOfficial",
+   "seconds": 138,
+   "genre": "soundtracks",
+   "query": "dreamy flight",
+   "score": 0.5128205128205128
+  },
+  {
+   "id": 9046598930,
+   "title": "Watching the Garden Grow (a)",
+   "artist": "Johnny Wishbone",
+   "creator": "APMOfficial",
+   "seconds": 163,
+   "genre": "film-score",
+   "query": "whimsical",
+   "score": 0.5
+  },
+  {
+   "id": 85938151220666,
+   "title": "Floating Between Islands",
+   "artist": "8bit Lofi Labs",
+   "creator": "DistrokidOfficial",
+   "seconds": 120,
+   "genre": "world",
+   "query": "floating islands",
+   "score": 0.49689440993788825
+  }
+ ],
+ "Stormspire_Storm": [
+  {
+   "id": 116315815173589,
+   "title": "Phantom Nova (Underscore Version)",
+   "artist": "Amir Gurvitz",
+   "creator": "APMOfficial",
+   "seconds": 124,
+   "genre": "film-score",
+   "query": "epic electronic",
+   "score": 1.0
+  },
+  {
+   "id": 1847492487,
+   "title": "21st Centurion A",
+   "artist": "Zyklus",
+   "creator": "APMOfficial",
+   "seconds": 258,
+   "genre": "electro",
+   "query": "epic electronic",
+   "score": 0.8695652173913044
+  },
+  {
+   "id": 117596024497708,
+   "title": "Aeon Driver (Underscore Version)",
+   "artist": "Amir Gurvitz",
+   "creator": "APMOfficial",
+   "seconds": 125,
+   "genre": "film-score",
+   "query": "epic electronic",
+   "score": 0.7692307692307692
+  },
+  {
+   "id": 135102649170289,
+   "title": "The Great Dynasties (Underscore Version)",
+   "artist": "Amir Gurvitz",
+   "creator": "APMOfficial",
+   "seconds": 142,
+   "genre": "film-score",
+   "query": "epic electronic",
+   "score": 0.6896551724137931
+  },
+  {
+   "id": 128746729733181,
+   "title": "SCME Sky Battle Classic",
+   "artist": "Pyzax4",
+   "creator": "DistrokidOfficial",
+   "seconds": 301,
+   "genre": "alternative",
+   "query": "sky battle",
+   "score": 0.6666666666666666
+  },
+  {
+   "id": 134766455010964,
+   "title": "Cobra Steel (Underscore Version)",
+   "artist": "Amir Gurvitz",
+   "creator": "APMOfficial",
+   "seconds": 146,
+   "genre": "film-score",
+   "query": "epic electronic",
+   "score": 0.625
+  }
+ ]
+}
