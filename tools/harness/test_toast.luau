@@ -67,12 +67,18 @@ t = 33
 check(ToastQueue.hide(q, old.id, old.generation), "the old toast goes")
 local newer = ToastQueue.push(q, "Mesa locked", "warn", 3)
 check(newer.id ~= old.id, "showing it again later is a new toast")
-check(ToastQueue.hide(q, old.id, old.generation), "a late duplicate of the old hide only reports it gone")
+check(
+	ToastQueue.hide(q, old.id, old.generation),
+	"a late duplicate of the old hide only reports it gone"
+)
 check(texts(q) == "Mesa locked", "and the newer toast stays up")
 t = 35
 local restarted = ToastQueue.push(q, "Mesa locked", "warn", 3)
 t = 36
-check(not ToastQueue.hide(q, newer.id, newer.generation), "the newer toast's first hide is stale after a restart")
+check(
+	not ToastQueue.hide(q, newer.id, newer.generation),
+	"the newer toast's first hide is stale after a restart"
+)
 check(texts(q) == "Mesa locked", "so the restarted toast stays")
 t = 38
 check(ToastQueue.hide(q, restarted.id, restarted.generation), "its current hide takes it down")

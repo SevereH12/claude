@@ -25,7 +25,10 @@ local unlocked = { bottleTier = second.requiresBottle, bootTier = 1 }
 -- a locked world and an unlocked world ---------------------------------------------------
 local refusal, to = Portals.teleportRefusal(starter, second.id, first.id, 100, 0)
 check(refusal ~= nil and to == nil, "a world you haven't unlocked refuses")
-check(refusal and string.find(refusal, "Needs", 1, true) ~= nil, `it says what it needs (got {refusal})`)
+check(
+	refusal and string.find(refusal, "Needs", 1, true) ~= nil,
+	`it says what it needs (got {refusal})`
+)
 refusal, to = Portals.teleportRefusal(unlocked, second.id, first.id, 100, 0)
 check(refusal == nil and to ~= nil and to.id == second.id, "an unlocked world takes you there")
 refusal, to = Portals.teleportRefusal(unlocked, first.id, second.id, 100, 0)
@@ -40,9 +43,15 @@ refusal, to = Portals.teleportRefusal(unlocked, first.id, first.id, 100, 0)
 check(refusal ~= nil and to == nil, "the world you're in can't be picked")
 
 -- the cooldown maths --------------------------------------------------------------------------
-check(Config.TELEPORT_COOLDOWN >= 5 and Config.TELEPORT_COOLDOWN <= 15, "the cooldown is about 10 seconds")
+check(
+	Config.TELEPORT_COOLDOWN >= 5 and Config.TELEPORT_COOLDOWN <= 15,
+	"the cooldown is about 10 seconds"
+)
 local readyAt = 100 + Config.TELEPORT_COOLDOWN -- a trip at time 100
-check(Portals.cooldownLeft(100, readyAt) == Config.TELEPORT_COOLDOWN, "right after a trip: the whole cooldown")
+check(
+	Portals.cooldownLeft(100, readyAt) == Config.TELEPORT_COOLDOWN,
+	"right after a trip: the whole cooldown"
+)
 check(Portals.cooldownLeft(100.2, readyAt) == Config.TELEPORT_COOLDOWN, "part seconds round up")
 check(Portals.cooldownLeft(readyAt - 0.5, readyAt) == 1, "half a second left shows 1s")
 check(Portals.cooldownLeft(readyAt, readyAt) == 0, "ready on the dot")
@@ -53,12 +62,18 @@ check(refusal == "Teleport ready in 3s", `cooling down refuses with the wait (go
 refusal = Portals.teleportRefusal(unlocked, second.id, first.id, readyAt, readyAt)
 check(refusal == nil, "after the cooldown it goes")
 refusal = Portals.teleportRefusal(starter, second.id, first.id, readyAt - 3, readyAt)
-check(refusal and string.find(refusal, "Needs", 1, true) ~= nil, "a locked world says what it needs before the wait")
+check(
+	refusal and string.find(refusal, "Needs", 1, true) ~= nil,
+	"a locked world says what it needs before the wait"
+)
 
 -- the AFK Lounge entry ------------------------------------------------------------------
 check(Portals.loungeRefusal(false, 100, 0) == nil, "the AFK Lounge entry goes when off cooldown")
 check(Portals.loungeRefusal(true, 100, 0) ~= nil, "not when you're already in the lounge")
-check(Portals.loungeRefusal(false, readyAt - 3, readyAt) == "Teleport ready in 3s", "it shares the cooldown")
+check(
+	Portals.loungeRefusal(false, readyAt - 3, readyAt) == "Teleport ready in 3s",
+	"it shares the cooldown"
+)
 check(Portals.world(Portals.AFK_LOUNGE) == nil, "the lounge id is not a world id")
 
 if failures > 0 then

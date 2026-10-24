@@ -1,7 +1,9 @@
 --!strict
 -- Tracks the storm phase from the server and sets the mood: during a storm
 -- the sky darkens, clouds roll in and it rains. All of this is local to
--- this player's screen.
+-- this player's screen. The rain follows SETTINGS > Graphics > Rain and
+-- particles, and the colour grade Bloom and colour. Changes take 4 seconds
+-- (slow enough for Reduce flashing).
 
 local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -9,6 +11,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local Net = require(ReplicatedStorage.Shared.Net)
+local SettingsStore = require(script.Parent.Parent.Lib.SettingsStore)
 local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local Types = require(ReplicatedStorage.Shared.Types)
 
@@ -125,13 +128,36 @@ local function tweenIfExists(target: Instance?, goals: { [string]: any })
 	end
 end
 
+-- The colour grade with no effect, for scaling it down.
+local NEUTRAL_GRADE: { [string]: any } =
+	{ Saturation = 0, Contrast = 0, TintColor = Color3.new(1, 1, 1) }
+
+-- The look's colour grade at `amount` of its strength.
+local function scaledGrade(grade: { [string]: any }, amount: number): { [string]: any }
+	local out = {}
+	for key, value in grade do
+		local neutral = NEUTRAL_GRADE[key]
+		if typeof(value) == "number" and typeof(neutral) == "number" then
+			out[key] = neutral + (value - neutral) * amount
+		elseif typeof(value) == "Color3" and typeof(neutral) == "Color3" then
+			out[key] = neutral:Lerp(value, amount)
+		else
+			out[key] = value
+		end
+	end
+	return out
+end
+
 local function applyLook(phase: Types.StormPhase)
 	local look = LOOKS[phase]
 	tweenIfExists(Lighting, look.lighting)
 	tweenIfExists(Lighting:FindFirstChildOfClass("Atmosphere"), look.atmosphere)
 	tweenIfExists(workspace.Terrain:FindFirstChildOfClass("Clouds"), look.clouds)
-	tweenIfExists(Lighting:FindFirstChild("StormGrade"), look.grade)
-	rainEmitter.Rate = look.rainRate
+	tweenIfExists(
+		Lighting:FindFirstChild("StormGrade"),
+		scaledGrade(look.grade, SettingsStore.get("bloomAmount"))
+	)
+	rainEmitter.Rate = look.rainRate * SettingsStore.get("particleAmount")
 end
 
 -- A big invisible slab that follows the camera and rains streaks downward.
@@ -180,6 +206,13 @@ function Storm.init()
 			applyLook(state.phase)
 		end
 		Storm.Changed:Fire(state)
+	end)
+	-- the settings change the current look straight away
+	SettingsStore.Changed:Connect(function(key: string)
+		local state = Storm.current
+		if state and (key == "particleAmount" or key == "bloomAmount") then
+			applyLook(state.phase)
+		end
 	end)
 end
 

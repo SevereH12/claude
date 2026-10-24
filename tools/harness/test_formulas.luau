@@ -99,7 +99,10 @@ local function fullBottle(zone, capacity)
 end
 
 for index, zone in progression do
-	check(zone.chargeSize >= 1 and zone.chargeSize == math.floor(zone.chargeSize), `{zone.id}: chargeSize is a whole number`)
+	check(
+		zone.chargeSize >= 1 and zone.chargeSize == math.floor(zone.chargeSize),
+		`{zone.id}: chargeSize is a whole number`
+	)
 	local capacity = Formulas.capacity(zone.requiresBottle)
 	check(capacity >= 5 * zone.chargeSize, `{zone.id}: its bottle holds at least 5 of its strikes`)
 	local previous = progression[index - 1]
@@ -135,12 +138,18 @@ for _, zone in Config.ZONES do
 			local progress = { bottleTier = tier, bootTier = 1 }
 			local best
 			for _, other in progression do
-				if tier >= other.requiresBottle and (best == nil or other.chargeValue > best.chargeValue) then
+				if
+					tier >= other.requiresBottle
+					and (best == nil or other.chargeValue > best.chargeValue)
+				then
 					best = other
 				end
 			end
 			if best then
-				check(Progression.chargeSize(progress, zone) == best.chargeSize, `tier {tier}: {zone.id} fills like {best.id}`)
+				check(
+					Progression.chargeSize(progress, zone) == best.chargeSize,
+					`tier {tier}: {zone.id} fills like {best.id}`
+				)
 				check(
 					Progression.boltValue(progress, zone) / Progression.chargeSize(progress, zone)
 						> best.chargeValue / best.chargeSize,

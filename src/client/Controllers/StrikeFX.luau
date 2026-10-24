@@ -28,8 +28,10 @@ local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Research = require(ReplicatedStorage.Shared.Util.Research)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Layout = require(script.Parent.Parent.Lib.Layout)
+local SettingsStore = require(script.Parent.Parent.Lib.SettingsStore)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
+local ZoneColours = require(script.Parent.Parent.Lib.ZoneColours)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
 local State = require(script.Parent.State)
 
@@ -110,6 +112,9 @@ local POPUP_WIDTH = 520
 local POPUP_RISE_BY = 64
 
 local function popup(text: string, gold: boolean, y: number, size: number?)
+	if not SettingsStore.get("showPopups") then
+		return -- SETTINGS > Accessibility & HUD
+	end
 	local area = Layout.area
 	local height = (size or 0.08) * 720
 	local slot: Popup = { y = y * area.Y, size = height }
@@ -157,11 +162,18 @@ local function popup(text: string, gold: boolean, y: number, size: number?)
 end
 
 local function screenFlash(amount: number)
+	if SettingsStore.get("reduceFlashing") then
+		return
+	end
 	flashFrame.BackgroundTransparency = 1 - amount
 	TweenService:Create(flashFrame, FADE, { BackgroundTransparency = 1 }):Play()
 end
 
-local function cameraShake(duration: number, intensity: number)
+local function cameraShake(duration: number, baseIntensity: number)
+	local intensity = baseIntensity * SettingsStore.get("cameraShake")
+	if intensity <= 0 then
+		return
+	end
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	if not humanoid then
@@ -238,8 +250,17 @@ local function drawPath(points: { Vector3 }, thickness: number, into: { BasePart
 	end
 end
 
--- Flicker on-off-on like real lightning, then fade out.
+-- Flicker on-off-on like real lightning, then fade out (with Reduce
+-- flashing, just a slower fade).
+local CALM_FADE = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local function flickerAndFade(parts: { BasePart })
+	if SettingsStore.get("reduceFlashing") then
+		for _, part in parts do
+			TweenService:Create(part, CALM_FADE, { Transparency = 1 }):Play()
+			Debris:AddItem(part, CALM_FADE.Time + 0.05)
+		end
+		return
+	end
 	local original: { [BasePart]: number } = {}
 	for _, part in parts do
 		original[part] = part.Transparency
@@ -303,18 +324,25 @@ local function catchSound(): string
 	return `catch_{math.clamp(math.ceil(fill * 5), 1, 5)}`
 end
 
--- Impact: light burst, sparks, shockwave, scorch mark.
-local function impact(position: Vector3)
+-- Impact: light burst, sparks, shockwave, scorch mark. `simple` (someone
+-- else's strike on Simple): just the shockwave. The light follows Lightning
+-- glow, the sparks Rain and particles.
+local function impact(position: Vector3, simple: boolean)
 	local anchor = anchorAt(position + Vector3.new(0, 0.3, 0), 5)
+	local glow = SettingsStore.get("glow")
 
-	local burst = UI.make(Instance.new("PointLight"), {
-		Color = GLOW_COLOR,
-		Brightness = 14,
-		Range = 60,
-		Shadows = true,
-		Parent = anchor,
-	})
-	TweenService:Create(burst, TweenInfo.new(0.6, Enum.EasingStyle.Quad), { Brightness = 0 }):Play()
+	if glow ~= "Off" and not simple then
+		local soft = glow == "Soft"
+		local burst = UI.make(Instance.new("PointLight"), {
+			Color = GLOW_COLOR,
+			Brightness = if soft then 6 else 14,
+			Range = if soft then 40 else 60,
+			Shadows = not soft,
+			Parent = anchor,
+		})
+		TweenService:Create(burst, TweenInfo.new(0.6, Enum.EasingStyle.Quad), { Brightness = 0 })
+			:Play()
+	end
 
 	local sparkOrigin = UI.make(Instance.new("Attachment"), { Parent = anchor })
 	local sparks = UI.make(Instance.new("ParticleEmitter"), {
@@ -333,7 +361,9 @@ local function impact(position: Vector3)
 		Drag = 2,
 		Parent = sparkOrigin,
 	})
-	sparks:Emit(45)
+	if not simple then
+		sparks:Emit(math.round(45 * SettingsStore.get("particleAmount")))
+	end
 
 	local shockwave = groundRing(anchor, {
 		Radius = 1,
@@ -345,6 +375,9 @@ local function impact(position: Vector3)
 	TweenService:Create(shockwave, SHOCKWAVE, { Radius = 16, InnerRadius = 15, Transparency = 1 })
 		:Play()
 
+	if simple then
+		return
+	end
 	local scorch = groundRing(anchor, {
 		Radius = 3.5,
 		InnerRadius = 0,
@@ -358,8 +391,9 @@ local function impact(position: Vector3)
 	-- strikes near you light up the whole screen for a moment
 	local camera = workspace.CurrentCamera
 	local distance = if camera then (camera.CFrame.Position - position).Magnitude else math.huge
-	if distance < FLASH_DISTANCE then
-		local strength = 1 - distance / FLASH_DISTANCE
+	local flashes = glow ~= "Off" and not SettingsStore.get("reduceFlashing")
+	if distance < FLASH_DISTANCE and flashes then
+		local strength = (1 - distance / FLASH_DISTANCE) * (if glow == "Soft" then 0.5 else 1)
 		strikeFlash.Brightness = 0.45 * strength
 		strikeFlash.TintColor = Color3.fromRGB(215, 230, 255)
 		TweenService:Create(strikeFlash, TweenInfo.new(0.35), { Brightness = 0 }):Play()
@@ -461,13 +495,56 @@ local function clearForecast(id: number)
 	end
 end
 
+-- Colourblind rings: a dashed outline outside the ring and a ⚡ in the
+-- middle, so a ring reads by shape as well as colour.
+local CB_DASHES = 12
+local function colourblindMarks(
+	anchor: BasePart,
+	position: Vector3,
+	radius: number,
+	color: Color3,
+	lifetime: number
+)
+	local outer = radius + 1.2
+	for index = 0, CB_DASHES - 1 do
+		local angle = (index / CB_DASHES) * math.pi * 2
+		local offset = Vector3.new(math.cos(angle), 0, math.sin(angle)) * outer
+		local dash = effectPart({
+			Name = "AssistDash",
+			Size = Vector3.new(0.6, 0.25, outer * math.pi / CB_DASHES),
+			CFrame = CFrame.lookAt(
+				position + offset + Vector3.new(0, 0.45, 0),
+				position + Vector3.new(0, 0.45, 0)
+			) * CFrame.Angles(0, math.rad(90), 0),
+			Color = Color3.new(1, 1, 1),
+			Transparency = 0.1,
+			Parent = anchor,
+		})
+		Debris:AddItem(dash, lifetime)
+	end
+	local icon = UI.make(Instance.new("BillboardGui"), {
+		Name = "AssistIcon",
+		Size = UDim2.fromScale(4, 4),
+		StudsOffset = Vector3.new(0, 2.5, 0),
+		AlwaysOnTop = true,
+		Parent = anchor,
+	})
+	UI.label({
+		Title = true,
+		Text = "⚡",
+		TextColor3 = color,
+		Size = UDim2.fromScale(1, 1),
+		Parent = icon,
+	})
+end
+
 local function onWarning(warning: Types.StrikeWarning)
 	local timeLeft = warning.landsAt - workspace:GetServerTimeNow()
 	if timeLeft <= 0 then
 		return
 	end
 	local zone = Config.ZONES[warning.zoneId]
-	local color = if zone then zone.color else UI.COLORS.volt
+	local color = ZoneColours.of(zone, UI.COLORS.volt)
 	if warning.ownerId and warning.ownerId ~= player.UserId then
 		color = BALLOON_MUTED -- someone else's balloon bolt
 	end
@@ -500,12 +577,22 @@ local function onWarning(warning: Types.StrikeWarning)
 	TweenService
 		:Create(fill, TweenInfo.new(timeLeft, Enum.EasingStyle.Linear), { Radius = warning.radius })
 		:Play()
-	-- pulse the ring faster and faster
+	-- pulse the ring (slower and softer with Reduce flashing: it always shows)
+	local calm = SettingsStore.get("reduceFlashing")
 	TweenService:Create(
 		ring,
-		TweenInfo.new(0.25, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-		{ Transparency = 0.5 }
+		TweenInfo.new(
+			if calm then 0.8 else 0.25,
+			Enum.EasingStyle.Sine,
+			Enum.EasingDirection.InOut,
+			-1,
+			true
+		),
+		{ Transparency = if calm then 0.3 else 0.5 }
 	):Play()
+	if ZoneColours.assist() then
+		colourblindMarks(anchor, warning.position, warning.radius, color, lifetime)
+	end
 
 	-- your Rod Tech's reach: a faint outer ring around the warning
 	local rodTech, rodRank = activeLevel("RodTech")
@@ -534,6 +621,24 @@ local function onWarning(warning: Types.StrikeWarning)
 	warnings[warning.id] = { anchor = anchor, pillar = pillar }
 end
 
+-- Does this strike concern you: you caught it (or were full, or it went to
+-- your tank), it's your balloon bolt, or it landed in the zone you're in?
+local function isMine(landed: Types.StrikeLanded): boolean
+	local me = player.UserId
+	if
+		table.find(landed.catchers, me)
+		or table.find(landed.full, me)
+		or table.find(landed.tanked, me)
+		or landed.ownerId == me
+	then
+		return true
+	end
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local zone = if root and root:IsA("BasePart") then Zones.at(root.Position) else nil
+	return zone ~= nil and zone.id == landed.zoneId
+end
+
 local function onLanded(landed: Types.StrikeLanded)
 	local warning = warnings[landed.id]
 	if warning then
@@ -542,19 +647,26 @@ local function onLanded(landed: Types.StrikeLanded)
 		warning.pillar:Destroy()
 	end
 
-	local sky = landed.position
-		+ Vector3.new(random:NextNumber(-15, 15), BOLT_HEIGHT, random:NextNumber(-15, 15))
-	bolt(sky, landed.position, 0.5, 2)
-	impact(landed.position)
-	playThunderAt(landed.position, landed.ownerId == player.UserId)
+	-- someone else's strike (a zone you're not in, nothing to do with you)
+	-- follows Others' lightning: Off, Simple (no branches, sparks or glow)
+	-- or Full
+	local others = if isMine(landed) then "Full" else SettingsStore.get("othersStrikes")
+	if others ~= "Off" then
+		local simple = others == "Simple"
+		local sky = landed.position
+			+ Vector3.new(random:NextNumber(-15, 15), BOLT_HEIGHT, random:NextNumber(-15, 15))
+		bolt(sky, landed.position, 0.5, if simple then 0 else 2)
+		impact(landed.position, simple)
 
-	-- little arcs from the strike into every catcher's bottle
-	for _, userId in landed.catchers do
-		local target = bottlePosition(userId)
-		if target then
-			bolt(landed.position + Vector3.new(0, 1, 0), target, 0.18, 0, arcColour(userId))
+		-- little arcs from the strike into every catcher's bottle
+		for _, userId in landed.catchers do
+			local target = bottlePosition(userId)
+			if target then
+				bolt(landed.position + Vector3.new(0, 1, 0), target, 0.18, 0, arcColour(userId))
+			end
 		end
 	end
+	playThunderAt(landed.position, landed.ownerId == player.UserId)
 
 	local caught = table.find(landed.catchers, player.UserId)
 	if caught then

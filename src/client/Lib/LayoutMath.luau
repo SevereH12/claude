@@ -111,10 +111,31 @@ function LayoutMath.classify(viewport: Vector2, input: Input): DeviceClass
 	return "Desktop"
 end
 
--- The UIScale every ScreenGui gets.
-function LayoutMath.scale(class: DeviceClass, viewport: Vector2): number
+-- SETTINGS > Accessibility & HUD > Text size: 0 Normal, 1 Large, 2 Extra
+-- large. Each step nudges the UI scale up (TEXT_BOOST) and raises the
+-- smallest text (TEXT_MIN_POINTS).
+LayoutMath.TEXT_LEVELS = { Normal = 0, Large = 1, ["Extra large"] = 2 } :: { [string]: number }
+LayoutMath.TEXT_BOOST = { [0] = 1, [1] = 1.1, [2] = 1.2 } :: { [number]: number }
+LayoutMath.TEXT_MIN_POINTS = { [1] = 16, [2] = 18 } :: { [number]: number }
+-- the bigger layout never shrinks the design area below this share of the
+-- device's design size (the HUD is laid out for that). Phones have no room
+-- to spare: there Text size only raises the smallest text.
+LayoutMath.MIN_DESIGN_SHARE = {
+	Phone = 1,
+	Tablet = 0.82,
+	Desktop = 0.82,
+	Console = 0.82,
+} :: { [DeviceClass]: number }
+
+-- The UIScale every ScreenGui gets (`textLevel`: the Text size setting).
+function LayoutMath.scale(class: DeviceClass, viewport: Vector2, textLevel: number?): number
 	local short = math.min(viewport.X, viewport.Y)
-	return math.clamp(short / LayoutMath.DESIGN_SHORT[class], 0.4, 4)
+	local base = short / LayoutMath.DESIGN_SHORT[class]
+	local boosted = math.min(
+		base * (LayoutMath.TEXT_BOOST[textLevel or 0] or 1),
+		short / (LayoutMath.DESIGN_SHORT[class] * LayoutMath.MIN_DESIGN_SHARE[class])
+	)
+	return math.clamp(math.max(base, boosted), 0.4, 4)
 end
 
 function LayoutMath.isTouch(class: DeviceClass): boolean
@@ -122,8 +143,15 @@ function LayoutMath.isTouch(class: DeviceClass): boolean
 end
 
 -- Smallest text size for TextScaled labels, in design pixels, so it's
--- PHONE_MIN_TEXT real points on a phone.
-function LayoutMath.minTextSize(class: DeviceClass, scale: number): number
+-- PHONE_MIN_TEXT real points on a phone, and with a bigger Text size
+-- setting TEXT_MIN_POINTS everywhere.
+function LayoutMath.minTextSize(class: DeviceClass, scale: number, textLevel: number?): number
+	local points = LayoutMath.TEXT_MIN_POINTS[textLevel or 0]
+	if points then
+		return math.ceil(
+			math.max(points, if class == "Phone" then LayoutMath.PHONE_MIN_TEXT else 0) / scale
+		)
+	end
 	return if class == "Phone" then math.ceil(LayoutMath.PHONE_MIN_TEXT / scale) else 1
 end
 

@@ -14,6 +14,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BoostRules = require(ReplicatedStorage.Shared.Util.Boosts)
 local Net = require(ReplicatedStorage.Shared.Net)
+local SettingsStore = require(script.Parent.Parent.Lib.SettingsStore)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
 local ZoneBanner = require(script.Parent.ZoneBanner)
@@ -29,13 +30,21 @@ local function clock(seconds: number): string
 	return string.format("%d:%02d", whole // 60, whole % 60)
 end
 
+-- Gift and Server Storm lines in the chat (unless SETTINGS > Accessibility &
+-- HUD > Chat announcements is off).
+local function chat(text: string)
+	if SettingsStore.get("showAnnouncements") then
+		UI.chatLine(text)
+	end
+end
+
 local function onAnnouncement(kind: unknown, a: unknown, b: unknown, c: unknown)
 	if kind == "storm" and typeof(a) == "string" and typeof(b) == "number" then
 		local started = c == true
 		local left = clock(b)
 		Sfx.play(if started then "server_storm" else "boost_start")
 		local what = if started then "started a" else "added to the"
-		UI.chatLine(`⚡ {a} {what} SERVER STORM! 2x Volts for everyone, {left}`)
+		chat(`⚡ {a} {what} SERVER STORM! 2x Volts for everyone, {left}`)
 		local how = if started then "started it" else "added more"
 		ZoneBanner.show(
 			"⚡ SERVER STORM!",
@@ -49,9 +58,9 @@ local function onAnnouncement(kind: unknown, a: unknown, b: unknown, c: unknown)
 		and typeof(b) == "string"
 		and typeof(c) == "string"
 	then
-		UI.chatLine(`🎁 {a} gifted {b} to {c}`)
+		chat(`🎁 {a} gifted {b} to {c}`)
 	elseif kind == "giftSent" and typeof(a) == "string" then
-		UI.chatLine(`🎁 {a} sent a gift!`)
+		chat(`🎁 {a} sent a gift!`)
 	end
 end
 

@@ -40,7 +40,10 @@ for _, key in { "masterVolume", "musicVolume", "sfxVolume", "ambienceVolume", "u
 end
 check(defaults.muted == false, "not muted by default")
 for _, def in Settings.DEFS do
-	check(table.find(Settings.SECTIONS, def.section) ~= nil, `{def.key} is on a real tab`)
+	check(
+		table.find(Settings.SECTIONS, def.section) ~= nil or def.section == Settings.HIDDEN,
+		`{def.key} is on a real tab`
+	)
 	check(Settings.clean(def, def.default) == def.default, `{def.key}'s default is valid`)
 end
 
@@ -146,6 +149,71 @@ check(
 		and Settings.keyLabel("ButtonL1") == "L1"
 		and Settings.keyLabel("") == "—",
 	"key labels"
+)
+
+-- graphics presets ------------------------------------------------------------------
+local presetTable = {
+	Low = { 0.25, "Off", false, 0, "Near", "Off", "Hidden" },
+	Medium = { 0.6, "Soft", true, 0.5, "Far", "Simple", "My sites" },
+	High = { 1, "Full", true, 1, "All", "Full", "All" },
+}
+for name, row in presetTable do
+	local picked = Settings.change(Settings.defaults(), "graphicsPreset", name)
+	check(picked.graphicsPreset == name, `choosing {name} keeps {name}`)
+	for index, key in Settings.PRESET_KEYS do
+		check(
+			picked[key] == row[index],
+			`{name}: {key} = {tostring(row[index])} (got {tostring(picked[key])})`
+		)
+		check(
+			Settings.clean(Settings.def(key), row[index]) == row[index],
+			`{name}'s {key} is a valid value`
+		)
+	end
+end
+local low = Settings.change(Settings.defaults(), "graphicsPreset", "Low")
+local custom = Settings.change(low, "shadows", true)
+check(
+	custom.graphicsPreset == "Custom" and custom.shadows == true,
+	"changing one graphics setting makes it Custom"
+)
+check(custom.glow == "Off", "and keeps the rest of the preset")
+local fov = Settings.change(low, "fieldOfView", 80)
+check(
+	fov.graphicsPreset == "Low" and fov.fieldOfView == 80,
+	"field of view isn't part of the preset"
+)
+local same = Settings.change(low, "shadows", false)
+check(same.graphicsPreset == "Low", "setting a value it already has doesn't make it Custom")
+check(Settings.sanitize({ fieldOfView = 200 }).fieldOfView == 90, "field of view clamps to 90")
+check(Settings.decorRange("Near") == 250 and Settings.decorRange("Far") == 500, "decoration ranges")
+check(Settings.decorRange("All") == math.huge, "All hides nothing")
+
+-- starting preset by device (and one step lower on a low Roblox graphics level)
+check(Settings.devicePreset("Phone", 0) == "Low", "phone: Low")
+check(Settings.devicePreset("Tablet", 0) == "Medium", "tablet: Medium")
+check(Settings.devicePreset("Desktop", 0) == "High", "PC: High")
+check(Settings.devicePreset("Console", 0) == "High", "console: High")
+check(Settings.devicePreset("Desktop", 3) == "Medium", "PC on Roblox graphics 3: Medium")
+check(Settings.devicePreset("Tablet", 2) == "Low", "tablet on Roblox graphics 2: Low")
+check(Settings.devicePreset("Phone", 1) == "Low", "a phone can't go lower than Low")
+check(Settings.devicePreset("Desktop", 4) == "High", "Roblox graphics 4 or more: no step down")
+check(Settings.devicePreset("Desktop", 10) == "High", "Roblox graphics 10: High")
+
+-- accessibility defaults
+local d = Settings.defaults()
+check(
+	d.reduceFlashing == false and d.cameraShake == 1 and d.colourblind == "Off",
+	"accessibility defaults"
+)
+check(
+	d.textSize == "Normal" and d.showPopups and d.showNameTags and d.showOffers,
+	"HUD shows everything by default"
+)
+check(d.flashAsked == false and d.graphicsSet == false, "nothing asked or set yet")
+check(
+	Settings.sanitize({ colourblind = "Purple" }).colourblind == "Off",
+	"an unknown colourblind mode: Off"
 )
 
 -- the save migration: prompt 11's sound settings carry over -------------------------

@@ -39,6 +39,7 @@ local Types = require(ReplicatedStorage.Shared.Types)
 local Celebrate = require(script.Parent.Parent.Lib.Celebrate)
 local Layout = require(script.Parent.Parent.Lib.Layout)
 local LayoutMath = require(script.Parent.Parent.Lib.LayoutMath)
+local SettingsStore = require(script.Parent.Parent.Lib.SettingsStore)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
 local State = require(script.Parent.State)
@@ -398,7 +399,7 @@ local function nudge(dailyReady: boolean, readyGifts: { number })
 		end
 	end
 	for _, index in readyGifts do
-		if not giftNudged[index] then
+		if not giftNudged[index] and SettingsStore.get("showGiftReminders") then
 			giftNudged[index] = true
 			local minutes = Config.PLAYTIME_GIFTS[index].minutes
 			UI.toast(`🎁 Your {minutes}-minute gift is ready!`, "good", NUDGE_SECONDS, {

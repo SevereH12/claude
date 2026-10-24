@@ -616,7 +616,15 @@ function SettingsUI.init()
 	end)
 	resetAll.Activated:Connect(function()
 		confirmTap(resetAll, "TAP AGAIN: RESET ALL", function()
-			SettingsStore.setAll(Rules.defaults())
+			-- everything back to default, except what's only remembered
+			-- (the device's Quality was set, the flashing question answered)
+			local values = Rules.defaults()
+			for _, def in Rules.DEFS do
+				if def.section == Rules.HIDDEN then
+					values[def.key] = SettingsStore.get(def.key)
+				end
+			end
+			SettingsStore.setAll(values)
 			resetAll.Text = "RESET ALL"
 			UI.toast("Every setting is back to its default", "good")
 		end)

@@ -26,14 +26,23 @@ end
 for _, pass in Config.PASSES do
 	local key = Gifts.productKey(pass.key)
 	check(key == "Gift" .. pass.key, `{pass.key}'s gift product is {key}`)
-	check(Gifts.passFor(key) ~= nil and Gifts.passFor(key).key == pass.key, `{key} gives {pass.key}`)
+	check(
+		Gifts.passFor(key) ~= nil and Gifts.passFor(key).key == pass.key,
+		`{key} gives {pass.key}`
+	)
 	local id = Gifts.productId(key)
 	check(id > 0 and Config.GIFT_PASS_PRODUCTS[pass.key] == id, `{key} has its product id`)
 	check(Gifts.byProductId(id) == key, `product {id} is {key}`)
 	check((Config.GIFT_ICONS[key] or 0) > 0, `{key} has an icon`)
 end
-check(Gifts.passFor("GiftNothing") == nil and Gifts.passFor("VIP") == nil, "only gift products are gifts")
-check(Gifts.byProductId(0) == nil and Gifts.byProductId(123) == nil, "unknown product ids aren't gifts")
+check(
+	Gifts.passFor("GiftNothing") == nil and Gifts.passFor("VIP") == nil,
+	"only gift products are gifts"
+)
+check(
+	Gifts.byProductId(0) == nil and Gifts.byProductId(123) == nil,
+	"unknown product ids aren't gifts"
+)
 
 -- intent matching and expiry ------------------------------------------------------
 local intent = { recipientId = 42, recipientName = "Sam", productKey = "GiftVIP", expires = 1000 }
@@ -44,13 +53,31 @@ check(not Gifts.intentMatches(nil, "GiftVIP", 0), "no intent, no match")
 check(Config.GIFTS.intentSeconds == 300, "an intent lasts 5 minutes")
 
 -- the receipt plan ---------------------------------------------------------------------
-check(Gifts.receiptPlan({ "p1" }, "p1", 42, "GiftVIP") == "AlreadyGranted", "a seen purchase is already granted")
-check(Gifts.receiptPlan(nil, "p1", 42, "GiftVIP") == "NotProcessedYet", "no giver profile: not processed yet")
-check(Gifts.receiptPlan({}, "p1", 42, "GiftVIP") == "Inbox", "with someone to send it to: the inbox")
-check(Gifts.receiptPlan({}, "p1", nil, "GiftVIP") == "Credit", "no intent: a gift credit, nothing is lost")
+check(
+	Gifts.receiptPlan({ "p1" }, "p1", 42, "GiftVIP") == "AlreadyGranted",
+	"a seen purchase is already granted"
+)
+check(
+	Gifts.receiptPlan(nil, "p1", 42, "GiftVIP") == "NotProcessedYet",
+	"no giver profile: not processed yet"
+)
+check(
+	Gifts.receiptPlan({}, "p1", 42, "GiftVIP") == "Inbox",
+	"with someone to send it to: the inbox"
+)
+check(
+	Gifts.receiptPlan({}, "p1", nil, "GiftVIP") == "Credit",
+	"no intent: a gift credit, nothing is lost"
+)
 check(Gifts.receiptPlan({}, "p1", 42, "LuckyBoost") == "Inbox", "a boost for someone: their inbox")
-check(Gifts.receiptPlan({}, "p1", nil, "LuckyBoost") == "ForMe", "a boost for nobody: FOR ME, the buyer's own")
-check(Gifts.receiptPlan({ "p1" }, "p1", nil, "LuckyBoost") == "AlreadyGranted", "a FOR ME boost is granted once")
+check(
+	Gifts.receiptPlan({}, "p1", nil, "LuckyBoost") == "ForMe",
+	"a boost for nobody: FOR ME, the buyer's own"
+)
+check(
+	Gifts.receiptPlan({ "p1" }, "p1", nil, "LuckyBoost") == "AlreadyGranted",
+	"a FOR ME boost is granted once"
+)
 local credits = {}
 Gifts.addCredit(credits, "GiftVIP", "p7")
 Gifts.addCredit(credits, "GiftVIP", "p8")
@@ -60,7 +87,10 @@ check(Gifts.nextCredit(credits, "GiftVIP") == "p7", "the oldest credit goes firs
 Gifts.removeCredit(credits, "GiftVIP", "p7")
 check(Gifts.creditCounts(credits).GiftVIP == 1, "sending one uses one")
 Gifts.removeCredit(credits, "GiftVIP", "p8")
-check(credits.GiftVIP == nil and Gifts.nextCredit(credits, "GiftVIP") == nil, "no credit, no free gift")
+check(
+	credits.GiftVIP == nil and Gifts.nextCredit(credits, "GiftVIP") == nil,
+	"no credit, no free gift"
+)
 
 -- the inbox -------------------------------------------------------------------------------
 local function entry(id, key)
@@ -73,8 +103,14 @@ for i = 2, Config.GIFTS.inboxCap do
 	Gifts.addToInbox(inbox, entry(`id{i}`))
 end
 check(#inbox == Config.GIFTS.inboxCap, "an inbox holds 100")
-check(not Gifts.addToInbox(inbox, entry("one too many")), "a full inbox refuses (the receipt waits)")
-check(#Gifts.removeFromInbox(inbox, { a = true, id2 = true }) == Config.GIFTS.inboxCap - 2, "delivered ids leave")
+check(
+	not Gifts.addToInbox(inbox, entry("one too many")),
+	"a full inbox refuses (the receipt waits)"
+)
+check(
+	#Gifts.removeFromInbox(inbox, { a = true, id2 = true }) == Config.GIFTS.inboxCap - 2,
+	"delivered ids leave"
+)
 
 -- inbox apply with duplicate ids skipped
 local profile = { giftedPasses = {}, receivedGiftIds = {} }
@@ -85,7 +121,10 @@ applied, done = Gifts.apply(profile, { entry("g1", "VIP"), entry("g3", "LabGrant
 check(#applied == 1 and applied[1].id == "g3", "an id applied before is skipped")
 check(done.g1 and done.g3, "and still leaves the inbox")
 check(#profile.receivedGiftIds == 3, "each id is remembered once")
-applied, done = Gifts.apply(profile, { { id = "f1", kind = "future", key = "x", fromId = 1, fromName = "A", time = 0 } })
+applied, done = Gifts.apply(
+	profile,
+	{ { id = "f1", kind = "future", key = "x", fromId = 1, fromName = "A", time = 0 } }
+)
 check(#applied == 0 and not done.f1, "a kind this version doesn't know waits in the inbox")
 for i = 1, Config.GIFTS.receivedCap + 10 do
 	Gifts.apply(profile, { entry(`many{i}`) })
@@ -107,16 +146,28 @@ check(Gifts.basicRefusal(1, "GiftVIP", 2) == nil, "a gift to someone else is fin
 local vip = Gifts.passFor("GiftVIP")
 check(Gifts.recipientRefusal(vip.name, false, false) ~= nil, "refused: no such player")
 check(Gifts.recipientRefusal(vip.name, true, nil) ~= nil, "refused: couldn't check what they own")
-check(Gifts.recipientRefusal(vip.name, true, true) == "They already have VIP", "refused: they already have it")
+check(
+	Gifts.recipientRefusal(vip.name, true, true) == "They already have VIP",
+	"refused: they already have it"
+)
 check(Gifts.recipientRefusal(vip.name, true, false) == nil, "a new pass for them is fine")
 check(Gifts.basicRefusal(1, "LuckyBoost", 2) == nil, "a boost can be gifted")
-check(Gifts.basicRefusal(1, "ServerStorm", 2) ~= nil, "refused: a Server Storm is for the whole server")
-check(Gifts.basicRefusal(1, "LuckyBoost", 1) ~= nil, "refused: no gifting yourself a boost (FOR ME)")
+check(
+	Gifts.basicRefusal(1, "ServerStorm", 2) ~= nil,
+	"refused: a Server Storm is for the whole server"
+)
+check(
+	Gifts.basicRefusal(1, "LuckyBoost", 1) ~= nil,
+	"refused: no gifting yourself a boost (FOR ME)"
+)
 
 -- boosts you can buy and gift ---------------------------------------------------------------
 for _, product in Config.BOOST_PRODUCTS do
 	local byId = Boosts.productById(product.productId)
-	check(product.productId > 0 and byId ~= nil and byId.key == product.key, `{product.key} has its product id`)
+	check(
+		product.productId > 0 and byId ~= nil and byId.key == product.key,
+		`{product.key} has its product id`
+	)
 	check(product.image > 0, `{product.key} has an icon`)
 	if product.serverStorm then
 		check(product.boosts == nil, "a Server Storm gives no personal boost")
@@ -125,11 +176,24 @@ for _, product in Config.BOOST_PRODUCTS do
 	else
 		local gift = Gifts.boostFor(product.key)
 		check(gift ~= nil and gift.key == product.key, `{product.key} can be gifted`)
-		check(Gifts.byProductId(product.productId) == product.key, `{product.key}'s receipt goes to Gifts`)
-		check(Gifts.productId(product.key) == product.productId, `{product.key}'s gift is the product itself`)
-		check(Gifts.itemName(product.key) == product.name and Gifts.price(product.key) == product.price, `{product.key} has a name and price`)
+		check(
+			Gifts.byProductId(product.productId) == product.key,
+			`{product.key}'s receipt goes to Gifts`
+		)
+		check(
+			Gifts.productId(product.key) == product.productId,
+			`{product.key}'s gift is the product itself`
+		)
+		check(
+			Gifts.itemName(product.key) == product.name
+				and Gifts.price(product.key) == product.price,
+			`{product.key} has a name and price`
+		)
 		for _, boost in product.boosts do
-			check(Boosts.def(boost.key) ~= nil and boost.minutes > 0, `{product.key} gives a real boost`)
+			check(
+				Boosts.def(boost.key) ~= nil and boost.minutes > 0,
+				`{product.key} gives a real boost`
+			)
 		end
 	end
 end
@@ -137,8 +201,14 @@ local kind, key = Gifts.entryKind("LuckyBoost")
 check(kind == "boost" and key == "LuckyBoost", "a boost gift's inbox entry is kind boost")
 kind, key = Gifts.entryKind("GiftVIP")
 check(kind == "pass" and key == "VIP", "a pass gift's inbox entry is kind pass")
-check(Gifts.entryProduct({ kind = "pass", key = "VIP" }) == "GiftVIP", "a pass entry came from its gift product")
-check(Gifts.entryProduct({ kind = "boost", key = "LuckyBoost" }) == "LuckyBoost", "a boost entry came from the boost")
+check(
+	Gifts.entryProduct({ kind = "pass", key = "VIP" }) == "GiftVIP",
+	"a pass entry came from its gift product"
+)
+check(
+	Gifts.entryProduct({ kind = "boost", key = "LuckyBoost" }) == "LuckyBoost",
+	"a boost entry came from the boost"
+)
 
 -- boost gifts add time (in full, past the reward cap) ---------------------------------
 local function boostEntry(id, key)
@@ -147,16 +217,32 @@ end
 local receiver = { giftedPasses = {}, receivedGiftIds = {}, boosts = { DoubleVolts = 100 } }
 applied, done = Gifts.apply(receiver, { boostEntry("b1", "DoubleVoltsBoost") })
 check(#applied == 1 and done.b1, "a boost gift applies")
-check(receiver.boosts.DoubleVolts == 100 + 30 * 60, "a 2x Volts Boost gift adds 30 minutes to what's left")
+check(
+	receiver.boosts.DoubleVolts == 100 + 30 * 60,
+	"a 2x Volts Boost gift adds 30 minutes to what's left"
+)
 applied = Gifts.apply(receiver, { boostEntry("b1", "DoubleVoltsBoost") })
-check(#applied == 0 and receiver.boosts.DoubleVolts == 100 + 30 * 60, "the same boost gift never adds twice")
+check(
+	#applied == 0 and receiver.boosts.DoubleVolts == 100 + 30 * 60,
+	"the same boost gift never adds twice"
+)
 Gifts.apply(receiver, { boostEntry("b2", "BoostBundle") })
 check(receiver.boosts.DoubleVolts == 100 + 90 * 60, "the bundle adds an hour of 2x Volts")
-check(receiver.boosts.Lucky == 3600 and receiver.boosts.BigBottles == 3600, "and an hour of Lucky and Big Bottles")
+check(
+	receiver.boosts.Lucky == 3600 and receiver.boosts.BigBottles == 3600,
+	"and an hour of Lucky and Big Bottles"
+)
 Gifts.apply(receiver, { boostEntry("b3", "BoostBundle"), boostEntry("b4", "BoostBundle") })
-check(receiver.boosts.Lucky == 3 * 3600, "bought or gifted time adds in full, past the 2-hour reward cap")
-applied, done = Gifts.apply(receiver, { boostEntry("s1", "ServerStorm"), boostEntry("x1", "NoSuchBoost") })
-check(#applied == 0 and not done.s1 and not done.x1, "a boost this version can't give waits in the inbox")
+check(
+	receiver.boosts.Lucky == 3 * 3600,
+	"bought or gifted time adds in full, past the 2-hour reward cap"
+)
+applied, done =
+	Gifts.apply(receiver, { boostEntry("s1", "ServerStorm"), boostEntry("x1", "NoSuchBoost") })
+check(
+	#applied == 0 and not done.s1 and not done.x1,
+	"a boost this version can't give waits in the inbox"
+)
 check(next(receiver.giftedPasses) == nil, "boost gifts aren't passes")
 -- a boost received while offline is seconds left, so it starts when they next play
 local offline = { giftedPasses = {}, receivedGiftIds = {}, boosts = {} }
@@ -174,29 +260,58 @@ check(rewards.DoubleVolts == Config.BOOST_CAP, "reward time still stops at the c
 
 -- Server Storm stacking and its cap -----------------------------------------------------
 local STORM = Config.SERVER_STORM
-check(STORM.minutes == 15 and STORM.maxMinutes == 60 and STORM.multiplier == 2, "a storm is 15 minutes of 2x, up to 60")
+check(
+	STORM.minutes == 15 and STORM.maxMinutes == 60 and STORM.multiplier == 2,
+	"a storm is 15 minutes of 2x, up to 60"
+)
 check(Boosts.stormAdd(0) == 15 * 60, "a new storm lasts 15 minutes")
 check(Boosts.stormAdd(10 * 60) == 25 * 60, "a second purchase adds 15 minutes")
 check(Boosts.stormAdd(50 * 60) == 60 * 60, "never past 60 minutes")
 check(Boosts.stormAdd(60 * 60) == 60 * 60, "a full storm stays at 60")
 check(Boosts.stormAdd(-30) == 15 * 60, "an ended storm starts fresh")
-check(Boosts.stormHasRoom(45 * 60) and not Boosts.stormHasRoom(45 * 60 + 1), "a purchase fits until 45 minutes are left")
-check(Boosts.stormLeft(nil, 100) == 0 and Boosts.stormLeft(160, 100) == 60 and Boosts.stormLeft(90, 100) == 0, "time left from the attribute")
+check(
+	Boosts.stormHasRoom(45 * 60) and not Boosts.stormHasRoom(45 * 60 + 1),
+	"a purchase fits until 45 minutes are left"
+)
+check(
+	Boosts.stormLeft(nil, 100) == 0
+		and Boosts.stormLeft(160, 100) == 60
+		and Boosts.stormLeft(90, 100) == 0,
+	"time left from the attribute"
+)
 
 -- the sell multiplier: a pass, a boost, the group bonus and a Server Storm --------------
 local GROUP, STORM_KEY = Passes.GROUP, Passes.SERVER_STORM
 check(Passes.sale(100, { [STORM_KEY] = true }) == 200, "a Server Storm doubles a sale")
-check(Passes.sale(100, Passes.withBoosts({ [STORM_KEY] = true }, { DoubleVolts = 60 })) == 400, "with a 2x boost: 4x")
+check(
+	Passes.sale(100, Passes.withBoosts({ [STORM_KEY] = true }, { DoubleVolts = 60 })) == 400,
+	"with a 2x boost: 4x"
+)
 check(Passes.sale(100, { DoubleVolts = true, [STORM_KEY] = true }) == 400, "with the 2x pass: 4x")
-check(Passes.sale(100, Passes.withBoosts({ DoubleVolts = true }, { DoubleVolts = 60 })) == 200, "a 2x boost adds nothing to the 2x pass")
-local everything = Passes.withBoosts({ VIP = true, [GROUP] = true, [STORM_KEY] = true }, { DoubleVolts = 60 })
-check(Passes.sale(100, everything) == 484, "VIP, the group, a 2x boost and a storm: 2 x 1.1 x 1.1 x 2 = 4.84x")
+check(
+	Passes.sale(100, Passes.withBoosts({ DoubleVolts = true }, { DoubleVolts = 60 })) == 200,
+	"a 2x boost adds nothing to the 2x pass"
+)
+local everything = Passes.withBoosts(
+	{ VIP = true, [GROUP] = true, [STORM_KEY] = true },
+	{ DoubleVolts = 60 }
+)
+check(
+	Passes.sale(100, everything) == 484,
+	"VIP, the group, a 2x boost and a storm: 2 x 1.1 x 1.1 x 2 = 4.84x"
+)
 local earned, missed, boostExtra = Passes.saleBreakdown(100, { [STORM_KEY] = true }, {})
-check(earned == 200 and missed == 200 and boostExtra == 0, "in a storm, 2x Volts would add another 200")
+check(
+	earned == 200 and missed == 200 and boostExtra == 0,
+	"in a storm, 2x Volts would add another 200"
+)
 
 -- profiles gain gifts ------------------------------------------------------------------------
 local migrated = PlayerData.migrate({ version = 8, volts = 0, bottleTier = 1 })
-check(next(migrated.giftedPasses) == nil and #migrated.receivedGiftIds == 0, "v8 saves have no gifts")
+check(
+	next(migrated.giftedPasses) == nil and #migrated.receivedGiftIds == 0,
+	"v8 saves have no gifts"
+)
 check(next(migrated.giftCredits) == nil, "and no gift credits")
 
 if failures > 0 then

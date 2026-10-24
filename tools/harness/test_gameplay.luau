@@ -129,7 +129,10 @@ for _, inst in world.workspace:GetDescendants() do
 		local name = inst:GetFullName()
 		local standing = inst.CFrame.Position - Vector3.new(0, inst.Size.Y / 2 - ROOT, 0)
 		local found = Portals.at(standing)
-		check(found ~= nil and found.id == to, "walking into " .. name .. " leads to " .. tostring(to))
+		check(
+			found ~= nil and found.id == to,
+			"walking into " .. name .. " leads to " .. tostring(to)
+		)
 		check(spawnsByWorld[to] ~= nil, name .. " leads to a world with a spawn")
 		check(
 			inst.Transparency >= 1 and not inst.CanCollide and not inst.CanQuery,
@@ -140,18 +143,26 @@ for _, inst in world.workspace:GetDescendants() do
 		-- it stands in the hub of the world before or after the one it leads to
 		local nearest, best = nil, math.huge
 		for _, w in worlds do
-			local d = (Vector3.new(w.offset.X, 0, w.offset.Z) - Vector3.new(inst.CFrame.X, 0, inst.CFrame.Z)).Magnitude
+			local d = (Vector3.new(w.offset.X, 0, w.offset.Z) - Vector3.new(
+				inst.CFrame.X,
+				0,
+				inst.CFrame.Z
+			)).Magnitude
 			if d < best then
 				nearest, best = w, d
 			end
 		end
 		check(
-			nearest ~= nil and math.abs(Formulas.worldIndex(nearest.id) - Formulas.worldIndex(to)) == 1,
+			nearest ~= nil
+				and math.abs(Formulas.worldIndex(nearest.id) - Formulas.worldIndex(to)) == 1,
 			name .. " is in the hub of a neighbouring world"
 		)
 	end
 end
-check(portalCount == 2 * (#worlds - 1), string.format("%d portals for %d worlds", portalCount, #worlds))
+check(
+	portalCount == 2 * (#worlds - 1),
+	string.format("%d portals for %d worlds", portalCount, #worlds)
+)
 
 -- selling -----------------------------------------------------------------
 local stations = {}
@@ -197,7 +208,10 @@ for id in builtZones do
 		)
 		local deck = box.CFrame.Position - Vector3.new(0, box.Size.Y / 2 - 1, 0)
 		local standing = deck + Vector3.new(0, 1 + ROOT, 0)
-		check(ResearchSites.campAt(standing) == id, "standing on " .. id .. "'s camp deck is in its camp")
+		check(
+			ResearchSites.campAt(standing) == id,
+			"standing on " .. id .. "'s camp deck is in its camp"
+		)
 		check(ResearchSites.camp(id) == box, "ResearchSites.camp finds " .. id)
 		check(Zones.at(standing) == nil, id .. " camp is outside every zone")
 		check(not Selling.isAtStation(standing), id .. " camp is not a sell station")
@@ -223,9 +237,13 @@ if map and map:GetAttribute("Style") == "WeatherLab" then
 	check(#offices > 0, "WeatherLab has a ResearchOffice")
 end
 for _, office in offices do
-	local standing = office.CFrame.Position - Vector3.new(0, office.Size.Y / 2 - 1, 0)
+	local standing = office.CFrame.Position
+		- Vector3.new(0, office.Size.Y / 2 - 1, 0)
 		+ Vector3.new(0, 1 + ROOT, 0)
-	check(ResearchSites.inOffice(standing), "standing on " .. office:GetFullName() .. " is in the office")
+	check(
+		ResearchSites.inOffice(standing),
+		"standing on " .. office:GetFullName() .. " is in the office"
+	)
 	check(Zones.at(standing) == nil, office:GetFullName() .. " is outside every zone")
 	check(not Selling.isAtStation(standing), office:GetFullName() .. " is not a sell station")
 	check(
@@ -245,7 +263,10 @@ if map and map:GetAttribute("Style") == "WeatherLab" then
 	check(#lounges > 0, "WeatherLab has an AFK Lounge (AfkZone)")
 end
 for _, box in lounges do
-	check(box.Transparency >= 1 and not box.CanCollide, box:GetFullName() .. " is invisible and non-blocking")
+	check(
+		box.Transparency >= 1 and not box.CanCollide,
+		box:GetFullName() .. " is invisible and non-blocking"
+	)
 	-- the whole box, not just the middle
 	for _, sx in { -1, 0, 1 } do
 		for _, sz in { -1, 0, 1 } do

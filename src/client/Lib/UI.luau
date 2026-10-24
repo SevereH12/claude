@@ -92,8 +92,10 @@ end
 local textLimits: { [UITextSizeConstraint]: boolean } = setmetatable({}, { __mode = "k" }) :: any
 
 local function minText(limit: UITextSizeConstraint)
-	limit.MinTextSize =
-		math.min(LayoutMath.minTextSize(Layout.class, Layout.scale), limit.MaxTextSize)
+	limit.MinTextSize = math.min(
+		LayoutMath.minTextSize(Layout.class, Layout.scale, Layout.textLevel),
+		limit.MaxTextSize
+	)
 end
 
 function UI.maxText(parent: Instance, size: number)

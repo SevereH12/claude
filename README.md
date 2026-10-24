@@ -260,6 +260,18 @@ server only stores what `Settings.sanitize` lets through.
   refused, and taking another action's key swaps them. The key chips on
   buttons show the player's own keys.
 - **Sound**: Master, Music, Effects, Ambience and UI volumes, and Mute all.
+- **Graphics**: a Quality preset (Low, Medium, High; changing any one
+  setting makes it Custom) for rain and particles, lightning glow, shadows,
+  bloom and colour, far decorations, other players' lightning and
+  researchers; plus Field of view. A new player starts on the preset that
+  suits their device (phone Low, tablet Medium, PC and console High; one
+  lower when their Roblox graphics level is 3 or less). A game can't change
+  the player's own Roblox graphics level.
+- **Accessibility & HUD**: Reduce flashing, Camera shake, Colourblind rings
+  (dashed rings with a ⚡ and a high-contrast zone colour set), Text size,
+  and switches for pop-ups, name tags, pass offers, chat announcements and
+  gift reminders. Before their first storm every player is asked once
+  whether to reduce flashing. Warning rings always show.
 - Code reads settings with `Lib/SettingsStore` (`get`, `set`, `watch`,
   `Changed`), so changes apply at once.
 

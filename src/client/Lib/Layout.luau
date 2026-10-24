@@ -32,6 +32,7 @@ local Layout = {}
 Layout.class = "Desktop" :: DeviceClass
 Layout.viewport = Vector2.new(1920, 1080)
 Layout.scale = 1
+Layout.textLevel = 0 -- the Text size setting (Layout.setTextLevel)
 Layout.portrait = false
 Layout.area = Vector2.new(1280, 720)
 Layout.topbar = { left = 0, right = 0, height = 0 } :: LayoutMath.Topbar
@@ -118,13 +119,22 @@ local function refresh()
 	local changed = class ~= Layout.class or viewport ~= Layout.viewport
 	Layout.class = class
 	Layout.viewport = viewport
-	Layout.scale = LayoutMath.scale(class, viewport)
+	Layout.scale = LayoutMath.scale(class, viewport, Layout.textLevel)
 	Layout.portrait = LayoutMath.isPortrait(viewport)
 	for _, screen in screens do
 		applyScreen(screen)
 	end
 	if remeasure() or changed then
 		Layout.Changed:Fire(class)
+	end
+end
+
+-- SETTINGS > Accessibility & HUD > Text size (LayoutMath.TEXT_LEVELS).
+function Layout.setTextLevel(level: number)
+	if level ~= Layout.textLevel then
+		Layout.textLevel = level
+		refresh()
+		Layout.Changed:Fire(Layout.class)
 	end
 end
 
