@@ -2,14 +2,20 @@
 -- Helpers for building UI in code, plus the shared look (colours, fonts,
 -- animation timings) so every screen feels like the same game. Also
 -- UI.toast: the one way to put a warning, hint or notice on screen, and
--- UI.chatLine for a line in the chat window from the game itself.
+-- UI.chatLine for a line in the chat window from the game itself. Buttons,
+-- panels and toasts make their sounds here (Lib/Sfx), so none is missed.
 
 local GuiService = game:GetService("GuiService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TextChatService = game:GetService("TextChatService")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
+local SettingsRules = require(ReplicatedStorage.Shared.Util.Settings)
 local Layout = require(script.Parent.Layout)
 local LayoutMath = require(script.Parent.LayoutMath)
+local SettingsStore = require(script.Parent.SettingsStore)
+local Sfx = require(script.Parent.Sfx)
 local ToastQueue = require(script.Parent.ToastQueue)
 
 local UI = {}
@@ -234,7 +240,23 @@ function UI.button(props: { [string]: any }): TextButton
 	local limit = UI.make(Instance.new("UISizeConstraint"), { Parent = button })
 	tapLimits[limit] = true
 	applyTap(limit)
+	UI.clickSound(button)
 	return button
+end
+
+-- A button's sounds: a click when tapped (a soft bonk when it's disabled,
+-- see UI.setEnabled) and, with a mouse, a very quiet hover. UI.button does
+-- this itself; call it for a plain TextButton (`always`: it's never
+-- disabled, so always a click).
+function UI.clickSound(button: GuiButton, always: boolean?)
+	button.Activated:Connect(function()
+		Sfx.play(if always or button.AutoButtonColor then "click" else "error")
+	end)
+	button.MouseEnter:Connect(function()
+		if UserInputService.MouseEnabled and not UserInputService.TouchEnabled then
+			Sfx.play("hover")
+		end
+	end)
 end
 
 function UI.setEnabled(button: TextButton, enabled: boolean, color: Color3)
@@ -345,7 +367,10 @@ function UI.selectFirst(target: GuiObject)
 	end
 end
 
-local function closePanel(panel: GuiObject)
+local function closePanel(panel: GuiObject, quiet: boolean?)
+	if not quiet then
+		Sfx.play("panel_close")
+	end
 	openPanels[panel] = nil
 	local token = (panelTokens[panel] or 0) + 1
 	panelTokens[panel] = token
@@ -369,8 +394,9 @@ function UI.openPanel(panel: GuiObject)
 		return
 	end
 	for other in table.clone(openPanels) do
-		closePanel(other)
+		closePanel(other, true)
 	end
+	Sfx.play("panel_open")
 	openPanels[panel] = true
 	panelTokens[panel] = (panelTokens[panel] or 0) + 1
 	local scale = panelScale(panel)
@@ -492,11 +518,12 @@ function UI.onLayout(apply: () -> ())
 	end)
 end
 
--- A small chip in a button's corner naming its shortcut: the gamepad
--- button ("Y") for players on a gamepad (Layout class Console), the key
--- ("M") for players on a PC (Desktop); nothing on touch, or where that
--- device has no shortcut (nil).
-function UI.padHint(button: GuiObject, padButton: string?, key: string?)
+-- A small chip in a button's corner naming the shortcut for `action`
+-- (Util/Settings.ACTIONS), as the player has bound it: the controller button
+-- ("Y") on a gamepad (Layout class Console), the key ("M") on a PC
+-- (Desktop); nothing on touch, or when that device has no key for it. It
+-- updates as soon as the player rebinds it.
+function UI.padHint(button: GuiObject, action: string)
 	local hint = UI.label({
 		Name = "PadHint",
 		Text = "",
@@ -509,16 +536,26 @@ function UI.padHint(button: GuiObject, padButton: string?, key: string?)
 		Parent = button,
 	})
 	UI.corner(hint, UDim.new(0.5, 0))
+	local padKey = SettingsRules.bindKey("Controller", action)
+	local keyboardKey = SettingsRules.bindKey("Keyboard", action)
 	local function apply()
-		local text = if Layout.class == "Console"
-			then padButton
-			elseif Layout.class == "Desktop" then key
+		local bound = if Layout.class == "Console"
+			then SettingsStore.get(padKey)
+			elseif Layout.class == "Desktop" then SettingsStore.get(keyboardKey)
+			else ""
+		local text = if typeof(bound) == "string" and bound ~= ""
+			then SettingsRules.keyLabel(bound)
 			else nil
 		hint.Text = text or ""
 		hint.Visible = text ~= nil
 	end
 	apply()
 	Layout.Changed:Connect(apply)
+	SettingsStore.Changed:Connect(function(key: string)
+		if key == padKey or key == keyboardKey then
+			apply()
+		end
+	end)
 end
 
 -- Toasts ---------------------------------------------------------------------------
@@ -644,6 +681,10 @@ end
 -- Shows a message for `seconds` (UI.TOAST_TIME by default), with an
 -- optional action (tap the toast to do it).
 function UI.toast(text: string, kind: ToastKind?, seconds: number?, action: ToastAction?)
+	-- a blip (a bonk for a warning), unless the event already made its sound
+	if not Sfx.recent(0.15) then
+		Sfx.play(if kind == "warn" then "error" else "toast")
+	end
 	local duration = seconds or UI.TOAST_TIME
 	local entry, evicted = ToastQueue.push(toasts, text, kind or "info", duration)
 	for _, old in evicted do

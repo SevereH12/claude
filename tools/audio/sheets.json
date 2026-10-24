@@ -1,0 +1,377 @@
+{
+ "files": {
+  "AmbCalm": {
+   "loop": true,
+   "path": "AmbCalm.ogg",
+   "seconds": 24.0
+  },
+  "AmbRain": {
+   "loop": true,
+   "path": "AmbRain.ogg",
+   "seconds": 16.0
+  },
+  "AmbGust": {
+   "loop": true,
+   "path": "AmbGust.ogg",
+   "seconds": 20.0
+  },
+  "AmbHum": {
+   "loop": true,
+   "path": "AmbHum.ogg",
+   "seconds": 8.0
+  },
+  "SfxUI": {
+   "loop": false,
+   "path": "SfxUI.ogg",
+   "seconds": 9.54
+  },
+  "SfxGameplay": {
+   "loop": false,
+   "path": "SfxGameplay.ogg",
+   "seconds": 31.71
+  },
+  "SfxRewards": {
+   "loop": false,
+   "path": "SfxRewards.ogg",
+   "seconds": 15.9
+  }
+ },
+ "sounds": {
+  "click": {
+   "file": "SfxUI",
+   "start": 0.1,
+   "length": 0.3081,
+   "group": "ui",
+   "loop": false
+  },
+  "hover": {
+   "file": "SfxUI",
+   "start": 0.9081,
+   "length": 0.3069,
+   "group": "ui",
+   "loop": false
+  },
+  "panel_open": {
+   "file": "SfxUI",
+   "start": 1.715,
+   "length": 0.5426,
+   "group": "ui",
+   "loop": false
+  },
+  "panel_close": {
+   "file": "SfxUI",
+   "start": 2.7576,
+   "length": 0.4657,
+   "group": "ui",
+   "loop": false
+  },
+  "tab": {
+   "file": "SfxUI",
+   "start": 3.7233,
+   "length": 0.3519,
+   "group": "ui",
+   "loop": false
+  },
+  "menu_open": {
+   "file": "SfxUI",
+   "start": 4.5752,
+   "length": 0.4761,
+   "group": "ui",
+   "loop": false
+  },
+  "menu_close": {
+   "file": "SfxUI",
+   "start": 5.5512,
+   "length": 0.4415,
+   "group": "ui",
+   "loop": false
+  },
+  "toast": {
+   "file": "SfxUI",
+   "start": 6.4928,
+   "length": 0.3033,
+   "group": "ui",
+   "loop": false
+  },
+  "error": {
+   "file": "SfxUI",
+   "start": 7.2961,
+   "length": 0.3032,
+   "group": "ui",
+   "loop": false
+  },
+  "purchase": {
+   "file": "SfxUI",
+   "start": 8.0993,
+   "length": 0.6265,
+   "group": "ui",
+   "loop": false
+  },
+  "volts_tick": {
+   "file": "SfxUI",
+   "start": 9.2258,
+   "length": 0.3126,
+   "group": "ui",
+   "loop": false
+  },
+  "strike_warning": {
+   "file": "SfxGameplay",
+   "start": 0.1,
+   "length": 1.5,
+   "group": "gameplay",
+   "loop": false
+  },
+  "strike_crack_1": {
+   "file": "SfxGameplay",
+   "start": 2.1,
+   "length": 0.3695,
+   "group": "gameplay",
+   "loop": false
+  },
+  "strike_crack_2": {
+   "file": "SfxGameplay",
+   "start": 2.9695,
+   "length": 0.4091,
+   "group": "gameplay",
+   "loop": false
+  },
+  "strike_crack_3": {
+   "file": "SfxGameplay",
+   "start": 3.8787,
+   "length": 0.3887,
+   "group": "gameplay",
+   "loop": false
+  },
+  "thunder_1": {
+   "file": "SfxGameplay",
+   "start": 4.7674,
+   "length": 2.355,
+   "group": "thunder",
+   "loop": false
+  },
+  "thunder_2": {
+   "file": "SfxGameplay",
+   "start": 7.6223,
+   "length": 2.5308,
+   "group": "thunder",
+   "loop": false
+  },
+  "thunder_3": {
+   "file": "SfxGameplay",
+   "start": 10.6532,
+   "length": 2.3367,
+   "group": "thunder",
+   "loop": false
+  },
+  "catch_1": {
+   "file": "SfxGameplay",
+   "start": 13.4899,
+   "length": 0.4591,
+   "group": "gameplay",
+   "loop": false
+  },
+  "catch_2": {
+   "file": "SfxGameplay",
+   "start": 14.4491,
+   "length": 0.4569,
+   "group": "gameplay",
+   "loop": false
+  },
+  "catch_3": {
+   "file": "SfxGameplay",
+   "start": 15.4059,
+   "length": 0.4428,
+   "group": "gameplay",
+   "loop": false
+  },
+  "catch_4": {
+   "file": "SfxGameplay",
+   "start": 16.3487,
+   "length": 0.5001,
+   "group": "gameplay",
+   "loop": false
+  },
+  "catch_5": {
+   "file": "SfxGameplay",
+   "start": 17.3488,
+   "length": 0.4498,
+   "group": "gameplay",
+   "loop": false
+  },
+  "bottle_full": {
+   "file": "SfxGameplay",
+   "start": 18.2986,
+   "length": 0.6575,
+   "group": "gameplay",
+   "loop": false
+  },
+  "sell_small": {
+   "file": "SfxGameplay",
+   "start": 19.4561,
+   "length": 0.5089,
+   "group": "gameplay",
+   "loop": false
+  },
+  "sell_medium": {
+   "file": "SfxGameplay",
+   "start": 20.4649,
+   "length": 0.6147,
+   "group": "gameplay",
+   "loop": false
+  },
+  "sell_big": {
+   "file": "SfxGameplay",
+   "start": 21.5796,
+   "length": 0.7901,
+   "group": "gameplay",
+   "loop": false
+  },
+  "lucky": {
+   "file": "SfxGameplay",
+   "start": 22.8697,
+   "length": 0.4397,
+   "group": "gameplay",
+   "loop": false
+  },
+  "jackpot": {
+   "file": "SfxGameplay",
+   "start": 23.8094,
+   "length": 0.9062,
+   "group": "gameplay",
+   "loop": false
+  },
+  "tank_glug": {
+   "file": "SfxGameplay",
+   "start": 25.2156,
+   "length": 0.4718,
+   "group": "gameplay",
+   "loop": false
+  },
+  "balloon_bolt": {
+   "file": "SfxGameplay",
+   "start": 26.1874,
+   "length": 0.8375,
+   "group": "gameplay",
+   "loop": false
+  },
+  "forecast": {
+   "file": "SfxGameplay",
+   "start": 27.5249,
+   "length": 0.5347,
+   "group": "gameplay",
+   "loop": false
+  },
+  "gate_bump": {
+   "file": "SfxGameplay",
+   "start": 28.5596,
+   "length": 0.3471,
+   "group": "gameplay",
+   "loop": false
+  },
+  "portal": {
+   "file": "SfxGameplay",
+   "start": 29.4067,
+   "length": 1.1397,
+   "group": "gameplay",
+   "loop": false
+  },
+  "zone_enter": {
+   "file": "SfxGameplay",
+   "start": 31.0464,
+   "length": 0.6681,
+   "group": "gameplay",
+   "loop": false
+  },
+  "unlock": {
+   "file": "SfxRewards",
+   "start": 0.1,
+   "length": 1.8093,
+   "group": "rewards",
+   "loop": false
+  },
+  "level_up": {
+   "file": "SfxRewards",
+   "start": 2.4093,
+   "length": 0.9038,
+   "group": "rewards",
+   "loop": false
+  },
+  "hired": {
+   "file": "SfxRewards",
+   "start": 3.8131,
+   "length": 0.7247,
+   "group": "rewards",
+   "loop": false
+  },
+  "boost_start": {
+   "file": "SfxRewards",
+   "start": 5.0379,
+   "length": 1.0323,
+   "group": "rewards",
+   "loop": false
+  },
+  "boost_end": {
+   "file": "SfxRewards",
+   "start": 6.5701,
+   "length": 0.777,
+   "group": "rewards",
+   "loop": false
+  },
+  "daily": {
+   "file": "SfxRewards",
+   "start": 7.8472,
+   "length": 1.0762,
+   "group": "rewards",
+   "loop": false
+  },
+  "gift_ready": {
+   "file": "SfxRewards",
+   "start": 9.4233,
+   "length": 1.0252,
+   "group": "rewards",
+   "loop": false
+  },
+  "gift_received": {
+   "file": "SfxRewards",
+   "start": 10.9486,
+   "length": 1.5882,
+   "group": "rewards",
+   "loop": false
+  },
+  "server_storm": {
+   "file": "SfxRewards",
+   "start": 13.0367,
+   "length": 2.8669,
+   "group": "rewards",
+   "loop": false
+  },
+  "calm_loop": {
+   "file": "AmbCalm",
+   "start": 0,
+   "length": 24.0,
+   "group": "ambience",
+   "loop": true
+  },
+  "rain_loop": {
+   "file": "AmbRain",
+   "start": 0,
+   "length": 16.0,
+   "group": "ambience",
+   "loop": true
+  },
+  "gust_loop": {
+   "file": "AmbGust",
+   "start": 0,
+   "length": 20.0,
+   "group": "ambience",
+   "loop": true
+  },
+  "hum_loop": {
+   "file": "AmbHum",
+   "start": 0,
+   "length": 8.0,
+   "group": "ambience",
+   "loop": true
+  }
+ }
+}

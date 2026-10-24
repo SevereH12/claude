@@ -14,11 +14,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
+local SettingsRules = require(ReplicatedStorage.Shared.Util.Settings)
 local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local STORE_NAME = "StormBottler_PlayerData"
-local CURRENT_VERSION = 9
+local CURRENT_VERSION = 12
 -- A lock older than this belongs to a server that crashed; it may be taken.
 local LOCK_STALE_SECONDS = Config.AUTOSAVE_INTERVAL * 3
 local LOCKED_RETRIES = 5
@@ -60,6 +62,8 @@ local DEFAULT_PROFILE: Types.Profile = {
 	giftedPasses = {},
 	receivedGiftIds = {},
 	giftCredits = {},
+	glints = {},
+	settings = SettingsRules.defaults(),
 }
 
 -- MIGRATIONS[n] turns a version-n profile into version n+1. When the profile
@@ -111,6 +115,38 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 		data.giftedPasses = {}
 		data.receivedGiftIds = {}
 		data.giftCredits = {}
+		return data
+	end,
+	-- researcher ranks and Glints (prompt 13): each researcher's rank is
+	-- the tier of the zone they're posted to now (0 at the Office), so
+	-- nobody is pushed out of their zone; their data stays, and their
+	-- level is kept or raised to what that data gives at that rank
+	[9] = function(data: any): any
+		data.glints = {}
+		if typeof(data.researchers) == "table" then
+			for _, save in data.researchers do
+				if typeof(save) == "table" then
+					local zone = if typeof(save.post) == "string"
+						then Config.ZONES[save.post]
+						else nil
+					save.rank = if zone then ResearchMath.zoneTier(zone) else 0
+					local fieldData = if typeof(save.data) == "number" then save.data else 0
+					local level = if typeof(save.level) == "number" then save.level else 1
+					save.level = math.max(level, ResearchMath.levelFor(fieldData, save.rank))
+				end
+			end
+		end
+		return data
+	end,
+	-- sound settings (prompt 11)
+	[10] = function(data: any): any
+		data.settings = { musicVolume = 1, sfxVolume = 1, ambienceVolume = 1, muted = false }
+		return data
+	end,
+	-- the full SETTINGS panel (prompt 14): the sound volumes carry over,
+	-- everything else starts at its default
+	[11] = function(data: any): any
+		data.settings = SettingsRules.sanitize(data.settings)
 		return data
 	end,
 }

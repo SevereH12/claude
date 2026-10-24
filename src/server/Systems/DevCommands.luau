@@ -6,7 +6,9 @@
 -- minutes of play, no boosts and no Server Storm), "group" pretends to be a
 -- group member, "testGift" puts a gift of a pass you don't have (or, with
 -- true, a 2x Volts Boost) in your own inbox, and "serverStorm" starts a
--- Server Storm as if you bought one. The repo and client code are public, so this
+-- Server Storm as if you bought one, "researchData" gives every
+-- researcher 500 field data and "glints" 100 Glints of the tier of the zone
+-- you're in (or your best zone). The repo and client code are public, so this
 -- is the lock: it only obeys in Studio play tests or, in a live server, the
 -- user who owns the place; everything but "volts" is Studio only. To remove it:
 -- delete this file and Controllers/DevCommands.luau, and take "DevCommand"
@@ -18,11 +20,14 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 local Net = require(ReplicatedStorage.Shared.Net)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
+local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
+local Zones = require(ReplicatedStorage.Shared.Util.Zones)
 local Boosts = require(script.Parent.Boosts)
 local Gifts = require(script.Parent.Gifts)
 local Group = require(script.Parent.Group)
 local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
+local Research = require(script.Parent.Research)
 local Rewards = require(script.Parent.Rewards)
 local Sync = require(script.Parent.Sync)
 local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
@@ -109,6 +114,18 @@ local function onCommand(player: Player, name: unknown, value: unknown, extra: u
 		print(`[DevCommands] {player.Name}: a test gift is on its way`)
 	elseif name == "serverStorm" then
 		Boosts.startStorm(player)
+	elseif name == "researchData" then
+		Research.addData(player, 500)
+		print(`[DevCommands] {player.Name}: +500 data to every researcher`)
+	elseif name == "glints" then
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		local profile = PlayerData.get(player)
+		local zone = if root and root:IsA("BasePart") then Zones.at(root.Position) else nil
+		zone = zone or (if profile then Progression.bestZone(profile) else nil)
+		local tier = if zone then ResearchMath.zoneTier(zone) else 0
+		Research.addGlints(player, tier, 100)
+		print(`[DevCommands] {player.Name}: +100 tier {tier} Glints`)
 	elseif name == "group" and typeof(value) == "boolean" then
 		Group.setPretend(player, value)
 		print(`[DevCommands] {player.Name} Pretend group member {if value then "on" else "off"}`)

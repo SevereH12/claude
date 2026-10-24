@@ -17,6 +17,7 @@ local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
 local Layout = require(script.Parent.Parent.Lib.Layout)
+local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
 local State = require(script.Parent.State)
 
@@ -114,6 +115,7 @@ local function nearLockedGate(position: Vector3)
 			local distance = (barrier.Position - position).Magnitude
 			if reason and distance < GATE_NEAR and not explained[zone.id] then
 				explained[zone.id] = true
+				Sfx.play("gate_bump")
 				UI.toast(`🔒 {zone.displayName}: {reason}`, "warn")
 			elseif distance > GATE_FAR then
 				explained[zone.id] = nil
@@ -134,6 +136,7 @@ function ZoneBanner.start()
 			if zone ~= current then
 				local now = os.clock()
 				if zone then
+					Sfx.play("zone_enter")
 					if now - (lastCard[zone.id] or -math.huge) >= REPEAT_TIME then
 						lastCard[zone.id] = now
 						local snapshot = State.current

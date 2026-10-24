@@ -39,6 +39,7 @@ local Types = require(ReplicatedStorage.Shared.Types)
 local Celebrate = require(script.Parent.Parent.Lib.Celebrate)
 local Layout = require(script.Parent.Parent.Lib.Layout)
 local LayoutMath = require(script.Parent.Parent.Lib.LayoutMath)
+local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
 local State = require(script.Parent.State)
 
@@ -464,6 +465,7 @@ local function onRewarded(rewarded: Types.Rewarded)
 			table.insert(parts, `{def.name} for {boost.minutes} min`)
 		end
 	end
+	Sfx.play("daily")
 	Celebrate.sparks()
 	UI.toast(`🎁 You got {table.concat(parts, " and ")}!`, "good", 5)
 	if #rewarded.swapped > 0 then
@@ -572,6 +574,7 @@ function RewardsUI.init()
 		renderGroup()
 		local percent = math.round(Config.GROUP_BONUS * 100)
 		if joinTapped and player:GetAttribute(PassRules.GROUP) == true then
+			Sfx.play("purchase")
 			Celebrate.sparks()
 			UI.toast(`Group bonus active: +{percent}% Volts!`, "good", 5)
 		end
@@ -592,6 +595,9 @@ function RewardsUI.start()
 		end
 		if nowReady ~= ready then
 			ready = nowReady
+			if ready then
+				Sfx.play("gift_ready")
+			end
 			RewardsUI.ReadyChanged:Fire(ready)
 		end
 		task.wait(1)

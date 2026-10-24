@@ -166,6 +166,103 @@ passes and Pretend Premium (the rate changes within 15 seconds) and
 **🎁 REWARDS → 💤 Simulate idle 17 min** (teleports don't work in Studio,
 so the backup only logs its attempt in the Output).
 
+## Researcher ranks
+
+Researchers have a **rank** (0 to 6) and can only work in zones of their
+rank's tier or lower (tier = which bottle opens the zone: Shoreline 0,
+Mesa 1, ... Ember Mesa 6). At level 5 you can promote one at the Research
+Office: it costs **Glints** (one for every bolt you catch, of that zone's
+tier; promotion to rank r takes Glints of tier r or higher), and sends the
+researcher back to level 1 a rank higher, with a 10% stronger perk.
+In the Research panel the Glints line sits at the top, each card shows the
+rank as gold stars (the name tags above the models too), and a level-5
+researcher's Hire button becomes **PROMOTE** (tap twice to confirm). Zones
+above a researcher's rank show 🔒 in the post picker.
+
+The numbers (`Config.RESEARCH_PRESTIGE`) come from
+`python3 tools/balance/prestige.py`, which works out how much data and how
+many Glints make the whole team ready about halfway through each new zone,
+and checks Config is within 10%. Run it again whenever zones, bottles or
+strike settings change. Studio TEST tools: **+500 research data** and
+**+100 Glints (this tier)** under 🎁 REWARDS.
+
+## Sound effects
+
+Every effect and ambience loop is original, made in code by
+`tools/audio/sfx.py` from one palette (`tools/audio/palette.py`: C major
+pentatonic, a glassy shimmer, an electric crackle, one small room, a
+loudness target per group). To change a sound, edit its function in
+`sfx.py`, then run:
+
+```
+python3 tools/audio/sfx.py      # WAVs in tools/audio/out/ (listen to them there)
+python3 tools/audio/review.py   # review.png + review.md; fails on a bad peak, level, loop seam or note
+python3 tools/audio/pack.py     # 3 effect sheets + 4 loops as .ogg, layout in sheets.json
+python3 tools/audio/upload.py   # uploads changed files to the group, writes sound_ids.json and SoundBank.luau
+```
+
+Uploads cost one of the 10 a month an unverified account gets, so only
+changed files are sent. Running `upload.py` again also re-checks moderation.
+
+In the game, `src/client/Lib/Sfx.luau` is the only code that plays sounds
+(`Sfx.play(name)` for 2D, `Sfx.playAt(name, position)` for 3D). Buttons,
+panels and toasts get their sounds in `Lib/UI`; everything else plays its
+sound where it happens. Every sound goes through a SoundGroup (Music,
+Ambience, SFX, UI): `Config.SOUND_MIX` sets their volumes, and the Sound tab
+of the players' ⚙️ SETTINGS panel scales them.
+In Studio, TEST > 🎁 REWARDS > **🔊 Sound board** plays every sound in turn
+with its name.
+
+### Music and ambience
+
+- **Music** (`Controllers/Music`) plays the world you're in, calm or storm:
+  `Config.MUSIC[<world id>].Calm / .Storm`, shuffled, crossfading over
+  `Config.MUSIC_FADE` seconds when the weather or world changes, and dipping
+  for big moments (`MUSIC_DUCK`). The tracks are Roblox's licensed partner
+  music (APMOfficial, DistrokidOfficial only). `python3
+  tools/audio/music_search.py` searches the Creator Store for each slot and
+  writes `docs/audio/music-shortlist.md`; TEST > 🎁 REWARDS > **🎵 Music
+  audition** (Studio) plays every candidate for 20 s so you can pick.
+- **Ambience** (`Controllers/Ambience`): wind and waves when calm; rain,
+  gusts and distant rumbles in a storm; a hum at every sell station.
+  Volumes in `Config.AMBIENCE`.
+
+**Where each volume lives**
+
+| What | Where |
+| --- | --- |
+| A group's overall level (Music, Ambience, SFX, UI) | `Config.SOUND_MIX` |
+| A player's own sliders and mute | ⚙️ SETTINGS on the menu (saved in their profile) |
+| One sound's level | `VOLUME` / `VOLUME_OVERRIDE` in `tools/audio/bank.py` (then run it) |
+| The loudness every effect is made at | `GROUPS` in `tools/audio/palette.py` |
+| Calm and storm ambience, gusts, the hum's reach | `Config.AMBIENCE` |
+| The music's tracks, crossfade and ducking | `Config.MUSIC`, `MUSIC_FADE`, `MUSIC_DUCK` |
+
+The mix, worked out: gameplay effects land at about -21 dBFS, thunder -15,
+rewards -19, UI -33 (the quietest), music about -24 (licensed tracks are
+mastered near -14, times 0.32), rain about -31 and calm waves -36, so the
+music sits under the effects and the ambience under the music, and a storm's
+thunder is the loudest thing in the game.
+
+## Settings
+
+The ⚙️ SETTINGS tile on the menu (or Comma) opens a panel with four tabs:
+Controls, Sound, Graphics and Accessibility & HUD. Every setting is
+described once, in `src/shared/Util/Settings.luau` (its kind, default,
+limits and tab), and the panel builds its rows from that list. Settings
+save to the player's profile, so they follow them to every device; the
+server only stores what `Settings.sanitize` lets through.
+
+- **Controls**: every shortcut (Menu, Shop, Research, Teleport, Boosts,
+  Rewards, Remote Sell, Settings) can be rebound, for keyboard and
+  controller. Keys Roblox or moving needs (W A S D, arrows, Space, Shift,
+  `/`, Enter, Tab, Esc, F9 to F12; A, B, Start, Select and the sticks) are
+  refused, and taking another action's key swaps them. The key chips on
+  buttons show the player's own keys.
+- **Sound**: Master, Music, Effects, Ambience and UI volumes, and Mute all.
+- Code reads settings with `Lib/SettingsStore` (`get`, `set`, `watch`,
+  `Changed`), so changes apply at once.
+
 ## Code layout
 
 - `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas, zone geometry

@@ -15,6 +15,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Types = require(ReplicatedStorage.Shared.Types)
 local State = require(script.Parent.State)
+local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
 
 local FADE = TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
@@ -95,6 +96,7 @@ local function update(snapshot: Types.Snapshot)
 			if open and before == false then
 				-- unlocked while playing
 				dissolve(model, barrier)
+				Sfx.play("unlock")
 				UI.toast(`{zone.displayName} unlocked!`, "good", 4)
 			elseif open and before == nil then
 				fadeOut(model, 0) -- already open when you joined

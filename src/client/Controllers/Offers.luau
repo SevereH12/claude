@@ -35,6 +35,7 @@ local Store = require(ReplicatedStorage.Shared.Util.Store)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Celebrate = require(script.Parent.Parent.Lib.Celebrate)
 local Layout = require(script.Parent.Parent.Lib.Layout)
+local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
 local BoostsUI = require(script.Parent.BoostsUI)
 local HUD = require(script.Parent.HUD)
@@ -304,6 +305,7 @@ local function onPurchased(userId: number, key: string, volts: number)
 	if userId ~= player.UserId then
 		return
 	end
+	Sfx.play("purchase")
 	Celebrate.sparks()
 	if pass then
 		UI.toast(`Thank you! {pass.name} is yours`, "good", 5)

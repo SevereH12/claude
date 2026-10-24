@@ -50,6 +50,7 @@ type Rig = {
 	own: boolean,
 	site: string,
 	level: number,
+	rank: number,
 	model: Model,
 	pivot: CFrame,
 	pos: Vector3,
@@ -81,7 +82,7 @@ type Rig = {
 	peg: Vector3,
 }
 
-type Entry = { post: string, level: number }
+type Entry = { post: string, level: number, rank: number }
 
 local Researchers = {}
 
@@ -102,11 +103,12 @@ local function parseAttribute(value: unknown): Entry?
 	if typeof(value) ~= "string" then
 		return nil
 	end
-	local post, level = string.match(value, "^(.+):(%d+)$")
+	-- "<post>:<level>:<rank>" (older servers: "<post>:<level>")
+	local post, level, rank = string.match(value, "^([^:]+):(%d+):?(%d*)$")
 	if not post or not level then
 		return nil
 	end
-	return { post = post, level = tonumber(level) or 1 }
+	return { post = post, level = tonumber(level) or 1, rank = tonumber(rank) or 0 }
 end
 
 local function readPlayer(player: Player)
@@ -155,9 +157,11 @@ local function spotsFor(site: string): ({ CFrame }?, CFrame?)
 	return frames, floor * CFrame.new(0, 5, -6)
 end
 
-local function tagText(roleId: string, level: number): string
+-- "Dr. Isobar · Forecaster Lv3 ★★": a gold star per rank.
+local function tagText(roleId: string, level: number, rank: number): string
 	local def = ResearchMath.def(roleId)
-	return if def then `{def.name} · {def.role} Lv{level}` else roleId
+	local stars = if rank > 0 then ` <font color="#FFD23C">{string.rep("★", rank)}</font>` else ""
+	return if def then `{def.name} · {def.role} Lv{level}{stars}` else roleId
 end
 
 local function makeTag(model: Model, text: string): TextLabel
@@ -178,6 +182,7 @@ local function makeTag(model: Model, text: string): TextLabel
 	label.TextColor3 = Color3.fromRGB(240, 240, 232)
 	label.Font = Enum.Font.GothamBold
 	label.TextSize = 15
+	label.RichText = true
 	label.Text = text
 	label.Parent = gui
 	local corner = Instance.new("UICorner")
@@ -191,7 +196,13 @@ local function part(model: Model, name: string): BasePart?
 	return if found and found:IsA("BasePart") then found else nil
 end
 
-local function makeRig(userId: number, own: boolean, roleId: string, level: number): Rig
+local function makeRig(
+	userId: number,
+	own: boolean,
+	roleId: string,
+	level: number,
+	rank: number
+): Rig
 	local model = ResearcherModels.build(roleId)
 	model.Name = `{userId}_{roleId}`
 	local arm = part(model, "Arm") :: BasePart
@@ -219,6 +230,7 @@ local function makeRig(userId: number, own: boolean, roleId: string, level: numb
 		own = own,
 		site = "",
 		level = level,
+		rank = rank,
 		model = model,
 		pivot = CFrame.identity,
 		pos = Vector3.zero,
@@ -229,7 +241,7 @@ local function makeRig(userId: number, own: boolean, roleId: string, level: numb
 		tapeUntil = 0,
 		jerkUntil = 0,
 		fill = 0,
-		tag = if own then makeTag(model, tagText(roleId, level)) else nil,
+		tag = if own then makeTag(model, tagText(roleId, level, rank)) else nil,
 		arm = arm,
 		shoulder = arm.CFrame * CFrame.new(0, 0.65 * S, 0),
 		hood = hood,
@@ -305,7 +317,7 @@ local function setBoard(site: string, anchor: CFrame?, extra: number)
 	board.part.Parent = folder
 end
 
-type Row = { userId: number, own: boolean, roleId: string, level: number, site: string }
+type Row = { userId: number, own: boolean, roleId: string, level: number, rank: number, site: string }
 
 -- Decide who stands where. Cheap (a handful of researchers), and only runs
 -- when something changed.
@@ -331,6 +343,7 @@ local function layout()
 				own = player == localPlayer,
 				roleId = roleId,
 				level = entry.level,
+				rank = entry.rank,
 				site = site,
 			})
 		end
@@ -358,16 +371,17 @@ local function layout()
 			if frames and index <= slots then
 				wanted[key] = true
 				if not rig then
-					rig = makeRig(row.userId, row.own, row.roleId, row.level)
+					rig = makeRig(row.userId, row.own, row.roleId, row.level, row.rank)
 				end
 				local frame = frames[index]
 				rig.site = site
 				rig.level = row.level
+				rig.rank = row.rank
 				rig.pivot = frame
 				rig.pos = frame.Position
 				rig.model:PivotTo(frame)
 				if rig.tag then
-					rig.tag.Text = tagText(rig.roleId, rig.level)
+					rig.tag.Text = tagText(rig.roleId, rig.level, rig.rank)
 				end
 			end
 		end
@@ -501,7 +515,7 @@ local function update(dt: number)
 	local chemist = if snapshot then snapshot.researchers.Chemist else nil
 	if snapshot and chemist then
 		tankFraction = math.clamp(
-			snapshot.tankCount / math.max(ResearchMath.tankCapacity(chemist.level), 1),
+			snapshot.tankCount / math.max(ResearchMath.tankCapacity(chemist.level, chemist.rank), 1),
 			0,
 			1
 		)
@@ -565,6 +579,30 @@ local function onLanded(landed: Types.StrikeLanded)
 			rig.tapeUntil = os.clock() + TAPE_SECONDS
 		end
 	end
+end
+
+-- A promotion: your researcher (at their camp or the office) does a little
+-- jump.
+function Researchers.celebrate(roleId: string)
+	local rig = rigs[`{localPlayer.UserId}:{roleId}`]
+	if not rig then
+		return
+	end
+	task.spawn(function()
+		local base = rig.pivot
+		local start = os.clock()
+		for _ = 1, 2 do
+			repeat
+				local t = (os.clock() - start) / 0.45
+				rig.pivot = base * CFrame.new(0, math.sin(math.min(t, 1) * math.pi) * 2.4, 0)
+				rig.model:PivotTo(rig.pivot)
+				RunService.Heartbeat:Wait()
+			until t >= 1
+			start = os.clock()
+		end
+		rig.pivot = base
+		rig.model:PivotTo(base)
+	end)
 end
 
 function Researchers.init()

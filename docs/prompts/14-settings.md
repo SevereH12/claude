@@ -5,7 +5,7 @@ Follow the rules in `docs/prompts/README.md`.
 **Run it twice.** Each run does the first part below that isn't ticked,
 then ticks it:
 
-- [ ] Part A: the settings system, the SETTINGS menu tile, Controls
+- [x] Part A: the settings system, the SETTINGS menu tile, Controls
   (rebinding) and Sound
 - [ ] Part B: Graphics (presets set by device), Accessibility & HUD, and
   the one-time flashing question

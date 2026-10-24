@@ -8,6 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Portals = require(ReplicatedStorage.Shared.Util.Portals)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
+local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
 local State = require(script.Parent.State)
 
@@ -21,6 +22,7 @@ function Travel.start()
 		local world = Portals.worldOf(player)
 		if world.id ~= shown then
 			shown = world.id
+			Sfx.play("portal")
 			UI.toast(`Welcome to {world.displayName}!`, "good", 4)
 		end
 	end)
@@ -36,6 +38,7 @@ function Travel.start()
 			local reason = if world then Progression.worldLockReason(snapshot, world) else nil
 			if world and reason and explained ~= world.id then
 				explained = world.id
+				Sfx.play("gate_bump")
 				UI.toast(`🔒 {world.displayName}: {reason}`, "warn")
 			elseif not reason then
 				explained = nil

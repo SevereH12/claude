@@ -1,9 +1,13 @@
 --!strict
--- Researchers: hiring, posting, set-up timers, field data and levels.
--- A researcher only exists as saved data here; perks (later parts) ask
--- Research.active() whether one is working for a player right now.
--- HireResearcher / PostResearcher are client requests: rate limit, type
--- checks, then every rule re-checked on the server.
+-- Researchers: hiring, posting, set-up timers, field data, levels, ranks
+-- and Glints. A researcher only exists as saved data here; perks ask
+-- Research.active() whether one is working for a player right now (and at
+-- what level and rank). HireResearcher / PostResearcher / PromoteResearcher
+-- are client requests: rate limit, type checks, then every rule re-checked
+-- on the server. A researcher can only be posted to zones of their rank's
+-- tier or lower; each bolt the player catches gives a Glint of that zone's
+-- tier; promotion (at the Research Office, Util/Research.canPromote) spends
+-- Glints and resets them to level 1 a rank higher.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -40,7 +44,8 @@ local function liveRoot(player: Player): BasePart?
 	return if root and root:IsA("BasePart") then root else nil
 end
 
--- Every client reads these to know who has which researcher where.
+-- Every client reads these to know who has which researcher where:
+-- Research_<RoleId> = "<post>:<level>:<rank>".
 local function refreshAttributes(player: Player)
 	local profile = PlayerData.get(player)
 	if not profile then
@@ -48,7 +53,10 @@ local function refreshAttributes(player: Player)
 	end
 	for _, def in Config.RESEARCHERS do
 		local save = profile.researchers[def.id]
-		player:SetAttribute(`Research_{def.id}`, if save then `{save.post}:{save.level}` else nil)
+		player:SetAttribute(
+			`Research_{def.id}`,
+			if save then `{save.post}:{save.level}:{save.rank}` else nil
+		)
 	end
 end
 
@@ -101,7 +109,7 @@ local function onHire(player: Player, roleId: unknown)
 		return
 	end
 	profile.volts -= def.price
-	profile.researchers[roleId] = { level = 1, data = 0, post = "Office" }
+	profile.researchers[roleId] = { level = 1, data = 0, post = "Office", rank = 0 }
 	changed(player)
 	Analytics.hired(player, def)
 end
@@ -121,13 +129,73 @@ local function onPost(player: Player, roleId: unknown, post: unknown)
 	if not profile or not save or save.post == post then
 		return
 	end
-	-- researchers can only be posted to zones the player has unlocked
+	-- researchers can only be posted to zones the player has unlocked, and
+	-- of their rank's tier or lower ("Needs rank 3": the client shows it)
 	local zone = Config.ZONES[post]
 	if zone and not Progression.canEnter(profile, zone, Progression.playerIsPremium(player)) then
 		return
 	end
+	if zone and not ResearchMath.canPost(save.rank, zone) then
+		return
+	end
 	save.post = post
 	startSetup(player, roleId, post)
+	changed(player)
+end
+
+-- Promotes a level-5 researcher at the Research Office: spends the Glints,
+-- then level 1, no data, one rank higher.
+local function onPromote(player: Player, roleId: unknown)
+	if not RateLimit.allow(player, "PromoteResearcher", 1, 3) then
+		return
+	end
+	if typeof(roleId) ~= "string" then
+		return
+	end
+	local profile = PlayerData.get(player)
+	local save = if profile then profile.researchers[roleId] else nil
+	local root = liveRoot(player)
+	if not profile or not save or not root or not ResearchSites.inOffice(root.Position) then
+		return
+	end
+	if not ResearchMath.canPromote(save, profile.glints) then
+		return
+	end
+	local spent = ResearchMath.spendGlints(profile.glints, save.rank + 1)
+	if not spent then
+		return
+	end
+	profile.glints = spent
+	save.rank += 1
+	save.level = 1
+	save.data = 0
+	print(`[Research] {player.Name} promoted {roleId} to rank {save.rank}`)
+	changed(player)
+end
+
+-- Adds Glints of a zone's tier (Studio TEST and the catch hook).
+function Research.addGlints(player: Player, tier: number, count: number)
+	local profile = PlayerData.get(player)
+	if not profile then
+		return
+	end
+	for t = 0, math.max(tier, ResearchMath.maxRank()) do
+		profile.glints[t + 1] = profile.glints[t + 1] or 0 -- saved as a list: no holes
+	end
+	profile.glints[tier + 1] += count
+	Sync.markDirty(player)
+end
+
+-- Studio TEST: field data for every researcher (levels follow).
+function Research.addData(player: Player, amount: number)
+	local profile = PlayerData.get(player)
+	if not profile then
+		return
+	end
+	for _, save in profile.researchers do
+		save.data += amount
+		save.level = math.max(save.level, ResearchMath.levelFor(save.data, save.rank))
+	end
 	changed(player)
 end
 
@@ -137,6 +205,7 @@ local function onLoaded(player: Player, profile: Types.Profile)
 		if not ResearchMath.isValidPost(save.post) then
 			save.post = "Office"
 		end
+		save.rank = save.rank or 0
 		startSetup(player, roleId, save.post)
 	end
 	changed(player)
@@ -150,37 +219,42 @@ local function onLoaded(player: Player, profile: Types.Profile)
 	end)
 end
 
--- The researcher's level if they are posted to the zone the player is
--- standing in and have finished setting up, otherwise nil.
-function Research.active(player: Player, roleId: string): number?
+-- The researcher's level and rank if they are posted to the zone the player
+-- is standing in and have finished setting up, otherwise nil.
+function Research.active(player: Player, roleId: string): (number?, number)
 	local profile = PlayerData.get(player)
 	local save = if profile then profile.researchers[roleId] else nil
 	if not save or save.post == "Office" then
-		return nil
+		return nil, 0
 	end
 	local timers = Sync.setupUntil[player]
 	local readyAt = if timers then timers[roleId] else nil
 	if readyAt and workspace:GetServerTimeNow() < readyAt then
-		return nil
+		return nil, 0
 	end
 	local root = liveRoot(player)
 	local zone = if root then Zones.at(root.Position) else nil
 	if not zone or zone.id ~= save.post then
-		return nil
+		return nil, 0
 	end
-	return save.level
+	return save.level, save.rank
 end
 
 -- Called once per landed strike. Every researcher posted to that zone watches
 -- it for their owner: +1 data, or +3 if the owner caught it (double with
--- the Lab Grant pass).
+-- the Lab Grant pass). Everyone who caught it (bottle or tank, a balloon
+-- bolt too) gets a Glint of the zone's tier.
 function Research.onStrikeLanded(zoneId: string, catchers: { number })
 	local caughtBy: { [number]: boolean } = {}
 	for _, userId in catchers do
 		caughtBy[userId] = true
 	end
+	local zone = Config.ZONES[zoneId]
 	for _, player in Players:GetPlayers() do
 		local profile = PlayerData.get(player)
+		if profile and zone and caughtBy[player.UserId] then
+			Research.addGlints(player, ResearchMath.zoneTier(zone), 1)
+		end
 		if profile then
 			local gained = false
 			local owned = Passes.owned(player)
@@ -192,7 +266,7 @@ function Research.onStrikeLanded(zoneId: string, catchers: { number })
 							else Config.RESEARCH_DATA_WATCH,
 						owned
 					)
-					save.level = math.max(save.level, ResearchMath.levelFor(save.data))
+					save.level = math.max(save.level, ResearchMath.levelFor(save.data, save.rank))
 					gained = true
 				end
 			end
@@ -238,14 +312,14 @@ end
 
 -- Storm Chaser: while active during a storm, a balloon bolt every N seconds.
 local function balloonTick(player: Player, now: number)
-	local level = Research.active(player, "StormChaser")
+	local level, rank = Research.active(player, "StormChaser")
 	if not level or not StormCycle.isStorming() then
 		balloonAt[player] = nil
 		return
 	end
 	local dueAt = balloonAt[player]
 	if not dueAt then
-		balloonAt[player] = now + ResearchMath.balloonInterval(level)
+		balloonAt[player] = now + ResearchMath.balloonInterval(level, rank)
 		return
 	end
 	if now < dueAt then
@@ -254,7 +328,7 @@ local function balloonTick(player: Player, now: number)
 	-- required here: Strikes requires this module
 	local Strikes = (require :: any)(script.Parent.Strikes)
 	if Strikes.spawnFor(player) then
-		balloonAt[player] = now + ResearchMath.balloonInterval(level)
+		balloonAt[player] = now + ResearchMath.balloonInterval(level, rank)
 	else
 		balloonAt[player] = now + 1 -- no room or one still in flight; try again soon
 	end
@@ -288,6 +362,7 @@ function Research.init()
 	end)
 	Net.get("HireResearcher").OnServerEvent:Connect(onHire)
 	Net.get("PostResearcher").OnServerEvent:Connect(onPost)
+	Net.get("PromoteResearcher").OnServerEvent:Connect(onPromote)
 	PlayerData.Loaded:Connect(onLoaded)
 end
 

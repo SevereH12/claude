@@ -589,7 +589,7 @@ return table.freeze({
 	WARNING_TIME = 1.5, -- seconds between the warning circle and the bolt
 	STRIKE_RADIUS = 8, -- studs; stand within this of the centre to catch
 	STRIKE_MAX_HEIGHT_ABOVE = 8, -- studs; you can catch mid-jump, but not from below a cliff
-	FORECAST_MAX_LEAD = 1.2, -- seconds; the top Forecaster perk value. Public warnings wait this long
+	FORECAST_MAX_LEAD = 1.92, -- seconds; the top Forecaster perk at rank 6 (1.2 x 1.6). Public warnings wait this long
 	BALLOON_MIN_DISTANCE = 12, -- studs from the owner; Storm Chaser bolts land this near
 	BALLOON_MAX_DISTANCE = 20,
 	STRIKE_INTERVAL_JITTER = 0.3, -- +/-30% randomness on strike timing
@@ -615,6 +615,17 @@ return table.freeze({
 	RESEARCH_SETUP_TIME = 8, -- seconds a newly posted researcher needs before the perk works
 	RESEARCH_DATA_WATCH = 1, -- data per strike landing in their zone
 	RESEARCH_DATA_CATCH = 3, -- data per strike the owner caught
+	-- Promoting researchers (Util/Research; tools/balance/prestige.py works
+	-- these out from the zones, bottles and strikes and checks them):
+	-- dataScale[rank + 1] multiplies RESEARCH_LEVELS at that rank (the last
+	-- one repeats at the top rank), glintCost[rank] is what promotion to
+	-- that rank costs, in Glints of its tier or higher, and each rank makes
+	-- the perk perkBonusPerRank stronger.
+	RESEARCH_PRESTIGE = table.freeze({
+		dataScale = table.freeze({ 1.15, 1.8, 2.85, 3.7, 3.7, 4.5, 4.5 }),
+		glintCost = table.freeze({ 45, 65, 130, 85, 165, 50 }),
+		perkBonusPerRank = 0.10,
+	}),
 
 	RESEARCHERS = table.freeze(RESEARCHERS),
 	BOTTLES = table.freeze(BOTTLES),
@@ -677,10 +688,46 @@ return table.freeze({
 		receivedCap = 200, -- delivered gift ids each profile remembers (no doubles)
 	}),
 
-	-- Placeholder sounds (built into Roblox). Swap for Creator Store sounds.
-	SOUNDS = table.freeze({
-		STRIKE = "rbxasset://sounds/collide.wav",
-		CATCH = "rbxasset://sounds/electronicpingshort.wav",
-		SELL = "rbxasset://sounds/electronicpingshort.wav",
+	-- Sound (the sounds themselves: Shared/SoundBank, made by tools/audio).
+	-- SOUND_MIX: each SoundGroup's volume before the player's sliders.
+	-- (the mix: music under the effects, UI the quietest, storms big)
+	SOUND_MIX = table.freeze({ Music = 0.32, Ambience = 0.55, SFX = 1, UI = 0.7 }),
+	-- Background music per world and weather: Roblox's licensed partner
+	-- tracks (APMOfficial, DistrokidOfficial; tools/audio/music_search.py,
+	-- docs/audio/music-shortlist.md). Each list plays shuffled (Controllers/Music).
+	MUSIC = table.freeze({
+		Bay = table.freeze({
+			-- Playful Pixel Adventure; Seaside View; Ambient Adventure Trail
+			Calm = { 94734731611772, 136150243866984, 129196538853609 },
+			-- Driving Shadows (Electronic Music 2025); Electro Chase; Upbeat Synthpop
+			Storm = { 125777738272639, 1836021063, 71868660197528 },
+		}),
+		Voltcliff = table.freeze({
+			-- Steampunk Clockworks; Time Traveller; Clockwork Symphony
+			Calm = { 97805011981124, 9039372102, 116123343811105 },
+			-- Ecos de Titán (Industrial & Electronic Rock); Refresh; Dubstep Action Gaming Music – Heavy Drops & Energy
+			Storm = { 70881491117119, 79863038732814, 136266951088751 },
+		}),
+		Stormspire = table.freeze({
+			-- Dreamy midnight flight; Dreamy Flights; Floating Islands
+			Calm = { 95537109377454, 82631091427646, 111480456898998 },
+			-- Phantom Nova (Underscore Version); 21st Centurion A; Aeon Driver (Underscore Version)
+			Storm = { 116315815173589, 1847492487, 117596024497708 },
+		}),
 	}),
+	MUSIC_FADE = 3, -- seconds to crossfade on a weather or world change
+	MUSIC_DUCK = 0.5, -- music volume (x) under big moments: about -6 dB
+	MUSIC_DUCK_SECONDS = 1.5,
+	-- ambience: the loops' volumes (x) in each weather, and how often a gust
+	-- or a distant rumble comes in a storm
+	AMBIENCE = table.freeze({
+		calmVolume = 0.6,
+		stormRainVolume = 1,
+		stormCalmVolume = 0.15, -- the waves stay faintly under the rain
+		eventEvery = { 6, 15 }, -- seconds between gusts and rumbles in a storm
+		humRadius = 60, -- studs: the power plant's hum is heard this far away
+	}),
+	-- the strike's thunder comes later the further away it is
+	THUNDER_STUDS_PER_SECOND = 340,
+	THUNDER_MAX_DELAY = 1.5,
 })

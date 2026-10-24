@@ -22,6 +22,7 @@ local Net = require(ReplicatedStorage.Shared.Net)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Celebrate = require(script.Parent.Parent.Lib.Celebrate)
 local Layout = require(script.Parent.Parent.Lib.Layout)
+local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
 local State = require(script.Parent.State)
 
@@ -151,6 +152,7 @@ local function fillPlayers()
 				Parent = row,
 			})
 			UI.maxText(label, 22)
+			UI.clickSound(row)
 			row.Activated:Connect(function()
 				UI.pop(row)
 				confirm({
@@ -271,6 +273,7 @@ local function onNews(kind: string, a: any, b: any)
 	elseif kind == "sent" then
 		waiting = false
 		UI.closePanels()
+		Sfx.play("purchase")
 		Celebrate.sparks()
 		UI.toast(`🎁 Gift sent to {a}!`, "good", 5)
 		if not b then
@@ -286,6 +289,7 @@ local function onNews(kind: string, a: any, b: any)
 			end,
 		})
 	elseif kind == "received" and typeof(a) == "table" then
+		Sfx.play("gift_received")
 		Celebrate.sparks()
 		local gifts = a :: { Types.GiftEntry }
 		if #gifts == 1 then
