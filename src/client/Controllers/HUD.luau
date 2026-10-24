@@ -329,7 +329,7 @@ local function buildSellButton()
 		Parent = screenGui,
 	})
 	UI.maxText(sellButton, 26)
-	UI.padHint(sellButton, "L1", "V")
+	UI.padHint(sellButton, "RemoteSell")
 	sellRing = UI.make(Instance.new("Frame"), {
 		Name = "ChargeRing",
 		AnchorPoint = Vector2.new(0.5, 0.5),

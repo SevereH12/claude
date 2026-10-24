@@ -727,13 +727,6 @@ return table.freeze({
 		eventEvery = { 6, 15 }, -- seconds between gusts and rumbles in a storm
 		humRadius = 60, -- studs: the power plant's hum is heard this far away
 	}),
-	-- the SETTINGS panel's starting values (0 to 1; they scale SOUND_MIX)
-	SOUND_SETTINGS = table.freeze({
-		musicVolume = 1,
-		sfxVolume = 1,
-		ambienceVolume = 1,
-		muted = false,
-	}),
 	-- the strike's thunder comes later the further away it is
 	THUNDER_STUDS_PER_SECOND = 340,
 	THUNDER_MAX_DELAY = 1.5,

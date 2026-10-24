@@ -6,8 +6,9 @@
 -- nothing is created per play.
 --
 -- Every sound plays in a SoundGroup (Music, Ambience, SFX, UI) whose volume
--- is Config.SOUND_MIX times the player's setting (the SETTINGS panel). Big
--- moments (fanfares, a jackpot, a Server Storm) duck the music for a moment.
+-- is Config.SOUND_MIX times the player's settings (the SETTINGS panel's
+-- Sound tab, Lib/SettingsStore). Big moments (fanfares, a jackpot, a Server
+-- Storm) duck the music for a moment.
 -- Sfx.loop makes a long-lived looping Sound (ambience) for its caller to fade.
 
 local ContentProvider = game:GetService("ContentProvider")
@@ -17,7 +18,7 @@ local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local SoundBank = require(ReplicatedStorage.Shared.SoundBank)
-local Types = require(ReplicatedStorage.Shared.Types)
+local SettingsStore = require(script.Parent.SettingsStore)
 
 local POOL_2D = 6 -- Sounds per sheet for 2D sounds
 local POOL_3D = 8 -- and for 3D sounds (each in its own Attachment)
@@ -33,6 +34,14 @@ local DUCKERS: { [string]: boolean } = {
 	gift_received = true,
 	jackpot = true,
 	server_storm = true,
+}
+local SOUND_KEYS: { [string]: boolean } = {
+	masterVolume = true,
+	musicVolume = true,
+	sfxVolume = true,
+	ambienceVolume = true,
+	uiVolume = true,
+	muted = true,
 }
 local DUCK_IN = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local DUCK_OUT = TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
@@ -54,7 +63,6 @@ local pools3D: { [string]: Pool } = {}
 local lastAt: { [string]: number } = {}
 local lastAny = -math.huge
 local random = Random.new()
-local settings: Types.SoundSettings? = nil
 local duck = Instance.new("NumberValue") -- the music's ducking (1 = none)
 duck.Value = 1
 local duckToken = 0
@@ -232,19 +240,17 @@ function Sfx.length(name: string): number
 	return if entry then entry.length else 0
 end
 
--- The player's volume settings: the sliders scale Config.SOUND_MIX.
-function Sfx.apply(newSettings: Types.SoundSettings)
-	settings = newSettings
-	local mute = if newSettings.muted then 0 else 1
+-- The SoundGroups' volumes: Config.SOUND_MIX times the player's sliders
+-- (Master and the group's own; Lib/SettingsStore), 0 when muted, and the
+-- music ducked under big moments.
+function Sfx.apply()
+	local get = SettingsStore.get
+	local master = if get("muted") then 0 else get("masterVolume")
 	local mix = Config.SOUND_MIX
-	group("Music").Volume = mix.Music * newSettings.musicVolume * mute * duck.Value
-	group("Ambience").Volume = mix.Ambience * newSettings.ambienceVolume * mute
-	group("SFX").Volume = mix.SFX * newSettings.sfxVolume * mute
-	group("UI").Volume = mix.UI * newSettings.sfxVolume * mute
-end
-
-function Sfx.current(): Types.SoundSettings
-	return settings or table.clone(Config.SOUND_SETTINGS)
+	group("Music").Volume = mix.Music * master * get("musicVolume") * duck.Value
+	group("Ambience").Volume = mix.Ambience * master * get("ambienceVolume")
+	group("SFX").Volume = mix.SFX * master * get("sfxVolume")
+	group("UI").Volume = mix.UI * master * get("uiVolume")
 end
 
 -- Starts loading the sheets so the first sounds aren't late.
@@ -262,9 +268,12 @@ function Sfx.preload()
 	end)
 end
 
-Sfx.apply(table.clone(Config.SOUND_SETTINGS))
-duck.Changed:Connect(function()
-	Sfx.apply(Sfx.current())
+Sfx.apply()
+duck.Changed:Connect(Sfx.apply)
+SettingsStore.Changed:Connect(function(key: string)
+	if SOUND_KEYS[key] then
+		Sfx.apply()
+	end
 end)
 
 return Sfx

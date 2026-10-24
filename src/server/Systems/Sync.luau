@@ -86,7 +86,6 @@ local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapsho
 		giftCredits = GiftRules.creditCounts(profile.giftCredits),
 		afk = Sync.afk[player],
 		glints = profile.glints,
-		settings = profile.settings,
 	}
 end
 

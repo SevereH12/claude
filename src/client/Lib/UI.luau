@@ -6,12 +6,15 @@
 -- panels and toasts make their sounds here (Lib/Sfx), so none is missed.
 
 local GuiService = game:GetService("GuiService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TextChatService = game:GetService("TextChatService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
+local SettingsRules = require(ReplicatedStorage.Shared.Util.Settings)
 local Layout = require(script.Parent.Layout)
 local LayoutMath = require(script.Parent.LayoutMath)
+local SettingsStore = require(script.Parent.SettingsStore)
 local Sfx = require(script.Parent.Sfx)
 local ToastQueue = require(script.Parent.ToastQueue)
 
@@ -515,11 +518,12 @@ function UI.onLayout(apply: () -> ())
 	end)
 end
 
--- A small chip in a button's corner naming its shortcut: the gamepad
--- button ("Y") for players on a gamepad (Layout class Console), the key
--- ("M") for players on a PC (Desktop); nothing on touch, or where that
--- device has no shortcut (nil).
-function UI.padHint(button: GuiObject, padButton: string?, key: string?)
+-- A small chip in a button's corner naming the shortcut for `action`
+-- (Util/Settings.ACTIONS), as the player has bound it: the controller button
+-- ("Y") on a gamepad (Layout class Console), the key ("M") on a PC
+-- (Desktop); nothing on touch, or when that device has no key for it. It
+-- updates as soon as the player rebinds it.
+function UI.padHint(button: GuiObject, action: string)
 	local hint = UI.label({
 		Name = "PadHint",
 		Text = "",
@@ -532,16 +536,26 @@ function UI.padHint(button: GuiObject, padButton: string?, key: string?)
 		Parent = button,
 	})
 	UI.corner(hint, UDim.new(0.5, 0))
+	local padKey = SettingsRules.bindKey("Controller", action)
+	local keyboardKey = SettingsRules.bindKey("Keyboard", action)
 	local function apply()
-		local text = if Layout.class == "Console"
-			then padButton
-			elseif Layout.class == "Desktop" then key
+		local bound = if Layout.class == "Console"
+			then SettingsStore.get(padKey)
+			elseif Layout.class == "Desktop" then SettingsStore.get(keyboardKey)
+			else ""
+		local text = if typeof(bound) == "string" and bound ~= ""
+			then SettingsRules.keyLabel(bound)
 			else nil
 		hint.Text = text or ""
 		hint.Visible = text ~= nil
 	end
 	apply()
 	Layout.Changed:Connect(apply)
+	SettingsStore.Changed:Connect(function(key: string)
+		if key == padKey or key == keyboardKey then
+			apply()
+		end
+	end)
 end
 
 -- Toasts ---------------------------------------------------------------------------

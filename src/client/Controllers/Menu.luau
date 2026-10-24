@@ -42,30 +42,44 @@ local ICON_TURN = TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirectio
 local DIM_FADE = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local DIM = 0.55 -- the backdrop's transparency while the card is open
 
--- `key`: its PC shortcut (Controllers/Shortcuts), shown on PC only
-type Item = { name: string, icon: string, color: Color3, key: string?, open: () -> () }
+-- `action`: its shortcut's action (Util/Settings.ACTIONS, Controllers/Shortcuts)
+type Item = { name: string, icon: string, color: Color3, action: string, open: () -> () }
 
 local ITEMS: { Item } = {
-	{ name = "SHOP", icon = "🛒", color = COLORS.green, key = "B", open = ShopUI.open },
-	{ name = "RESEARCH", icon = "🔬", color = COLORS.storm, key = "R", open = ResearchUI.open },
+	{ name = "SHOP", icon = "🛒", color = COLORS.green, action = "Shop", open = ShopUI.open },
+	{
+		name = "RESEARCH",
+		icon = "🔬",
+		color = COLORS.storm,
+		action = "Research",
+		open = ResearchUI.open,
+	},
 	{
 		name = "TELEPORT",
 		icon = "🌀",
 		color = Color3.fromRGB(165, 110, 255),
-		key = "T",
+		action = "Teleport",
 		open = TeleportUI.open,
 	},
-	{ name = "BOOSTS", icon = "🚀", color = COLORS.volt, key = "P", open = BoostsUI.open },
+	{
+		name = "BOOSTS",
+		icon = "🚀",
+		color = COLORS.volt,
+		action = "Boosts",
+		open = BoostsUI.open,
+	},
 	{
 		name = "REWARDS",
 		icon = "🎁",
 		color = Color3.fromRGB(255, 120, 170),
+		action = "Rewards",
 		open = RewardsUI.open,
 	},
 	{
 		name = "SETTINGS",
 		icon = "⚙️",
 		color = Color3.fromRGB(120, 130, 160),
+		action = "Settings",
 		open = SettingsUI.open,
 	},
 }
@@ -267,9 +281,7 @@ local function buildTile(index: number, item: Item)
 	elseif item.name == "SHOP" or item.name == "RESEARCH" then
 		buyDots[item.name] = addDot(tile, COLORS.volt)
 	end
-	if item.key then
-		UI.padHint(tile, nil, item.key)
-	end
+	UI.padHint(tile, item.action)
 end
 
 -- The button and its card go where LayoutMath.hud says: the left edge,
@@ -331,7 +343,7 @@ function Menu.init()
 		Parent = menuButton,
 	})
 	UI.maxText(caption, 18)
-	UI.padHint(menuButton, "Y", "M")
+	UI.padHint(menuButton, "Menu")
 	addDot(menuButton)
 	menuButton.Activated:Connect(function()
 		UI.pop(menuButton)
