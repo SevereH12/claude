@@ -204,6 +204,15 @@ python3 tools/audio/upload.py   # uploads changed files to the group, writes sou
 Uploads cost one of the 10 a month an unverified account gets, so only
 changed files are sent. Running `upload.py` again also re-checks moderation.
 
+In the game, `src/client/Lib/Sfx.luau` is the only code that plays sounds
+(`Sfx.play(name)` for 2D, `Sfx.playAt(name, position)` for 3D). Buttons,
+panels and toasts get their sounds in `Lib/UI`; everything else plays its
+sound where it happens. Every sound goes through a SoundGroup (Music,
+Ambience, SFX, UI): `Config.SOUND_MIX` sets their volumes, and the players'
+⚙️ SETTINGS panel (on the menu) scales them and is saved in their profile.
+In Studio, TEST > 🎁 REWARDS > **🔊 Sound board** plays every sound in turn
+with its name.
+
 ## Code layout
 
 - `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas, zone geometry

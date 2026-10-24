@@ -5,8 +5,9 @@
 -- Pass and "Send test gift to me" and "Send test boost gift" buttons, and
 -- REWARDS opens Next day, +5 min playtime, Clear boosts (and the Server
 -- Storm), Start Server Storm, +500 research data, +100 Glints, Simulate idle 17 min (the AFK Lounge's
--- idle handler, Controllers/AfkUI) and a Pretend group member toggle (all
--- Studio only). The server (Systems/DevCommands) checks again. To
+-- idle handler, Controllers/AfkUI), a Pretend group member toggle and the
+-- Sound board, which plays every sound in order with its name (all Studio
+-- only). The server (Systems/DevCommands) checks again. To
 -- remove it: delete this file and Systems/DevCommands.luau, and take
 -- "DevCommand" out of Shared/Remotes.
 
@@ -19,6 +20,7 @@ local Net = require(ReplicatedStorage.Shared.Net)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Layout = require(script.Parent.Parent.Lib.Layout)
 local LayoutMath = require(script.Parent.Parent.Lib.LayoutMath)
+local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
 local AfkUI = require(script.Parent.AfkUI)
 
@@ -145,7 +147,7 @@ function DevCommands.init()
 	UI.onLayout(function()
 		UI.place(rewards, row(4))
 		local area = Layout.hud.test
-		UI.place(tools, { x = area.x + area.w + LayoutMath.GAP, y = area.y, w = 220, h = 8 * 48 })
+		UI.place(tools, { x = area.x + area.w + LayoutMath.GAP, y = area.y, w = 220, h = 9 * 48 })
 	end)
 	local function showLists(passesOn: boolean, rewardsOn: boolean)
 		list.Visible = passesOn
@@ -200,6 +202,50 @@ function DevCommands.init()
 		idle.Activated:Connect(function()
 			UI.pop(idle)
 			AfkUI.simulateIdle()
+		end)
+	end
+	-- Sound board (Studio only): every sound in order, its name in a toast
+	-- (loops play for a few seconds); tap again to stop
+	if RunService:IsStudio() then
+		local board = UI.button({
+			Name = "SoundBoard",
+			LayoutOrder = 9,
+			Text = "🔊 Sound board",
+			Size = UDim2.new(1, 0, 0, 40),
+			BackgroundColor3 = UI.COLORS.panelDark,
+			Parent = tools,
+		})
+		UI.maxText(board, 16)
+		local playing = 0
+		board.Activated:Connect(function()
+			UI.pop(board)
+			playing += 1
+			local mine = playing
+			if mine % 2 == 0 then
+				board.Text = "🔊 Sound board"
+				return -- the second tap stops it
+			end
+			board.Text = "⏹ Stop sound board"
+			task.spawn(function()
+				for index, name in Sfx.names() do
+					if playing ~= mine then
+						return
+					end
+					local sound = Sfx.play(name)
+					UI.toast(`🔊 {index}. {name}`, "info", 2)
+					local length = Sfx.length(name)
+					if sound and sound.Looped then
+						task.wait(4)
+						sound:Stop()
+					else
+						task.wait(length + 0.5)
+					end
+				end
+				if playing == mine then
+					playing += 1
+					board.Text = "🔊 Sound board"
+				end
+			end)
 		end)
 	end
 	-- Pretend group member: the group bonus without joining (Systems/Group)

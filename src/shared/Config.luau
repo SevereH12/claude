@@ -688,10 +688,17 @@ return table.freeze({
 		receivedCap = 200, -- delivered gift ids each profile remembers (no doubles)
 	}),
 
-	-- Placeholder sounds (built into Roblox). Swap for Creator Store sounds.
-	SOUNDS = table.freeze({
-		STRIKE = "rbxasset://sounds/collide.wav",
-		CATCH = "rbxasset://sounds/electronicpingshort.wav",
-		SELL = "rbxasset://sounds/electronicpingshort.wav",
+	-- Sound (the sounds themselves: Shared/SoundBank, made by tools/audio).
+	-- SOUND_MIX: each SoundGroup's volume before the player's sliders.
+	SOUND_MIX = table.freeze({ Music = 0.5, Ambience = 0.6, SFX = 1, UI = 0.8 }),
+	-- the SETTINGS panel's starting values (0 to 1; they scale SOUND_MIX)
+	SOUND_SETTINGS = table.freeze({
+		musicVolume = 1,
+		sfxVolume = 1,
+		ambienceVolume = 1,
+		muted = false,
 	}),
+	-- the strike's thunder comes later the further away it is
+	THUNDER_STUDS_PER_SECOND = 340,
+	THUNDER_MAX_DELAY = 1.5,
 })

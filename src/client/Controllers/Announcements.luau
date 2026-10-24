@@ -14,6 +14,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BoostRules = require(ReplicatedStorage.Shared.Util.Boosts)
 local Net = require(ReplicatedStorage.Shared.Net)
+local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
 local ZoneBanner = require(script.Parent.ZoneBanner)
 
@@ -32,6 +33,7 @@ local function onAnnouncement(kind: unknown, a: unknown, b: unknown, c: unknown)
 	if kind == "storm" and typeof(a) == "string" and typeof(b) == "number" then
 		local started = c == true
 		local left = clock(b)
+		Sfx.play(if started then "server_storm" else "boost_start")
 		local what = if started then "started a" else "added to the"
 		UI.chatLine(`⚡ {a} {what} SERVER STORM! 2x Volts for everyone, {left}`)
 		local how = if started then "started it" else "added more"

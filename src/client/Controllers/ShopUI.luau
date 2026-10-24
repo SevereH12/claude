@@ -11,6 +11,7 @@ local Net = require(ReplicatedStorage.Shared.Net)
 local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Layout = require(script.Parent.Parent.Lib.Layout)
+local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
 local State = require(script.Parent.State)
 
@@ -222,6 +223,7 @@ local function buildTab(
 	tabButton.Activated:Connect(function()
 		if current ~= tab then
 			UI.pop(tabButton)
+			Sfx.play("tab")
 			selectTab(tab)
 		end
 	end)

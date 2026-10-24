@@ -150,7 +150,11 @@ local migrated = PlayerData.migrate({
 		Analyst = { level = 2, data = 1200, post = "Mesa" },
 	},
 })
-check(migrated.version == 10 and typeof(migrated.glints) == "table" and #migrated.glints == 0, "v10 with no Glints")
+check(migrated.version >= 10 and typeof(migrated.glints) == "table" and #migrated.glints == 0, "v10 with no Glints")
+check(
+	typeof(migrated.settings) == "table" and migrated.settings.sfxVolume == 1 and migrated.settings.muted == false,
+	"v11: default sound settings"
+)
 check(migrated.researchers.Forecaster.rank == 4, "posted in Thunderhead: rank 4")
 check(migrated.researchers.RodTech.rank == 0, "at the Office: rank 0")
 check(migrated.researchers.RodTech.level == 5 and migrated.researchers.RodTech.data == 1000, "level and data kept")

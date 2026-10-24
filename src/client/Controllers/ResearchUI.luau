@@ -18,6 +18,7 @@ local Types = require(ReplicatedStorage.Shared.Types)
 local ResearcherModels = require(script.Parent.Parent.Lib.ResearcherModels)
 local Celebrate = require(script.Parent.Parent.Lib.Celebrate)
 local Layout = require(script.Parent.Parent.Lib.Layout)
+local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
 local Researchers = require(script.Parent.Researchers)
 local State = require(script.Parent.State)
@@ -58,6 +59,7 @@ local knownLevels: { [string]: number } = {}
 local knownRanks: { [string]: number } = {} -- for the promotion moment
 local confirmUntil: { [string]: number } = {} -- role id -> os.clock() the confirm tap runs out
 local lastBottleTier: number? = nil
+local rendered = false -- the first render is just loading in (no "hired" sound)
 local tipShown = false
 
 function ResearchUI.toggle()
@@ -122,6 +124,7 @@ end
 local function celebrate(card: Card, rank: number)
 	UI.pop(card.title, 1.25)
 	UI.pop(card.level, 1.25)
+	Sfx.play("level_up")
 	Celebrate.sparks()
 	Researchers.celebrate(card.def.id)
 	UI.toast(`{card.def.name} is now rank {rank}! {string.rep("★", rank)}`, "volt")
@@ -169,6 +172,8 @@ local function render(snapshot: Types.Snapshot)
 	local glints = snapshot.glints or {}
 	glintsLabel.Text = glintsText(glints)
 	checkTip(snapshot)
+	local wasRendered = rendered
+	rendered = true
 	for _, card in cards do
 		local def = card.def
 		local save = snapshot.researchers[def.id]
@@ -179,6 +184,9 @@ local function render(snapshot: Types.Snapshot)
 		card.title.Text = `{string.upper(`{def.name} · {def.role}`)}{stars(rank)}`
 		local known = knownRanks[def.id]
 		if save then
+			if known == nil and wasRendered then
+				Sfx.play("hired")
+			end
 			knownRanks[def.id] = rank
 			if known and rank > known then
 				celebrate(card, rank)
@@ -508,6 +516,7 @@ local function watchLevels()
 			local before = knownLevels[def.id]
 			knownLevels[def.id] = level
 			if before and level > before then
+				Sfx.play("level_up")
 				UI.toast(`{def.name} reached LV {level}!`, "volt")
 			end
 		end

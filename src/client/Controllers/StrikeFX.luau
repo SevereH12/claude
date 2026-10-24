@@ -28,6 +28,7 @@ local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Research = require(ReplicatedStorage.Shared.Util.Research)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Layout = require(script.Parent.Parent.Lib.Layout)
+local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
 local State = require(script.Parent.State)
@@ -99,18 +100,6 @@ local function groundRing(anchor: BasePart, props: { [string]: any }): CylinderH
 		ZIndex = 0,
 	})
 	return UI.make(ring, props)
-end
-
-local function playSound(soundId: string, parent: Instance, speed: number?, volume: number?)
-	local sound = UI.make(Instance.new("Sound"), {
-		SoundId = soundId,
-		Volume = volume or 0.8,
-		PlaybackSpeed = (speed or 1) * random:NextNumber(0.92, 1.08),
-		RollOffMaxDistance = 500,
-		Parent = parent,
-	})
-	sound:Play()
-	Debris:AddItem(sound, 5)
 end
 
 -- Floating text that rises and fades. `y` is how far down the screen it
@@ -289,14 +278,29 @@ local function bolt(from: Vector3, to: Vector3, thickness: number, branches: num
 	flickerAndFade(parts)
 end
 
--- Thunder crack at a point in the world.
-local function playThunderAt(position: Vector3)
-	local attachment = UI.make(Instance.new("Attachment"), {
-		WorldPosition = position,
-		Parent = workspace.Terrain,
-	})
-	playSound(Config.SOUNDS.STRIKE, attachment, 0.55, 1)
-	Debris:AddItem(attachment, 5)
+-- The bolt's crack at a point in the world (a whistle and crack for your
+-- own balloon bolt), and its thunder, later the further away you are (sound
+-- takes about 1 s per Config.THUNDER_STUDS_PER_SECOND studs).
+local function playThunderAt(position: Vector3, balloon: boolean)
+	if balloon then
+		Sfx.playAt("balloon_bolt", position)
+	else
+		Sfx.playAt(`strike_crack_{random:NextInteger(1, 3)}`, position)
+	end
+	local camera = workspace.CurrentCamera
+	local distance = if camera then (camera.CFrame.Position - position).Magnitude else 0
+	local delay = math.min(distance / Config.THUNDER_STUDS_PER_SECOND, Config.THUNDER_MAX_DELAY)
+	task.delay(delay, function()
+		Sfx.playAt(`thunder_{random:NextInteger(1, 3)}`, position)
+	end)
+end
+
+-- The catch sound rises as the bottle fills: catch_1 (nearly empty) to
+-- catch_5 (nearly full).
+local function catchSound(): string
+	local snapshot = State.current
+	local fill = if snapshot then snapshot.chargeCount / math.max(snapshot.capacity, 1) else 0
+	return `catch_{math.clamp(math.ceil(fill * 5), 1, 5)}`
 end
 
 -- Impact: light burst, sparks, shockwave, scorch mark.
@@ -360,8 +364,6 @@ local function impact(position: Vector3)
 		strikeFlash.TintColor = Color3.fromRGB(215, 230, 255)
 		TweenService:Create(strikeFlash, TweenInfo.new(0.35), { Brightness = 0 }):Play()
 	end
-
-	playThunderAt(position)
 end
 
 -- Where a player's bottle is, for the arc that flies into it.
@@ -441,6 +443,7 @@ local function onForecast(forecast: Types.Forecast)
 		table.insert(dashes, dash)
 	end
 	forecasts[forecast.id] = dashes
+	Sfx.play("forecast")
 end
 
 local function clearForecast(id: number)
@@ -470,6 +473,12 @@ local function onWarning(warning: Types.StrikeWarning)
 	end
 	local lifetime = timeLeft + 2 -- safety net if the landed event never arrives
 	clearForecast(warning.id)
+	-- the charge-up hum lasts WARNING_TIME: join it part way if we're late
+	local someoneElses = warning.ownerId ~= nil and warning.ownerId ~= player.UserId
+	Sfx.playAt("strike_warning", warning.position, {
+		offset = Config.WARNING_TIME - timeLeft,
+		volume = if someoneElses then 0.4 else 1,
+	})
 
 	local anchor = anchorAt(warning.position + Vector3.new(0, 0.4, 0), lifetime)
 	local ring = groundRing(anchor, {
@@ -537,6 +546,7 @@ local function onLanded(landed: Types.StrikeLanded)
 		+ Vector3.new(random:NextNumber(-15, 15), BOLT_HEIGHT, random:NextNumber(-15, 15))
 	bolt(sky, landed.position, 0.5, 2)
 	impact(landed.position)
+	playThunderAt(landed.position, landed.ownerId == player.UserId)
 
 	-- little arcs from the strike into every catcher's bottle
 	for _, userId in landed.catchers do
@@ -551,16 +561,19 @@ local function onLanded(landed: Types.StrikeLanded)
 		screenFlash(0.55)
 		cameraShake(0.3, 0.7)
 		popup(`+{Format.abbreviate(landed.values[caught] or landed.value)} ⚡`, true, 0.42)
-		playSound(Config.SOUNDS.CATCH, screenGui, 1.2)
+		Sfx.play(catchSound())
 		-- the Analyst's assay and Lucky Charges each double it
 		local assayed = table.find(landed.assayed, player.UserId) ~= nil
 		local lucky = table.find(landed.lucky, player.UserId) ~= nil
 		if assayed and lucky then
+			Sfx.play("jackpot")
 			popup("x4 JACKPOT", true, 0.5, 0.075)
 			cameraShake(0.25, 0.5)
 		elseif lucky then
+			Sfx.play("lucky")
 			popup("x2 LUCKY", true, 0.5, 0.06)
 		elseif assayed then
+			Sfx.play("lucky")
 			popup("x2 ASSAYED", true, 0.5, 0.06)
 		end
 	elseif table.find(landed.tanked, player.UserId) then
@@ -568,7 +581,7 @@ local function onLanded(landed: Types.StrikeLanded)
 		local snapshot = State.current
 		local units = if zone and snapshot then Progression.chargeSize(snapshot, zone) else 1
 		popup(`+{units} → TANK`, true, 0.42, 0.06)
-		playSound(Config.SOUNDS.CATCH, screenGui, 0.9)
+		Sfx.play("tank_glug")
 	elseif table.find(landed.full, player.UserId) then
 		UI.toastEvery("bottleFull", UI.FULL_REMINDER, UI.FULL_MESSAGE, "warn")
 	end
@@ -590,7 +603,12 @@ local function onSold(earned: number, count: number)
 	end
 	screenFlash(0.25)
 	cameraShake(0.2, 0.35)
-	playSound(Config.SOUNDS.SELL, screenGui, 0.8)
+	-- the ka-ching grows with how much of a bottle you sold
+	local snapshot = State.current
+	local share = if snapshot then count / math.max(snapshot.capacity, 1) else 0
+	Sfx.play(
+		if share >= 0.9 then "sell_big" elseif share >= 0.34 then "sell_medium" else "sell_small"
+	)
 end
 
 -- The Power Plant's tesla coil throws small arcs now and then.

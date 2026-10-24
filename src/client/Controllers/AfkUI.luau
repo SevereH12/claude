@@ -271,6 +271,7 @@ function AfkUI.init()
 		Parent = card,
 	})
 	UI.maxText(upsell, 14)
+	UI.clickSound(upsell)
 	upsell.Activated:Connect(function()
 		pcall(MarketplaceService.PromptPremiumPurchase, MarketplaceService, player)
 	end)
@@ -286,6 +287,7 @@ function AfkUI.init()
 		Parent = card,
 	})
 	UI.maxText(toggle, 15)
+	UI.clickSound(toggle)
 	toggle.Activated:Connect(function()
 		expanded = not expanded
 		toggle.Text = if expanded

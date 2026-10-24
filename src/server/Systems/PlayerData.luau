@@ -19,7 +19,7 @@ local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local STORE_NAME = "StormBottler_PlayerData"
-local CURRENT_VERSION = 10
+local CURRENT_VERSION = 11
 -- A lock older than this belongs to a server that crashed; it may be taken.
 local LOCK_STALE_SECONDS = Config.AUTOSAVE_INTERVAL * 3
 local LOCKED_RETRIES = 5
@@ -62,6 +62,7 @@ local DEFAULT_PROFILE: Types.Profile = {
 	receivedGiftIds = {},
 	giftCredits = {},
 	glints = {},
+	settings = { musicVolume = 1, sfxVolume = 1, ambienceVolume = 1, muted = false },
 }
 
 -- MIGRATIONS[n] turns a version-n profile into version n+1. When the profile
@@ -134,6 +135,11 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 				end
 			end
 		end
+		return data
+	end,
+	-- sound settings (prompt 11)
+	[10] = function(data: any): any
+		data.settings = { musicVolume = 1, sfxVolume = 1, ambienceVolume = 1, muted = false }
 		return data
 	end,
 }

@@ -35,6 +35,7 @@ local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Layout = require(script.Parent.Parent.Lib.Layout)
 local LayoutMath = require(script.Parent.Parent.Lib.LayoutMath)
+local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
 local State = require(script.Parent.State)
 local Storm = require(script.Parent.Storm)
@@ -514,7 +515,11 @@ local function renderGoal(snapshot: Types.Snapshot)
 end
 
 local function render(snapshot: Types.Snapshot)
-	TweenService:Create(displayedVolts, UI.TWEEN.countUp, { Value = snapshot.volts }):Play()
+	if lastChargeCount < 0 then
+		displayedVolts.Value = snapshot.volts -- loading in: no count-up
+	else
+		TweenService:Create(displayedVolts, UI.TWEEN.countUp, { Value = snapshot.volts }):Play()
+	end
 	renderGoal(snapshot)
 
 	local bottle = Formulas.bottle(snapshot.bottleTier)
@@ -526,6 +531,7 @@ local function render(snapshot: Types.Snapshot)
 	local full = fraction >= 1
 	setFull(full)
 	if full and not wasFull and lastChargeCount >= 0 then
+		Sfx.play("bottle_full")
 		UI.toastEvery("bottleFull", UI.FULL_REMINDER, UI.FULL_MESSAGE, "warn", true)
 	end
 	wasFull = full
@@ -620,8 +626,14 @@ function HUD.init()
 	HUD.place()
 	Layout.Changed:Connect(HUD.place)
 
+	-- the counter ticks as it counts up (Sfx keeps it to one tick per 80 ms)
+	local lastVolts = displayedVolts.Value
 	displayedVolts.Changed:Connect(function(value: number)
 		voltsLabel.Text = Format.abbreviate(value)
+		if value > lastVolts and lastChargeCount >= 0 then
+			Sfx.play("volts_tick")
+		end
+		lastVolts = value
 	end)
 end
 

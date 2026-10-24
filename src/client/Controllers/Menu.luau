@@ -19,10 +19,12 @@ local TweenService = game:GetService("TweenService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Layout = require(script.Parent.Parent.Lib.Layout)
+local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
 local BoostsUI = require(script.Parent.BoostsUI)
 local ResearchUI = require(script.Parent.ResearchUI)
 local RewardsUI = require(script.Parent.RewardsUI)
+local SettingsUI = require(script.Parent.SettingsUI)
 local ShopUI = require(script.Parent.ShopUI)
 local State = require(script.Parent.State)
 local TeleportUI = require(script.Parent.TeleportUI)
@@ -60,6 +62,12 @@ local ITEMS: { Item } = {
 		color = Color3.fromRGB(255, 120, 170),
 		open = RewardsUI.open,
 	},
+	{
+		name = "SETTINGS",
+		icon = "⚙️",
+		color = Color3.fromRGB(120, 130, 160),
+		open = SettingsUI.open,
+	},
 }
 
 local Menu = {}
@@ -93,6 +101,7 @@ function Menu.open()
 	isOpen = true
 	token += 1
 	UI.closePanels()
+	Sfx.play("menu_open")
 	setIcon(true)
 	catcher.Visible = true
 	TweenService:Create(catcher, DIM_FADE, { BackgroundTransparency = DIM }):Play()
@@ -123,6 +132,7 @@ function Menu.close()
 	end
 	isOpen = false
 	token += 1
+	Sfx.play("menu_close")
 	local mine = token
 	setIcon(false)
 	local undim = TweenService:Create(catcher, DIM_FADE, { BackgroundTransparency = 1 })

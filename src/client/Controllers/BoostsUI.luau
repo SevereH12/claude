@@ -39,6 +39,7 @@ local Store = require(ReplicatedStorage.Shared.Util.Store)
 local GiftRules = require(ReplicatedStorage.Shared.Util.Gifts)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Layout = require(script.Parent.Parent.Lib.Layout)
+local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
 local GiftUI = require(script.Parent.GiftUI)
 local State = require(script.Parent.State)
@@ -176,6 +177,7 @@ local function buildCard(parent: Instance, order: number, card: Card, onLook: ()
 		ZIndex = 0,
 		Parent = frame,
 	})
+	UI.clickSound(look, true)
 	look.Activated:Connect(function()
 		UI.pop(frame, 1.03)
 		onLook()
@@ -694,6 +696,7 @@ local function buildTab(body: Frame, order: number, title: string): Tab
 	local tab = { button = button, grid = grid }
 	button.Activated:Connect(function()
 		UI.pop(button)
+		Sfx.play("tab")
 		selectTab(tab)
 	end)
 	table.insert(tabs, tab)

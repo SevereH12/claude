@@ -25,6 +25,15 @@ export type Profile = {
 	receivedGiftIds: { string }, -- the newest gift ids already applied (Systems/Gifts)
 	giftCredits: { [string]: { string } }, -- gifts paid for but not sent yet: product key -> purchase ids
 	glints: { number }, -- Glints per zone tier: glints[tier + 1] (Util/Research)
+	settings: SoundSettings, -- the SETTINGS panel (Systems/Settings)
+}
+
+-- The player's sound settings: volumes 0 to 1 (they scale Config.SOUND_MIX).
+export type SoundSettings = {
+	musicVolume: number,
+	sfxVolume: number, -- effects: the SFX and UI groups
+	ambienceVolume: number,
+	muted: boolean,
 }
 
 -- A hired researcher. post is "Office" or a zone id.
@@ -59,6 +68,7 @@ export type Snapshot = {
 	giftCredits: { [string]: number }, -- gift products paid for but not sent yet
 	afk: AfkState?, -- in the AFK Lounge (Systems/Afk), nil when not
 	glints: { number }, -- Glints per zone tier (glints[tier + 1])
+	settings: SoundSettings,
 }
 
 -- The player's AFK Lounge state, sent in the snapshot (Systems/Afk). The
