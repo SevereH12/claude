@@ -58,6 +58,12 @@ and stops if it isn't. To run one, say: "Do `docs/prompts/<file>`".
     halfway through each zone. Part A: the rules, Glints, the save migration
     and a balance calculator. Part B: the Promote screen, rank stars and the
     promotion moment.
+14. `14-settings.md`: **run it twice.** A SETTINGS menu tile. Part A:
+    the settings system (saved to the account), rebindable keyboard and
+    controller shortcuts, and the Sound tab. Part B: Graphics presets set by
+    device (rain, particles, glow, shadows, far decorations, field of view),
+    Accessibility & HUD (reduce flashing, camera shake, colourblind rings,
+    text size, popup toggles), and a one-time "reduce flashing?" question.
 
 Researchers (all five parts done) live in `researchers/`.
 

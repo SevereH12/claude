@@ -213,15 +213,21 @@ it doesn't, stop and tell the user.
    - **Sell**: picks small, medium or big by amount.
    - **Everything else from the part A list**, at its event.
    - Remove `Config.SOUNDS` and the old `playSound`.
-3. **Settings**: a gear button on the menu card opens a small SETTINGS
-   panel.
-   - **Sliders**: Music, Effects (SFX and UI) and Ambience, plus a Mute all
-     toggle.
-   - **Saving**: in the profile (`settings.musicVolume`, `sfxVolume`,
-     `ambienceVolume`, and `muted`, in a migration) through a
-     `SaveSettings` remote, rate-limited and with values clamped from 0 to
-     1.
-   - **Applying**: on join.
+3. **Settings**:
+   - **If prompt 14 has run** (`src/client/Lib/SettingsStore.luau` exists):
+     don't build a panel. Drive the `SoundGroup`s from its Sound tab
+     settings (Master, Music, Effects, Ambience, UI, Mute all) through
+     `SettingsStore.Changed`.
+   - **Otherwise**, a gear button on the menu card opens a small SETTINGS
+     panel.
+     - **Sliders**: Music, Effects (SFX and UI) and Ambience, plus a Mute
+       all toggle.
+     - **Saving**: in the profile (`settings.musicVolume`, `sfxVolume`,
+       `ambienceVolume`, and `muted`, in a migration) through a
+       `SaveSettings` remote, rate-limited and with values clamped from 0
+       to 1.
+     - **Applying**: on join.
+     - Prompt 14 later moves these into its Settings panel.
 4. **Studio check**: a TEST-panel "Sound board" button (Studio only) plays
    every sound in order with its name shown, so the user can hear them all
    in one go.
