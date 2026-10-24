@@ -694,25 +694,26 @@ return table.freeze({
 	SOUND_MIX = table.freeze({ Music = 0.32, Ambience = 0.55, SFX = 1, UI = 0.7 }),
 	-- Background music per world and weather: Roblox's licensed partner
 	-- tracks (APMOfficial, DistrokidOfficial; tools/audio/music_search.py,
-	-- docs/audio/music-shortlist.md). Each list plays shuffled (Controllers/Music).
+	-- docs/audio/music-shortlist.md). Instrumental only: no lyrics. Each list
+	-- plays shuffled (Controllers/Music).
 	MUSIC = table.freeze({
 		Bay = table.freeze({
-			-- Playful Pixel Adventure; Seaside View; Ambient Adventure Trail
-			Calm = { 94734731611772, 136150243866984, 129196538853609 },
-			-- Driving Shadows (Electronic Music 2025); Electro Chase; Upbeat Synthpop
-			Storm = { 125777738272639, 1836021063, 71868660197528 },
+			-- Cheerful Classroom Celebration Instrumental; Seaside Reflections; Magical Adventure (Light Vs)
+			Calm = { 133196125967338, 88298878796645, 1838661059 },
+			-- Night Run; Roller coaster?; Funk Drift
+			Storm = { 9044545570, 92504170192114, 129146412554158 },
 		}),
 		Voltcliff = table.freeze({
-			-- Steampunk Clockworks; Time Traveller; Clockwork Symphony
-			Calm = { 97805011981124, 9039372102, 116123343811105 },
-			-- Ecos de Titán (Industrial & Electronic Rock); Refresh; Dubstep Action Gaming Music – Heavy Drops & Energy
-			Storm = { 70881491117119, 79863038732814, 136266951088751 },
+			-- Follow The Footprints - Underscore; Time in Gears; Heavenly Clockwork
+			Calm = { 9047610291, 9039374146, 1842365805 },
+			-- Alarm Glock NO DRM KT; Macho Manhunt; Loco Motive NO ORCH
+			Storm = { 122770769791748, 131880535514102, 101746788451393 },
 		}),
 		Stormspire = table.freeze({
-			-- Dreamy midnight flight; Dreamy Flights; Floating Islands
-			Calm = { 95537109377454, 82631091427646, 111480456898998 },
-			-- Phantom Nova (Underscore Version); 21st Centurion A; Aeon Driver (Underscore Version)
-			Storm = { 116315815173589, 1847492487, 117596024497708 },
+			-- Watching the Garden Grow (a); Pizzicato Spritz (a); The Whimsical Waltz (c)
+			Calm = { 9046598930, 9046599262, 9046601476 },
+			-- Phantom Nova (Underscore Version); Aeon Driver (Underscore Version); The Great Dynasties (Underscore Version)
+			Storm = { 116315815173589, 117596024497708, 135102649170289 },
 		}),
 	}),
 	MUSIC_FADE = 3, -- seconds to crossfade on a weather or world change

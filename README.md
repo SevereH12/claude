@@ -219,7 +219,7 @@ with its name.
   `Config.MUSIC[<world id>].Calm / .Storm`, shuffled, crossfading over
   `Config.MUSIC_FADE` seconds when the weather or world changes, and dipping
   for big moments (`MUSIC_DUCK`). The tracks are Roblox's licensed partner
-  music (APMOfficial, DistrokidOfficial only). `python3
+  music (APMOfficial, DistrokidOfficial only), instrumental only: the search keeps a track only when its listing says it has no vocals. `python3
   tools/audio/music_search.py` searches the Creator Store for each slot and
   writes `docs/audio/music-shortlist.md`; TEST > 🎁 REWARDS > **🎵 Music
   audition** (Studio) plays every candidate for 20 s so you can pick.
