@@ -392,23 +392,23 @@ end
 
 -- The level of your own researcher if they'd be working right now (posted to
 -- the zone you stand in, set up). Display only: the server decides for real.
-local function activeLevel(roleId: string): number?
+local function activeLevel(roleId: string): (number?, number)
 	local snapshot = State.current
 	local save = if snapshot then snapshot.researchers[roleId] else nil
 	if not snapshot or not save or save.post == "Office" then
-		return nil
+		return nil, 0
 	end
 	local readyAt = snapshot.setupUntil[roleId]
 	if readyAt and workspace:GetServerTimeNow() < readyAt then
-		return nil
+		return nil, 0
 	end
 	local character = player.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	local zone = if root and root:IsA("BasePart") then Zones.at(root.Position) else nil
 	if not zone or zone.id ~= save.post then
-		return nil
+		return nil, 0
 	end
-	return save.level
+	return save.level, save.rank or 0
 end
 
 -- Events --------------------------------------------------------------------
@@ -499,9 +499,9 @@ local function onWarning(warning: Types.StrikeWarning)
 	):Play()
 
 	-- your Rod Tech's reach: a faint outer ring around the warning
-	local rodTech = activeLevel("RodTech")
+	local rodTech, rodRank = activeLevel("RodTech")
 	if rodTech then
-		local reach = Research.catchRadius(rodTech)
+		local reach = Research.catchRadius(rodTech, rodRank)
 		groundRing(anchor, {
 			Radius = reach,
 			InnerRadius = reach - 0.3,

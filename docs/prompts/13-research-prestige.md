@@ -7,7 +7,7 @@ then ticks it:
 
 - [x] Part A: ranks, promotion rules, Glints, saved data and the balance
   calculator
-- [ ] Part B: the Promote screen, rank stars, the Glint counter and the
+- [x] Part B: the Promote screen, rank stars, the Glint counter and the
   promotion moment
 
 ## The design (the user's choices)

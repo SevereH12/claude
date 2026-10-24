@@ -44,7 +44,8 @@ local function liveRoot(player: Player): BasePart?
 	return if root and root:IsA("BasePart") then root else nil
 end
 
--- Every client reads these to know who has which researcher where.
+-- Every client reads these to know who has which researcher where:
+-- Research_<RoleId> = "<post>:<level>:<rank>".
 local function refreshAttributes(player: Player)
 	local profile = PlayerData.get(player)
 	if not profile then
@@ -52,7 +53,10 @@ local function refreshAttributes(player: Player)
 	end
 	for _, def in Config.RESEARCHERS do
 		local save = profile.researchers[def.id]
-		player:SetAttribute(`Research_{def.id}`, if save then `{save.post}:{save.level}` else nil)
+		player:SetAttribute(
+			`Research_{def.id}`,
+			if save then `{save.post}:{save.level}:{save.rank}` else nil
+		)
 	end
 end
 

@@ -174,6 +174,10 @@ Mesa 1, ... Ember Mesa 6). At level 5 you can promote one at the Research
 Office: it costs **Glints** (one for every bolt you catch, of that zone's
 tier; promotion to rank r takes Glints of tier r or higher), and sends the
 researcher back to level 1 a rank higher, with a 10% stronger perk.
+In the Research panel the Glints line sits at the top, each card shows the
+rank as gold stars (the name tags above the models too), and a level-5
+researcher's Hire button becomes **PROMOTE** (tap twice to confirm). Zones
+above a researcher's rank show 🔒 in the post picker.
 
 The numbers (`Config.RESEARCH_PRESTIGE`) come from
 `python3 tools/balance/prestige.py`, which works out how much data and how
