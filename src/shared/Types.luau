@@ -24,6 +24,7 @@ export type Profile = {
 	giftedPasses: { [string]: boolean }, -- passes others gifted this player (count as owned)
 	receivedGiftIds: { string }, -- the newest gift ids already applied (Systems/Gifts)
 	giftCredits: { [string]: { string } }, -- gifts paid for but not sent yet: product key -> purchase ids
+	glints: { number }, -- Glints per zone tier: glints[tier + 1] (Util/Research)
 }
 
 -- A hired researcher. post is "Office" or a zone id.
@@ -31,6 +32,7 @@ export type ResearcherSave = {
 	level: number,
 	data: number,
 	post: string,
+	rank: number, -- 0 to Research.maxRank(); works in zones of this tier or lower
 }
 
 -- Sent to the owning client whenever their state changes.
@@ -56,6 +58,7 @@ export type Snapshot = {
 	gifted: { [string]: boolean }, -- passes owned because someone gifted them
 	giftCredits: { [string]: number }, -- gift products paid for but not sent yet
 	afk: AfkState?, -- in the AFK Lounge (Systems/Afk), nil when not
+	glints: { number }, -- Glints per zone tier (glints[tier + 1])
 }
 
 -- The player's AFK Lounge state, sent in the snapshot (Systems/Afk). The

@@ -6,7 +6,8 @@
 -- Purchased, Rewarded, GiftNews, Announcement
 -- Client -> server: BuyBottle, BuyBoots, HireResearcher, PostResearcher, DevCommand, Teleport,
 -- RemoteSell, SetBoltColour, StartTrial, StoreEvent, ClaimDaily, ClaimGift,
--- GroupJoined, FindPlayer, PrepareGift, SendCredit, CancelGift, AfkRejoin
+-- GroupJoined, FindPlayer, PrepareGift, SendCredit, CancelGift, AfkRejoin,
+-- PromoteResearcher
 
 export type RemoteName =
 	"StateSnapshot"
@@ -37,6 +38,7 @@ export type RemoteName =
 	| "CancelGift"
 	| "Announcement"
 	| "AfkRejoin"
+	| "PromoteResearcher"
 
 local NAMES: { RemoteName } = {
 	"StateSnapshot",
@@ -67,6 +69,7 @@ local NAMES: { RemoteName } = {
 	"CancelGift",
 	"Announcement",
 	"AfkRejoin",
+	"PromoteResearcher",
 }
 
 return table.freeze(NAMES)

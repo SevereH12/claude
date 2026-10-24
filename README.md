@@ -166,6 +166,22 @@ passes and Pretend Premium (the rate changes within 15 seconds) and
 **🎁 REWARDS → 💤 Simulate idle 17 min** (teleports don't work in Studio,
 so the backup only logs its attempt in the Output).
 
+## Researcher ranks
+
+Researchers have a **rank** (0 to 6) and can only work in zones of their
+rank's tier or lower (tier = which bottle opens the zone: Shoreline 0,
+Mesa 1, ... Ember Mesa 6). At level 5 you can promote one at the Research
+Office: it costs **Glints** (one for every bolt you catch, of that zone's
+tier; promotion to rank r takes Glints of tier r or higher), and sends the
+researcher back to level 1 a rank higher, with a 10% stronger perk.
+
+The numbers (`Config.RESEARCH_PRESTIGE`) come from
+`python3 tools/balance/prestige.py`, which works out how much data and how
+many Glints make the whole team ready about halfway through each new zone,
+and checks Config is within 10%. Run it again whenever zones, bottles or
+strike settings change. Studio TEST tools: **+500 research data** and
+**+100 Glints (this tier)** under 🎁 REWARDS.
+
 ## Code layout
 
 - `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas, zone geometry

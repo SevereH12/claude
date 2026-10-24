@@ -501,7 +501,7 @@ local function update(dt: number)
 	local chemist = if snapshot then snapshot.researchers.Chemist else nil
 	if snapshot and chemist then
 		tankFraction = math.clamp(
-			snapshot.tankCount / math.max(ResearchMath.tankCapacity(chemist.level), 1),
+			snapshot.tankCount / math.max(ResearchMath.tankCapacity(chemist.level, chemist.rank), 1),
 			0,
 			1
 		)

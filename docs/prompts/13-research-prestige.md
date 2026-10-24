@@ -5,7 +5,7 @@ Follow the rules in `docs/prompts/README.md`.
 **Run it twice.** Each run does the first part below that isn't ticked,
 then ticks it:
 
-- [ ] Part A: ranks, promotion rules, Glints, saved data and the balance
+- [x] Part A: ranks, promotion rules, Glints, saved data and the balance
   calculator
 - [ ] Part B: the Promote screen, rank stars, the Glint counter and the
   promotion moment

@@ -589,7 +589,7 @@ return table.freeze({
 	WARNING_TIME = 1.5, -- seconds between the warning circle and the bolt
 	STRIKE_RADIUS = 8, -- studs; stand within this of the centre to catch
 	STRIKE_MAX_HEIGHT_ABOVE = 8, -- studs; you can catch mid-jump, but not from below a cliff
-	FORECAST_MAX_LEAD = 1.2, -- seconds; the top Forecaster perk value. Public warnings wait this long
+	FORECAST_MAX_LEAD = 1.92, -- seconds; the top Forecaster perk at rank 6 (1.2 x 1.6). Public warnings wait this long
 	BALLOON_MIN_DISTANCE = 12, -- studs from the owner; Storm Chaser bolts land this near
 	BALLOON_MAX_DISTANCE = 20,
 	STRIKE_INTERVAL_JITTER = 0.3, -- +/-30% randomness on strike timing
@@ -615,6 +615,17 @@ return table.freeze({
 	RESEARCH_SETUP_TIME = 8, -- seconds a newly posted researcher needs before the perk works
 	RESEARCH_DATA_WATCH = 1, -- data per strike landing in their zone
 	RESEARCH_DATA_CATCH = 3, -- data per strike the owner caught
+	-- Promoting researchers (Util/Research; tools/balance/prestige.py works
+	-- these out from the zones, bottles and strikes and checks them):
+	-- dataScale[rank + 1] multiplies RESEARCH_LEVELS at that rank (the last
+	-- one repeats at the top rank), glintCost[rank] is what promotion to
+	-- that rank costs, in Glints of its tier or higher, and each rank makes
+	-- the perk perkBonusPerRank stronger.
+	RESEARCH_PRESTIGE = table.freeze({
+		dataScale = table.freeze({ 1.15, 1.8, 2.85, 3.7, 3.7, 4.5, 4.5 }),
+		glintCost = table.freeze({ 45, 65, 130, 85, 165, 50 }),
+		perkBonusPerRank = 0.10,
+	}),
 
 	RESEARCHERS = table.freeze(RESEARCHERS),
 	BOTTLES = table.freeze(BOTTLES),

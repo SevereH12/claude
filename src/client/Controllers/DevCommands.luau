@@ -4,7 +4,7 @@
 -- (Studio only), PASSES opens one "Pretend owns <pass>" toggle per Game
 -- Pass and "Send test gift to me" and "Send test boost gift" buttons, and
 -- REWARDS opens Next day, +5 min playtime, Clear boosts (and the Server
--- Storm), Start Server Storm, Simulate idle 17 min (the AFK Lounge's
+-- Storm), Start Server Storm, +500 research data, +100 Glints, Simulate idle 17 min (the AFK Lounge's
 -- idle handler, Controllers/AfkUI) and a Pretend group member toggle (all
 -- Studio only). The server (Systems/DevCommands) checks again. To
 -- remove it: delete this file and Systems/DevCommands.luau, and take
@@ -145,7 +145,7 @@ function DevCommands.init()
 	UI.onLayout(function()
 		UI.place(rewards, row(4))
 		local area = Layout.hud.test
-		UI.place(tools, { x = area.x + area.w + LayoutMath.GAP, y = area.y, w = 220, h = 6 * 48 })
+		UI.place(tools, { x = area.x + area.w + LayoutMath.GAP, y = area.y, w = 220, h = 8 * 48 })
 	end)
 	local function showLists(passesOn: boolean, rewardsOn: boolean)
 		list.Visible = passesOn
@@ -167,6 +167,8 @@ function DevCommands.init()
 			{ text = "⏱ +5 min playtime", command = "playtime" },
 			{ text = "🧹 Clear boosts", command = "clearBoosts" },
 			{ text = "🌩️ Start Server Storm", command = "serverStorm" },
+			{ text = "🔬 +500 research data", command = "researchData" },
+			{ text = "✨ +100 Glints (this tier)", command = "glints" },
 		}
 	do
 		local toolButton = UI.button({
@@ -188,7 +190,7 @@ function DevCommands.init()
 	if RunService:IsStudio() then
 		local idle = UI.button({
 			Name = "SimulateIdle",
-			LayoutOrder = 6,
+			LayoutOrder = 8,
 			Text = `💤 Simulate idle {Config.AFK.idleRejoinMinutes} min`,
 			Size = UDim2.new(1, 0, 0, 40),
 			BackgroundColor3 = UI.COLORS.panelDark,
@@ -203,7 +205,7 @@ function DevCommands.init()
 	-- Pretend group member: the group bonus without joining (Systems/Group)
 	local groupToggle = UI.button({
 		Name = "PretendGroup",
-		LayoutOrder = 5,
+		LayoutOrder = 7,
 		Text = "",
 		Size = UDim2.new(1, 0, 0, 40),
 		BackgroundColor3 = UI.COLORS.panelDark,

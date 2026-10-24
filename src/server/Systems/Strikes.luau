@@ -135,9 +135,9 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, owner
 		local radius = ResearchMath.catchRadius(Research.active(player, "RodTech"))
 		local distance = if root then distanceInside(root, position, radius) else nil
 		if profile and distance then
-			local chemist = Research.active(player, "Chemist")
+			local chemist, chemistRank = Research.active(player, "Chemist")
 			local tankRoom = if chemist
-				then ResearchMath.tankCapacity(chemist) - profile.tankCount
+				then ResearchMath.tankCapacity(chemist, chemistRank) - profile.tankCount
 				else 0
 			local capacity = Passes.capacity(player, profile)
 			if not Formulas.isFull(profile.chargeCount, capacity) then
@@ -177,8 +177,8 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, owner
 			candidate.room
 		)
 		local base = value
-		local assayLevel = Research.active(candidate.player, "Analyst")
-		if assayLevel and random:NextNumber() < ResearchMath.assayChance(assayLevel) then
+		local assayLevel, assayRank = Research.active(candidate.player, "Analyst")
+		if assayLevel and random:NextNumber() < ResearchMath.assayChance(assayLevel, assayRank) then
 			value *= 2
 			table.insert(assayed, candidate.player.UserId)
 		end
@@ -256,11 +256,11 @@ local function spawnStrike(zone: Types.ZoneDef, zonePart: BasePart)
 		warnsAt = warnsAt,
 	}
 	for _, player in Players:GetPlayers() do
-		local level = Research.active(player, "Forecaster")
+		local level, rank = Research.active(player, "Forecaster")
 		local profile = PlayerData.get(player)
 		local save = if profile then profile.researchers.Forecaster else nil
 		if level and save and save.post == zone.id then
-			local lead = ResearchMath.forecastLead(level)
+			local lead = ResearchMath.forecastLead(level, rank)
 			task.delay(Config.FORECAST_MAX_LEAD - lead, function()
 				if player.Parent then
 					forecastRemote:FireClient(player, forecast)

@@ -535,7 +535,7 @@ local function render(snapshot: Types.Snapshot)
 	local chemist = snapshot.researchers.Chemist
 	tankLabel.Visible = chemist ~= nil
 	if chemist then
-		local tankCapacity = ResearchMath.tankCapacity(chemist.level)
+		local tankCapacity = ResearchMath.tankCapacity(chemist.level, chemist.rank)
 		tankLabel.Text = `TANK {snapshot.tankCount}/{tankCapacity}`
 	end
 
