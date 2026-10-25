@@ -3,7 +3,7 @@
 Follow the rules in `docs/prompts/README.md`. **Run it twice**; each run
 does the first unticked part, then ticks it.
 
-- [ ] Part A (in-game): admin tools, error reporting, and streaming and
+- [x] Part A (in-game): admin tools, error reporting, and streaming and
   memory
 - [ ] Part B (outside the game): data deletion, store page art, and private
   servers

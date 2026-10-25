@@ -501,6 +501,52 @@ can't send real notifications: the TEST panel's **Queue test reminder**
 puts one in the queue for you, due now, and the output shows it being
 claimed and sent (or why it wasn't).
 
+## Admin panel, error reports and streaming
+
+**Admin panel** (`Systems/Admin`, `Controllers/AdminUI`, `Util/Ops`).
+Admins are the owner of the Super Studio group, anyone in it at rank 200
+or higher (`Config.ADMIN_RANK`), and everyone in a Studio play test.
+Admins see an **🛡 ADMIN** button under the MENU button. In the panel:
+
+- type a **username** (or a user id) at the top, and a **reason** under it
+- **KICK** (players in this server), **BAN** for the length on the button
+  beside it (1 hour, 1 day, 7 days, 30 days or forever; tap it to change)
+  and **UNBAN**. Bans use Roblox's own ban system, so they work in every
+  server and don't work in Studio.
+- **GIVE VOLTS** (the amount box) and **GIVE BOOST** (tap the boost and the
+  length to change them), for players in this server
+- **RESET PROFILE**: tap it, then tap again within 4 seconds to confirm.
+  Their save starts again from nothing (if they're in the server they're
+  sent out first; it refuses while they're playing in another server).
+- **LOOK UP**: that player's saved data, read only, in the box at the bottom
+- **TEST ERROR** makes a test error on the server and on your device, and
+  **ERRORS** shows this server's 20 most recent errors.
+
+The server checks every request (only the button is on the client), and
+every action is saved in the `AdminLog` DataStore: one entry per action
+(who, what, when, the target), one key per day (`day_2026-10-25`). The
+Studio-only TEST buttons are still there, under the ADMIN button.
+
+**Error reports** (`Systems/Errors`, `Controllers/ErrorReport`). Every
+script error, on the server and on players' devices, is grouped by a short
+fingerprint (the script's name and the first line of the message, with
+numbers and player names taken out). The first time a fingerprint shows up
+in a server it's sent to the Creator Dashboard as the custom event
+**Error** (field 1 = the fingerprint, field 2 = `server` or `client`).
+Devices send at most 5 errors a minute, and a server takes at most 300 a
+minute.
+
+**Streaming** (`Lib/MapBuilder`). The map turns on
+**Workspace.StreamingEnabled**, so phones only load the world near the
+player (at least 128 studs round you, up to 512 when there's memory;
+`Config.STREAMING`). Update Game sets it when it rebuilds the map. If the
+map is marked as hand-edited (so it isn't rebuilt), turn it on yourself:
+click **Workspace** in the Explorer, then tick **StreamingEnabled** in
+Properties. What the game needs everywhere stays loaded (Persistent
+models): zone volumes, camps, gates, sell areas, the research office,
+portals and the AFK Lounge. Before a trip to another world the server
+loads the arrival spot first.
+
 ## Code layout
 
 - `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas, zone geometry

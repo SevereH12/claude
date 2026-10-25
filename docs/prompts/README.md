@@ -105,7 +105,7 @@ Researchers (all five parts done) live in `researchers/`.
 - If `lune`, `stylua` or `selene` is missing, add it to `rokit.toml` and run
   `rokit install`, one try only. If that fails, skip that check and say so.
 - Only use the Roblox Studio MCP if it's already connected: one short play
-  test, then stop. The TEST button (`Systems/DevCommands`) gives you Volts
-  for testing purchases.
+  test, then stop. The ADMIN panel's GIVE VOLTS (`Systems/Admin`) gives
+  you Volts for testing purchases.
 - End by telling the user what to check in Studio after clicking Update
   Game.
