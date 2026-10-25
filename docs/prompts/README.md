@@ -64,6 +64,21 @@ and stops if it isn't. To run one, say: "Do `docs/prompts/<file>`".
     device (rain, particles, glow, shadows, far decorations, field of view),
     Accessibility & HUD (reduce flashing, camera shake, colourblind rings,
     text size, popup toggles), and a one-time "reduce flashing?" question.
+15. `15-storm-surprises.md`: **run it twice.** Part A: rare bolts
+    (Golden ×10, Rainbow ×25, drifting ball lightning), Supercell storms
+    about every hour, and scheduled events like Double Volts Weekend.
+    Part B: a server goal meter that starts a 10-minute Server Surge.
+16. `16-goals-and-ascension.md`: **run it three times.** Part A: stat
+    counters, plus 3 daily and 1 weekly quest. Part B: the Storm Log
+    collection book (rewards, and +2% Volts per finished page). Part C:
+    Ascension (reset for +50% Volts per level, for good).
+17. `17-players-and-friends.md`: **run it twice.** Part A: the new-player
+    tutorial, +5% per friend in the server, and invite rewards. Part B:
+    leaderboards (a panel and a board at spawn) and phone notifications.
+18. `18-launch-ops.md`: **run it twice.** Part A: the admin panel (bans,
+    gifts, an audit log), error reporting and streaming for lower memory.
+    Part B: a data deletion tool, store page art (icon and thumbnails) and
+    private servers.
 
 Researchers (all five parts done) live in `researchers/`.
 
