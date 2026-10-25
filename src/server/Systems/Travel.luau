@@ -138,6 +138,13 @@ local function onTeleport(player: Player, worldId: unknown)
 	task.spawn(sendTo, player, world.id)
 end
 
+-- Sends the player to the first world's spawn (Barometer Bay), the start
+-- of the game: Systems/Ascension calls it after an Ascension. Yields while
+-- the world streams in, so call it in its own thread.
+function Travel.sendHome(player: Player)
+	sendTo(player, Config.WORLDS[1].id)
+end
+
 function Travel.init()
 	Players.PlayerRemoving:Connect(function(player)
 		lastTrip[player] = nil

@@ -798,6 +798,24 @@ return table.freeze({
 		maxBonus = 0.08, -- never more than +8%
 		pages = table.freeze(STORM_LOG_PAGES),
 	}),
+	-- Ascension (Util/Ascension, Systems/Ascension): own the top bottle and
+	-- have baseCost x (level + 1) Volts to start again from the beginning,
+	-- for +perLevel Volts on every sale for good (added up: level 3 = +150%).
+	ASCENSION = table.freeze({
+		baseCost = 10_000_000,
+		perLevel = 0.5,
+		confirmSeconds = 30, -- the confirm screen's token runs out after this
+		-- what goes back to how a new player starts
+		resetTo = table.freeze({
+			volts = 0,
+			bottleTier = 1,
+			bootTier = 1,
+			chargeCount = 0,
+			chargeValue = 0,
+			tankCount = 0,
+			tankValue = 0,
+		}),
+	}),
 	-- a boost reward for a pass the player owns pays Volts instead: this many
 	-- charges per minute of boost (about a minute of catching)
 	REWARD_SWAP_CHARGES = 10,

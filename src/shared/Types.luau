@@ -29,6 +29,7 @@ export type Profile = {
 	stats: StatsSave, -- stat counters (Util/Stats, Systems/Stats)
 	quests: QuestsSave, -- daily and weekly quests (Util/Quests, Systems/Quests)
 	logClaimed: { [string]: boolean }, -- Storm Log rows whose reward was claimed, by row id (Util/StormLog)
+	ascension: number, -- Ascension level: times the player has ascended (Util/Ascension), 0 = never
 }
 
 -- A Storm Log page (Config.STORM_LOG.pages): its id, heading, icon, and
@@ -138,6 +139,7 @@ export type Snapshot = {
 	glints: { number }, -- Glints per zone tier (glints[tier + 1])
 	quests: QuestsView, -- today's and this week's quests with their progress
 	log: LogView, -- the Storm Log: entries found and rows claimed
+	ascension: number, -- Ascension level (Util/Ascension)
 }
 
 -- The player's AFK Lounge state, sent in the snapshot (Systems/Afk). The

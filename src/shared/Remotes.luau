@@ -8,6 +8,8 @@
 -- RemoteSell, SetBoltColour, StartTrial, StoreEvent, ClaimDaily, ClaimGift,
 -- GroupJoined, FindPlayer, PrepareGift, SendCredit, CancelGift, AfkRejoin,
 -- PromoteResearcher, SaveSettings, ClaimQuest, RerollQuest, ClaimLogRow
+-- Both ways: Ascend (asks, then confirms with the server's token; the server
+-- answers with the confirm screen's details or the new level)
 
 export type RemoteName =
 	"StateSnapshot"
@@ -44,6 +46,7 @@ export type RemoteName =
 	| "ClaimQuest"
 	| "RerollQuest"
 	| "ClaimLogRow"
+	| "Ascend"
 
 local NAMES: { RemoteName } = {
 	"StateSnapshot",
@@ -80,6 +83,7 @@ local NAMES: { RemoteName } = {
 	"ClaimQuest",
 	"RerollQuest",
 	"ClaimLogRow",
+	"Ascend",
 }
 
 return table.freeze(NAMES)

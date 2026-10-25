@@ -28,6 +28,8 @@ Stats.PLAYTIME_MINUTES = "playtimeMinutes"
 -- Researcher promotions, and gifts sent to other players.
 Stats.PROMOTIONS = "researcherPromotions"
 Stats.GIFTS_SENT = "giftsSent"
+-- times the player ascended (Systems/Ascension)
+Stats.ASCENSIONS = "ascensions"
 
 -- The Storm Log (Util/StormLog) reads these. A "visited" counter is 1 once
 -- the player has stood in that zone (or been in that world); it never goes

@@ -3,7 +3,9 @@
 -- week resets (Monday UTC), deterministic picking, scaling with progress,
 -- each template's completion check, claiming, the daily reroll, the Studio
 -- "complete quest" tool and the save migration; the Storm Log (Util/StormLog):
--- its pages, row and page completion, claiming, the bonus and its cap.
+-- its pages, row and page completion, claiming, the bonus and its cap; and
+-- Ascension (Util/Ascension): the requirements, what resets and what stays,
+-- and its bonus stacking with passes, events and the Log.
 --   lune run tools/harness/test_quests.luau
 local World = require("./World")
 
@@ -15,6 +17,7 @@ local PlayerData = world:require("ServerScriptService.Server.Systems.PlayerData"
 local StormLog = world:require("ReplicatedStorage.Shared.Util.StormLog")
 local Passes = world:require("ReplicatedStorage.Shared.Util.Passes")
 local Research = world:require("ReplicatedStorage.Shared.Util.Research")
+local Ascension = world:require("ReplicatedStorage.Shared.Util.Ascension")
 
 local failures = 0
 local function check(condition, message)
@@ -442,13 +445,106 @@ check(entry ~= nil and key ~= nil and not found[entry.id], "the test tool picks 
 lifetime[key] = 1
 check(StormLog.found(lifetime, researchers)[entry.id], "and its counter finds it")
 
+-- Ascension ------------------------------------------------------------------------------
+local top = #Config.BOTTLES
+local A = Config.ASCENSION
+check(A.baseCost == 10_000_000, "the first Ascension costs 10M Volts")
+check(Ascension.cost(0) == A.baseCost and Ascension.cost(2) == 3 * A.baseCost, "baseCost x (level + 1)")
+check(
+	not Ascension.canAscend({ volts = 1e15, bottleTier = top - 1, ascension = 0 }),
+	"not without the top bottle"
+)
+check(
+	not Ascension.canAscend({ volts = A.baseCost - 1, bottleTier = top, ascension = 0 }),
+	"not without the Volts"
+)
+check(
+	Ascension.canAscend({ volts = A.baseCost, bottleTier = top, ascension = 0 }),
+	"the top bottle and baseCost Volts: ready"
+)
+check(
+	not Ascension.canAscend({ volts = A.baseCost, bottleTier = top, ascension = 1 }),
+	"level 1 to 2 needs twice as much"
+)
+
+local function fullProfile()
+	local profile = PlayerData.migrate({ version = 1, volts = 0, bottleTier = 1 })
+	profile.volts = 25_000_000
+	profile.totalVolts = 90_000_000
+	profile.bottleTier = top
+	profile.bootTier = #Config.BOOTS
+	profile.chargeCount = 400
+	profile.chargeValue = 12345
+	profile.tankCount = 50
+	profile.tankValue = 999
+	profile.researchers = { Chemist = { post = "Office", data = 300, level = 4, rank = 2 } }
+	profile.glints = { 5, 10 }
+	profile.giftedPasses = { VIP = true }
+	profile.logClaimed = { someRow = true }
+	profile.dailyStreak = 4
+	profile.lastDailyDay = 20000
+	profile.boosts = { DoubleVolts = 60 }
+	profile.settings.musicVolume = 0.3
+	profile.stats.lifetime.boltsCaught = 777
+	return profile
+end
+local ascender = fullProfile()
+local questsBefore = ascender.quests
+check(Ascension.ascend(ascender) == 1, "ascending gives level 1")
+check(ascender.ascension == 1, "and saves it")
+check(ascender.volts == 0 and ascender.bottleTier == 1 and ascender.bootTier == 1, "Volts, bottle and boots reset")
+check(
+	ascender.chargeCount == 0 and ascender.chargeValue == 0 and ascender.tankCount == 0 and ascender.tankValue == 0,
+	"bottle contents and the tank reset"
+)
+check(ascender.totalVolts == 90_000_000, "lifetime earnings stay")
+check(
+	ascender.researchers.Chemist.level == 4 and ascender.researchers.Chemist.rank == 2,
+	"researchers keep their ranks and levels"
+)
+check(ascender.glints[2] == 10, "Glints stay")
+check(ascender.giftedPasses.VIP and ascender.boosts.DoubleVolts == 60, "gifts and boosts stay")
+check(ascender.logClaimed.someRow and ascender.quests == questsBefore, "the Log and quests stay")
+check(ascender.dailyStreak == 4 and ascender.lastDailyDay == 20000, "the reward streak stays")
+check(ascender.settings.musicVolume == 0.3, "settings stay")
+check(ascender.stats.lifetime.boltsCaught == 777, "stats stay")
+check(Ascension.ascend(ascender) == nil and ascender.ascension == 1, "can't ascend again straight away")
+local notReady = fullProfile()
+notReady.bottleTier = top - 1
+check(Ascension.ascend(notReady) == nil and notReady.volts == 25_000_000, "a refused Ascension changes nothing")
+
+-- the bonus: +50% per level, added up, multiplying with everything else
+check(near(Passes.sellMultiplier({}), 1), "level 0: no bonus")
+check(near(Passes.sellMultiplier(Passes.withAscension({}, 1)), 1.5), "level 1: +50%")
+check(near(Passes.sellMultiplier(Passes.withAscension({}, 3)), 2.5), "level 3: +150% (added, not 1.5^3)")
+check(next(Passes.withAscension({}, 0)) == nil, "level 0 adds no mark")
+check(
+	near(Passes.sellMultiplier(Passes.withAscension({ DoubleVolts = true }, 2)), 4),
+	"2x Volts x (1 + 1.0) at level 2"
+)
+local stack = Passes.withAscension({ DoubleVolts = true, VIP = true }, 1)
+stack[Passes.EVENT .. Config.EVENTS[1].name] = true
+stack[Passes.SERVER_SURGE] = true
+stack[Passes.LOG_PAGE .. Config.STORM_LOG.pages[1].id] = true
+local expected = Config.PASS_VALUES.doubleVolts
+	* Config.PASS_VALUES.vipVolts
+	* Config.EVENTS[1].multiplier
+	* Config.SERVER_GOAL.multiplier
+	* (1 + Config.STORM_LOG.pageBonus)
+	* 1.5
+check(near(Passes.sellMultiplier(stack), expected), "stacks with passes, an event, a Surge and the Log")
+check(Passes.sale(100, Passes.withAscension({}, 3)) == 250, "a 100 Volt bottle sells for 250 at level 3")
+check(Ascension.bonusText(3) == "+150%" and Ascension.stars(2) == "★★", "the text")
+
 -- the save migration -------------------------------------------------------------------
+local fromV14 = PlayerData.migrate({ version = 14, volts = 1, bottleTier = 1 })
+check(fromV14.version == 15 and fromV14.ascension == 0, "v14 saves start at Ascension level 0")
 local migrated = PlayerData.migrate({ version = 12, volts = 10, totalVolts = 5000, bottleTier = 1 })
-check(migrated.version == 14, "v12 saves become v14")
+check(migrated.version == 15 and migrated.ascension == 0, "v12 saves become v15")
 check(typeof(migrated.logClaimed) == "table", "with no Log rows claimed")
 local fromV13 = PlayerData.migrate({ version = 13, volts = 1, bottleTier = 1 })
 check(
-	fromV13.version == 14
+	fromV13.version == 15
 		and typeof(fromV13.logClaimed) == "table"
 		and next(fromV13.logClaimed) == nil,
 	"v13 saves get an empty Storm Log claim list"

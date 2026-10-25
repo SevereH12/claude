@@ -13,7 +13,8 @@
 -- pretends the first scheduled event is on, and "serverGoal" fills a
 -- quarter of the server goal as if you sold it, and "completeQuest" counts
 -- your first unfinished quest as done, and "logEntry" finds the next
--- Storm Log entry a counter can find. The repo and client code are public, so this
+-- Storm Log entry a counter can find, and "readyAscend" gives you the top
+-- bottle and enough Volts to ascend. The repo and client code are public, so this
 -- is the lock: it only obeys in Studio play tests or, in a live server, the
 -- user who owns the place; everything but "volts" is Studio only. To remove it:
 -- delete this file and Controllers/DevCommands.luau, and take "DevCommand"
@@ -29,6 +30,7 @@ local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local Weather = require(ReplicatedStorage.Shared.Util.Weather)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
+local Ascension = require(script.Parent.Ascension)
 local Boosts = require(script.Parent.Boosts)
 local Gifts = require(script.Parent.Gifts)
 local Group = require(script.Parent.Group)
@@ -168,6 +170,9 @@ local function onCommand(player: Player, name: unknown, value: unknown, extra: u
 				then `Storm Log entry {entry} found`
 				else "no Storm Log entry left to find"}`
 		)
+	elseif name == "readyAscend" then
+		Ascension.testReady(player)
+		print(`[DevCommands] {player.Name}: ready to ascend (SHOP > BOTTLES > ASCEND)`)
 	elseif name == "event" and typeof(value) == "boolean" then
 		workspace:SetAttribute(Weather.PRETEND_EVENT, value)
 		Sync.markDirty(player)

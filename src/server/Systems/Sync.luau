@@ -7,6 +7,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Net = require(ReplicatedStorage.Shared.Net)
+local AscensionRules = require(ReplicatedStorage.Shared.Util.Ascension)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local GiftRules = require(ReplicatedStorage.Shared.Util.Gifts)
@@ -96,6 +97,7 @@ local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapsho
 			StormLogRules.found(profile.stats.lifetime, profile.researchers),
 			profile.logClaimed
 		),
+		ascension = profile.ascension,
 	}
 end
 
@@ -105,6 +107,10 @@ local function setupLeaderstats(player: Player)
 	local volts = Instance.new("NumberValue")
 	volts.Name = "Volts"
 	volts.Parent = leaderstats
+	-- Ascension stars in the player list (Systems/Ascension)
+	local ascension = Instance.new("StringValue")
+	ascension.Name = "Ascension"
+	ascension.Parent = leaderstats
 	leaderstats.Parent = player
 end
 
@@ -113,6 +119,11 @@ local function updateLeaderstats(player: Player, profile: Types.Profile)
 	local volts = leaderstats and leaderstats:FindFirstChild("Volts")
 	if volts and volts:IsA("NumberValue") then
 		volts.Value = profile.volts
+	end
+	local ascension = leaderstats and leaderstats:FindFirstChild("Ascension")
+	if ascension and ascension:IsA("StringValue") then
+		local stars = AscensionRules.stars(profile.ascension)
+		ascension.Value = if stars == "" then "-" else stars
 	end
 end
 

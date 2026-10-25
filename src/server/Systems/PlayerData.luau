@@ -22,7 +22,7 @@ local StatRules = require(ReplicatedStorage.Shared.Util.Stats)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local STORE_NAME = "StormBottler_PlayerData"
-local CURRENT_VERSION = 14
+local CURRENT_VERSION = 15
 -- A lock older than this belongs to a server that crashed; it may be taken.
 local LOCK_STALE_SECONDS = Config.AUTOSAVE_INTERVAL * 3
 local LOCKED_RETRIES = 5
@@ -69,6 +69,7 @@ local DEFAULT_PROFILE: Types.Profile = {
 	stats = StatRules.new(),
 	quests = QuestRules.new(),
 	logClaimed = {},
+	ascension = 0,
 }
 
 -- MIGRATIONS[n] turns a version-n profile into version n+1. When the profile
@@ -169,6 +170,11 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 	-- counters, so only claimed row rewards are new (none yet)
 	[13] = function(data: any): any
 		data.logClaimed = {}
+		return data
+	end,
+	-- Ascension (prompt 16 part C): nobody has ascended yet
+	[14] = function(data: any): any
+		data.ascension = 0
 		return data
 	end,
 }

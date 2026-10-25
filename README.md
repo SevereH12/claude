@@ -380,6 +380,31 @@ seen), so the only thing saved is which rewards you've claimed.
 - **Testing in Studio**: the TEST panel's **+Log entry** button marks the
   next missing entry as found (Team entries need a real hire or promotion).
 
+## Ascension
+
+Ascension is the game's rebirth (`Util/Ascension`, `Systems/Ascension`,
+`Controllers/AscensionUI`). Once you own the top bottle (the Storm Core),
+an **ASCEND** row shows at the bottom of the Shop's BOTTLES list.
+
+- **What it costs**: you need `baseCost x (level + 1)` Volts: 10M for the
+  first, 20M for the second, and so on (`Config.ASCENSION`).
+- **What resets**: your Volts, bottle, boots, the charges in your bottle
+  and the Chemist's tank. You're moved back to Barometer Bay's spawn.
+- **What stays**: passes, gifts, boosts, researchers (ranks and levels),
+  Glints, quests, the Storm Log, settings, reward streaks and stats.
+- **The reward**: **+50% Volts for good per level, added up** (level 3 =
+  +150%, so every sale pays 2.5x). It multiplies with passes, events, the
+  Server Surge and the Log, and the AFK Lounge and quests follow by
+  themselves. The level is saved as `ascension` in the profile.
+- **Safety**: pressing ASCEND asks the server, which checks the rules and
+  sends a one-use token that runs out after 30 seconds. The confirm screen
+  lists exactly what resets and what stays; only pressing ASCEND there (with
+  that token) does it.
+- **On screen**: purple stars over your head ("★★ ASCENDED", everyone sees
+  them) and in the player list, and a big celebration when you ascend.
+- **Testing in Studio**: the TEST panel's REWARDS list has **Ready to
+  ascend**, which gives you the top bottle and enough Volts.
+
 ## Code layout
 
 - `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas, zone geometry

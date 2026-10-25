@@ -40,6 +40,10 @@ Passes.EVENT = "Event_"
 -- an `owned` set, so each one adds Config.STORM_LOG.pageBonus to sales.
 Passes.LOG_PAGE = "LogPage_"
 
+-- The player's Ascension level (Util/Ascension): ASCENSION .. level marks
+-- it in an `owned` set (e.g. Ascension_3), so it multiplies sales like a pass.
+Passes.ASCENSION = "Ascension_"
+
 -- The pass with this key, or nil.
 function Passes.def(key: string): Types.PassDef?
 	for _, pass in Config.PASSES do
@@ -63,10 +67,42 @@ function Passes.logBonus(owned: Owned): number
 	return math.min(pages * log.pageBonus, log.maxBonus)
 end
 
+-- The Ascension level marked in `owned` (the highest, if more than one), or 0.
+function Passes.ascensionLevel(owned: Owned): number
+	local level = 0
+	local prefix = #Passes.ASCENSION
+	for key, on in owned do
+		if on and string.sub(key, 1, prefix) == Passes.ASCENSION then
+			local n = tonumber(string.sub(key, prefix + 1))
+			if n and n > level then
+				level = n
+			end
+		end
+	end
+	return level
+end
+
+-- Ascension's extra: Config.ASCENSION.perLevel (0.5) per level, added up
+-- (level 3 = +1.5, so sales pay 2.5x); then it multiplies like a pass.
+function Passes.ascensionBonus(owned: Owned): number
+	return Passes.ascensionLevel(owned) * Config.ASCENSION.perLevel
+end
+
+-- `owned` plus the mark for this Ascension level (nothing at level 0).
+function Passes.withAscension(owned: Owned, level: number): Owned
+	if level <= 0 then
+		return owned
+	end
+	local set = table.clone(owned)
+	set[Passes.ASCENSION .. level] = true
+	return set
+end
+
 -- What a sale pays, times this: 2x Volts (pass or boost), VIP, the group
 -- bonus, a Server Storm, a Server Surge and any scheduled event multiply
--- (2 x 1.1 x 1.1 x 2 = 4.84, x2 more on a Double Volts Weekend), and the
--- Storm Log's finished pages add up to +8% on top.
+-- (2 x 1.1 x 1.1 x 2 = 4.84, x2 more on a Double Volts Weekend), the
+-- Storm Log's finished pages add up to +8% on top, and Ascension adds +50%
+-- per level on top of that.
 function Passes.sellMultiplier(owned: Owned): number
 	local multiplier = 1
 	if owned.DoubleVolts then
@@ -90,6 +126,7 @@ function Passes.sellMultiplier(owned: Owned): number
 		end
 	end
 	multiplier *= 1 + Passes.logBonus(owned)
+	multiplier *= 1 + Passes.ascensionBonus(owned)
 	return multiplier
 end
 

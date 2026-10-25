@@ -83,6 +83,10 @@ local function multipliers(effects: Passes.Owned): { Multiplier }
 	if logBonus > 0 then
 		table.insert(list, { label = "Storm Log", value = 1 + logBonus })
 	end
+	local ascension = Passes.ascensionBonus(effects)
+	if ascension > 0 then
+		table.insert(list, { label = "Ascension", value = 1 + ascension })
+	end
 	return list
 end
 
