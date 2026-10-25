@@ -8,7 +8,9 @@
 -- true, a 2x Volts Boost) in your own inbox, and "serverStorm" starts a
 -- Server Storm as if you bought one, "researchData" gives every
 -- researcher 500 field data and "glints" 100 Glints of the tier of the zone
--- you're in (or your best zone). The repo and client code are public, so this
+-- you're in (or your best zone), "goldenBolt" drops a golden bolt where you
+-- stand, "supercell" starts a Supercell in 30 s and "event" (true/false)
+-- pretends the first scheduled event is on. The repo and client code are public, so this
 -- is the lock: it only obeys in Studio play tests or, in a live server, the
 -- user who owns the place; everything but "volts" is Studio only. To remove it:
 -- delete this file and Controllers/DevCommands.luau, and take "DevCommand"
@@ -18,9 +20,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local ServerScriptService = game:GetService("ServerScriptService")
 
+local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
+local Weather = require(ReplicatedStorage.Shared.Util.Weather)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
 local Boosts = require(script.Parent.Boosts)
 local Gifts = require(script.Parent.Gifts)
@@ -29,6 +33,8 @@ local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
 local Research = require(script.Parent.Research)
 local Rewards = require(script.Parent.Rewards)
+local StormCycle = require(script.Parent.StormCycle)
+local Strikes = require(script.Parent.Strikes)
 local Sync = require(script.Parent.Sync)
 local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
 
@@ -126,6 +132,20 @@ local function onCommand(player: Player, name: unknown, value: unknown, extra: u
 		local tier = if zone then ResearchMath.zoneTier(zone) else 0
 		Research.addGlints(player, tier, 100)
 		print(`[DevCommands] {player.Name}: +100 tier {tier} Glints`)
+	elseif name == "goldenBolt" then
+		local ok = Strikes.forceAt(player, "Golden")
+		print(
+			`[DevCommands] {player.Name}: golden bolt {if ok
+				then "coming"
+				else "needs you in a zone"}`
+		)
+	elseif name == "supercell" then
+		StormCycle.supercellIn(Config.SUPERCELL.warningSeconds)
+		print(`[DevCommands] {player.Name}: Supercell in {Config.SUPERCELL.warningSeconds}s`)
+	elseif name == "event" and typeof(value) == "boolean" then
+		workspace:SetAttribute(Weather.PRETEND_EVENT, value)
+		Sync.markDirty(player)
+		print(`[DevCommands] {player.Name}: pretend event {if value then "on" else "off"}`)
 	elseif name == "group" and typeof(value) == "boolean" then
 		Group.setPretend(player, value)
 		print(`[DevCommands] {player.Name} Pretend group member {if value then "on" else "off"}`)

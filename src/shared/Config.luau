@@ -576,6 +576,47 @@ local GIFT_ICONS: { [string]: number } = {
 	GiftJetBoots = 138738735787414,
 }
 
+-- Rare bolts (Util/Weather picks one per strike; Systems/Strikes pays it).
+-- `chance` is per strike; `multiplier` multiplies that catch's value (luck
+-- and the assay still stack on top; the bottle space stays the same).
+local BOLT_TYPES: { Types.BoltTypeDef } = {
+	{
+		key = "Golden",
+		chance = 0.02,
+		multiplier = 10,
+		label = "GOLDEN",
+		color = Color3.fromRGB(255, 200, 40),
+	},
+	{
+		key = "Rainbow",
+		chance = 0.004,
+		multiplier = 25,
+		label = "RAINBOW",
+		color = Color3.fromRGB(255, 120, 220),
+		boostMinutes = 5, -- plus this long of a random timed boost (Config.BOOSTS)
+	},
+	{
+		key = "Ball",
+		chance = 0.01,
+		multiplier = 5,
+		label = "BALL LIGHTNING",
+		color = Color3.fromRGB(150, 230, 255),
+	},
+}
+
+-- Scheduled events (Util/Weather): every sale pays `multiplier` times more
+-- while one is on. A "Sat 00:00" style time repeats every week (UTC); a
+-- number is a one-off Unix time.
+local EVENTS: { Types.EventDef } = {
+	{
+		name = "Double Volts Weekend",
+		startUtc = "Sat 00:00",
+		endUtc = "Sun 23:59",
+		multiplier = 2,
+		banner = "2x Volts on every sale, all weekend!",
+	},
+}
+
 return table.freeze({
 	-- Saving
 	AUTOSAVE_INTERVAL = 60, -- seconds between autosaves per player
@@ -593,6 +634,30 @@ return table.freeze({
 	BALLOON_MIN_DISTANCE = 12, -- studs from the owner; Storm Chaser bolts land this near
 	BALLOON_MAX_DISTANCE = 20,
 	STRIKE_INTERVAL_JITTER = 0.3, -- +/-30% randomness on strike timing
+	BOLT_TYPES = table.freeze(BOLT_TYPES),
+	-- Ball lightning: an orb that drifts across the zone for `seconds`; the
+	-- first player (with room) within `touchRadius` studs of it catches it.
+	-- The server checks every `checkEvery` seconds.
+	BALL_LIGHTNING = table.freeze({
+		seconds = 8,
+		checkEvery = 0.2,
+		touchRadius = 5,
+		height = 3, -- studs above the ground the orb floats
+		minTravel = 24, -- studs; the shortest drift
+	}),
+	-- Supercell (Systems/StormCycle): about every intervalMinutes (give or
+	-- take jitterMinutes) a storm turns into a Supercell for `minutes`, with
+	-- strikeMultiplier times the strikes and goldenMultiplier times the
+	-- golden chance. A countdown shows warningSeconds before it starts.
+	SUPERCELL = table.freeze({
+		intervalMinutes = 60,
+		jitterMinutes = 15,
+		minutes = 3,
+		warningSeconds = 30,
+		strikeMultiplier = 2,
+		goldenMultiplier = 5,
+	}),
+	EVENTS = table.freeze(EVENTS),
 
 	-- Movement: you move faster between zones so travel isn't a chore.
 	-- Boots add their speedBonus inside zones only (see BOOTS).

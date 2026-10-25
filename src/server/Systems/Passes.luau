@@ -36,6 +36,7 @@ local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
 local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local Types = require(ReplicatedStorage.Shared.Types)
+local Weather = require(ReplicatedStorage.Shared.Util.Weather)
 local Boosts = require(script.Parent.Boosts)
 local Group = require(script.Parent.Group)
 local PlayerData = require(script.Parent.PlayerData)
@@ -182,17 +183,22 @@ function Passes.storeSession(player: Player): Types.StoreSession
 	return session
 end
 
--- Owned passes plus what multiplies sales like one: the group bonus and a
--- Server Storm (Systems/Boosts).
+-- Owned passes plus what multiplies sales like one: the group bonus, a
+-- Server Storm (Systems/Boosts) and any scheduled event on now
+-- (Config.EVENTS, Util/Weather).
 local function withBonuses(player: Player): PassRules.Owned
 	local owned = Passes.owned(player)
 	local member, storm = Group.isMember(player), Boosts.stormOn()
-	if not member and not storm then
+	local events = Weather.liveEvents()
+	if not member and not storm and #events == 0 then
 		return owned
 	end
 	local set = table.clone(owned)
 	set[PassRules.GROUP] = if member then true else nil
 	set[PassRules.SERVER_STORM] = if storm then true else nil
+	for _, on in events do
+		set[PassRules.EVENT .. on.event.name] = true
+	end
 	return set
 end
 

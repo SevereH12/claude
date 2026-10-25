@@ -275,6 +275,36 @@ server only stores what `Settings.sanitize` lets through.
 - Code reads settings with `Lib/SettingsStore` (`get`, `set`, `watch`,
   `Changed`), so changes apply at once.
 
+## Storm surprises
+
+Storms aren't all the same. The server decides everything here; players'
+screens only draw it. The maths is in `src/shared/Util/Weather.luau`
+(tested by `tools/harness/test_weather.luau`), and the numbers are in
+`Config.BOLT_TYPES`, `Config.BALL_LIGHTNING`, `Config.SUPERCELL` and
+`Config.EVENTS`.
+
+- **Rare bolts**: each strike has a 2% chance to be **Golden** (worth x10),
+  0.4% to be **Rainbow** (x25, plus 5 minutes of a random boost for the
+  catcher and a chat line for the whole server) and 1% to be **Ball
+  lightning** (x5): an orb that drifts across the zone for 8 seconds, and
+  the first player with room in their bottle who touches it catches it.
+  The ring shows the type (gold, rainbow colours, or the orb) before the
+  bolt lands, so players can race for it. Luck and the assay still double
+  on top, and a rare bolt fills the same bottle space as a normal one.
+- **Supercells**: about once an hour (45 to 75 minutes apart) a storm turns
+  into a 3-minute Supercell: twice the strikes, golden bolts 5x as likely,
+  a darker purple sky and a banner. The storm timer counts down for 30
+  seconds before it starts, so players can get into a zone.
+- **Scheduled events**: `Config.EVENTS` lists events with a start, an end
+  and a sale multiplier. **Double Volts Weekend** runs every Saturday 00:00
+  to Sunday 23:59 UTC and doubles every sale (AFK and Remote Sell too). A
+  chip under the goal card shows the event and its time left. To add an
+  event, add a line: a weekly one uses times like `"Sat 00:00"`, a one-off
+  uses Unix times.
+- **Testing in Studio**: the TEST panel's REWARDS list has **Force golden
+  bolt** (drops one where you stand, in a zone), **Supercell in 30 s** and
+  **Pretend event** (turns Double Volts Weekend on).
+
 ## Code layout
 
 - `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas, zone geometry

@@ -1,6 +1,12 @@
 --!strict
 -- Runs the storm/calm loop and tells every client the current phase and
 -- when it ends.
+--
+-- About every hour (Config.SUPERCELL, Util/Weather) a Supercell takes over:
+-- 30 s before it, the state carries `supercellAt` (clients show a
+-- countdown); then a storm with `supercell = true` runs for its 3 minutes
+-- (Systems/Strikes doubles the strikes and the golden chance), then the
+-- normal loop carries on with a calm.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -8,23 +14,78 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Types = require(ReplicatedStorage.Shared.Types)
+local Weather = require(ReplicatedStorage.Shared.Util.Weather)
 
 local StormCycle = {}
 
 local state: Types.StormState = { phase = "Calm", endsAt = 0 }
+local random = Random.new()
+local supercellAt = math.huge -- server time the next Supercell starts
+local remote: RemoteEvent
 
 function StormCycle.isStorming(): boolean
 	return state.phase == "Storm"
 end
 
-local function setPhase(remote: RemoteEvent, phase: Types.StormPhase, duration: number)
-	state = { phase = phase, endsAt = workspace:GetServerTimeNow() + duration }
+-- Is the storm on now a Supercell?
+function StormCycle.isSupercell(): boolean
+	return state.phase == "Storm" and state.supercell == true
+end
+
+local function now(): number
+	return workspace:GetServerTimeNow()
+end
+
+-- `supercellAt` goes out only during the warning countdown.
+local function warningAt(): number?
+	return if Weather.supercellStage(now(), supercellAt) == "warning" then supercellAt else nil
+end
+
+local function setPhase(phase: Types.StormPhase, duration: number, supercell: boolean?)
+	state = {
+		phase = phase,
+		endsAt = now() + duration,
+		supercell = supercell,
+		supercellAt = if supercell then nil else warningAt(),
+	}
 	remote:FireAllClients(state)
-	print(`[StormCycle] {phase} for {duration}s`)
+	print(`[StormCycle] {if supercell then "Supercell" else phase} for {duration}s`)
+end
+
+-- Waits out the phase. Returns true early if a Supercell is due; sends the
+-- countdown once when its warning starts.
+local function waitPhase(): boolean
+	while now() < state.endsAt do
+		local stage = Weather.supercellStage(now(), supercellAt)
+		if stage == "on" or stage == "over" then
+			return true
+		end
+		if stage == "warning" and state.supercellAt == nil then
+			state = table.clone(state)
+			state.supercellAt = supercellAt
+			remote:FireAllClients(state)
+		end
+		task.wait(0.25)
+	end
+	return false
+end
+
+local function runSupercell()
+	local duration = Config.SUPERCELL.minutes * 60
+	setPhase("Storm", duration, true)
+	task.wait(duration)
+	supercellAt = Weather.nextSupercellAt(now(), random:NextNumber())
+	setPhase("Calm", Config.CALM_DURATION)
+	waitPhase()
+end
+
+-- TEST panel (Studio): the next Supercell starts in `seconds`.
+function StormCycle.supercellIn(seconds: number)
+	supercellAt = now() + seconds
 end
 
 function StormCycle.init()
-	local remote = Net.get("StormState")
+	remote = Net.get("StormState")
 	-- players joining mid-cycle get the current phase straight away
 	Players.PlayerAdded:Connect(function(player)
 		remote:FireClient(player, state)
@@ -32,14 +93,20 @@ function StormCycle.init()
 end
 
 function StormCycle.start()
-	local remote = Net.get("StormState")
-	setPhase(remote, "Calm", Config.FIRST_STORM_DELAY)
-	task.wait(Config.FIRST_STORM_DELAY)
+	supercellAt = Weather.nextSupercellAt(now(), random:NextNumber())
+	setPhase("Calm", Config.FIRST_STORM_DELAY)
+	waitPhase()
 	while true do
-		setPhase(remote, "Storm", Config.STORM_DURATION)
-		task.wait(Config.STORM_DURATION)
-		setPhase(remote, "Calm", Config.CALM_DURATION)
-		task.wait(Config.CALM_DURATION)
+		if now() >= supercellAt then
+			runSupercell()
+			continue
+		end
+		setPhase("Storm", Config.STORM_DURATION)
+		if waitPhase() then
+			continue
+		end
+		setPhase("Calm", Config.CALM_DURATION)
+		waitPhase()
 	end
 end
 

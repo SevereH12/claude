@@ -162,6 +162,34 @@ export type StormPhase = "Storm" | "Calm"
 export type StormState = {
 	phase: StormPhase,
 	endsAt: number,
+	supercell: boolean?, -- this storm is a Supercell (Config.SUPERCELL)
+	supercellAt: number?, -- a Supercell starts at this time (sent in the last 30 s before it)
+}
+
+-- A rare bolt (Config.BOLT_TYPES); "Normal" is every other bolt.
+export type BoltType = "Normal" | "Golden" | "Rainbow" | "Ball"
+
+-- key: the BoltType; chance: the odds per strike (0.02 = 2%); multiplier:
+-- what it multiplies the catch's value by; label: its popup ("GOLDEN");
+-- boostMinutes: a random timed boost for every catcher (Rainbow).
+export type BoltTypeDef = {
+	key: BoltType,
+	chance: number,
+	multiplier: number,
+	label: string,
+	color: Color3,
+	boostMinutes: number?,
+}
+
+-- A scheduled event (Config.EVENTS) multiplies every sale while it's on.
+-- startUtc/endUtc: a Unix time (a one-off event) or "Sat 00:00" style
+-- weekday and UTC time (it repeats every week). The end minute is included.
+export type EventDef = {
+	name: string,
+	startUtc: number | string,
+	endUtc: number | string,
+	multiplier: number,
+	banner: string,
 }
 
 -- "Shared": everyone inside the circle catches it.
@@ -261,6 +289,11 @@ export type StrikeWarning = {
 	radius: number,
 	landsAt: number, -- workspace:GetServerTimeNow() time
 	ownerId: number?, -- Storm Chaser balloon bolt: only this UserId can catch it
+	boltType: BoltType?, -- a rare bolt (nil = Normal)
+	-- Ball lightning: the orb drifts in a straight line from `position` to
+	-- orbTo (both on the ground) for orbSeconds, starting at landsAt
+	orbTo: Vector3?,
+	orbSeconds: number?,
 }
 
 -- Server -> one client (a Forecaster's owner): the next strike's ring, early.
@@ -287,6 +320,8 @@ export type StrikeLanded = {
 	tanked: { number }, -- full players whose charge went into their Chemist's tank
 	lucky: { number }, -- Lucky Charges catchers whose roll doubled the charge
 	ownerId: number?, -- Storm Chaser balloon bolt: only this UserId could catch it
+	boltType: BoltType?, -- a rare bolt (nil = Normal); `values` include its multiplier
+	boost: string?, -- Rainbow: the boost key (Config.BOOSTS) every catcher got
 }
 
 return nil

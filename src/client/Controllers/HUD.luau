@@ -11,6 +11,8 @@
 --   ├── StormChip    under it, while a Server Storm is on (Systems/Boosts,
 --   │                read from workspace attributes): its latest buyer and
 --   │                time left ("🌩️ SERVER 2x · Alex · 14:32")
+--   ├── EventChip    under that, while a scheduled event is on (Config.EVENTS,
+--   │                Util/Weather): "🎉 Double Volts Weekend 2x · 1d 4h"
 --   ├── BottleBar    bottom centre (top centre on touch): fill + "JAR 3 / 5",
 --   │                with the Chemist's TANK count beside it
 --   └── RemoteSell   Remote Sell pass owners: a SELL button at the bar's
@@ -33,6 +35,7 @@ local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local Types = require(ReplicatedStorage.Shared.Types)
+local Weather = require(ReplicatedStorage.Shared.Util.Weather)
 local Layout = require(script.Parent.Parent.Lib.Layout)
 local LayoutMath = require(script.Parent.Parent.Lib.LayoutMath)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
@@ -66,6 +69,7 @@ local boostRow: Frame
 local boostList: UIListLayout
 local boostChips: { [string]: TextLabel } = {} -- by boost key
 local stormChip: TextLabel
+local eventChip: TextLabel
 local sellCharging = false
 local sellReadyAt = 0
 local goalCard: Frame
@@ -319,6 +323,23 @@ local function buildStormChip()
 	UI.maxText(stormChip, 18)
 end
 
+-- A scheduled event's chip under the Server Storm's.
+local function buildEventChip()
+	eventChip = UI.label({
+		Title = true,
+		Name = "EventChip",
+		Text = "",
+		Visible = false,
+		TextColor3 = COLORS.text,
+		BackgroundColor3 = Color3.fromRGB(230, 150, 20),
+		BackgroundTransparency = 0,
+		Parent = screenGui,
+	})
+	UI.corner(eventChip, UDim.new(0.5, 0))
+	UI.stroke(eventChip, 2)
+	UI.maxText(eventChip, 18)
+end
+
 -- The SELL button's charge-up ring: an outline that fills left to right.
 local function buildSellButton()
 	sellButton = UI.button({
@@ -459,6 +480,17 @@ local function renderServerStorm()
 	end
 end
 
+-- The scheduled event on now (the first, if several), and its time left.
+local function renderEvent()
+	local active = Weather.liveEvents()[1]
+	eventChip.Visible = active ~= nil
+	if active then
+		local event = active.event
+		eventChip.Text =
+			`🎉 {event.name} {event.multiplier}x · {Weather.formatLeft(active.left)}`
+	end
+end
+
 local function renderStorm()
 	local state = Storm.current
 	if not state then
@@ -466,7 +498,17 @@ local function renderStorm()
 	end
 	local seconds = math.ceil(Storm.secondsLeft())
 	local clock = string.format("%d:%02d", seconds // 60, seconds % 60)
-	if state.phase == "Storm" then
+	local supercellIn = if state.supercellAt
+		then math.max(0, math.ceil(state.supercellAt - workspace:GetServerTimeNow()))
+		else nil
+	if state.phase == "Storm" and state.supercell then
+		stormLabel.Text = `⛈ SUPERCELL  {clock}`
+		stormPill.BackgroundColor3 = Color3.fromRGB(120, 60, 200)
+	elseif supercellIn then
+		-- the 30 s countdown to a Supercell (Systems/StormCycle)
+		stormLabel.Text = string.format("⛈ SUPERCELL IN 0:%02d", supercellIn)
+		stormPill.BackgroundColor3 = Color3.fromRGB(120, 60, 200)
+	elseif state.phase == "Storm" then
 		stormLabel.Text = `⚡ STORM  {clock}`
 		stormPill.BackgroundColor3 = COLORS.storm
 	else
@@ -567,6 +609,7 @@ function HUD.place()
 	UI.place(stormPill, hud.storm)
 	UI.place(goalCard, hud.goal)
 	UI.place(stormChip, hud.serverStorm)
+	UI.place(eventChip, hud.event)
 	-- the boosts' chips: three across a row, or stacked in a column
 	local boosts = hud.boosts
 	UI.place(boostRow, boosts)
@@ -622,6 +665,7 @@ function HUD.init()
 	buildBottleBar()
 	buildBoostRow()
 	buildStormChip()
+	buildEventChip()
 	buildSellButton()
 	HUD.place()
 	Layout.Changed:Connect(HUD.place)
@@ -647,6 +691,7 @@ function HUD.start()
 		renderStorm()
 		renderBoosts()
 		renderServerStorm()
+		renderEvent()
 		task.wait(0.25)
 	end
 end

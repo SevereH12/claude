@@ -45,6 +45,7 @@ export type Hud = {
 	boosts: Rect, -- timed boost chips: a row under the storm timer (a column beside Volts on a sideways phone or tablet)
 	goal: Rect,
 	serverStorm: Rect, -- a Server Storm's chip (buyer and time left), under the goal
+	event: Rect, -- a scheduled event's chip (name and time left), under that
 	bar: Rect,
 	menu: Rect,
 	card: Rect, -- the menu's tile card, beside the menu button (offers use it too)
@@ -236,7 +237,8 @@ function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?): Hud
 	local serverStorm = rect(goalX, goal.y + goal.h + G, H.goalWidth, H.boostHeight)
 	local leftBottom = math.max(storm.y + storm.h, boosts.y + boosts.h)
 	local leftRight = math.max(volts.x + volts.w, boosts.x + boosts.w)
-	local rightBottom = serverStorm.y + serverStorm.h
+	local event = rect(goalX, serverStorm.y + serverStorm.h + G, H.goalWidth, H.boostHeight)
+	local rightBottom = event.y + event.h
 
 	-- the bottle bar, and on a phone or tablet held upright MENU beside it
 	local bar
@@ -320,6 +322,7 @@ function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?): Hud
 		boosts = boosts,
 		goal = goal,
 		serverStorm = serverStorm,
+		event = event,
 		bar = bar,
 		menu = button,
 		card = card,

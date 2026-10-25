@@ -4,7 +4,9 @@
 -- (Studio only), PASSES opens one "Pretend owns <pass>" toggle per Game
 -- Pass and "Send test gift to me" and "Send test boost gift" buttons, and
 -- REWARDS opens Next day, +5 min playtime, Clear boosts (and the Server
--- Storm), Start Server Storm, +500 research data, +100 Glints, Simulate idle 17 min (the AFK Lounge's
+-- Storm), Start Server Storm, +500 research data, +100 Glints, Force golden
+-- bolt (where you stand), Supercell in 30 s, a Pretend event toggle (Double
+-- Volts Weekend), Simulate idle 17 min (the AFK Lounge's
 -- idle handler, Controllers/AfkUI), a Pretend group member toggle, the
 -- Sound board, which plays every sound in order with its name, and the Music
 -- audition, every shortlisted track for 20 s (all Studio only). The server (Systems/DevCommands) checks again. To
@@ -18,6 +20,7 @@ local RunService = game:GetService("RunService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
+local Weather = require(ReplicatedStorage.Shared.Util.Weather)
 local Layout = require(script.Parent.Parent.Lib.Layout)
 local LayoutMath = require(script.Parent.Parent.Lib.LayoutMath)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
@@ -148,7 +151,7 @@ function DevCommands.init()
 	UI.onLayout(function()
 		UI.place(rewards, row(4))
 		local area = Layout.hud.test
-		UI.place(tools, { x = area.x + area.w + LayoutMath.GAP, y = area.y, w = 220, h = 10 * 48 })
+		UI.place(tools, { x = area.x + area.w + LayoutMath.GAP, y = area.y, w = 220, h = 13 * 48 })
 	end)
 	local function showLists(passesOn: boolean, rewardsOn: boolean)
 		list.Visible = passesOn
@@ -172,11 +175,13 @@ function DevCommands.init()
 			{ text = "🌩️ Start Server Storm", command = "serverStorm" },
 			{ text = "🔬 +500 research data", command = "researchData" },
 			{ text = "✨ +100 Glints (this tier)", command = "glints" },
+			{ text = "🌟 Force golden bolt", command = "goldenBolt" },
+			{ text = "⛈ Supercell in 30 s", command = "supercell" },
 		}
 	do
 		local toolButton = UI.button({
 			Name = tool.command,
-			LayoutOrder = index,
+			LayoutOrder = if index > 6 then index + 4 else index,
 			Text = tool.text,
 			Size = UDim2.new(1, 0, 0, 40),
 			BackgroundColor3 = UI.COLORS.panelDark,
@@ -286,6 +291,27 @@ function DevCommands.init()
 	groupToggle.Activated:Connect(function()
 		UI.pop(groupToggle)
 		devRemote:FireServer("group", player:GetAttribute("PretendGroup") ~= true)
+	end)
+	-- Pretend event: the first scheduled event (Config.EVENTS) is on
+	local eventToggle = UI.button({
+		Name = "PretendEvent",
+		LayoutOrder = 13,
+		Text = "",
+		Size = UDim2.new(1, 0, 0, 40),
+		BackgroundColor3 = UI.COLORS.panelDark,
+		Parent = tools,
+	})
+	UI.maxText(eventToggle, 16)
+	local function showEvent()
+		local on = workspace:GetAttribute(Weather.PRETEND_EVENT) == true
+		eventToggle.Text = `🎉 Pretend event: {if on then "ON" else "OFF"}`
+		eventToggle.BackgroundColor3 = if on then UI.COLORS.green else UI.COLORS.panelDark
+	end
+	showEvent()
+	workspace:GetAttributeChangedSignal(Weather.PRETEND_EVENT):Connect(showEvent)
+	eventToggle.Activated:Connect(function()
+		UI.pop(eventToggle)
+		devRemote:FireServer("event", workspace:GetAttribute(Weather.PRETEND_EVENT) ~= true)
 	end)
 	for index, pass in Config.PASSES do
 		local attribute = `PretendPass_{pass.key}`

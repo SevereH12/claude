@@ -28,6 +28,10 @@ Passes.GROUP = "GroupMember"
 -- that marks it in an `owned` set, so it multiplies sales like a pass.
 Passes.SERVER_STORM = "ServerStorm"
 
+-- A scheduled event is on (Config.EVENTS, Util/Weather): EVENT .. its name
+-- marks it in an `owned` set, so it multiplies sales like a pass.
+Passes.EVENT = "Event_"
+
 -- The pass with this key, or nil.
 function Passes.def(key: string): Types.PassDef?
 	for _, pass in Config.PASSES do
@@ -39,7 +43,8 @@ function Passes.def(key: string): Types.PassDef?
 end
 
 -- What a sale pays, times this: 2x Volts (pass or boost), VIP, the group
--- bonus and a Server Storm multiply (2 x 1.1 x 1.1 x 2 = 4.84).
+-- bonus, a Server Storm and any scheduled event multiply
+-- (2 x 1.1 x 1.1 x 2 = 4.84, x2 more on a Double Volts Weekend).
 function Passes.sellMultiplier(owned: Owned): number
 	local multiplier = 1
 	if owned.DoubleVolts then
@@ -53,6 +58,11 @@ function Passes.sellMultiplier(owned: Owned): number
 	end
 	if owned[Passes.SERVER_STORM] then
 		multiplier *= Config.SERVER_STORM.multiplier
+	end
+	for _, event in Config.EVENTS do
+		if owned[Passes.EVENT .. event.name] then
+			multiplier *= event.multiplier
+		end
 	end
 	return multiplier
 end

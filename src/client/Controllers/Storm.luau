@@ -3,7 +3,8 @@
 -- the sky darkens, clouds roll in and it rains. All of this is local to
 -- this player's screen. The rain follows SETTINGS > Graphics > Rain and
 -- particles, and the colour grade Bloom and colour. Changes take 4 seconds
--- (slow enough for Reduce flashing).
+-- (slow enough for Reduce flashing). A Supercell (Systems/StormCycle) is a
+-- darker, purple version of the storm look.
 
 local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -104,6 +105,37 @@ local function captureLooks()
 	end
 	LOOKS.Calm = calm
 	LOOKS.Storm = storm
+
+	-- Supercell: the storm look, darker and purple
+	local purple = Color3.fromRGB(70, 30, 110)
+	local supercell: Look = {
+		lighting = {
+			Brightness = storm.lighting.Brightness * 0.6,
+			OutdoorAmbient = (storm.lighting.OutdoorAmbient :: Color3):Lerp(purple, 0.5),
+			ClockTime = storm.lighting.ClockTime,
+		},
+		atmosphere = table.clone(storm.atmosphere),
+		clouds = table.clone(storm.clouds),
+		grade = table.clone(storm.grade),
+		rainRate = RAIN_RATE * 1.5,
+	}
+	if typeof(storm.atmosphere.Color) == "Color3" then
+		supercell.atmosphere.Color = storm.atmosphere.Color:Lerp(purple, 0.55)
+		supercell.atmosphere.Density = math.min(storm.atmosphere.Density + 0.08, 0.75)
+	end
+	if typeof(storm.clouds.Color) == "Color3" then
+		supercell.clouds.Color = storm.clouds.Color:Lerp(purple, 0.5)
+		supercell.clouds.Cover = 1
+	end
+	if typeof(storm.grade.TintColor) == "Color3" then
+		supercell.grade.TintColor = storm.grade.TintColor:Lerp(Color3.fromRGB(200, 160, 255), 0.6)
+	end
+	LOOKS.Supercell = supercell
+end
+
+-- Which look a state wants: "Calm", "Storm" or "Supercell".
+local function lookOf(state: Types.StormState): string
+	return if state.phase == "Storm" and state.supercell then "Supercell" else state.phase
 end
 
 local Storm = {}
@@ -148,8 +180,8 @@ local function scaledGrade(grade: { [string]: any }, amount: number): { [string]
 	return out
 end
 
-local function applyLook(phase: Types.StormPhase)
-	local look = LOOKS[phase]
+local function applyLook(name: string)
+	local look = LOOKS[name]
 	tweenIfExists(Lighting, look.lighting)
 	tweenIfExists(Lighting:FindFirstChildOfClass("Atmosphere"), look.atmosphere)
 	tweenIfExists(workspace.Terrain:FindFirstChildOfClass("Clouds"), look.clouds)
@@ -200,10 +232,10 @@ function Storm.init()
 	rainEmitter = makeRain()
 	Net.get("StormState").OnClientEvent:Connect(function(state: Types.StormState)
 		local previous = Storm.current
-		local changedPhase = previous == nil or previous.phase ~= state.phase
+		local changedLook = previous == nil or lookOf(previous) ~= lookOf(state)
 		Storm.current = state
-		if changedPhase then
-			applyLook(state.phase)
+		if changedLook then
+			applyLook(lookOf(state))
 		end
 		Storm.Changed:Fire(state)
 	end)
@@ -211,7 +243,7 @@ function Storm.init()
 	SettingsStore.Changed:Connect(function(key: string)
 		local state = Storm.current
 		if state and (key == "particleAmount" or key == "bloomAmount") then
-			applyLook(state.phase)
+			applyLook(lookOf(state))
 		end
 	end)
 end

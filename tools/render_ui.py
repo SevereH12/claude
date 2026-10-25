@@ -21,6 +21,7 @@ COLORS = {
     "boosts": (255, 120, 170),
     "goal": (100, 160, 255),
     "serverStorm": (130, 70, 230),
+    "event": (230, 170, 30),
     "bar": (70, 90, 230),
     "menu": (44, 52, 92),
     "card": (120, 130, 170),
@@ -34,6 +35,7 @@ LABELS = {
     "boosts": "BOOSTS",
     "goal": "GOAL",
     "serverStorm": "SERVER STORM",
+    "event": "EVENT",
     "bar": "BOTTLE",
     "menu": "MENU",
     "card": "menu card (open)",
@@ -74,7 +76,7 @@ def main():
                 [(ox + x * s) * k, (oy + y * s) * k, (ox + (x + w) * s) * k, (oy + (y + h) * s) * k],
                 outline=(235, 75, 75),
             )
-        order = ["card", "banner", "toasts", "test", "volts", "storm", "boosts", "goal", "serverStorm", "bar", "menu"]
+        order = ["card", "banner", "toasts", "test", "volts", "storm", "boosts", "goal", "serverStorm", "event", "bar", "menu"]
         for key in order:
             x, y, w, h = d["hud"][key]
             box = [(ox + x * s) * k, (oy + y * s) * k, (ox + (x + w) * s) * k, (oy + (y + h) * s) * k]
