@@ -25,6 +25,10 @@ Passes.BOLT_ATTRIBUTE = "BoltColour"
 -- `owned` set, so the group bonus multiplies like a pass.
 Passes.GROUP = "GroupMember"
 
+-- The owner of the private server they're in (Systems/PrivateServer): the
+-- player attribute behind the [Owner] chat tag. Not a perk, just a label.
+Passes.SERVER_OWNER = "PrivateServerOwner"
+
 -- A Server Storm is on in the player's server (Systems/Boosts): the key
 -- that marks it in an `owned` set, so it multiplies sales like a pass.
 Passes.SERVER_STORM = "ServerStorm"

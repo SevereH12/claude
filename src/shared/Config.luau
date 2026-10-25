@@ -891,6 +891,7 @@ return table.freeze({
 	GROUP_NAME = "Super Studio",
 	GROUP_BONUS = 0.10,
 	GROUP_COLOR = Color3.fromRGB(80, 200, 255), -- the [Member] chat tag
+	OWNER_COLOR = Color3.fromRGB(120, 230, 140), -- the [Owner] chat tag (private servers)
 
 	-- The AFK Lounge (Systems/Afk, Util/Afk): standing in it pays this
 	-- fraction of the player's best grinding rate (passes, boosts, the group

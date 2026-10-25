@@ -5,7 +5,7 @@ does the first unticked part, then ticks it.
 
 - [x] Part A (in-game): admin tools, error reporting, and streaming and
   memory
-- [ ] Part B (outside the game): data deletion, store page art, and private
+- [x] Part B (outside the game): data deletion, store page art, and private
   servers
 
 ## Part A: admin tools, error reporting, streaming (run 1)

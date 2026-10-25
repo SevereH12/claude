@@ -547,6 +547,84 @@ models): zone volumes, camps, gates, sell areas, the research office,
 portals and the AFK Lounge. Before a trip to another world the server
 loads the arrival spot first.
 
+## Data deletion requests
+
+Players can ask Roblox to erase their data ("right to erasure"). Roblox
+then tells you which user id to erase, and gives you a deadline:
+
+- **Getting told**: on the Creator Dashboard, open **Webhooks** (under
+  your profile menu) and add one with the **Right To Erasure Request**
+  trigger, pointing at a URL that reaches you (a Discord webhook works).
+  Without a webhook, Roblox sends the request as a notice in your Roblox
+  messages, so keep an eye on those.
+- **Erasing**: run the script (or ask Claude to run it) before the
+  deadline. First the dry run, which only reads and lists what it would
+  change:
+
+  ```
+  python3 tools/ops/erase_user.py <userId> --dry-run
+  python3 tools/ops/erase_user.py <userId>
+  ```
+
+  It deletes that user's save (`StormBottler_PlayerData`, key
+  `player_<id>`), gift inbox and gift receipts (`StormBottler_Gifts`),
+  invite count (`StormBottler_Invites`), leaderboard scores (the four
+  `StormBottler_LB_<board>` stores) and phone reminders (the
+  `StormBottler_Notifications` MemoryStore). Where their name or id sits
+  in someone else's data (gifts they sent, someone's invite list, the
+  `AdminLog`), it blanks just that part and keeps the rest. It prints
+  every key it deletes or cleans.
+- **Keeping it complete**: if the game's code ever opens a store the
+  script doesn't know, the script refuses to run until it's added.
+  `python3 tools/ops/erase_user.py --check` checks just that, and
+  `python3 tools/ops/test_erase_user.py` tests the erase against a fake
+  Roblox (nothing goes online).
+- It uses the same Open Cloud API key as `tools/store/` (`$ROBLOX_API_KEY`,
+  or the one the network adds). The key needs DataStores, Ordered
+  DataStores and MemoryStore access for the game. Roblox keeps bans
+  itself; this game stores nothing else about players.
+
+## Store page art
+
+`python3 tools/store/make_store_art.py tools/store/art` draws the game
+page art into `tools/store/art/`:
+
+- `icon.png` (512×512): the game icon, a glowing bottle of lightning with
+  the STORM BOTTLER name
+- `thumb_1_storm.png`, `thumb_2_worlds.png`, `thumb_3_loop.png`
+  (1920×1080): Barometer Bay in a storm, the three worlds, and "catch,
+  sell, upgrade"
+
+Roblox's Open Cloud can't change a game's own icon or thumbnails (its
+thumbnail calls only take translated images), so upload them by hand on
+create.roblox.com (Creator Dashboard):
+
+1. **Icon**: click the game under **Creations**. In the left menu go to
+   **Configurations** > **Places**, click the start place (the one with a
+   star), then **Icon** in its left menu. Set the type to **Image**, click
+   **Change**, choose `icon.png`, then **Save Changes**.
+2. **Thumbnails**: back on the game's page, click **Thumbnails** in the
+   left menu and open the **Experience Detail Page** tab. Upload
+   `thumb_1_storm.png`, `thumb_2_worlds.png` and `thumb_3_loop.png`, put
+   the storm one first, remove Roblox's default picture, and save. (The
+   **Home Page** tab can use the same images.)
+3. Roblox checks new images first, so they can take a few minutes to show.
+
+## Private servers
+
+Private servers are **on**, at **100 Robux a month** (set with Open Cloud:
+`PATCH /cloud/v2/universes/10772352394`, `privateServerPriceRobux`).
+Players buy one from the **Servers** tab on the game page. Roblox only
+offers private servers in a **public** game, so they show up once the game
+is public. To check, change the price or turn them off: create.roblox.com
+> **Creations** > the game > **Audience** > **Access Settings** >
+**Allow private servers** (and **Requires Robux** with the price), then
+**Save Changes**.
+
+In a private server its owner gets a small green **[Owner]** chat tag
+(`Systems/PrivateServer`, `Controllers/VipChat`). Everything else works the
+same as in a public server.
+
 ## Code layout
 
 - `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas, zone geometry
@@ -564,3 +642,4 @@ loads the arrival spot first.
 
 - Format: `stylua src`
 - Lint: `selene src`
+- Data deletion script: `python3 tools/ops/test_erase_user.py` (offline)
