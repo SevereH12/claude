@@ -28,6 +28,10 @@ Passes.GROUP = "GroupMember"
 -- that marks it in an `owned` set, so it multiplies sales like a pass.
 Passes.SERVER_STORM = "ServerStorm"
 
+-- A Server Surge is on (the server goal was filled: Systems/ServerGoal).
+-- It stacks with a Server Storm (both on: 2 x 2 = 4x).
+Passes.SERVER_SURGE = "ServerSurge"
+
 -- A scheduled event is on (Config.EVENTS, Util/Weather): EVENT .. its name
 -- marks it in an `owned` set, so it multiplies sales like a pass.
 Passes.EVENT = "Event_"
@@ -43,7 +47,7 @@ function Passes.def(key: string): Types.PassDef?
 end
 
 -- What a sale pays, times this: 2x Volts (pass or boost), VIP, the group
--- bonus, a Server Storm and any scheduled event multiply
+-- bonus, a Server Storm, a Server Surge and any scheduled event multiply
 -- (2 x 1.1 x 1.1 x 2 = 4.84, x2 more on a Double Volts Weekend).
 function Passes.sellMultiplier(owned: Owned): number
 	local multiplier = 1
@@ -58,6 +62,9 @@ function Passes.sellMultiplier(owned: Owned): number
 	end
 	if owned[Passes.SERVER_STORM] then
 		multiplier *= Config.SERVER_STORM.multiplier
+	end
+	if owned[Passes.SERVER_SURGE] then
+		multiplier *= Config.SERVER_GOAL.multiplier
 	end
 	for _, event in Config.EVENTS do
 		if owned[Passes.EVENT .. event.name] then

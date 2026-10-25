@@ -714,6 +714,25 @@ return table.freeze({
 		maxMinutes = 60,
 		multiplier = 2,
 	}),
+	-- The server goal (Systems/ServerGoal, the maths in Util/Weather): every
+	-- Volt sold in this server (Remote Sell too, not the AFK Lounge) fills
+	-- one meter. Its size is every present player's grinding rate (Util/Afk)
+	-- added up, times `minutes`, so any server takes about that long. Filling
+	-- it starts a Server Surge: `multiplier` x Volts for everyone for
+	-- `surgeMinutes` (on top of any Server Storm). Each goal after that is
+	-- `growth` times bigger, back to normal every `resetMinutes`. The goal never drops below what's filled plus `stuckMargin`,
+	-- and is at least `minGoal` Volts. Tapping the meter shows the top
+	-- `topCount` contributors.
+	SERVER_GOAL = table.freeze({
+		minutes = 15,
+		surgeMinutes = 10,
+		multiplier = 2,
+		growth = 1.5,
+		resetMinutes = 60,
+		stuckMargin = 0.1,
+		minGoal = 1000,
+		topCount = 3,
+	}),
 	DAILY_REWARDS = table.freeze(DAILY_REWARDS),
 	PLAYTIME_GIFTS = table.freeze(PLAYTIME_GIFTS),
 	-- a boost reward for a pass the player owns pays Volts instead: this many

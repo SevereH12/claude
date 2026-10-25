@@ -14,7 +14,8 @@
 --
 -- The HUD sits on the screen's edges: Volts, the storm timer and the
 -- running boosts' chips top left,
--- the next goal top right (a Server Storm's chip under it), the bottle bar bottom centre (top centre on
+-- the next goal top right (a Server Storm's chip, an event's chip and the
+-- slim server goal meter under it), the bottle bar bottom centre (top centre on
 -- touch, clear of the thumbstick and jump button; on a phone held upright
 -- under the top row, beside MENU), MENU on the left edge. Toasts and the zone banner
 -- go in the middle of the top, under whatever sits there. Pieces use the
@@ -46,6 +47,7 @@ export type Hud = {
 	goal: Rect,
 	serverStorm: Rect, -- a Server Storm's chip (buyer and time left), under the goal
 	event: Rect, -- a scheduled event's chip (name and time left), under that
+	serverGoal: Rect, -- the server goal meter (tap: top contributors), under the event's chip
 	bar: Rect,
 	menu: Rect,
 	card: Rect, -- the menu's tile card, beside the menu button (offers use it too)
@@ -84,6 +86,7 @@ LayoutMath.HUD = table.freeze({
 	menuSize = 84,
 	boostHeight = 28, -- one boost chip
 	boostWidth = 78, -- one chip in the sideways column
+	serverGoalHeight = 24, -- the slim server goal meter
 	cardWidth = 398, -- three tiles of 118 + gaps of 10 + padding 12 each side
 	cardHeight = 214, -- two rows of 90 + gap 10 + padding 12 each side
 	toastWidth = 380,
@@ -238,7 +241,8 @@ function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?): Hud
 	local leftBottom = math.max(storm.y + storm.h, boosts.y + boosts.h)
 	local leftRight = math.max(volts.x + volts.w, boosts.x + boosts.w)
 	local event = rect(goalX, serverStorm.y + serverStorm.h + G, H.goalWidth, H.boostHeight)
-	local rightBottom = event.y + event.h
+	local serverGoal = rect(goalX, event.y + event.h + G / 2, H.goalWidth, H.serverGoalHeight)
+	local rightBottom = serverGoal.y + serverGoal.h
 
 	-- the bottle bar, and on a phone or tablet held upright MENU beside it
 	local bar
@@ -323,6 +327,7 @@ function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?): Hud
 		goal = goal,
 		serverStorm = serverStorm,
 		event = event,
+		serverGoal = serverGoal,
 		bar = bar,
 		menu = button,
 		card = card,

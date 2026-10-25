@@ -184,6 +184,77 @@ check(
 	"a 100 Volt bottle sells for 200"
 )
 
+-- The server goal -------------------------------------------------------------
+
+local GOAL = Config.SERVER_GOAL
+local Afk = world:require("ReplicatedStorage.Shared.Util.Afk")
+check(
+	GOAL.minutes == 15 and GOAL.surgeMinutes == 10 and GOAL.multiplier == 2,
+	"goal: 15 min, surge 10 min 2x"
+)
+-- the size: the rates added up, times 15 minutes
+check(Weather.goalSize({ 10, 20 }, 0, 0) == 30 * 15 * 60, "two players at 10 and 20 V/s: 27,000")
+check(Weather.goalSize({}, 0, 0) == GOAL.minGoal, "an empty server: the smallest goal")
+check(Weather.goalSize({ 0.01 }, 0, 0) == GOAL.minGoal, "a tiny rate: the smallest goal")
+check(Weather.goalSize({ 0 / 0, -5, 10 }, 0, 0) == 9000, "NaN and negative rates are skipped")
+-- each goal this hour is 1.5x the last
+check(Weather.goalSize({ 10 }, 1, 0) == 13500, "the second goal is 1.5x")
+check(Weather.goalSize({ 10 }, 2, 0) == 20250, "the third is 2.25x")
+-- a full server of late players and a small early server take the same time
+local function minutesToFill(rates)
+	local sum = 0
+	for _, rate in rates do
+		sum += rate
+	end
+	return Weather.goalSize(rates, 0, 0) / sum / 60
+end
+local late, early = {}, {}
+for _ = 1, 12 do
+	local _, breakdown = Afk.rate(
+		{ bottleTier = #Config.BOTTLES, bootTier = #Config.BOOTS },
+		{},
+		false
+	)
+	table.insert(late, breakdown.grindPerSecond)
+end
+for _ = 1, 2 do
+	local _, breakdown = Afk.rate({ bottleTier = 5, bootTier = 1 }, {}, false)
+	table.insert(early, breakdown.grindPerSecond)
+end
+check(near(minutesToFill(late), 15, 0.01), "12 late-game players: about 15 minutes")
+check(near(minutesToFill(early), 15, 0.01), "2 early players: about 15 minutes")
+-- never stuck: a big player leaves after the meter is mostly full
+local filled = 25000
+check(Weather.goalFloor(filled) == 27500, "the floor is filled + 10%")
+check(Weather.goalSize({ 1 }, 0, filled) == 27500, "the goal never drops below filled + 10%")
+check(Weather.goalSize({ 1000 }, 0, filled) == 900000, "a bigger goal stays as it is")
+check(Weather.goalSize({}, 3, 0) >= GOAL.minGoal, "rounds never go under the smallest goal")
+-- the hourly reset
+local round, start = Weather.goalRound(2, 100, 100 + 3599)
+check(round == 2 and start == 100, "under an hour: the same round")
+round, start = Weather.goalRound(2, 100, 100 + 3600)
+check(round == 0 and start == 3700, "an hour on: back to round 0")
+-- the meter's fraction
+check(Weather.goalFraction(62, 100) == 0.62, "62%")
+check(Weather.goalFraction(150, 100) == 1, "never over 100%")
+check(Weather.goalFraction(nil, 100) == 0 and Weather.goalFraction(5, 0) == 0, "no meter: 0")
+-- the top contributors
+local top = Weather.topContributors({ Alex = 500, Sam = 1200, Kim = 500, Lee = 10, Zed = 0 }, 3)
+check(
+	#top == 3 and top[1].name == "Sam" and top[2].name == "Alex" and top[3].name == "Kim",
+	"top 3, ties by name"
+)
+local decoded = Weather.decodeTop(Weather.encodeTop(top))
+check(#decoded == 3 and decoded[1].name == "Sam" and decoded[1].volts == 1200, "top 3 round trip")
+check(#Weather.decodeTop(nil) == 0 and #Weather.decodeTop("") == 0, "no top: empty")
+check(Weather.decodeTop("Big Al=5")[1].name == "Big Al", "names with spaces")
+-- a Surge doubles sales, and stacks with a Server Storm
+check(Passes.sellMultiplier({ [Passes.SERVER_SURGE] = true }) == 2, "a Surge: x2")
+check(
+	Passes.sellMultiplier({ [Passes.SERVER_SURGE] = true, [Passes.SERVER_STORM] = true }) == 4,
+	"a Surge and a Server Storm: x4"
+)
+
 -- Formatting ----------------------------------------------------------------
 
 check(Weather.formatLeft(2 * DAY) == "2d 0h", "2 days")

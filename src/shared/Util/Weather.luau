@@ -3,7 +3,8 @@
 -- which rare bolt a strike is (Config.BOLT_TYPES), when the next Supercell
 -- comes (Config.SUPERCELL) and which scheduled events are on
 -- (Config.EVENTS). Systems/Strikes, Systems/StormCycle and Systems/Passes
--- use it on the server; the HUD uses it to show the event chip.
+-- use it on the server; the HUD uses it to show the event chip. Also the
+-- server goal's maths (Config.SERVER_GOAL, Systems/ServerGoal).
 
 local Config = require(script.Parent.Parent.Config)
 local Types = require(script.Parent.Parent.Types)
@@ -20,6 +21,14 @@ local Weather = {}
 -- event in Config.EVENTS is on.
 Weather.PRETEND_EVENT = "PretendEvent"
 
+-- Workspace attributes everyone can read (Systems/ServerGoal sets them):
+-- the Volts in the server goal's meter, its size, and this round's top
+-- contributors (Weather.encodeTop).
+Weather.GOAL_FILLED = "ServerGoalFilled"
+Weather.GOAL_SIZE = "ServerGoalSize"
+Weather.GOAL_TOP = "ServerGoalTop"
+
+export type Contributor = { name: string, volts: number }
 export type SupercellStage = "waiting" | "warning" | "on" | "over"
 export type ActiveEvent = { event: Types.EventDef, left: number }
 
@@ -186,6 +195,93 @@ function Weather.formatLeft(seconds: number): string
 		return `{left // 3600}h {left // 60 % 60}m`
 	end
 	return string.format("%d:%02d", left // 60, left % 60)
+end
+
+-- Server goal ---------------------------------------------------------------
+
+local GOAL = Config.SERVER_GOAL
+
+-- The smallest the goal may be once `filled` Volts are in the meter: what's
+-- filled plus stuckMargin (10%), rounded up, so someone leaving never leaves it full
+-- but not finished.
+function Weather.goalFloor(filled: number): number
+	-- whole Volts; the nudge keeps 25000 x 1.1 at 27500 when floating
+	-- point lands just over
+	return math.ceil(math.max(filled, 0) * (1 + GOAL.stuckMargin) - 1e-6)
+end
+
+-- The goal's size: every present player's grinding rate (`rates`, Volts a
+-- second from Util/Afk) added up, times SERVER_GOAL.minutes, times growth
+-- for each goal already reached this hour (`round`, 0 for the first). At
+-- least minGoal, and never below goalFloor(filled).
+function Weather.goalSize(rates: { number }, round: number, filled: number): number
+	local sum = 0
+	for _, rate in rates do
+		if rate == rate and rate > 0 then -- skip NaN and negatives
+			sum += rate
+		end
+	end
+	local size = math.max(sum * GOAL.minutes * 60, GOAL.minGoal) * GOAL.growth ^ math.max(round, 0)
+	return math.ceil(math.max(size, Weather.goalFloor(filled)))
+end
+
+-- The round count and when its hour started, at time `now` (seconds): back
+-- to round 0 once resetMinutes have passed since `hourStart`.
+function Weather.goalRound(round: number, hourStart: number, now: number): (number, number)
+	if now - hourStart >= GOAL.resetMinutes * 60 then
+		return 0, now
+	end
+	return round, hourStart
+end
+
+-- How full the meter is, 0 to 1.
+function Weather.goalFraction(filled: unknown, size: unknown): number
+	if typeof(filled) ~= "number" or typeof(size) ~= "number" or size <= 0 then
+		return 0
+	end
+	return math.clamp(filled / size, 0, 1)
+end
+
+-- The top `count` contributors (most Volts first, then by name), from
+-- Volts per name.
+function Weather.topContributors(volts: { [string]: number }, count: number): { Contributor }
+	local list: { Contributor } = {}
+	for name, amount in volts do
+		if amount > 0 then
+			table.insert(list, { name = name, volts = amount })
+		end
+	end
+	table.sort(list, function(a, b)
+		if a.volts ~= b.volts then
+			return a.volts > b.volts
+		end
+		return a.name < b.name
+	end)
+	while #list > count do
+		table.remove(list)
+	end
+	return list
+end
+
+-- Contributors as one attribute string ("Alex=1200;Sam=300") and back.
+-- Display names can't hold "=" or ";".
+function Weather.encodeTop(list: { Contributor }): string
+	local parts = {}
+	for _, entry in list do
+		table.insert(parts, `{entry.name}={math.floor(entry.volts)}`)
+	end
+	return table.concat(parts, ";")
+end
+
+function Weather.decodeTop(text: unknown): { Contributor }
+	local list: { Contributor } = {}
+	if typeof(text) ~= "string" then
+		return list
+	end
+	for name, amount in string.gmatch(text, "([^=;]+)=(%d+)") do
+		table.insert(list, { name = name, volts = tonumber(amount) or 0 })
+	end
+	return list
 end
 
 return Weather

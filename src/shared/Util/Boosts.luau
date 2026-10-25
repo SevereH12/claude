@@ -19,6 +19,9 @@ local Boosts = {}
 -- display name.
 Boosts.STORM_ENDS = "ServerStormEnds"
 Boosts.STORM_BY = "ServerStormBy"
+-- The server time a Server Surge ends (the server goal was filled:
+-- Systems/ServerGoal), while one is on. Boosts.stormLeft reads it too.
+Boosts.SURGE_ENDS = "ServerSurgeEnds"
 
 -- The boost with this key, or nil.
 function Boosts.def(key: string): Types.BoostDef?

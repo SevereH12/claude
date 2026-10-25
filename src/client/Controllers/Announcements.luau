@@ -8,6 +8,9 @@
 --     Alex gifted VIP to Sam" in the chat (Systems/Gifts).
 --   "giftSent" (giver): someone here sent a gift to a player in another
 --     server, or offline: "🎁 Alex sent a gift!" in the chat.
+--   "surge" (top contributor or "", seconds left): the server goal was
+--     filled (Systems/ServerGoal): a big "SERVER SURGE!" banner and a chat
+--     line. The HUD's server goal meter shows its time left.
 --   "rainbow" (catcher, boost): someone caught a Rainbow bolt
 --     (Systems/Strikes): "🌈 Alex caught a RAINBOW bolt! x25 + 5 min Lucky"
 --     in the chat.
@@ -32,6 +35,7 @@ local ZoneBanner = require(script.Parent.ZoneBanner)
 local STORM_COLOR = Color3.fromRGB(190, 140, 255)
 local SUPERCELL_COLOR = Color3.fromRGB(160, 90, 255)
 local EVENT_COLOR = Color3.fromRGB(255, 200, 40)
+local SURGE_COLOR = Color3.fromRGB(90, 220, 255)
 local BANNER_SECONDS = 4
 local JOIN_DELAY = 4 -- seconds after joining before the "storm is on" toast
 
@@ -71,6 +75,17 @@ local function onAnnouncement(kind: unknown, a: unknown, b: unknown, c: unknown)
 		and typeof(c) == "string"
 	then
 		chat(`🎁 {a} gifted {b} to {c}`)
+	elseif kind == "surge" and typeof(a) == "string" and typeof(b) == "number" then
+		local multiplier = Config.SERVER_GOAL.multiplier
+		Sfx.play("server_storm")
+		local thanks = if a ~= "" then ` Top helper: {a}.` else ""
+		chat(`⚡ SERVER GOAL REACHED! SERVER SURGE: {multiplier}x Volts for everyone, {clock(b)}`)
+		ZoneBanner.show(
+			"⚡ SERVER SURGE!",
+			`Server goal reached: {multiplier}x Volts for everyone, {clock(b)}.{thanks}`,
+			SURGE_COLOR,
+			BANNER_SECONDS
+		)
 	elseif kind == "giftSent" and typeof(a) == "string" then
 		chat(`🎁 {a} sent a gift!`)
 	elseif kind == "rainbow" and typeof(a) == "string" and typeof(b) == "string" then

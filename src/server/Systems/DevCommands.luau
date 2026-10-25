@@ -10,7 +10,8 @@
 -- researcher 500 field data and "glints" 100 Glints of the tier of the zone
 -- you're in (or your best zone), "goldenBolt" drops a golden bolt where you
 -- stand, "supercell" starts a Supercell in 30 s and "event" (true/false)
--- pretends the first scheduled event is on. The repo and client code are public, so this
+-- pretends the first scheduled event is on, and "serverGoal" fills a
+-- quarter of the server goal as if you sold it. The repo and client code are public, so this
 -- is the lock: it only obeys in Studio play tests or, in a live server, the
 -- user who owns the place; everything but "volts" is Studio only. To remove it:
 -- delete this file and Controllers/DevCommands.luau, and take "DevCommand"
@@ -33,6 +34,7 @@ local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
 local Research = require(script.Parent.Research)
 local Rewards = require(script.Parent.Rewards)
+local ServerGoal = require(script.Parent.ServerGoal)
 local StormCycle = require(script.Parent.StormCycle)
 local Strikes = require(script.Parent.Strikes)
 local Sync = require(script.Parent.Sync)
@@ -114,6 +116,7 @@ local function onCommand(player: Player, name: unknown, value: unknown, extra: u
 	elseif name == "clearBoosts" then
 		Boosts.clear(player)
 		Boosts.endStorm()
+		Boosts.endSurge()
 		print(`[DevCommands] {player.Name}: boosts cleared`)
 	elseif name == "testGift" then
 		Gifts.testGift(player, value == true)
@@ -142,6 +145,9 @@ local function onCommand(player: Player, name: unknown, value: unknown, extra: u
 	elseif name == "supercell" then
 		StormCycle.supercellIn(Config.SUPERCELL.warningSeconds)
 		print(`[DevCommands] {player.Name}: Supercell in {Config.SUPERCELL.warningSeconds}s`)
+	elseif name == "serverGoal" then
+		ServerGoal.testFill(player, 0.25)
+		print(`[DevCommands] {player.Name}: +25% server goal`)
 	elseif name == "event" and typeof(value) == "boolean" then
 		workspace:SetAttribute(Weather.PRETEND_EVENT, value)
 		Sync.markDirty(player)

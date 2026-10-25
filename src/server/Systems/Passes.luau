@@ -184,18 +184,19 @@ function Passes.storeSession(player: Player): Types.StoreSession
 end
 
 -- Owned passes plus what multiplies sales like one: the group bonus, a
--- Server Storm (Systems/Boosts) and any scheduled event on now
+-- Server Storm and a Server Surge (Systems/Boosts) and any scheduled event on now
 -- (Config.EVENTS, Util/Weather).
 local function withBonuses(player: Player): PassRules.Owned
 	local owned = Passes.owned(player)
-	local member, storm = Group.isMember(player), Boosts.stormOn()
+	local member, storm, surge = Group.isMember(player), Boosts.stormOn(), Boosts.surgeOn()
 	local events = Weather.liveEvents()
-	if not member and not storm and #events == 0 then
+	if not member and not storm and not surge and #events == 0 then
 		return owned
 	end
 	local set = table.clone(owned)
 	set[PassRules.GROUP] = if member then true else nil
 	set[PassRules.SERVER_STORM] = if storm then true else nil
+	set[PassRules.SERVER_SURGE] = if surge then true else nil
 	for _, on in events do
 		set[PassRules.EVENT .. on.event.name] = true
 	end

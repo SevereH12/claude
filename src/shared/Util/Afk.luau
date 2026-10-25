@@ -71,6 +71,9 @@ local function multipliers(effects: Passes.Owned): { Multiplier }
 	if effects[Passes.SERVER_STORM] then
 		table.insert(list, { label = "Server Storm", value = Config.SERVER_STORM.multiplier })
 	end
+	if effects[Passes.SERVER_SURGE] then
+		table.insert(list, { label = "Server Surge", value = Config.SERVER_GOAL.multiplier })
+	end
 	for _, event in Config.EVENTS do
 		if effects[Passes.EVENT .. event.name] then
 			table.insert(list, { label = event.name, value = event.multiplier })

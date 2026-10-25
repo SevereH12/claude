@@ -45,7 +45,7 @@ local devices = {
 	{ "console at 1080p", Vector2.new(1920, 1080), pad, "Console" },
 }
 
-local STAY = { "volts", "storm", "boosts", "goal", "serverStorm", "event", "bar", "menu" } -- always on screen
+local STAY = { "volts", "storm", "boosts", "goal", "serverStorm", "event", "serverGoal", "bar", "menu" } -- always on screen
 local preview = {}
 
 -- every device at every Text size setting (0 Normal, 1 Large, 2 Extra large)
@@ -97,7 +97,7 @@ for _, level in { 0, 1, 2 } do
 			not LayoutMath.overlaps(hud.card, hud.menu),
 			`{name}: the menu card opens beside the button`
 		)
-		for _, key in { "volts", "storm", "boosts", "goal", "serverStorm", "event", "bar" } do
+		for _, key in { "volts", "storm", "boosts", "goal", "serverStorm", "event", "serverGoal", "bar" } do
 			check(
 				not LayoutMath.overlaps(hud.card, hud[key]),
 				`{name}: the open menu card clears {key}`

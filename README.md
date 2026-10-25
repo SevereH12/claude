@@ -305,6 +305,27 @@ screens only draw it. The maths is in `src/shared/Util/Weather.luau`
   bolt** (drops one where you stand, in a zone), **Supercell in 30 s** and
   **Pretend event** (turns Double Volts Weekend on).
 
+### Server goal and Server Surge
+
+Everyone in a server fills one meter together (`Systems/ServerGoal`, the
+numbers in `Config.SERVER_GOAL`).
+
+- **Filling it**: every Volt sold in the server counts, at a station or
+  with Remote Sell. The AFK Lounge doesn't count.
+- **How big it is**: each player's grinding rate (what the AFK screen
+  works out for their best zone) added up, times 15 minutes. So a full
+  server of late-game players and two new players both take about 15
+  minutes. It's worked out again when someone joins or leaves, and it
+  never drops below what's already filled plus 10%, so it can't get stuck.
+- **Server Surge**: a full meter starts 10 minutes of 2x Volts for
+  everyone, with a banner and a chat line. It stacks with a Server Storm
+  (both on: 4x). The meter then empties and the next goal is 1.5x bigger;
+  every hour the size goes back to normal.
+- **On screen**: a slim meter under the goal card ("⚡ Server goal 62%", or
+  the Surge's time left). Tap it to see this round's top 3 helpers.
+- **Testing in Studio**: the TEST panel's REWARDS list has **Server goal
+  +25%** (four taps start a Surge); **Clear boosts** ends a Surge too.
+
 ## Code layout
 
 - `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas, zone geometry

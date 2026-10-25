@@ -4,9 +4,9 @@
 -- (Studio only), PASSES opens one "Pretend owns <pass>" toggle per Game
 -- Pass and "Send test gift to me" and "Send test boost gift" buttons, and
 -- REWARDS opens Next day, +5 min playtime, Clear boosts (and the Server
--- Storm), Start Server Storm, +500 research data, +100 Glints, Force golden
+-- Storm and Surge), Start Server Storm, +500 research data, +100 Glints, Force golden
 -- bolt (where you stand), Supercell in 30 s, a Pretend event toggle (Double
--- Volts Weekend), Simulate idle 17 min (the AFK Lounge's
+-- Volts Weekend), Server goal +25% (a full meter starts a Server Surge), Simulate idle 17 min (the AFK Lounge's
 -- idle handler, Controllers/AfkUI), a Pretend group member toggle, the
 -- Sound board, which plays every sound in order with its name, and the Music
 -- audition, every shortlisted track for 20 s (all Studio only). The server (Systems/DevCommands) checks again. To
@@ -151,7 +151,7 @@ function DevCommands.init()
 	UI.onLayout(function()
 		UI.place(rewards, row(4))
 		local area = Layout.hud.test
-		UI.place(tools, { x = area.x + area.w + LayoutMath.GAP, y = area.y, w = 220, h = 13 * 48 })
+		UI.place(tools, { x = area.x + area.w + LayoutMath.GAP, y = area.y, w = 220, h = 14 * 48 })
 	end)
 	local function showLists(passesOn: boolean, rewardsOn: boolean)
 		list.Visible = passesOn
@@ -193,6 +193,21 @@ function DevCommands.init()
 			devRemote:FireServer(tool.command)
 		end)
 	end
+	-- Server goal +25%: as if you sold a quarter of the goal (four fill it
+	-- and start a Server Surge)
+	local goalButton = UI.button({
+		Name = "ServerGoal",
+		LayoutOrder = 14,
+		Text = "⚡ Server goal +25%",
+		Size = UDim2.new(1, 0, 0, 40),
+		BackgroundColor3 = UI.COLORS.panelDark,
+		Parent = tools,
+	})
+	UI.maxText(goalButton, 16)
+	goalButton.Activated:Connect(function()
+		UI.pop(goalButton)
+		devRemote:FireServer("serverGoal")
+	end)
 	-- Simulate idle 17 min (Studio only): runs the AFK idle handler, so the
 	-- VirtualUser nudge and the server-hop backup can be checked
 	if RunService:IsStudio() then

@@ -13,6 +13,10 @@
 --   │                time left ("🌩️ SERVER 2x · Alex · 14:32")
 --   ├── EventChip    under that, while a scheduled event is on (Config.EVENTS,
 --   │                Util/Weather): "🎉 Double Volts Weekend 2x · 1d 4h"
+--   ├── ServerGoal   a slim meter under that (Systems/ServerGoal, read from
+--   │                workspace attributes): "⚡ Server goal 62%", or the
+--   │                Server Surge's time left while one is on. Tap it: a
+--   │                toast with this round's top 3 contributors
 --   ├── BottleBar    bottom centre (top centre on touch): fill + "JAR 3 / 5",
 --   │                with the Chemist's TANK count beside it
 --   └── RemoteSell   Remote Sell pass owners: a SELL button at the bar's
@@ -45,6 +49,7 @@ local Storm = require(script.Parent.Storm)
 
 local COLORS = UI.COLORS
 local FULL_PULSE = TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+local SURGE_COLOR = Color3.fromRGB(90, 220, 255) -- the server goal meter's fill
 local SELL_WIDTH = 104 -- design pixels the SELL button takes from the bar's slot
 
 local HUD = {}
@@ -70,6 +75,9 @@ local boostList: UIListLayout
 local boostChips: { [string]: TextLabel } = {} -- by boost key
 local stormChip: TextLabel
 local eventChip: TextLabel
+local goalMeter: TextButton
+local goalMeterFill: Frame
+local goalMeterLabel: TextLabel
 local sellCharging = false
 local sellReadyAt = 0
 local goalCard: Frame
@@ -340,6 +348,56 @@ local function buildEventChip()
 	UI.maxText(eventChip, 18)
 end
 
+-- The server goal meter under the event chip: a fill bar with its text on
+-- top; the whole meter is one button.
+local function buildGoalMeter()
+	goalMeter = UI.make(Instance.new("TextButton"), {
+		Name = "ServerGoal",
+		Text = "",
+		AutoButtonColor = false,
+		BackgroundColor3 = COLORS.panelDark,
+		BorderSizePixel = 0,
+		Parent = screenGui,
+	})
+	UI.corner(goalMeter, UDim.new(0.5, 0))
+	UI.stroke(goalMeter, 2)
+	UI.clickSound(goalMeter, true)
+	local clip = UI.make(Instance.new("CanvasGroup"), {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Parent = goalMeter,
+	})
+	UI.corner(clip, UDim.new(0.5, 0))
+	goalMeterFill = UI.make(Instance.new("Frame"), {
+		Name = "Fill",
+		Size = UDim2.fromScale(0, 1),
+		BackgroundColor3 = SURGE_COLOR,
+		BorderSizePixel = 0,
+		Parent = clip,
+	})
+	goalMeterLabel = UI.label({
+		Title = true,
+		Name = "Label",
+		Text = "⚡ Server goal 0%",
+		Size = UDim2.fromScale(1, 1),
+		Parent = goalMeter,
+	})
+	UI.maxText(goalMeterLabel, 16)
+	goalMeter.Activated:Connect(function()
+		UI.pop(goalMeter)
+		local top = Weather.decodeTop(workspace:GetAttribute(Weather.GOAL_TOP))
+		if #top == 0 then
+			UI.toast("⚡ Server goal: sell Volts to fill it and start a SERVER SURGE", "info", 5)
+			return
+		end
+		local lines = {}
+		for index, entry in top do
+			table.insert(lines, `{index}. {entry.name} {Format.abbreviate(entry.volts)}`)
+		end
+		UI.toast(`🏆 Top this round: {table.concat(lines, " · ")}`, "volt", 6)
+	end)
+end
+
 -- The SELL button's charge-up ring: an outline that fills left to right.
 local function buildSellButton()
 	sellButton = UI.button({
@@ -491,6 +549,33 @@ local function renderEvent()
 	end
 end
 
+-- The server goal meter: how full it is, or the Server Surge's time left.
+local function renderGoalMeter()
+	local fraction = Weather.goalFraction(
+		workspace:GetAttribute(Weather.GOAL_FILLED),
+		workspace:GetAttribute(Weather.GOAL_SIZE)
+	)
+	goalMeterFill.Size = UDim2.fromScale(fraction, 1)
+	local surge = math.ceil(
+		BoostRules.stormLeft(
+			workspace:GetAttribute(BoostRules.SURGE_ENDS),
+			workspace:GetServerTimeNow()
+		)
+	)
+	if surge > 0 then
+		goalMeter.BackgroundColor3 = Color3.fromRGB(30, 110, 150)
+		goalMeterLabel.Text = string.format(
+			"⚡ SERVER SURGE %dx · %d:%02d",
+			Config.SERVER_GOAL.multiplier,
+			surge // 60,
+			surge % 60
+		)
+	else
+		goalMeter.BackgroundColor3 = COLORS.panelDark
+		goalMeterLabel.Text = `⚡ Server goal {math.floor(fraction * 100)}%`
+	end
+end
+
 local function renderStorm()
 	local state = Storm.current
 	if not state then
@@ -610,6 +695,7 @@ function HUD.place()
 	UI.place(goalCard, hud.goal)
 	UI.place(stormChip, hud.serverStorm)
 	UI.place(eventChip, hud.event)
+	UI.place(goalMeter, hud.serverGoal)
 	-- the boosts' chips: three across a row, or stacked in a column
 	local boosts = hud.boosts
 	UI.place(boostRow, boosts)
@@ -666,6 +752,7 @@ function HUD.init()
 	buildBoostRow()
 	buildStormChip()
 	buildEventChip()
+	buildGoalMeter()
 	buildSellButton()
 	HUD.place()
 	Layout.Changed:Connect(HUD.place)
@@ -692,6 +779,7 @@ function HUD.start()
 		renderBoosts()
 		renderServerStorm()
 		renderEvent()
+		renderGoalMeter()
 		task.wait(0.25)
 	end
 end
