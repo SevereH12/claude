@@ -14,8 +14,8 @@
 --
 -- The HUD sits on the screen's edges: Volts, the storm timer and the
 -- running boosts' chips top left,
--- the next goal top right (a Server Storm's chip, an event's chip and the
--- slim server goal meter under it), the bottle bar bottom centre (top centre on
+-- the next goal top right (a Server Storm's chip, an event's chip, the
+-- slim server goal meter under it), the friends chip under the boosts, the bottle bar bottom centre (top centre on
 -- touch, clear of the thumbstick and jump button; on a phone held upright
 -- under the top row, beside MENU), MENU on the left edge. Toasts and the zone banner
 -- go in the middle of the top, under whatever sits there. Pieces use the
@@ -48,11 +48,13 @@ export type Hud = {
 	serverStorm: Rect, -- a Server Storm's chip (buyer and time left), under the goal
 	event: Rect, -- a scheduled event's chip (name and time left), under that
 	serverGoal: Rect, -- the server goal meter (tap: top contributors), under the event's chip
+	friends: Rect, -- the friends boost's chip ("👥 +10% friends"), under the boosts' chips
 	bar: Rect,
 	menu: Rect,
 	card: Rect, -- the menu's tile card, beside the menu button (offers use it too)
 	toasts: Rect,
 	banner: Rect,
+	tutorial: Rect, -- the tutorial's step card, in the middle of the top (the toasts go under it while it shows)
 	test: Rect, -- the owner's TEST buttons (two rows), under the menu
 }
 
@@ -94,6 +96,8 @@ LayoutMath.HUD = table.freeze({
 	toastRows = 2,
 	bannerWidth = 560,
 	bannerHeight = 100,
+	tutorialWidth = 440,
+	tutorialHeight = 64,
 	testWidth = 150,
 	testHeight = 50,
 })
@@ -203,7 +207,10 @@ end
 -- Where every HUD piece goes on a safe area of `area` design pixels.
 -- `topbar`: Roblox's top row (design pixels); pieces use its free middle
 -- and only drop below it where its buttons are.
-function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?): Hud
+-- `tutorial`: the tutorial's step card is showing (Controllers/Tutorial):
+-- it takes the toasts' place and they move down under it; the zone banner
+-- covers the card while it shows.
+function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?, tutorial: boolean?): Hud
 	local H = LayoutMath.HUD
 	local M, G = LayoutMath.MARGIN, LayoutMath.GAP
 	local W, T = area.X, area.Y
@@ -238,11 +245,22 @@ function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?): Hud
 	local goalX = W - M - H.goalWidth
 	local goal = rect(goalX, topFor(goalX, H.goalWidth), H.goalWidth, H.goalHeight)
 	local serverStorm = rect(goalX, goal.y + goal.h + G, H.goalWidth, H.boostHeight)
+	-- the friends chip: under the boosts' row (a sideways phone or tablet,
+	-- short of height on the left, has it under the server goal meter)
+	local sideways = touch and not upright
+	local friends = rect(M, boosts.y + boosts.h + G, H.statWidth, H.boostHeight)
 	local leftBottom = math.max(storm.y + storm.h, boosts.y + boosts.h)
 	local leftRight = math.max(volts.x + volts.w, boosts.x + boosts.w)
+	if not sideways then
+		leftBottom = math.max(leftBottom, friends.y + friends.h)
+	end
 	local event = rect(goalX, serverStorm.y + serverStorm.h + G, H.goalWidth, H.boostHeight)
 	local serverGoal = rect(goalX, event.y + event.h + G / 2, H.goalWidth, H.serverGoalHeight)
 	local rightBottom = serverGoal.y + serverGoal.h
+	if sideways then
+		friends = rect(goalX, rightBottom + G / 2, H.goalWidth, H.boostHeight)
+		rightBottom = friends.y + friends.h
+	end
 
 	-- the bottle bar, and on a phone or tablet held upright MENU beside it
 	local bar
@@ -280,14 +298,31 @@ function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?): Hud
 		then menu.y + menu.h + G
 		elseif touch then bar.y + bar.h + G
 		else topFor(toastX, toastWidth)
+	-- the tutorial's step card first (while it shows, the toasts go under it)
+	local tutorialWidth = math.min(H.tutorialWidth, W - 2 * M)
+	local tutorialX = (W - tutorialWidth) / 2
+	local tutorialRect = rect(
+		tutorialX,
+		belowCorners(tutorialX, tutorialWidth, centerTop),
+		tutorialWidth,
+		H.tutorialHeight
+	)
+	if tutorial then
+		centerTop = tutorialRect.y + tutorialRect.h + G
+	end
 	local toastHeight = H.toastRows * (H.toastHeight + 6)
 	local toasts =
 		rect(toastX, belowCorners(toastX, toastWidth, centerTop), toastWidth, toastHeight)
 	local bannerWidth = math.min(H.bannerWidth, W - 2 * M)
 	local bannerX = (W - bannerWidth) / 2
+	-- while the tutorial shows, the (brief) banner covers its card instead
 	local banner = rect(
 		bannerX,
-		belowCorners(bannerX, bannerWidth, toasts.y + toasts.h + G),
+		belowCorners(
+			bannerX,
+			bannerWidth,
+			if tutorial then tutorialRect.y else toasts.y + toasts.h + G
+		),
 		bannerWidth,
 		H.bannerHeight
 	)
@@ -328,11 +363,13 @@ function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?): Hud
 		serverStorm = serverStorm,
 		event = event,
 		serverGoal = serverGoal,
+		friends = friends,
 		bar = bar,
 		menu = button,
 		card = card,
 		toasts = toasts,
 		banner = banner,
+		tutorial = tutorialRect,
 		test = test,
 	}
 end

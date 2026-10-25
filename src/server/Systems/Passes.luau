@@ -186,10 +186,10 @@ end
 
 -- Owned passes plus what multiplies sales like one: the group bonus, a
 -- Server Storm and a Server Surge (Systems/Boosts), any scheduled event on now
--- (Config.EVENTS, Util/Weather), the Storm Log's finished pages and the
--- player's Ascension level.
+-- (Config.EVENTS, Util/Weather), the Storm Log's finished pages, friends in
+-- the server (Systems/Friends) and the player's Ascension level.
 local function withBonuses(player: Player): PassRules.Owned
-	local owned = Passes.owned(player)
+	local owned = PassRules.withFriends(Passes.owned(player), Sync.friends[player] or 0)
 	local profile = PlayerData.get(player)
 	if profile then
 		owned = StormLogRules.withPages(

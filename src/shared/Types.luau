@@ -30,6 +30,7 @@ export type Profile = {
 	quests: QuestsSave, -- daily and weekly quests (Util/Quests, Systems/Quests)
 	logClaimed: { [string]: boolean }, -- Storm Log rows whose reward was claimed, by row id (Util/StormLog)
 	ascension: number, -- Ascension level: times the player has ascended (Util/Ascension), 0 = never
+	tutorialStep: number, -- the new-player tutorial's step (Util/Tutorial): 1-4, 0 = done or skipped
 }
 
 -- A Storm Log page (Config.STORM_LOG.pages): its id, heading, icon, and
@@ -140,6 +141,8 @@ export type Snapshot = {
 	quests: QuestsView, -- today's and this week's quests with their progress
 	log: LogView, -- the Storm Log: entries found and rows claimed
 	ascension: number, -- Ascension level (Util/Ascension)
+	tutorialStep: number, -- the tutorial's step (Util/Tutorial), 0 = not showing
+	friends: number, -- Roblox friends in this server that count for the friends boost (0 to Config.FRIENDS.max)
 }
 
 -- The player's AFK Lounge state, sent in the snapshot (Systems/Afk). The

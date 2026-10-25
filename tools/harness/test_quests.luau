@@ -538,13 +538,13 @@ check(Ascension.bonusText(3) == "+150%" and Ascension.stars(2) == "★★", "the
 
 -- the save migration -------------------------------------------------------------------
 local fromV14 = PlayerData.migrate({ version = 14, volts = 1, bottleTier = 1 })
-check(fromV14.version == 15 and fromV14.ascension == 0, "v14 saves start at Ascension level 0")
+check(fromV14.version >= 15 and fromV14.ascension == 0, "v14 saves start at Ascension level 0")
 local migrated = PlayerData.migrate({ version = 12, volts = 10, totalVolts = 5000, bottleTier = 1 })
-check(migrated.version == 15 and migrated.ascension == 0, "v12 saves become v15")
+check(migrated.version >= 15 and migrated.ascension == 0, "v12 saves become v15 (or a later version)")
 check(typeof(migrated.logClaimed) == "table", "with no Log rows claimed")
 local fromV13 = PlayerData.migrate({ version = 13, volts = 1, bottleTier = 1 })
 check(
-	fromV13.version == 15
+	fromV13.version >= 15
 		and typeof(fromV13.logClaimed) == "table"
 		and next(fromV13.logClaimed) == nil,
 	"v13 saves get an empty Storm Log claim list"

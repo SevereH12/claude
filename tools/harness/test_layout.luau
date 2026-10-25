@@ -45,7 +45,7 @@ local devices = {
 	{ "console at 1080p", Vector2.new(1920, 1080), pad, "Console" },
 }
 
-local STAY = { "volts", "storm", "boosts", "goal", "serverStorm", "event", "serverGoal", "bar", "menu" } -- always on screen
+local STAY = { "volts", "storm", "boosts", "goal", "serverStorm", "event", "serverGoal", "friends", "bar", "menu" } -- always on screen
 local preview = {}
 
 -- every device at every Text size setting (0 Normal, 1 Large, 2 Extra large)
@@ -93,11 +93,50 @@ for _, level in { 0, 1, 2 } do
 			check(not LayoutMath.overlaps(hud.toasts, hud[a]), `{name}: toasts clear {a}`)
 			check(not LayoutMath.overlaps(hud.banner, hud[a]), `{name}: zone banner clears {a}`)
 		end
+		-- while the tutorial shows, its step card takes the toasts' place and
+		-- they (and the zone banner) move under it: everything still fits,
+		-- and the card stays clear of every HUD piece and the thumb controls
+		local withCard = LayoutMath.hud(got, area, topbar, true)
+		for key, r in withCard do
+			if key ~= "test" then
+				check(LayoutMath.inside(r, area), `{name} (tutorial): {key} is on screen`)
+			end
+		end
+		for _, key in STAY do
+			check(
+				LayoutMath.overlaps(withCard[key], hud[key]) or withCard[key].w == 0,
+				`{name} (tutorial): {key} stays where it was`
+			)
+			check(
+				not LayoutMath.overlaps(withCard.tutorial, withCard[key]),
+				`{name} (tutorial): the step card clears {key}`
+			)
+			check(
+				not LayoutMath.overlaps(withCard.toasts, withCard[key]),
+				`{name} (tutorial): toasts clear {key}`
+			)
+			check(
+				not LayoutMath.overlaps(withCard.banner, withCard[key]),
+				`{name} (tutorial): zone banner clears {key}`
+			)
+		end
+		check(
+			not LayoutMath.overlaps(withCard.tutorial, withCard.toasts),
+			`{name} (tutorial): the step card clears the toasts`
+		)
+		if LayoutMath.isTouch(got) then
+			for _, zone in LayoutMath.thumbZones(area) do
+				check(
+					not LayoutMath.overlaps(withCard.tutorial, zone),
+					`{name} (tutorial): the step card is clear of the thumb controls`
+				)
+			end
+		end
 		check(
 			not LayoutMath.overlaps(hud.card, hud.menu),
 			`{name}: the menu card opens beside the button`
 		)
-		for _, key in { "volts", "storm", "boosts", "goal", "serverStorm", "event", "serverGoal", "bar" } do
+		for _, key in { "volts", "storm", "boosts", "goal", "serverStorm", "event", "serverGoal", "friends", "bar" } do
 			check(
 				not LayoutMath.overlaps(hud.card, hud[key]),
 				`{name}: the open menu card clears {key}`

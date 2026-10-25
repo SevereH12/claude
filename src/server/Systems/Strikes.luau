@@ -31,6 +31,7 @@ local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local PlayerData = require(script.Parent.PlayerData)
 local StormCycle = require(script.Parent.StormCycle)
 local Sync = require(script.Parent.Sync)
+local Tutorial = require(script.Parent.Tutorial)
 
 -- HumanoidRootPart sits about this far above the ground the player stands on
 local ROOT_HEIGHT = 3
@@ -224,6 +225,7 @@ local function resolve(
 		end
 		Sync.markDirty(candidate.player)
 		Analytics.caught(candidate.player)
+		Tutorial.caught(candidate.player)
 		Stats.caught(
 			candidate.player,
 			boltType,

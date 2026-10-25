@@ -17,6 +17,7 @@ local Analytics = require(script.Parent.Analytics)
 local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
 local Stats = require(script.Parent.Stats)
+local Tutorial = require(script.Parent.Tutorial)
 
 local CHECK_INTERVAL = 0.2
 local GATE_STEP_OUT = 6 -- studs outside a locked zone's gate to put players
@@ -50,6 +51,7 @@ local function update(player: Player)
 		zone = nil
 	end
 	Analytics.inZone(player, zone)
+	Tutorial.entered(player, zone)
 	-- the Storm Log's Places page: zones and worlds visited
 	if zone then
 		Stats.visited(player, StatRules.visitZoneKey(zone.id))

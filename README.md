@@ -405,6 +405,43 @@ an **ASCEND** row shows at the bottom of the Shop's BOTTLES list.
 - **Testing in Studio**: the TEST panel's REWARDS list has **Ready to
   ascend**, which gives you the top bottle and enough Volts.
 
+## Tutorial, friends and invites
+
+**New-player tutorial** (`Util/Tutorial`, `Systems/Tutorial`,
+`Controllers/Tutorial`). A first-time player sees a small card at the top
+of the screen with one line at a time:
+
+1. Walk to Shoreline (a glowing path and a light beam show the way).
+2. Catch 3 bolts. If it's calm, the card explains the storm timer and
+   points at it.
+3. When the bottle is full, a path leads to the sell pad.
+4. Open the MENU, the SHOP, and buy the Vial (a glowing outline and a
+   pointing hand show each button in turn).
+5. "You're a Storm Bottler!" and a reward of 50 charges (paid in Volts,
+   like every reward: 250 Volts on Shoreline).
+
+- **Skipping**: SKIP asks "Skip the tutorial?" first (YES / NO).
+- **Saving**: the step is saved (`tutorialStep` in the profile), so it
+  carries on after a rejoin. Anyone who owns a Vial or better (or has
+  ascended) never sees it.
+- **Testing in Studio**: the TEST panel's REWARDS list has **Restart
+  tutorial** (starts it again from step 1).
+
+**Friends boost** (`Systems/Friends`): +5% Volts for each Roblox friend
+in your server, up to 3 (+15%). The server checks friendships when
+someone joins and forgets them when they leave. A green chip on the HUD
+says "👥 +10% friends". It counts everywhere a sale does (Remote Sell, the
+AFK Lounge). Studio test: **Pretend friends +1** in the TEST panel.
+
+**Invites** (`Systems/Invites`, the **INVITE** button in REWARDS): opens
+Roblox's own invite window. When a friend who has **never played before**
+joins from your invite, they get a welcome gift of 100 charges and you get
+a 2x Volts Boost in your gift inbox (so you get it even if you're offline).
+Limits: 5 rewarded invites a day per inviter, and only for Roblox accounts
+at least 3 days old. Numbers are in `Config.TUTORIAL`, `Config.FRIENDS`
+and `Config.INVITES`. Studio can't send real invites: look for
+`[Invites]` lines in the output on a live server.
+
 ## Code layout
 
 - `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas, zone geometry

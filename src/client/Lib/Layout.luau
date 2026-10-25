@@ -12,7 +12,8 @@
 --     keeps 5% clear of the TV's edges.
 --   * Layout.area: the root's size in design pixels; Layout.topbar: which
 --     parts of the top row Roblox's own buttons take (the middle is free);
---     Layout.hud: where each HUD piece goes (LayoutMath.hud). All update
+--     Layout.hud: where each HUD piece goes (LayoutMath.hud; the
+--     tutorial's card moves the toasts: Layout.setTutorial). All update
 --     with Changed.
 
 local GuiService = game:GetService("GuiService")
@@ -34,6 +35,7 @@ Layout.viewport = Vector2.new(1920, 1080)
 Layout.scale = 1
 Layout.textLevel = 0 -- the Text size setting (Layout.setTextLevel)
 Layout.portrait = false
+Layout.tutorial = false -- the tutorial's step card is showing (Layout.setTutorial)
 Layout.area = Vector2.new(1280, 720)
 Layout.topbar = { left = 0, right = 0, height = 0 } :: LayoutMath.Topbar
 Layout.hud = LayoutMath.hud("Desktop", Layout.area, Layout.topbar)
@@ -103,7 +105,7 @@ local function remeasure(): boolean
 		or math.abs(topbar.right - oldBar.right) > 0.5
 	Layout.area = area
 	Layout.topbar = topbar
-	Layout.hud = LayoutMath.hud(Layout.class, area, topbar)
+	Layout.hud = LayoutMath.hud(Layout.class, area, topbar, Layout.tutorial)
 	return changed
 end
 
@@ -134,6 +136,16 @@ function Layout.setTextLevel(level: number)
 	if level ~= Layout.textLevel then
 		Layout.textLevel = level
 		refresh()
+		Layout.Changed:Fire(Layout.class)
+	end
+end
+
+-- The tutorial's step card shows (or not): while it does, it takes the
+-- toasts' place in the middle of the top and they move under it.
+function Layout.setTutorial(on: boolean)
+	if on ~= Layout.tutorial then
+		Layout.tutorial = on
+		Layout.hud = LayoutMath.hud(Layout.class, Layout.area, Layout.topbar, on)
 		Layout.Changed:Fire(Layout.class)
 	end
 end

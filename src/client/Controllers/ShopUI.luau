@@ -68,6 +68,10 @@ function ShopUI.toggle()
 	UI.togglePanel(panel)
 end
 
+function ShopUI.isOpen(): boolean
+	return panel ~= nil and panel.Visible
+end
+
 -- The ASCEND row: shown once the top bottle is owned, its button lit when
 -- the player has the Volts too (the server checks again).
 local function renderAscend(snapshot: Types.Snapshot)
@@ -123,6 +127,26 @@ local function selectTab(tab: Tab)
 		other.button.BackgroundColor3 = if other == tab then COLORS.volt else COLORS.panelDark
 	end
 	hint.Text = tab.hint
+end
+
+-- The tutorial: shows the BOTTLES tab, scrolled to this tier's row, and
+-- returns its Buy button to point at (nil if there's no such row).
+function ShopUI.focusBottle(tier: number): GuiObject?
+	local bottles = tabs[1]
+	if not bottles then
+		return nil
+	end
+	if current ~= bottles then
+		selectTab(bottles)
+	end
+	for _, row in bottles.rows do
+		if row.tier == tier then
+			-- rows are ROW_HEIGHT tall with 10 between them, in tier order
+			bottles.list.CanvasPosition = Vector2.new(0, (tier - 1) * (ROW_HEIGHT + 10))
+			return row.button
+		end
+	end
+	return nil
 end
 
 local function buildRow(tab: Tab, tier: number, item: Item)

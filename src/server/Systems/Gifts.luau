@@ -504,6 +504,18 @@ function Gifts.processReceipt(
 	return Enum.ProductPurchaseDecision.NotProcessedYet
 end
 
+-- A reward from the game (Systems/Invites: an invite's reward) for anyone,
+-- online here, in another server or offline: it goes in their inbox like a
+-- gift (each `entry.id` only ever arrives once) and is delivered now if
+-- they're playing, or on their next join. False if it couldn't be written.
+function Gifts.sendReward(toId: number, entry: Types.GiftEntry): boolean
+	if not addToInbox(toId, entry) then
+		return false
+	end
+	announce(toId)
+	return true
+end
+
 -- Studio TEST tool: a gift from "Test Gifter" to yourself, through your own
 -- inbox: the first pass you don't have, or (`boost`) a 2x Volts Boost.
 function Gifts.testGift(player: Player, boost: boolean?)

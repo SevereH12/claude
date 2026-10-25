@@ -6,6 +6,7 @@
 local Config = require(script.Parent.Parent.Config)
 local Types = require(script.Parent.Parent.Types)
 local Boosts = require(script.Parent.Boosts)
+local Social = require(script.Parent.Social)
 
 export type Owned = { [string]: boolean }
 
@@ -43,6 +44,11 @@ Passes.LOG_PAGE = "LogPage_"
 -- The player's Ascension level (Util/Ascension): ASCENSION .. level marks
 -- it in an `owned` set (e.g. Ascension_3), so it multiplies sales like a pass.
 Passes.ASCENSION = "Ascension_"
+
+-- Roblox friends in the player's server (Systems/Friends): FRIENDS .. count
+-- marks it in an `owned` set (e.g. Friends_2), so it multiplies sales like
+-- a pass: +5% each, up to 3 (Util/Social).
+Passes.FRIENDS = "Friends_"
 
 -- The pass with this key, or nil.
 function Passes.def(key: string): Types.PassDef?
@@ -98,11 +104,43 @@ function Passes.withAscension(owned: Owned, level: number): Owned
 	return set
 end
 
+-- The friend count marked in `owned` (the highest, if more than one), or 0.
+function Passes.friendCount(owned: Owned): number
+	local count = 0
+	local prefix = #Passes.FRIENDS
+	for key, on in owned do
+		if on and string.sub(key, 1, prefix) == Passes.FRIENDS then
+			local n = tonumber(string.sub(key, prefix + 1))
+			if n and n > count then
+				count = n
+			end
+		end
+	end
+	return count
+end
+
+-- The friends boost's extra (+0.05 per friend, up to +0.15).
+function Passes.friendsBonus(owned: Owned): number
+	return Social.friendsBonus(Passes.friendCount(owned))
+end
+
+-- `owned` plus the mark for this many friends (nothing for none).
+function Passes.withFriends(owned: Owned, count: number): Owned
+	local counted = Social.countedFriends(count)
+	if counted <= 0 then
+		return owned
+	end
+	local set = table.clone(owned)
+	set[Passes.FRIENDS .. counted] = true
+	return set
+end
+
 -- What a sale pays, times this: 2x Volts (pass or boost), VIP, the group
 -- bonus, a Server Storm, a Server Surge and any scheduled event multiply
 -- (2 x 1.1 x 1.1 x 2 = 4.84, x2 more on a Double Volts Weekend), the
--- Storm Log's finished pages add up to +8% on top, and Ascension adds +50%
--- per level on top of that.
+-- Storm Log's finished pages add up to +8% on top, friends in the server
+-- +5% each (up to +15%) on top of that, and Ascension adds +50% per level
+-- on top of that.
 function Passes.sellMultiplier(owned: Owned): number
 	local multiplier = 1
 	if owned.DoubleVolts then
@@ -126,6 +164,7 @@ function Passes.sellMultiplier(owned: Owned): number
 		end
 	end
 	multiplier *= 1 + Passes.logBonus(owned)
+	multiplier *= 1 + Passes.friendsBonus(owned)
 	multiplier *= 1 + Passes.ascensionBonus(owned)
 	return multiplier
 end

@@ -19,10 +19,11 @@ local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local SettingsRules = require(ReplicatedStorage.Shared.Util.Settings)
 local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local StatRules = require(ReplicatedStorage.Shared.Util.Stats)
+local TutorialRules = require(ReplicatedStorage.Shared.Util.Tutorial)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local STORE_NAME = "StormBottler_PlayerData"
-local CURRENT_VERSION = 15
+local CURRENT_VERSION = 16
 -- A lock older than this belongs to a server that crashed; it may be taken.
 local LOCK_STALE_SECONDS = Config.AUTOSAVE_INTERVAL * 3
 local LOCKED_RETRIES = 5
@@ -41,6 +42,7 @@ type Session = {
 	player: Player,
 	profile: Types.Profile,
 	canSave: boolean, -- false for a temporary Studio profile
+	isNew: boolean, -- there was no saved profile before this visit (Systems/Invites)
 }
 
 local DEFAULT_PROFILE: Types.Profile = {
@@ -70,6 +72,7 @@ local DEFAULT_PROFILE: Types.Profile = {
 	quests = QuestRules.new(),
 	logClaimed = {},
 	ascension = 0,
+	tutorialStep = TutorialRules.WALK, -- a new player starts the tutorial
 }
 
 -- MIGRATIONS[n] turns a version-n profile into version n+1. When the profile
@@ -177,6 +180,17 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 		data.ascension = 0
 		return data
 	end,
+	-- the new-player tutorial (prompt 17): anyone who has owned a Vial or
+	-- better (or ascended) never sees it; a saved player still on the Jar
+	-- starts it from step 1
+	[15] = function(data: any): any
+		local tier = if typeof(data.bottleTier) == "number" then data.bottleTier else 1
+		local level = if typeof(data.ascension) == "number" then data.ascension else 0
+		data.tutorialStep = if TutorialRules.isOldPlayer({ bottleTier = tier, ascension = level })
+			then TutorialRules.DONE
+			else TutorialRules.WALK
+		return data
+	end,
 }
 
 local storeOk, storeResult = pcall(function()
@@ -273,14 +287,15 @@ local function claim(
 	dataStore: DataStore,
 	player: Player,
 	sessionId: string
-): (ClaimResult, Types.Profile?)
+): (ClaimResult, Types.Profile?, boolean)
 	local outcome: ClaimResult = "error"
 	local profile: Types.Profile? = nil
+	local isNew = false
 
 	local ok = withRetry(3, function()
 		dataStore:UpdateAsync(keyFor(player), function(old: any): any
 			-- this function can run more than once; reset results every time
-			outcome, profile = "error", nil
+			outcome, profile, isNew = "error", nil, false
 			if old ~= nil and typeof(old) ~= "table" then
 				return nil -- unknown format: refuse rather than overwrite
 			end
@@ -288,6 +303,7 @@ local function claim(
 				outcome = "locked"
 				return nil
 			end
+			isNew = not (old and typeof(old.data) == "table")
 			local data = if old and typeof(old.data) == "table"
 				then migrate(old.data)
 				else deepCopy(DEFAULT_PROFILE)
@@ -298,9 +314,9 @@ local function claim(
 	end)
 
 	if not ok then
-		return "error", nil
+		return "error", nil, false
 	end
-	return outcome, profile
+	return outcome, profile, isNew
 end
 
 -- Writes the profile. release = true also clears the lock (player left).
@@ -364,6 +380,7 @@ local function useTemporaryProfile(player: Player)
 		player = player,
 		profile = deepCopy(DEFAULT_PROFILE),
 		canSave = false,
+		isNew = true,
 	}
 	sessions[player] = session
 	PlayerData.Loaded:Fire(player, session.profile)
@@ -382,10 +399,12 @@ local function onPlayerAdded(player: Player)
 
 	local sessionId = HttpService:GenerateGUID(false)
 	local profile: Types.Profile? = nil
+	local isNew = false
 	for attempt = 1, LOCKED_RETRIES do
-		local result, loaded = claim(dataStore, player, sessionId)
+		local result, loaded, fresh = claim(dataStore, player, sessionId)
 		if result == "ok" then
 			profile = loaded
+			isNew = fresh
 			break
 		elseif result == "error" then
 			if RunService:IsStudio() then
@@ -410,7 +429,8 @@ local function onPlayerAdded(player: Player)
 		return
 	end
 
-	local session: Session = { id = sessionId, player = player, profile = profile, canSave = true }
+	local session: Session =
+		{ id = sessionId, player = player, profile = profile, canSave = true, isNew = isNew }
 
 	-- left while we were loading: hand the lock straight back
 	if player.Parent == nil then
@@ -447,6 +467,13 @@ end
 function PlayerData.get(player: Player): Types.Profile?
 	local session = sessions[player]
 	return if session then session.profile else nil
+end
+
+-- True if the player had no saved profile before this visit (a brand-new
+-- player; a temporary Studio profile counts as new).
+function PlayerData.isNew(player: Player): boolean
+	local session = sessions[player]
+	return session ~= nil and session.isNew
 end
 
 -- Someone's saved profile, read only: for a player who may not be in this

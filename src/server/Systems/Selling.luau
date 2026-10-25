@@ -26,6 +26,7 @@ local PlayerData = require(script.Parent.PlayerData)
 local ServerGoal = require(script.Parent.ServerGoal)
 local Stats = require(script.Parent.Stats)
 local Sync = require(script.Parent.Sync)
+local Tutorial = require(script.Parent.Tutorial)
 
 local SELL_TAG = "SellArea"
 local CHECK_INTERVAL = 0.15
@@ -89,6 +90,7 @@ function Selling.payOut(player: Player, profile: Types.Profile)
 	profile.chargeValue = 0
 	Sync.markDirty(player)
 	Analytics.sold(player, earned)
+	Tutorial.sold(player)
 	Stats.sold(player, earned, full)
 	ServerGoal.add(player, earned) -- every sale fills the server goal
 	soldRemote:FireClient(player, earned, count, missed)

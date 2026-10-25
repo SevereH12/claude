@@ -10,6 +10,7 @@ local Net = require(ReplicatedStorage.Shared.Net)
 local Analytics = require(script.Parent.Analytics)
 local PlayerData = require(script.Parent.PlayerData)
 local Sync = require(script.Parent.Sync)
+local Tutorial = require(script.Parent.Tutorial)
 local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
 
 local Shop = {}
@@ -41,6 +42,7 @@ local function onBuyBottle(player: Player, tier: unknown)
 	profile.bottleTier = tier
 	Sync.markDirty(player)
 	Analytics.boughtBottle(player, tier - 1)
+	Tutorial.boughtBottle(player)
 end
 
 local function onBuyBoots(player: Player, tier: unknown)

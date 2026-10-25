@@ -13,6 +13,9 @@
 --   │                time left ("🌩️ SERVER 2x · Alex · 14:32")
 --   ├── EventChip    under that, while a scheduled event is on (Config.EVENTS,
 --   │                Util/Weather): "🎉 Double Volts Weekend 2x · 1d 4h"
+--   ├── FriendsChip  "👥 +10% friends" while Roblox friends are in your server
+--   │                (Systems/Friends): under the boosts (under the server
+--   │                goal meter on a sideways phone or tablet)
 --   ├── ServerGoal   a slim meter under that (Systems/ServerGoal, read from
 --   │                workspace attributes): "⚡ Server goal 62%", or the
 --   │                Server Surge's time left while one is on. Tap it: a
@@ -37,6 +40,7 @@ local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
+local Social = require(ReplicatedStorage.Shared.Util.Social)
 local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Weather = require(ReplicatedStorage.Shared.Util.Weather)
@@ -75,6 +79,7 @@ local boostList: UIListLayout
 local boostChips: { [string]: TextLabel } = {} -- by boost key
 local stormChip: TextLabel
 local eventChip: TextLabel
+local friendsChip: TextLabel
 local goalMeter: TextButton
 local goalMeterFill: Frame
 local goalMeterLabel: TextLabel
@@ -346,6 +351,23 @@ local function buildEventChip()
 	UI.corner(eventChip, UDim.new(0.5, 0))
 	UI.stroke(eventChip, 2)
 	UI.maxText(eventChip, 18)
+end
+
+-- The friends boost's chip (shown while a friend is in the server).
+local function buildFriendsChip()
+	friendsChip = UI.label({
+		Title = true,
+		Name = "FriendsChip",
+		Text = "",
+		Visible = false,
+		TextColor3 = COLORS.text,
+		BackgroundColor3 = Color3.fromRGB(60, 170, 110),
+		BackgroundTransparency = 0,
+		Parent = screenGui,
+	})
+	UI.corner(friendsChip, UDim.new(0.5, 0))
+	UI.stroke(friendsChip, 2)
+	UI.maxText(friendsChip, 18)
 end
 
 -- The server goal meter under the event chip: a fill bar with its text on
@@ -648,6 +670,9 @@ local function render(snapshot: Types.Snapshot)
 		TweenService:Create(displayedVolts, UI.TWEEN.countUp, { Value = snapshot.volts }):Play()
 	end
 	renderGoal(snapshot)
+	local friendsText = Social.chipText(snapshot.friends or 0)
+	friendsChip.Visible = friendsText ~= ""
+	friendsChip.Text = friendsText
 
 	local bottle = Formulas.bottle(snapshot.bottleTier)
 	local capacity = snapshot.capacity -- Big Bottles included
@@ -696,6 +721,7 @@ function HUD.place()
 	UI.place(stormChip, hud.serverStorm)
 	UI.place(eventChip, hud.event)
 	UI.place(goalMeter, hud.serverGoal)
+	UI.place(friendsChip, hud.friends)
 	-- the boosts' chips: three across a row, or stacked in a column
 	local boosts = hud.boosts
 	UI.place(boostRow, boosts)
@@ -752,6 +778,7 @@ function HUD.init()
 	buildBoostRow()
 	buildStormChip()
 	buildEventChip()
+	buildFriendsChip()
 	buildGoalMeter()
 	buildSellButton()
 	HUD.place()

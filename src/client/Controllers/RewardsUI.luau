@@ -13,6 +13,10 @@
 --     +10% Volts. JOIN opens Roblox's group prompt (only from the tap), and
 --     a join is reported (GroupJoined) for the server to check itself
 --     (Systems/Group)
+--   * the invite card: INVITE opens Roblox's invite window
+--     (SocialService:PromptGameInvite, after CanSendGameInviteAsync). A
+--     friend who's new to the game gets a welcome gift and you get a boost
+--     (Systems/Invites); friends in your server add +5% Volts each
 -- Cards size themselves to the screen (fitCards): a phone held upright gets
 -- 4 days and 2 gifts a row, and on touch screens the cards grow to fit the
 -- TAP_MIN-tall CLAIM button and the larger minimum text, instead of the
@@ -34,6 +38,7 @@ local GroupService = game:GetService("GroupService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local SocialService = game:GetService("SocialService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
@@ -501,6 +506,33 @@ local function joinGroup()
 	end)
 end
 
+-- INVITE: Roblox's own invite window, if this player may send invites.
+local inviting = false
+local function invite()
+	if inviting then
+		return
+	end
+	inviting = true
+	task.spawn(function()
+		local ok, can = pcall(function()
+			return SocialService:CanSendGameInviteAsync(player)
+		end)
+		if not ok or not can then
+			print(`[RewardsUI] invites aren't available here ({if ok then "not allowed" else can})`)
+			UI.toast("Invites aren't available right now", "warn")
+		else
+			local shown, err = pcall(function()
+				SocialService:PromptGameInvite(player)
+			end)
+			if not shown then
+				warn(`[RewardsUI] the invite window failed: {err}`)
+				UI.toast("Couldn't open the invite window. Try again soon.", "warn")
+			end
+		end
+		inviting = false
+	end)
+end
+
 -- Everything from the snapshot and the clock. Returns whether anything is
 -- ready to claim, whether that's the daily reward, and which gifts are.
 local function render(): (boolean, boolean, { number })
@@ -889,6 +921,49 @@ function RewardsUI.init()
 		joinGroup()
 	end)
 	renderGroup()
+
+	heading(list, 8, "✉️ INVITE FRIENDS")
+	local inviteCard = UI.make(Instance.new("Frame"), {
+		Name = "Invite",
+		LayoutOrder = 9,
+		BackgroundColor3 = COLORS.panelDark,
+		Size = UDim2.new(1, -12, 0, GROUP_HEIGHT),
+		Parent = list,
+	})
+	UI.corner(inviteCard, UDim.new(0, 12))
+	UI.stroke(inviteCard, 3, PINK)
+	local reward = Config.BOOST_PRODUCTS[1]
+	for _, product in Config.BOOST_PRODUCTS do
+		if product.key == Config.INVITES.inviterReward then
+			reward = product
+		end
+	end
+	local inviteText = UI.label({
+		Title = true,
+		Text = `New players you invite get a welcome gift, you get a {reward.name}. Friends here: +{math.round(
+			Config.FRIENDS.perFriend * 100
+		)}% Volts each`,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextWrapped = true,
+		Position = UDim2.new(0, 14, 0, 8),
+		Size = UDim2.new(0.68, -14, 1, -16),
+		Parent = inviteCard,
+	})
+	UI.maxText(inviteText, 18)
+	local inviteButton = UI.button({
+		Name = "InviteButton",
+		Text = "INVITE",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -10, 0.5, 0),
+		Size = UDim2.new(0.28, 0, 0, 48),
+		BackgroundColor3 = PINK,
+		Parent = inviteCard,
+	})
+	UI.maxText(inviteButton, 24)
+	inviteButton.Activated:Connect(function()
+		UI.pop(inviteButton)
+		invite()
+	end)
 	player:GetAttributeChangedSignal(PassRules.GROUP):Connect(function()
 		renderGroup()
 		local percent = math.round(Config.GROUP_BONUS * 100)

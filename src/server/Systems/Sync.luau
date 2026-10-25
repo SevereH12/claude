@@ -39,6 +39,10 @@ Sync.rewards = {} :: { [Player]: Types.RewardSession }
 -- Owned by Systems/Afk: per player in the AFK Lounge, its state.
 Sync.afk = {} :: { [Player]: Types.AfkState }
 
+-- Owned by Systems/Friends: per player, how many of their Roblox friends
+-- are in this server (Studio's pretend friends included).
+Sync.friends = {} :: { [Player]: number }
+
 local NO_STORE: Types.StoreSession = table.freeze({ boostEarned = 0, missedDouble = 0 })
 
 function Sync.markDirty(player: Player)
@@ -98,6 +102,8 @@ local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapsho
 			profile.logClaimed
 		),
 		ascension = profile.ascension,
+		tutorialStep = profile.tutorialStep,
+		friends = Sync.friends[player] or 0,
 	}
 end
 

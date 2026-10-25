@@ -14,7 +14,9 @@
 -- quarter of the server goal as if you sold it, and "completeQuest" counts
 -- your first unfinished quest as done, and "logEntry" finds the next
 -- Storm Log entry a counter can find, and "readyAscend" gives you the top
--- bottle and enough Volts to ascend. The repo and client code are public, so this
+-- bottle and enough Volts to ascend, "restartTutorial" starts the
+-- new-player tutorial again from step 1 and "friends" adds a pretend
+-- friend in the server (0 to 3, then 0 again). The repo and client code are public, so this
 -- is the lock: it only obeys in Studio play tests or, in a live server, the
 -- user who owns the place; everything but "volts" is Studio only. To remove it:
 -- delete this file and Controllers/DevCommands.luau, and take "DevCommand"
@@ -31,6 +33,7 @@ local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local Weather = require(ReplicatedStorage.Shared.Util.Weather)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
 local Ascension = require(script.Parent.Ascension)
+local Friends = require(script.Parent.Friends)
 local Boosts = require(script.Parent.Boosts)
 local Gifts = require(script.Parent.Gifts)
 local Group = require(script.Parent.Group)
@@ -45,6 +48,7 @@ local ServerGoal = require(script.Parent.ServerGoal)
 local StormCycle = require(script.Parent.StormCycle)
 local Strikes = require(script.Parent.Strikes)
 local Sync = require(script.Parent.Sync)
+local Tutorial = require(script.Parent.Tutorial)
 local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
 
 local INFINITE_VOLTS = 1e12
@@ -173,6 +177,12 @@ local function onCommand(player: Player, name: unknown, value: unknown, extra: u
 	elseif name == "readyAscend" then
 		Ascension.testReady(player)
 		print(`[DevCommands] {player.Name}: ready to ascend (SHOP > BOTTLES > ASCEND)`)
+	elseif name == "restartTutorial" then
+		Tutorial.restart(player)
+		print(`[DevCommands] {player.Name}: the tutorial starts again from step 1`)
+	elseif name == "friends" then
+		local n = Friends.cyclePretend(player)
+		print(`[DevCommands] {player.Name}: {n} pretend friends in the server`)
 	elseif name == "event" and typeof(value) == "boolean" then
 		workspace:SetAttribute(Weather.PRETEND_EVENT, value)
 		Sync.markDirty(player)

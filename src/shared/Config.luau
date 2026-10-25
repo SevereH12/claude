@@ -820,6 +820,33 @@ return table.freeze({
 	-- charges per minute of boost (about a minute of catching)
 	REWARD_SWAP_CHARGES = 10,
 
+	-- The new-player tutorial (Util/Tutorial, Systems/Tutorial): walk to
+	-- `zone`, catch `catches` bolts, fill the bottle and sell it, then buy
+	-- the next bottle. Finishing pays `rewardCharges` charges (in Volts, like
+	-- every reward: Util/Store.volts).
+	TUTORIAL = table.freeze({
+		zone = "Shoreline",
+		catches = 3,
+		rewardCharges = 50,
+	}),
+	-- Friends boost (Systems/Friends, Util/Passes): +perFriend Volts on every
+	-- sale for each Roblox friend in your server, counting up to `max`.
+	FRIENDS = table.freeze({
+		perFriend = 0.05,
+		max = 3,
+	}),
+	-- Invites (Systems/Invites, Util/Social): a brand-new player who joins
+	-- from someone's invite gets `welcomeCharges` charges; the inviter gets a
+	-- `inviterReward` (a BOOST_PRODUCTS key) in their gift inbox, at most
+	-- `dailyCap` times a UTC day, and only when the new player's Roblox
+	-- account is at least `minAccountAgeDays` old.
+	INVITES = table.freeze({
+		welcomeCharges = 100,
+		inviterReward = "DoubleVoltsBoost",
+		dailyCap = 5,
+		minAccountAgeDays = 3,
+	}),
+
 	-- The group that owns the game (Systems/Group): members get GROUP_BONUS
 	-- more Volts on every sale. To use another group, change GROUP_ID (and
 	-- GROUP_NAME, which the REWARDS panel shows).

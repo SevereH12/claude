@@ -3,7 +3,7 @@
 Follow the rules in `docs/prompts/README.md`. **Run it twice**; each run
 does the first unticked part, then ticks it.
 
-- [ ] Part A: the new-player tutorial, the friends boost and invites
+- [x] Part A: the new-player tutorial, the friends boost and invites
 - [ ] Part B: leaderboards and phone notifications
 
 **Needs prompt 16 part A**: `src/shared/Util/Stats.luau` must exist. If it
