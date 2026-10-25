@@ -960,4 +960,37 @@ return table.freeze({
 	-- the strike's thunder comes later the further away it is
 	THUNDER_STUDS_PER_SECOND = 340,
 	THUNDER_MAX_DELAY = 1.5,
+
+	-- Admins (Systems/Admin, Util/Ops): the owner of the group (GROUP_ID),
+	-- anyone in it at this rank or higher, and everyone in Studio play tests.
+	ADMIN_RANK = 200,
+	ADMIN = table.freeze({
+		logStore = "AdminLog", -- DataStore: one key per UTC day, "day_2026-10-25"
+		logPerDay = 1000, -- entries kept per day (the oldest go first)
+		reasonLength = 200, -- characters in a kick or ban reason
+		maxVolts = 1e12, -- the most Volts one "give" can add
+		-- ban lengths the panel offers, in seconds (-1 = forever)
+		banSeconds = { 3600, 86400, 7 * 86400, 30 * 86400, -1 },
+		boostMinutes = { 15, 30, 60 }, -- boost lengths the panel offers
+		rankRecheckSeconds = 300, -- how long a rank check is trusted
+	}),
+
+	-- Error reporting (Systems/Errors, Util/Ops): client errors come in
+	-- through the ClientError remote, at most `perPlayer` a minute per player
+	-- and `perServer` a minute for the whole server. The admin panel shows the
+	-- last `recent` errors.
+	ERRORS = table.freeze({
+		perPlayer = 5,
+		perServer = 300,
+		recent = 20,
+		messageLength = 300, -- characters kept from a message
+	}),
+
+	-- Streaming (Lib/MapBuilder): phones only load the map near the player.
+	-- minRadius is always loaded round you; targetRadius is how far it tries
+	-- to load when there's memory to spare (studs).
+	STREAMING = table.freeze({
+		minRadius = 128,
+		targetRadius = 512,
+	}),
 })

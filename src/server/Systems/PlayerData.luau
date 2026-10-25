@@ -43,6 +43,7 @@ type Session = {
 	profile: Types.Profile,
 	canSave: boolean, -- false for a temporary Studio profile
 	isNew: boolean, -- there was no saved profile before this visit (Systems/Invites)
+	wipe: boolean?, -- an admin reset it: every save from now writes a new profile
 }
 
 local DEFAULT_PROFILE: Types.Profile = {
@@ -343,7 +344,7 @@ local function save(session: Session, release: boolean): boolean
 	if not session.canSave or not dataStore then
 		return false
 	end
-	local data = deepCopy(session.profile)
+	local data = deepCopy(if session.wipe then DEFAULT_PROFILE else session.profile)
 	local player = session.player
 	local wrote = false
 
@@ -521,6 +522,52 @@ end
 function PlayerData.saveNow(player: Player): boolean
 	local session = sessions[player]
 	return session ~= nil and save(session, false)
+end
+
+-- Admin reset (Systems/Admin) of a player in this server: their profile is
+-- saved as a brand-new one now and when they leave (the admin system then
+-- kicks them, so nothing in this session uses the old profile again).
+-- True if it was written (a temporary Studio profile never saves).
+function PlayerData.reset(player: Player): boolean
+	local session = sessions[player]
+	if not session then
+		return false
+	end
+	session.wipe = true
+	return save(session, false)
+end
+
+-- Admin reset of a player who isn't in this server. Refuses (false, why)
+-- while another server holds their save, so it can't fight a live session.
+function PlayerData.resetSaved(userId: number): (boolean, string)
+	local dataStore = store
+	if not dataStore then
+		return false, "DataStores aren't available here"
+	end
+	local outcome = "error"
+	local ok = withRetry(2, function()
+		dataStore:UpdateAsync(keyForId(userId), function(old: any): any
+			outcome = "error"
+			if old ~= nil and typeof(old) ~= "table" then
+				return nil
+			end
+			if old and heldByOther(old.lock, "") then
+				outcome = "locked"
+				return nil
+			end
+			outcome = "ok"
+			local record: Record = { data = deepCopy(DEFAULT_PROFILE), lock = nil }
+			return record
+		end)
+	end)
+	if not ok then
+		return false, "couldn't write the save"
+	elseif outcome == "locked" then
+		return false, "they're playing in another server right now"
+	elseif outcome ~= "ok" then
+		return false, "their save is in an unknown format"
+	end
+	return true, "reset"
 end
 
 function PlayerData.start()

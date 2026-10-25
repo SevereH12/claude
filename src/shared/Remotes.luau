@@ -11,7 +11,9 @@
 -- PromoteResearcher, SaveSettings, ClaimQuest, RerollQuest, ClaimLogRow
 -- Both ways: Ascend (asks, then confirms with the server's token; the server
 -- answers with the confirm screen's details or the new level), Tutorial
--- (the client asks to "skip"; the server says "finished")
+-- (the client asks to "skip"; the server says "finished"), Admin (the admin
+-- panel's requests and the server's answers; Systems/Admin)
+-- Client -> server: ClientError (a client script error, Systems/Errors)
 
 export type RemoteName =
 	"StateSnapshot"
@@ -52,6 +54,8 @@ export type RemoteName =
 	| "Tutorial"
 	| "Leaderboards"
 	| "NotifyOptIn"
+	| "Admin"
+	| "ClientError"
 
 local NAMES: { RemoteName } = {
 	"StateSnapshot",
@@ -92,6 +96,8 @@ local NAMES: { RemoteName } = {
 	"Tutorial",
 	"Leaderboards",
 	"NotifyOptIn",
+	"Admin",
+	"ClientError",
 }
 
 return table.freeze(NAMES)

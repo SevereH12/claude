@@ -101,19 +101,45 @@ local function watchFolder(folder: Instance)
 	folder.DescendantAdded:Connect(addPart) -- streamed in later
 end
 
-local function findDecor(map: Instance)
-	local roots = { map }
-	for _, child in map:GetChildren() do
-		if child:IsA("Folder") or child:IsA("Model") then
-			table.insert(roots, child)
+local watched: { [Instance]: boolean } = {}
+local function watchRoot(root: Instance)
+	local function consider(child: Instance)
+		if not watched[child] and table.find(DECOR_FOLDERS, child.Name) then
+			watched[child] = true
+			watchFolder(child)
 		end
 	end
-	for _, root in roots do
-		for _, name in DECOR_FOLDERS do
-			local folder = root:FindFirstChild(name)
-			if folder then
-				watchFolder(folder)
-			end
+	for _, child in root:GetChildren() do
+		consider(child)
+	end
+	root.ChildAdded:Connect(consider) -- with streaming, folders can arrive late
+end
+
+local function findDecor(map: Instance)
+	watchRoot(map)
+	local function addWorld(child: Instance)
+		if child:IsA("Folder") or child:IsA("Model") then
+			watchRoot(child)
+		end
+	end
+	for _, child in map:GetChildren() do
+		addWorld(child)
+	end
+	map.ChildAdded:Connect(addWorld)
+end
+
+-- Streaming removes far parts (and brings back new copies later): forget
+-- the removed ones so the list doesn't keep growing.
+local function forgetRemoved()
+	local index = 1
+	while index <= #decor do
+		local part = decor[index]
+		if part.Parent == nil then
+			inDecor[part] = nil
+			decor[index] = decor[#decor]
+			decor[#decor] = nil
+		else
+			index += 1
 		end
 	end
 end
@@ -164,6 +190,7 @@ function Graphics.start()
 		end
 		findDecor(map)
 		while true do
+			forgetRemoved()
 			decorPass()
 			task.wait(CHECK_EVERY)
 		end

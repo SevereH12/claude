@@ -1,6 +1,6 @@
 --!strict
--- TEMPORARY test tool: the client's TEST buttons (Controllers/DevCommands)
--- send DevCommand: "volts" sets that player's Volts, "premium" turns
+-- TEMPORARY Studio-only test tool: the client's TEST buttons
+-- (Controllers/DevCommands) send DevCommand: "premium" turns
 -- Pretend Premium on or off, "pass" pretends to own a Game Pass, and
 -- "nextDay", "playtime" and "clearBoosts" test rewards (a day later, +5
 -- minutes of play, no boosts and no Server Storm), "group" pretends to be a
@@ -19,11 +19,11 @@
 -- friend in the server (0 to 3, then 0 again), "testLeaderboard" fills
 -- the leaderboards with made-up players (you at #7) or goes back to the
 -- real ones, and "testNotify" queues a daily reminder for you, due now
--- (the log shows it being claimed and sent, or why it can't be). The repo and client code are public, so this
--- is the lock: it only obeys in Studio play tests or, in a live server, the
--- user who owns the place; everything but "volts" is Studio only. To remove it:
--- delete this file and Controllers/DevCommands.luau, and take "DevCommand"
--- out of Shared/Remotes.
+-- (the log shows it being claimed and sent, or why it can't be). The repo
+-- and client code are public, so this is the lock: it only obeys in Studio
+-- play tests. Tools for a live game (giving Volts and the rest) are in the
+-- admin panel (Systems/Admin). To remove it: delete this file and
+-- Controllers/DevCommands.luau, and take "DevCommand" out of Shared/Remotes.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -56,40 +56,9 @@ local Sync = require(script.Parent.Sync)
 local Tutorial = require(script.Parent.Tutorial)
 local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
 
-local INFINITE_VOLTS = 1e12
 local PLAYTIME_STEP = 5 * 60 -- seconds "+5 min playtime" adds
 
 local DevCommands = {}
-
-local function isOwner(player: Player): boolean
-	if RunService:IsStudio() then
-		return true
-	end
-	-- a group-owned place has a group id here, so only Studio works there
-	return game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId
-end
-
-local function setVolts(player: Player, amount: unknown)
-	local volts = INFINITE_VOLTS
-	if amount ~= nil then
-		if
-			typeof(amount) ~= "number"
-			or amount ~= amount
-			or amount < 0
-			or amount > INFINITE_VOLTS
-		then
-			return
-		end
-		volts = math.floor(amount)
-	end
-	local profile = PlayerData.get(player)
-	if not profile then
-		return
-	end
-	profile.volts = volts
-	Sync.markDirty(player)
-	print(`[DevCommands] {player.Name} set Volts to {volts}`)
-end
 
 -- Lets a tester without Premium try the Premium zone. Progression also
 -- ignores the attribute outside Studio.
@@ -112,17 +81,13 @@ local function setPretendPass(player: Player, key: unknown, on: unknown)
 end
 
 local function onCommand(player: Player, name: unknown, value: unknown, extra: unknown)
-	if not RateLimit.allow(player, "DevCommand", 2, 4) or not isOwner(player) then
+	if not RateLimit.allow(player, "DevCommand", 2, 4) or not RunService:IsStudio() then
 		return
 	end
-	if name == "volts" then
-		setVolts(player, value)
-	elseif name == "premium" then
+	if name == "premium" then
 		setPretendPremium(player, value)
 	elseif name == "pass" then
 		setPretendPass(player, value, extra)
-	elseif not RunService:IsStudio() then
-		return
 	elseif name == "nextDay" then
 		Rewards.nextDay(player)
 		Stats.refresh(player) -- a new quest day too

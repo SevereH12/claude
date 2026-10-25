@@ -27,7 +27,9 @@ local player = Players.LocalPlayer
 
 local ZoneGates = {}
 
-local wasOpen: { [string]: boolean } = {} -- zone id -> open at the last update
+-- gate model -> open at the last update (weak: a gate that streams out
+-- and back in is a new model, set up again)
+local wasOpen: { [Model]: boolean } = setmetatable({}, { __mode = "k" }) :: any
 local lastUpsell = -math.huge
 
 local function gates(): { Model }
@@ -92,7 +94,7 @@ local function update(snapshot: Types.Snapshot)
 		local zone, barrier = parts(model)
 		if zone and barrier then
 			local open = Progression.canEnter(snapshot, zone, snapshot.premium)
-			local before = wasOpen[zone.id]
+			local before = wasOpen[model]
 			if open and before == false then
 				-- unlocked while playing
 				dissolve(model, barrier)
@@ -103,7 +105,7 @@ local function update(snapshot: Types.Snapshot)
 			elseif not open then
 				barrier.CanCollide = true
 			end
-			wasOpen[zone.id] = open
+			wasOpen[model] = open
 		end
 	end
 end
@@ -139,13 +141,21 @@ end
 function ZoneGates.start()
 	-- the gates are a Persistent model, but may arrive after this script runs
 	local map = workspace:WaitForChild("Map", 30)
-	if map then
-		map:WaitForChild("ZoneGates", 10)
-	end
+	local container = if map then map:WaitForChild("ZoneGates", 10) else nil
 	if State.current then
 		update(State.current)
 	end
 	State.Changed:Connect(update)
+	-- a gate that arrives later (or streams back in) is set up then
+	if container then
+		container.ChildAdded:Connect(function()
+			task.defer(function()
+				if State.current then
+					update(State.current)
+				end
+			end)
+		end)
+	end
 	while true do
 		task.wait(0.2)
 		if State.current then

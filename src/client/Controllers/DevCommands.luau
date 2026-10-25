@@ -1,7 +1,7 @@
 --!strict
--- TEMPORARY test buttons: one sets your Volts to 1 trillion (shown in
--- Studio or to the place's owner), one turns Pretend Premium on and off
--- (Studio only), PASSES opens one "Pretend owns <pass>" toggle per Game
+-- TEMPORARY test buttons, Studio play tests only (the first row above them
+-- is the ADMIN button, Controllers/AdminUI, which gives Volts and the rest
+-- in a live game too): one turns Pretend Premium on and off, PASSES opens one "Pretend owns <pass>" toggle per Game
 -- Pass and "Send test gift to me" and "Send test boost gift" buttons, and
 -- REWARDS opens Next day, +5 min playtime, Clear boosts (and the Server
 -- Storm and Surge), Start Server Storm, +500 research data, +100 Glints, Force golden
@@ -33,32 +33,14 @@ local Music = require(script.Parent.Music)
 
 local DevCommands = {}
 
-local function isOwner(): boolean
-	return RunService:IsStudio()
-		or (
-			game.CreatorType == Enum.CreatorType.User
-			and Players.LocalPlayer.UserId == game.CreatorId
-		)
-end
-
 function DevCommands.init()
-	if not isOwner() then
+	if not RunService:IsStudio() then
 		return
 	end
 	local devRemote = Net.get("DevCommand")
 	local _, screenGui = Layout.screen("StormBottlerTest", 1)
-	-- under the MENU button (LayoutMath.hud.test: two rows)
-	local button = UI.button({
-		Name = "TestVolts",
-		Text = "TEST: 1T ⚡",
-		BackgroundColor3 = UI.COLORS.volt,
-		Parent = screenGui,
-	})
-	UI.maxText(button, 22)
-	button.Activated:Connect(function()
-		UI.pop(button)
-		devRemote:FireServer("volts")
-	end)
+	-- under the MENU button (LayoutMath.hud.test): row 1 is the ADMIN
+	-- button (Controllers/AdminUI), the test buttons are rows 2 to 4
 	local function row(index: number): LayoutMath.Rect
 		local area = Layout.hud.test
 		local height = (area.h - LayoutMath.GAP) / 2
@@ -69,13 +51,7 @@ function DevCommands.init()
 			h = height,
 		}
 	end
-	UI.onLayout(function()
-		UI.place(button, row(1))
-	end)
 
-	if not RunService:IsStudio() then
-		return
-	end
 	local player = Players.LocalPlayer
 	local premium = UI.button({
 		Name = "PretendPremium",
