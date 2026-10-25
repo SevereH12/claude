@@ -35,6 +35,19 @@ function Rewards.daily(lastClaimDay: number, today: number, streak: number): (bo
 	return true, 1
 end
 
+-- The login run after claiming on `today`: days in a row with a claim.
+-- Unlike the 7-day streak it keeps counting past day 7 (the "Longest
+-- streak" leaderboard); a missed day starts it again at 1.
+function Rewards.loginRun(lastClaimDay: number, today: number, run: number): number
+	if lastClaimDay == today then
+		return run
+	end
+	if lastClaimDay == today - 1 and run >= 1 then
+		return run + 1
+	end
+	return 1
+end
+
 -- May this playtime gift be claimed, `elapsed` seconds into the session?
 function Rewards.giftReady(gift: Types.PlaytimeGift, elapsed: number, claimed: boolean): boolean
 	return not claimed and elapsed >= gift.minutes * 60

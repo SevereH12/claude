@@ -13,6 +13,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Afk = require(ReplicatedStorage.Shared.Util.Afk)
+local Leaderboards = require(ReplicatedStorage.Shared.Util.Leaderboards)
 local Portals = require(ReplicatedStorage.Shared.Util.Portals)
 local ResearchSites = require(ReplicatedStorage.Shared.Util.ResearchSites)
 local Blocks = require(script.Parent.Blocks)
@@ -329,6 +330,89 @@ function Kit.sign(
 	Kit.faceText(board, Enum.NormalId.Front, title, subtitle, style)
 	if style.twoSided then
 		Kit.faceText(board, Enum.NormalId.Back, title, subtitle, style)
+	end
+	return board
+end
+
+-- The leaderboard board: a sign on two posts whose face shows a title and
+-- `rows` lines ("1. ---" until Systems/Leaderboards fills them in with the
+-- live top players). `bottom` is the ground under its middle; the text
+-- faces along bottom.LookVector. The board is tagged
+-- Leaderboards.BOARD_TAG, and its SurfaceGui's rows are named Row1, Row2...
+function Kit.leaderboard(
+	parent: Instance,
+	bottom: CFrame,
+	width: number,
+	height: number,
+	lift: number,
+	rows: number,
+	title: string,
+	style: SignStyle,
+	postColor: Color3,
+	postMaterial: Enum.Material?
+): BasePart
+	local thickness = style.thickness or 0.6
+	for _, side in { -1, 1 } do
+		local foot = (bottom * CFrame.new(side * (width / 2 - 0.6), 0, thickness / 2 + 0.45)).Position
+		Kit.cylinder(parent, foot, lift + height + 0.4, 0.8, {
+			Name = "BoardPost",
+			Color = postColor,
+			Material = postMaterial or Enum.Material.Wood,
+			CanCollide = true,
+		})
+	end
+	local board = Kit.decor({
+		Name = "Leaderboard",
+		Size = Vector3.new(width, height, thickness),
+		CFrame = bottom * CFrame.new(0, lift + height / 2, 0),
+		Color = style.boardColor,
+		Material = style.boardMaterial or Enum.Material.SmoothPlastic,
+		CanCollide = true,
+		Parent = parent,
+	})
+	board:AddTag(Leaderboards.BOARD_TAG)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "Rows"
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 40
+	gui.LightInfluence = if style.glow == false then 1 else 0
+	gui.MaxDistance = 200
+	gui.Parent = board
+	local stroke = style.strokeColor or Color3.fromRGB(15, 15, 25)
+	local titleLabel = Instance.new("TextLabel")
+	titleLabel.Name = "Title"
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.Position = UDim2.fromScale(0.05, 0.03)
+	titleLabel.Size = UDim2.fromScale(0.9, 0.15)
+	titleLabel.Font = style.titleFont or Enum.Font.LuckiestGuy
+	titleLabel.TextScaled = true
+	titleLabel.TextColor3 = style.titleColor
+	titleLabel.Text = title
+	titleLabel.Parent = gui
+	local titleStroke = Instance.new("UIStroke")
+	titleStroke.Thickness = 4
+	titleStroke.Color = stroke
+	titleStroke.Parent = titleLabel
+	local rowHeight = 0.78 / rows
+	for index = 1, rows do
+		local row = Instance.new("TextLabel")
+		row.Name = `Row{index}`
+		row.BackgroundTransparency = 1
+		row.Position = UDim2.fromScale(0.06, 0.2 + (index - 1) * rowHeight)
+		row.Size = UDim2.fromScale(0.88, rowHeight * 0.9)
+		row.Font = style.subtitleFont or Enum.Font.BuilderSansExtraBold
+		row.TextScaled = true
+		row.TextXAlignment = Enum.TextXAlignment.Left
+		row.TextColor3 = if index <= 3
+			then style.titleColor
+			else style.subtitleColor or Color3.new(1, 1, 1)
+		row.Text = `{index}. ---`
+		row.Parent = gui
+		local rowStroke = Instance.new("UIStroke")
+		rowStroke.Thickness = 2
+		rowStroke.Color = stroke
+		rowStroke.Parent = row
 	end
 	return board
 end

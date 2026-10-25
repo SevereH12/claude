@@ -8,8 +8,10 @@
 -- on the coast. The island is part-built (Land): a grass 14-gon on earth
 -- and stone bands, a sand ring and wedge beach slopes.
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
+local Config = require(ReplicatedStorage.Shared.Config)
 local Blocks = require(ServerScriptService.Server.World.Blocks)
 local Kit = require(ServerScriptService.Server.World.Kit)
 local Geo = require(script.Parent.Geo)
@@ -674,6 +676,37 @@ local function fingerpost(ctx: Context, parent: Instance, floor: number, dir: Ve
 	Pieces.weatherVane(parent, base + Vector3.new(0, h, 0), 1.2)
 end
 
+-- The leaderboard (Systems/Leaderboards fills in the top 10 all-time
+-- Volts): off the spawn deck's left shoulder (the fingerpost is on the
+-- right), between the deck and the boardwalk direction on that side (the
+-- spawn sits in the middle of a gap between boardwalk directions,
+-- `half` degrees from each). It stands BOARD_CLEAR studs from that
+-- boardwalk's centre line, its back to it, turned BOARD_TURN degrees
+-- toward the plaza so players walking in from the spawn see it.
+local BOARD_W, BOARD_H, BOARD_LIFT = 9, 9, 1.6
+local BOARD_CLEAR = 10
+local BOARD_TURN = 20
+local function leaderboard(parent: Instance, floor: number, spawnA: number, half: number)
+	local along = Geo.dir(spawnA - half) -- out along the boardwalk
+	local across = Geo.dir(spawnA - half + 90) -- from it toward the spawn
+	local out = SPAWN_DISTANCE * math.cos(math.rad(half)) + 9
+	local at = along * out + across * BOARD_CLEAR + Vector3.new(0, floor, 0)
+	local turn = math.rad(BOARD_TURN)
+	local facing = across * math.cos(turn) - along * math.sin(turn)
+	Kit.leaderboard(
+		parent,
+		CFrame.lookAt(at, at + facing),
+		BOARD_W,
+		BOARD_H,
+		BOARD_LIFT,
+		Config.LEADERBOARDS.boardRows,
+		"TOP VOLTS",
+		Palette.zoneSign(C.beacon),
+		C.piling,
+		Enum.Material.Wood
+	)
+end
+
 -- Night Shift Lounge (the AFK Lounge) ------------------------------------------------
 
 local LOUNGE_W, LOUNGE_D = 18, 13 -- the deck (side to side, front to back)
@@ -1308,6 +1341,11 @@ function Hub.buildHub(ctx: Context)
 	sellStation(ctx, parent, floor, dir, lens)
 	spawnDeck(parent, floor, dir)
 	fingerpost(ctx, parent, floor, dir)
+	for _, g in gaps do
+		if Geo.angleDiff(g.angle, spawnA) < 1 then
+			leaderboard(parent, floor, spawnA, g.half)
+		end
+	end
 	local loungeA = loungeAngle(gaps, coveA, spawnA, portalAs)
 	village(ctx, parent, floor, gaps, coveA, spawnA, portalAs, loungeA)
 	portals(ctx, parent, floor, portalAs)

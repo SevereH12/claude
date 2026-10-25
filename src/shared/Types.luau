@@ -31,6 +31,21 @@ export type Profile = {
 	logClaimed: { [string]: boolean }, -- Storm Log rows whose reward was claimed, by row id (Util/StormLog)
 	ascension: number, -- Ascension level: times the player has ascended (Util/Ascension), 0 = never
 	tutorialStep: number, -- the new-player tutorial's step (Util/Tutorial): 1-4, 0 = done or skipped
+	loginRun: number, -- days in a row the daily reward was claimed (keeps counting past day 7), 0 = never
+	bestLoginRun: number, -- the longest loginRun ever (the "Longest streak" leaderboard)
+	notifyAsked: boolean, -- asked "Remind me when my daily reward is ready?" (asked once, ever)
+}
+
+-- A leaderboard row (Systems/Leaderboards): rank 1 is the top.
+export type LeaderboardEntry = { userId: number, name: string, value: number }
+
+-- Server -> client (the Leaderboards remote): every board's top rows by
+-- board key (Config.LEADERBOARDS.boards), and this player's own values.
+-- `test`: Studio test data is showing.
+export type LeaderboardView = {
+	boards: { [string]: { LeaderboardEntry } },
+	mine: { [string]: number },
+	test: boolean,
 }
 
 -- A Storm Log page (Config.STORM_LOG.pages): its id, heading, icon, and

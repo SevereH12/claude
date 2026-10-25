@@ -23,7 +23,7 @@ local TutorialRules = require(ReplicatedStorage.Shared.Util.Tutorial)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local STORE_NAME = "StormBottler_PlayerData"
-local CURRENT_VERSION = 16
+local CURRENT_VERSION = 17
 -- A lock older than this belongs to a server that crashed; it may be taken.
 local LOCK_STALE_SECONDS = Config.AUTOSAVE_INTERVAL * 3
 local LOCKED_RETRIES = 5
@@ -73,6 +73,9 @@ local DEFAULT_PROFILE: Types.Profile = {
 	logClaimed = {},
 	ascension = 0,
 	tutorialStep = TutorialRules.WALK, -- a new player starts the tutorial
+	loginRun = 0,
+	bestLoginRun = 0,
+	notifyAsked = false,
 }
 
 -- MIGRATIONS[n] turns a version-n profile into version n+1. When the profile
@@ -191,6 +194,16 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 			else TutorialRules.WALK
 		return data
 	end,
+	-- leaderboards and notifications (prompt 17 part B): the login run
+	-- starts from the streak day they're on (the best guess we have), and
+	-- nobody has been asked about notifications yet
+	[16] = function(data: any): any
+		local streak = if typeof(data.dailyStreak) == "number" then data.dailyStreak else 0
+		data.loginRun = streak
+		data.bestLoginRun = streak
+		data.notifyAsked = false
+		return data
+	end,
 }
 
 local storeOk, storeResult = pcall(function()
@@ -205,6 +218,10 @@ local PlayerData = {}
 
 -- Fires once a player's profile is ready to use.
 PlayerData.Loaded = Signal.new() :: Signal.Signal<Player, Types.Profile>
+
+-- Fires when a player leaves, just before their profile's last save
+-- (PlayerData.get no longer finds it after this).
+PlayerData.Leaving = Signal.new() :: Signal.Signal<Player, Types.Profile>
 
 local function deepCopy<T>(value: T): T
 	if typeof(value) ~= "table" then
@@ -449,6 +466,7 @@ local function onPlayerRemoving(player: Player)
 		return
 	end
 	sessions[player] = nil
+	PlayerData.Leaving:Fire(player, session.profile)
 	release(session)
 end
 

@@ -21,19 +21,25 @@
 -- 4 days and 2 gifts a row, and on touch screens the cards grow to fit the
 -- TAP_MIN-tall CLAIM button and the larger minimum text, instead of the
 -- button covering the reward.
--- Three tabs: REWARDS (all of the above), QUESTS: today's daily quests
+-- Four tabs: REWARDS (all of the above), QUESTS: today's daily quests
 -- and this week's quest (Util/Quests), each a card with what to do, a
 -- progress bar, the reward and a button: CLAIM when it's done, or REROLL
 -- (today's one free reroll) while it isn't. A quest reaching 100% shows a
 -- toast. Both only ask (ClaimQuest, RerollQuest); Systems/Quests decides.
 -- And LOG: the Storm Log collection book (Lib/StormLogTab, Util/StormLog),
--- with CLAIM on each finished row.
+-- with CLAIM on each finished row. And TOP: the leaderboards
+-- (Lib/LeaderboardTab, Systems/Leaderboards).
+-- After the first daily claim the server may ask (NotifyOptIn) "Remind me
+-- when my daily reward is ready?": a toast whose YES opens Roblox's own
+-- notifications prompt (ExperienceNotificationService), if this player can
+-- be asked. It's asked once, ever (Systems/Notifications).
 -- RewardsUI.ReadyChanged tells the menu when something is ready to claim
 -- (a quest or a Log row too).
 -- Gentle nudges, as toasts with OPEN: the daily reward when you join (if
 -- it's ready), each playtime gift once when it's ready, and the group card
 -- once a visit after your first sale.
 
+local ExperienceNotificationService = game:GetService("ExperienceNotificationService")
 local GroupService = game:GetService("GroupService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -53,6 +59,7 @@ local Store = require(ReplicatedStorage.Shared.Util.Store)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Celebrate = require(script.Parent.Parent.Lib.Celebrate)
 local Layout = require(script.Parent.Parent.Lib.Layout)
+local LeaderboardTab = require(script.Parent.Parent.Lib.LeaderboardTab)
 local LayoutMath = require(script.Parent.Parent.Lib.LayoutMath)
 local SettingsStore = require(script.Parent.Parent.Lib.SettingsStore)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
@@ -109,9 +116,11 @@ local panel: Frame
 local list: ScrollingFrame
 local questList: ScrollingFrame
 local logList: ScrollingFrame
+local topList: ScrollingFrame
 local rewardsTab: TextButton
 local questsTab: TextButton
 local logTab: TextButton
+local topTab: TextButton
 local dailyQuestCards: { QuestCard } = {}
 local weeklyQuestCards: { QuestCard } = {}
 local dailyNote: TextLabel
@@ -138,16 +147,24 @@ function RewardsUI.open()
 	UI.openPanel(panel)
 end
 
-type Tab = "rewards" | "quests" | "log"
+type Tab = "rewards" | "quests" | "log" | "top"
 
--- Shows the REWARDS, QUESTS or LOG tab.
+-- Shows the REWARDS, QUESTS, LOG or TOP tab.
 local function selectTab(tab: Tab)
 	list.Visible = tab == "rewards"
 	questList.Visible = tab == "quests"
 	logList.Visible = tab == "log"
+	topList.Visible = tab == "top"
 	UI.setEnabled(rewardsTab, true, if tab == "rewards" then PINK else COLORS.panelDark)
 	UI.setEnabled(questsTab, true, if tab == "quests" then PINK else COLORS.panelDark)
 	UI.setEnabled(logTab, true, if tab == "log" then PINK else COLORS.panelDark)
+	UI.setEnabled(topTab, true, if tab == "top" then PINK else COLORS.panelDark)
+end
+
+-- Opens the panel on the TOP tab (the leaderboards).
+function RewardsUI.openTop()
+	selectTab("top")
+	RewardsUI.open()
 end
 
 -- Opens the panel on the QUESTS tab.
@@ -726,6 +743,31 @@ local function grid(parent: Instance, order: number, name: string, count: number
 	return { frame = frame, layout = layout, count = count }
 end
 
+-- The server asks once, after a daily claim: "Remind me when my daily
+-- reward is ready?" Only shown if Roblox lets this player be asked (13+,
+-- not already on, not asked in the last 30 days); YES opens Roblox's own
+-- prompt, which is the real yes or no.
+local function askAboutReminders()
+	local ok, canAsk = pcall(function()
+		return ExperienceNotificationService:CanPromptOptInAsync()
+	end)
+	if not ok or not canAsk then
+		print(`[RewardsUI] not asking about reminders ({if ok then "Roblox says no" else canAsk})`)
+		return
+	end
+	UI.toast("🔔 Remind me when my daily reward is ready?", "info", 12, {
+		text = "YES",
+		onTap = function()
+			local shown, err = pcall(function()
+				ExperienceNotificationService:PromptOptIn()
+			end)
+			if not shown then
+				warn(`[RewardsUI] the notifications prompt failed: {err}`)
+			end
+		end,
+	})
+end
+
 -- "Got +1.2K Volts and 2x Volts for 10 min!"
 local function onRewarded(rewarded: Types.Rewarded)
 	local parts: { string } = {}
@@ -750,7 +792,7 @@ function RewardsUI.init()
 	local _, root = Layout.screen("StormBottlerRewards", 5)
 	local window = UI.window(root, "RewardsPanel", "🎁 REWARDS", PINK, Vector2.new(680, 560))
 	panel = window.panel
-	-- the two tabs along the top
+	-- the four tabs along the top
 	local tabBar = UI.make(Instance.new("Frame"), {
 		Name = "Tabs",
 		Size = UDim2.new(1, 0, 0, TAB_HEIGHT),
@@ -758,7 +800,7 @@ function RewardsUI.init()
 		Parent = window.body,
 	})
 	UI.make(Instance.new("UIGridLayout"), {
-		CellSize = UDim2.new(1 / 3, -6, 1, 0),
+		CellSize = UDim2.new(1 / 4, -6, 1, 0),
 		CellPadding = UDim2.fromOffset(6, 0),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = tabBar,
@@ -794,10 +836,12 @@ function RewardsUI.init()
 	list = page("List")
 	questList = page("Quests")
 	logList = page("Log")
-	local pages: { [Tab]: ScrollingFrame } = { rewards = list, quests = questList, log = logList }
+	topList = page("Top")
+	local pages: { [Tab]: ScrollingFrame } =
+		{ rewards = list, quests = questList, log = logList, top = topList }
 	local function tab(order: number, text: string, which: Tab): TextButton
 		local names: { [Tab]: string } =
-			{ rewards = "RewardsTab", quests = "QuestsTab", log = "LogTab" }
+			{ rewards = "RewardsTab", quests = "QuestsTab", log = "LogTab", top = "TopTab" }
 		local button = UI.button({
 			Name = names[which],
 			Text = text,
@@ -818,6 +862,10 @@ function RewardsUI.init()
 	rewardsTab = tab(1, "🎁 REWARDS", "rewards")
 	questsTab = tab(2, "📋 QUESTS", "quests")
 	logTab = tab(3, "📖 LOG", "log")
+	topTab = tab(4, "🏆 TOP", "top")
+
+	-- the TOP tab (Lib/LeaderboardTab)
+	LeaderboardTab.build(topList)
 
 	-- the LOG tab (Lib/StormLogTab)
 	StormLogTab.build(logList, RewardsUI.openLog)
@@ -978,6 +1026,9 @@ end
 function RewardsUI.start()
 	Net.get("Rewarded").OnClientEvent:Connect(onRewarded)
 	Net.get("Sold").OnClientEvent:Connect(onSold)
+	Net.get("NotifyOptIn").OnClientEvent:Connect(function()
+		task.delay(3, askAboutReminders) -- after the reward's celebration
+	end)
 	State.Changed:Connect(function()
 		render()
 	end)

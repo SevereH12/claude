@@ -846,6 +846,43 @@ return table.freeze({
 		dailyCap = 5,
 		minAccountAgeDays = 3,
 	}),
+	-- Leaderboards (Systems/Leaderboards, Util/Leaderboards): one
+	-- OrderedDataStore per board. Each player's values are written every
+	-- `writeEverySeconds` (only if they changed) and when they leave; every
+	-- server reads the top `top` every `readEverySeconds`. The board at
+	-- world 1's spawn shows the first board's top `boardRows`.
+	LEADERBOARDS = table.freeze({
+		writeEverySeconds = 5 * 60,
+		readEverySeconds = 2 * 60,
+		top = 50,
+		boardRows = 10,
+		storePrefix = "StormBottler_LB_",
+		boards = table.freeze({
+			table.freeze({ key = "volts", title = "All-time Volts", icon = "⚡" }),
+			table.freeze({ key = "bolts", title = "Bolts caught", icon = "🌩️" }),
+			table.freeze({ key = "ascension", title = "Ascension", icon = "🌟" }),
+			table.freeze({ key = "streak", title = "Longest streak", icon = "📅" }),
+		}),
+	}),
+	-- Phone notifications (Systems/Notifications, Util/Notifications):
+	-- Roblox experience notifications, sent through Open Cloud. They need
+	-- setup on the Creator Dashboard (see README.md, "Leaderboards and
+	-- notifications"): an API key saved as the secret `secretName`, and two
+	-- notification strings whose asset ids go in `dailyReadyMessageId` and
+	-- `streakEndingMessageId`. Until then nothing is sent (the log says so
+	-- once). "Streak ends soon" goes `streakWarnHours` before the streak
+	-- would break. Due items wait in the MemoryStore sorted map `mapName`;
+	-- a server that claims one has it for `claimSeconds`.
+	NOTIFICATIONS = table.freeze({
+		secretName = "StormBottlerNotifyKey",
+		dailyReadyMessageId = "",
+		streakEndingMessageId = "",
+		streakWarnHours = 3,
+		sendEverySeconds = 60,
+		batch = 50,
+		claimSeconds = 5 * 60,
+		mapName = "StormBottler_Notifications",
+	}),
 
 	-- The group that owns the game (Systems/Group): members get GROUP_BONUS
 	-- more Volts on every sale. To use another group, change GROUP_ID (and

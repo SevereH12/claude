@@ -120,6 +120,33 @@ for _, w in worlds do
 	check(spawnsByWorld[w.id] ~= nil, "a SpawnLocation exists for world " .. w.id)
 end
 
+-- leaderboard board (the real game: world 1's style builds it) ------------------------
+if styleName == nil then
+	local Leaderboards = world:require("ReplicatedStorage.Shared.Util.Leaderboards")
+	local boards = {}
+	for _, inst in world.workspace:GetDescendants() do
+		if inst:IsA("BasePart") and inst:HasTag(Leaderboards.BOARD_TAG) then
+			table.insert(boards, inst)
+		end
+	end
+	check(#boards == 1, "one leaderboard board (found " .. #boards .. ")")
+	local board = boards[1]
+	local spawn = spawnsByWorld[Config.WORLDS[1].id]
+	if board and spawn then
+		local offset = board.CFrame.Position - spawn.CFrame.Position
+		check(Vector3.new(offset.X, 0, offset.Z).Magnitude < 30, "the leaderboard stands beside world 1's spawn")
+		check(Zones.at(board.CFrame.Position) == nil, "the leaderboard is outside every zone")
+		local gui = board:FindFirstChildOfClass("SurfaceGui")
+		local rows = 0
+		for index = 1, Config.LEADERBOARDS.boardRows do
+			if gui and gui:FindFirstChild("Row" .. index) then
+				rows += 1
+			end
+		end
+		check(rows == Config.LEADERBOARDS.boardRows, "the leaderboard has a line for each of the top 10")
+	end
+end
+
 -- portals -----------------------------------------------------------------------
 local portalCount = 0
 for _, inst in world.workspace:GetDescendants() do

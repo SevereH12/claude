@@ -16,7 +16,10 @@
 -- Storm Log entry a counter can find, and "readyAscend" gives you the top
 -- bottle and enough Volts to ascend, "restartTutorial" starts the
 -- new-player tutorial again from step 1 and "friends" adds a pretend
--- friend in the server (0 to 3, then 0 again). The repo and client code are public, so this
+-- friend in the server (0 to 3, then 0 again), "testLeaderboard" fills
+-- the leaderboards with made-up players (you at #7) or goes back to the
+-- real ones, and "testNotify" queues a daily reminder for you, due now
+-- (the log shows it being claimed and sent, or why it can't be). The repo and client code are public, so this
 -- is the lock: it only obeys in Studio play tests or, in a live server, the
 -- user who owns the place; everything but "volts" is Studio only. To remove it:
 -- delete this file and Controllers/DevCommands.luau, and take "DevCommand"
@@ -37,6 +40,8 @@ local Friends = require(script.Parent.Friends)
 local Boosts = require(script.Parent.Boosts)
 local Gifts = require(script.Parent.Gifts)
 local Group = require(script.Parent.Group)
+local Leaderboards = require(script.Parent.Leaderboards)
+local Notifications = require(script.Parent.Notifications)
 local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
 local Quests = require(script.Parent.Quests)
@@ -183,6 +188,12 @@ local function onCommand(player: Player, name: unknown, value: unknown, extra: u
 	elseif name == "friends" then
 		local n = Friends.cyclePretend(player)
 		print(`[DevCommands] {player.Name}: {n} pretend friends in the server`)
+	elseif name == "testLeaderboard" then
+		local on = Leaderboards.toggleTest(player)
+		print(`[DevCommands] {player.Name}: leaderboard test data {if on then "on" else "off"}`)
+	elseif name == "testNotify" then
+		Notifications.testQueue(player)
+		print(`[DevCommands] {player.Name}: a test daily reminder is queued, due now`)
 	elseif name == "event" and typeof(value) == "boolean" then
 		workspace:SetAttribute(Weather.PRETEND_EVENT, value)
 		Sync.markDirty(player)

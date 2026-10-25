@@ -10,8 +10,9 @@
 -- idle handler, Controllers/AfkUI), a Pretend group member toggle, the
 -- Sound board, which plays every sound in order with its name, and the Music
 -- audition, every shortlisted track for 20 s, Complete quest, +Log entry,
--- Ready to ascend, Restart tutorial and Pretend friends +1 (all Studio
--- only). The server (Systems/DevCommands) checks again. To
+-- Ready to ascend, Restart tutorial, Pretend friends +1, Leaderboard test
+-- data (fills REWARDS > TOP with made-up players) and Queue test reminder
+-- (all Studio only). The server (Systems/DevCommands) checks again. To
 -- remove it: delete this file and Systems/DevCommands.luau, and take
 -- "DevCommand" out of Shared/Remotes.
 
@@ -290,6 +291,26 @@ function DevCommands.init()
 	end)
 	-- Simulate idle 17 min (Studio only): runs the AFK idle handler, so the
 	-- VirtualUser nudge and the server-hop backup can be checked
+	for index, tool in
+		{
+			{ text = "🏆 Leaderboard test data", command = "testLeaderboard" },
+			{ text = "🔔 Queue test reminder", command = "testNotify" },
+		}
+	do
+		local toolButton = UI.button({
+			Name = tool.command,
+			LayoutOrder = 19 + index,
+			Text = tool.text,
+			Size = UDim2.new(1, 0, 0, 40),
+			BackgroundColor3 = UI.COLORS.panelDark,
+			Parent = tools,
+		})
+		UI.maxText(toolButton, 16)
+		toolButton.Activated:Connect(function()
+			UI.pop(toolButton)
+			devRemote:FireServer(tool.command)
+		end)
+	end
 	if RunService:IsStudio() then
 		local idle = UI.button({
 			Name = "SimulateIdle",

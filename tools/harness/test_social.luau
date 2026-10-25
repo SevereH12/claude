@@ -1,7 +1,10 @@
 --!nocheck
 -- The new-player tutorial (shared/Util/Tutorial), the friends boost
 -- (Util/Social, Util/Passes) and invite rewards (Util/Social), plus the
--- profile migration that decides who sees the tutorial.
+-- profile migration that decides who sees the tutorial; leaderboards
+-- (Util/Leaderboards), the login run (Util/Rewards) and the notification
+-- queue: when reminders are due, and that a due item is only sent once
+-- (Util/Notifications, against a pretend MemoryStore sorted map).
 --   lune run tools/harness/test_social.luau
 local World = require("./World")
 
@@ -12,6 +15,10 @@ local Social = world:require("ReplicatedStorage.Shared.Util.Social")
 local Passes = world:require("ReplicatedStorage.Shared.Util.Passes")
 local Afk = world:require("ReplicatedStorage.Shared.Util.Afk")
 local PlayerData = world:require("ServerScriptService.Server.Systems.PlayerData")
+local Leaderboards = world:require("ReplicatedStorage.Shared.Util.Leaderboards")
+local Notify = world:require("ReplicatedStorage.Shared.Util.Notifications")
+local Rewards = world:require("ReplicatedStorage.Shared.Util.Rewards")
+local Stats = world:require("ReplicatedStorage.Shared.Util.Stats")
 
 local failures = 0
 local function check(condition, message)
@@ -132,6 +139,112 @@ check(fresh and #nextDay.ids == 1 and nextDay.day == day + 1, "a new UTC day sta
 local _, junk = Social.countInvite("junk", day, 5)
 check(junk, "a broken record starts again")
 check(Social.inviteGiftId(55) == "invite-55", "one inbox id per new player")
+
+-- leaderboards -------------------------------------------------------------------
+local profile = PlayerData.migrate({ version = 17, volts = 5, totalVolts = 1234.7, ascension = 2, bestLoginRun = 9 })
+profile.stats.lifetime[Stats.BOLTS] = 321
+check(Leaderboards.value(profile, "volts") == 1234, "all-time Volts, whole")
+check(Leaderboards.value(profile, "bolts") == 321, "bolts caught from the stat counter")
+check(Leaderboards.value(profile, "ascension") == 2, "the Ascension level")
+check(Leaderboards.value(profile, "streak") == 9, "the longest login run")
+profile.totalVolts = 0 / 0
+check(Leaderboards.value(profile, "volts") == 0, "a broken number writes 0")
+local values = Leaderboards.values(profile)
+check(values.volts == 0 and values.bolts == 321, "every board's value at once")
+local every = Config.LEADERBOARDS.writeEverySeconds
+check(not Leaderboards.shouldWrite(5, 5, 0, 1000, every, true), "an unchanged value is never written")
+check(not Leaderboards.shouldWrite(0, nil, -math.huge, 0, every, true), "no zeros for a brand-new player")
+check(Leaderboards.shouldWrite(6, nil, -math.huge, 0, every, false), "the first value is written straight away")
+check(not Leaderboards.shouldWrite(7, 6, 100, 100 + every - 1, every, false), "a change waits for the 5 minutes")
+check(Leaderboards.shouldWrite(7, 6, 100, 100 + every, every, false), "then it's written")
+check(Leaderboards.shouldWrite(7, 6, 100, 101, every, true), "leaving writes it now")
+check(Leaderboards.backoff(1) == 1 and Leaderboards.backoff(3) == 4 and Leaderboards.backoff(9) == 30, "retry backoff")
+local entries = { { userId = 5, name = "A", value = 9 }, { userId = 7, name = "B", value = 8 } }
+check(Leaderboards.rankOf(entries, 7) == 2 and Leaderboards.rankOf(entries, 9) == nil, "ranks")
+check(Leaderboards.youText(entries, 7, "volts", 8) == "You: #2 · 8 ⚡", "You: #N")
+check(
+	Leaderboards.youText(entries, 9, "streak", 3) == `You: not in the top {Config.LEADERBOARDS.top} · 3 days`,
+	"not in the top 50, with your own value"
+)
+local test = Leaderboards.testBoards(99, "Me")
+check(#test.volts == Config.LEADERBOARDS.top and Leaderboards.rankOf(test.volts, 99) == 7, "test data puts you at #7")
+check(Leaderboards.rankOf(test.bolts, 99) == nil, "and off one board")
+check(test.volts[1].value >= test.volts[2].value and test.volts[2].value >= test.volts[50].value, "test boards fall")
+
+-- the login run (the longest streak board)
+check(Rewards.loginRun(0, 100, 0) == 1, "a first claim starts the run")
+check(Rewards.loginRun(99, 100, 7) == 8, "the run keeps counting past day 7")
+check(Rewards.loginRun(98, 100, 12) == 1, "a missed day starts it again")
+check(Rewards.loginRun(100, 100, 4) == 4, "claimed already today: unchanged")
+local streakProfile = PlayerData.migrate({ version = 16, volts = 0, dailyStreak = 4 })
+check(streakProfile.loginRun == 4 and streakProfile.bestLoginRun == 4 and streakProfile.notifyAsked == false, "the migration starts the run at the streak day")
+
+-- notifications: when ---------------------------------------------------------------
+local DAY = 86400
+local today = 20000
+local warn = Config.NOTIFICATIONS.streakWarnHours * 3600
+local noon = today * DAY + 12 * 3600
+local plan = Notify.plan(42, today, 3, noon)
+check(#plan == 2, "claimed today with a streak: two reminders")
+check(plan[1].kind == "daily" and plan[1].due == (today + 1) * DAY, "daily: at the start of the next UTC day")
+check(plan[2].kind == "streak" and plan[2].due == (today + 2) * DAY - warn, "streak: 3 h before it breaks")
+local yesterday = Notify.plan(42, today - 1, 3, noon)
+check(#yesterday == 1 and yesterday[1].kind == "streak", "today's not claimed yet: it's ready already, only the streak one")
+check(yesterday[1].due == (today + 1) * DAY - warn, "which goes 3 h before midnight tonight")
+local late = Notify.plan(42, today - 1, 3, (today + 1) * DAY - warn + 1)
+check(#late == 0, "nothing that's already due is queued")
+check(#Notify.plan(42, today, 1, noon) == 1, "a 1-day run has no streak to lose")
+check(#Notify.plan(42, 0, 0, noon) == 0, "never claimed: nothing")
+local keys = Notify.keysFor(42, today, 3)
+check(keys[1] == plan[1].key and keys[2] == plan[2].key, "coming back finds the same keys to remove")
+check(Notify.key(5, 1, "daily") < Notify.key(40, 1, "daily"), "keys sort by due time")
+check(plan[1].key < Notify.upperBound(plan[1].due), "the upper bound includes what's due now")
+check(not (plan[1].key < Notify.upperBound(plan[1].due - 1)), "and leaves out what isn't due yet")
+local body = Notify.body(777, "daily")
+check(body.source.universe == "universes/777" and body.payload.type == "MOMENT", "the Open Cloud request body")
+
+-- notifications: only sent once ------------------------------------------------------
+-- a pretend MemoryStore sorted map: UpdateAsync runs the transform on the
+-- current value and stores what it returns (nil = no change)
+local stored = {}
+local function updateAsync(key, transform)
+	local result = transform(stored[key])
+	if result ~= nil then
+		stored[key] = result
+		return result
+	end
+	return nil
+end
+for _, item in plan do
+	stored[item.key] = { userId = item.userId, kind = item.kind, due = item.due }
+end
+local claimSeconds = Config.NOTIFICATIONS.claimSeconds
+local dueAt = plan[1].due
+local function tryClaim(server, key, now)
+	local result = updateAsync(key, function(old)
+		return Notify.claim(old, server, now, claimSeconds)
+	end)
+	return Notify.won(result, server, now)
+end
+check(not tryClaim("A", plan[1].key, dueAt - 1), "not claimed before it's due")
+check(tryClaim("A", plan[1].key, dueAt), "server A claims a due item")
+check(not tryClaim("B", plan[1].key, dueAt), "server B can't claim it too")
+check(not tryClaim("B", plan[1].key, dueAt + 30), "not even a bit later")
+check(not tryClaim("A", plan[1].key, dueAt + 30), "nor A again while it's sending")
+check(tryClaim("B", plan[1].key, dueAt + claimSeconds), "a stale claim (server A stopped) can be taken over")
+stored[plan[1].key] = nil -- sent and removed
+check(not tryClaim("C", plan[1].key, dueAt + claimSeconds + 1), "a removed item can't be claimed")
+-- many servers racing for the same items: each is sent exactly once
+local sends = {}
+for server = 1, 5 do
+	for _, item in plan do
+		if tryClaim(`S{server}`, item.key, (today + 3) * DAY) then
+			sends[item.key] = (sends[item.key] or 0) + 1
+		end
+	end
+end
+check(sends[plan[2].key] == 1 and sends[plan[1].key] == nil, "five servers: the remaining item is sent once")
+check(Notify.claim("junk", "A", 0, claimSeconds) == nil, "a broken value is left alone")
 
 if failures > 0 then
 	error(`{failures} social checks failed`)

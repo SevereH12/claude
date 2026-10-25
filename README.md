@@ -442,6 +442,65 @@ at least 3 days old. Numbers are in `Config.TUTORIAL`, `Config.FRIENDS`
 and `Config.INVITES`. Studio can't send real invites: look for
 `[Invites]` lines in the output on a live server.
 
+## Leaderboards and notifications
+
+**Leaderboards** (`Util/Leaderboards`, `Systems/Leaderboards`). Four
+boards: **All-time Volts**, **Bolts caught**, **Ascension** and **Longest
+streak** (the most days in a row you claimed the daily reward; it keeps
+counting past day 7). Each is saved in its own OrderedDataStore
+(`StormBottler_LB_volts` and so on).
+
+- **Saving scores**: every 5 minutes (only scores that changed) and when
+  you leave.
+- **Reading them**: every server reads the top 50 every 2 minutes, so a new
+  score can take a few minutes to show.
+- **Seeing them**: REWARDS > **TOP**. A button per board, then "You: #7"
+  (or "not in the top 50" with your own score), then the top 50 with
+  avatars. Your own row glows gold.
+- **The board at the spawn**: a "TOP VOLTS" sign beside world 1's spawn
+  shows the top 10 all-time Volts.
+- **Testing in Studio**: the TEST panel's REWARDS list has **Leaderboard
+  test data** (fills every board with made-up players, with you at #7;
+  tap again to go back). Real boards need Game Settings > Security >
+  Enable Studio Access to API Services.
+
+**Phone notifications** (`Util/Notifications`, `Systems/Notifications`).
+After a player claims a daily reward for the first time, a message asks
+"Remind me when my daily reward is ready?". YES opens Roblox's own
+notifications prompt. It's only ever asked once. When someone who was
+asked leaves, two reminders wait in a MemoryStore queue: **daily reward
+ready** (at midnight UTC, if they claimed today) and **streak ends soon**
+(3 hours before their streak would break). Any running server sends due
+reminders each minute, and each is sent only once. Coming back cancels
+them. Roblox delivers at most one a day per game, only to players 13 and
+over who said yes.
+
+**Setup you need to do once** (until then nothing is sent, and the output
+says `[Notifications] not sending ...`):
+
+1. **Notification strings**: on the Creator Dashboard
+   (create.roblox.com/dashboard/creations), open the game, then
+   **Engagement > Notifications > Create a Notification String**. Make two,
+   for example "Your daily reward is ready! ⚡" and "Your login streak ends
+   soon. Come back to keep it!" (99 characters at most). For each one, use
+   the **...** button > **Copy Asset ID** and paste the ids into
+   `src/shared/Config.luau`: `NOTIFICATIONS.dailyReadyMessageId` and
+   `NOTIFICATIONS.streakEndingMessageId`.
+2. **API key**: Creator Dashboard > **Open Cloud > API Keys > Create API
+   Key**. Add the **user-notification** API system with the
+   **user.user-notification:write** permission for this experience. Copy
+   the key.
+3. **Secret**: on the game's page on the Creator Dashboard, **Secrets >
+   Create Secret**. Name: `StormBottlerNotifyKey`, secret: the key, domain:
+   `apis.roblox.com`.
+4. **HTTP**: in Studio, **File > Experience Settings > Security > Allow
+   HTTP Requests** on.
+
+The game must have at least 100 visits before Roblox sends any. Studio
+can't send real notifications: the TEST panel's **Queue test reminder**
+puts one in the queue for you, due now, and the output shows it being
+claimed and sent (or why it wasn't).
+
 ## Code layout
 
 - `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas, zone geometry
