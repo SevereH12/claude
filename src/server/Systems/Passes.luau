@@ -35,6 +35,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
 local Signal = require(ReplicatedStorage.Shared.Util.Signal)
+local StormLogRules = require(ReplicatedStorage.Shared.Util.StormLog)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Weather = require(ReplicatedStorage.Shared.Util.Weather)
 local Boosts = require(script.Parent.Boosts)
@@ -184,10 +185,17 @@ function Passes.storeSession(player: Player): Types.StoreSession
 end
 
 -- Owned passes plus what multiplies sales like one: the group bonus, a
--- Server Storm and a Server Surge (Systems/Boosts) and any scheduled event on now
--- (Config.EVENTS, Util/Weather).
+-- Server Storm and a Server Surge (Systems/Boosts), any scheduled event on now
+-- (Config.EVENTS, Util/Weather) and the Storm Log's finished pages.
 local function withBonuses(player: Player): PassRules.Owned
 	local owned = Passes.owned(player)
+	local profile = PlayerData.get(player)
+	if profile then
+		owned = StormLogRules.withPages(
+			owned,
+			StormLogRules.found(profile.stats.lifetime, profile.researchers)
+		)
+	end
 	local member, storm, surge = Group.isMember(player), Boosts.stormOn(), Boosts.surgeOn()
 	local events = Weather.liveEvents()
 	if not member and not storm and not surge and #events == 0 then
@@ -204,7 +212,8 @@ local function withBonuses(player: Player): PassRules.Owned
 end
 
 -- Everything that multiplies a sale, as one set: owned passes, running
--- boosts, the group bonus and a Server Storm (what Passes.payout applies).
+-- boosts, the group bonus, a Server Storm and the Storm Log (what
+-- Passes.payout applies).
 -- Systems/Afk works its rate out from this.
 function Passes.saleEffects(player: Player): PassRules.Owned
 	return PassRules.withBoosts(withBonuses(player), Boosts.left(player))

@@ -28,6 +28,23 @@ export type Profile = {
 	settings: { [string]: any }, -- the SETTINGS panel: Util/Settings values (Systems/Settings)
 	stats: StatsSave, -- stat counters (Util/Stats, Systems/Stats)
 	quests: QuestsSave, -- daily and weekly quests (Util/Quests, Systems/Quests)
+	logClaimed: { [string]: boolean }, -- Storm Log rows whose reward was claimed, by row id (Util/StormLog)
+}
+
+-- A Storm Log page (Config.STORM_LOG.pages): its id, heading, icon, and
+-- what finishing one of its rows pays (once per row).
+export type StormLogPageDef = {
+	id: string,
+	title: string,
+	icon: string,
+	rowReward: Reward,
+}
+
+-- What the client sees of the Storm Log (Util/StormLog.view): the ids of
+-- the entries found and of the rows already claimed.
+export type LogView = {
+	found: { string },
+	claimed: { string },
 }
 
 -- Stat counters (Util/Stats): key -> count, three times over. `day` is the
@@ -120,6 +137,7 @@ export type Snapshot = {
 	afk: AfkState?, -- in the AFK Lounge (Systems/Afk), nil when not
 	glints: { number }, -- Glints per zone tier (glints[tier + 1])
 	quests: QuestsView, -- today's and this week's quests with their progress
+	log: LogView, -- the Storm Log: entries found and rows claimed
 }
 
 -- The player's AFK Lounge state, sent in the snapshot (Systems/Afk). The

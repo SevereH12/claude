@@ -12,7 +12,8 @@
 -- stand, "supercell" starts a Supercell in 30 s and "event" (true/false)
 -- pretends the first scheduled event is on, and "serverGoal" fills a
 -- quarter of the server goal as if you sold it, and "completeQuest" counts
--- your first unfinished quest as done. The repo and client code are public, so this
+-- your first unfinished quest as done, and "logEntry" finds the next
+-- Storm Log entry a counter can find. The repo and client code are public, so this
 -- is the lock: it only obeys in Studio play tests or, in a live server, the
 -- user who owns the place; everything but "volts" is Studio only. To remove it:
 -- delete this file and Controllers/DevCommands.luau, and take "DevCommand"
@@ -37,6 +38,7 @@ local Quests = require(script.Parent.Quests)
 local Research = require(script.Parent.Research)
 local Rewards = require(script.Parent.Rewards)
 local Stats = require(script.Parent.Stats)
+local StormLog = require(script.Parent.StormLog)
 local ServerGoal = require(script.Parent.ServerGoal)
 local StormCycle = require(script.Parent.StormCycle)
 local Strikes = require(script.Parent.Strikes)
@@ -158,6 +160,13 @@ local function onCommand(player: Player, name: unknown, value: unknown, extra: u
 			`[DevCommands] {player.Name}: {if ok
 				then "a quest is done"
 				else "no quest left to finish"}`
+		)
+	elseif name == "logEntry" then
+		local entry = StormLog.testEntry(player)
+		print(
+			`[DevCommands] {player.Name}: {if entry
+				then `Storm Log entry {entry} found`
+				else "no Storm Log entry left to find"}`
 		)
 	elseif name == "event" and typeof(value) == "boolean" then
 		workspace:SetAttribute(Weather.PRETEND_EVENT, value)

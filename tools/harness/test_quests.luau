@@ -2,7 +2,8 @@
 -- Stat counters and quests (shared/Util/Stats, Util/Quests): the day and
 -- week resets (Monday UTC), deterministic picking, scaling with progress,
 -- each template's completion check, claiming, the daily reroll, the Studio
--- "complete quest" tool and the save migration.
+-- "complete quest" tool and the save migration; the Storm Log (Util/StormLog):
+-- its pages, row and page completion, claiming, the bonus and its cap.
 --   lune run tools/harness/test_quests.luau
 local World = require("./World")
 
@@ -11,6 +12,9 @@ local Config = world:require("ReplicatedStorage.Shared.Config")
 local Stats = world:require("ReplicatedStorage.Shared.Util.Stats")
 local Quests = world:require("ReplicatedStorage.Shared.Util.Quests")
 local PlayerData = world:require("ServerScriptService.Server.Systems.PlayerData")
+local StormLog = world:require("ReplicatedStorage.Shared.Util.StormLog")
+local Passes = world:require("ReplicatedStorage.Shared.Util.Passes")
+local Research = world:require("ReplicatedStorage.Shared.Util.Research")
 
 local failures = 0
 local function check(condition, message)
@@ -286,9 +290,169 @@ check(
 	"a daily quest's reward"
 )
 
+-- the Storm Log -------------------------------------------------------------------------
+local function near(a, b)
+	return math.abs(a - b) < 1e-9
+end
+local pages = StormLog.pages()
+local pageIds = {}
+for _, page in pages do
+	pageIds[page.id] = page
+end
+check(#pages == 4, "four pages")
+check(
+	pageIds.Bolts and pageIds.Places and pageIds.Team and pageIds.Weather,
+	"Bolts, Places, Team and Weather"
+)
+local zoneCount = 0
+for _ in Config.ZONES do
+	zoneCount += 1
+end
+check(#pageIds.Bolts.rows == zoneCount, "a Bolts row per zone")
+for _, row in pageIds.Bolts.rows do
+	check(#row.entries == 1 + #Config.BOLT_TYPES, `{row.id}: every bolt type`)
+end
+check(#pageIds.Places.rows == #Config.WORLDS, "a Places row per world")
+local placeEntries = 0
+for _, row in pageIds.Places.rows do
+	placeEntries += #row.entries
+end
+check(placeEntries == #Config.WORLDS + zoneCount, "every world and zone is a place")
+check(#pageIds.Team.rows == #Config.RESEARCHERS, "a Team row per researcher")
+for _, row in pageIds.Team.rows do
+	check(#row.entries == Research.maxRank() + 1, `{row.id}: hired plus every rank`)
+end
+check(
+	#pageIds.Weather.rows[1].entries == 1 + #Config.EVENTS,
+	"Weather: the Supercell and every event"
+)
+local ids = {}
+local unique = true
+for _, page in pages do
+	for _, row in page.rows do
+		check(row.page == page.id, `{row.id} names its page`)
+		for _, entry in row.entries do
+			unique = unique and not ids[entry.id]
+			ids[entry.id] = true
+			check(#entry.hint > 0, `{entry.id} has a hint`)
+		end
+	end
+end
+check(unique, "entry ids are unique")
+
+-- nothing found yet
+local lifetime = {}
+local researchers = {}
+local found = StormLog.found(lifetime, researchers)
+check(next(found) == nil, "a new player has found nothing")
+check(#StormLog.pagesDone(found) == 0, "and finished no page")
+
+-- a row: every bolt type in Mesa
+local mesa = StormLog.row("Bolts:Mesa")
+check(mesa ~= nil, "Mesa has a Bolts row")
+lifetime[Stats.typeZoneKey("Normal", "Mesa")] = 3
+lifetime[Stats.zoneKey("Mesa")] = 4 -- Systems/Stats.caught counts the zone too
+lifetime[Stats.typeZoneKey("Golden", "Mesa")] = 1
+found = StormLog.found(lifetime, researchers)
+check(found["Bolts:Golden:Mesa"] and found["Bolts:Normal:Mesa"], "caught bolts are found")
+check(not found["Bolts:Golden:Shoreline"], "but only in the zone they were caught in")
+check(not StormLog.rowDone(mesa, found), "half a row isn't done")
+local claimed = {}
+check(StormLog.claim(claimed, "Bolts:Mesa", found) == nil, "an unfinished row can't be claimed")
+for _, def in Config.BOLT_TYPES do
+	lifetime[Stats.typeZoneKey(def.key, "Mesa")] = 1
+end
+found = StormLog.found(lifetime, researchers)
+check(StormLog.rowDone(mesa, found), "every bolt type in Mesa finishes the row")
+check(not StormLog.pageDone(pageIds.Bolts, found), "one row isn't the page")
+check(StormLog.canClaim("Bolts:Mesa", found, claimed), "a finished row can be claimed")
+local reward = StormLog.claim(claimed, "Bolts:Mesa", found)
+check(reward == pageIds.Bolts.reward, "it pays its page's row reward")
+check(claimed["Bolts:Mesa"] == true, "and is marked claimed")
+check(StormLog.claim(claimed, "Bolts:Mesa", found) == nil, "only once")
+check(StormLog.claim(claimed, "Bolts:Nowhere", found) == nil, "an unknown row pays nothing")
+
+-- places: a catch in a zone counts as visiting it and its world
+found = StormLog.found(lifetime, researchers)
+check(
+	found["Places:zone:Mesa"] and found["Places:world:Bay"],
+	"catching in Mesa visits it (and the Bay)"
+)
+lifetime[Stats.visitZoneKey("Yard")] = 1
+found = StormLog.found(lifetime, researchers)
+check(found["Places:zone:Yard"] and found["Places:world:Voltcliff"], "standing in a zone visits it")
+check(not found["Places:world:Stormspire"], "a world you haven't been to isn't found")
+
+-- team: a researcher's ranks so far
+researchers.Forecaster = { level = 1, data = 0, post = "Office", rank = 2 }
+found = StormLog.found(lifetime, researchers)
+check(found["Team:Forecaster:0"] and found["Team:Forecaster:2"], "hired and promoted to rank 2")
+check(not found["Team:Forecaster:3"], "but not rank 3 yet")
+check(not found["Team:RodTech:0"], "a researcher you haven't hired isn't found")
+
+-- weather
+lifetime[Stats.SUPERCELLS_SEEN] = 1
+found = StormLog.found(lifetime, researchers)
+check(found["Weather:Supercell"], "a Supercell seen is found")
+
+-- a whole page, and the bonus
+for _, row in pageIds.Bolts.rows do
+	for _, entry in row.entries do
+		lifetime[entry.stats[1]] = 1
+	end
+end
+found = StormLog.found(lifetime, researchers)
+check(StormLog.pageDone(pageIds.Bolts, found), "every bolt in every zone finishes the page")
+local done = StormLog.pagesDone(found)
+check(#done == 1 and done[1] == "Bolts", "one page done")
+local owned = StormLog.withPages({}, found)
+check(owned[Passes.LOG_PAGE .. "Bolts"] == true, "a finished page marks the sale effects")
+check(near(Passes.sellMultiplier(owned), 1.02), "one page: +2% Volts")
+check(
+	near(Passes.sellMultiplier(StormLog.withPages({ DoubleVolts = true }, found)), 2.04),
+	"it stacks with 2x Volts"
+)
+check(next(StormLog.withPages({}, {})) == nil, "no page done: nothing added")
+check(near(StormLog.bonus(1), 0.02) and near(StormLog.bonus(4), 0.08), "+2% a page")
+check(near(StormLog.bonus(10), Config.STORM_LOG.maxBonus), "never more than the cap")
+local all = {}
+for _, page in pages do
+	all[Passes.LOG_PAGE .. page.id] = true
+end
+check(near(Passes.sellMultiplier(all), 1.08), "every page: +8%")
+check(near(Passes.logBonus(all), Config.STORM_LOG.maxBonus), "which is the cap")
+local partial = 0
+local foundCount, totalCount = StormLog.pageProgress(pageIds.Places, found)
+partial = foundCount
+check(partial > 0 and partial < totalCount, "page progress counts the entries found")
+
+-- the client's view, and the Studio "+Log entry" tool
+local view = StormLog.view(found, claimed)
+local backFound, backClaimed = StormLog.fromView(view)
+local same = true
+for id in found do
+	same = same and backFound[id] == true
+end
+for id in backFound do
+	same = same and found[id] == true
+end
+check(same and backClaimed["Bolts:Mesa"], "the view carries what's found and claimed")
+local entry, key = StormLog.nextTestEntry(found)
+check(entry ~= nil and key ~= nil and not found[entry.id], "the test tool picks a missing entry")
+lifetime[key] = 1
+check(StormLog.found(lifetime, researchers)[entry.id], "and its counter finds it")
+
 -- the save migration -------------------------------------------------------------------
 local migrated = PlayerData.migrate({ version = 12, volts = 10, totalVolts = 5000, bottleTier = 1 })
-check(migrated.version == 13, "v12 saves become v13")
+check(migrated.version == 14, "v12 saves become v14")
+check(typeof(migrated.logClaimed) == "table", "with no Log rows claimed")
+local fromV13 = PlayerData.migrate({ version = 13, volts = 1, bottleTier = 1 })
+check(
+	fromV13.version == 14
+		and typeof(fromV13.logClaimed) == "table"
+		and next(fromV13.logClaimed) == nil,
+	"v13 saves get an empty Storm Log claim list"
+)
 check(
 	migrated.stats.lifetime[Stats.VOLTS_EARNED] == 5000,
 	"lifetime Volts earned starts at what they'd earned"

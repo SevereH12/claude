@@ -22,7 +22,7 @@ local StatRules = require(ReplicatedStorage.Shared.Util.Stats)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local STORE_NAME = "StormBottler_PlayerData"
-local CURRENT_VERSION = 13
+local CURRENT_VERSION = 14
 -- A lock older than this belongs to a server that crashed; it may be taken.
 local LOCK_STALE_SECONDS = Config.AUTOSAVE_INTERVAL * 3
 local LOCKED_RETRIES = 5
@@ -68,6 +68,7 @@ local DEFAULT_PROFILE: Types.Profile = {
 	settings = SettingsRules.defaults(),
 	stats = StatRules.new(),
 	quests = QuestRules.new(),
+	logClaimed = {},
 }
 
 -- MIGRATIONS[n] turns a version-n profile into version n+1. When the profile
@@ -162,6 +163,12 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 			data.stats.lifetime[StatRules.VOLTS_EARNED] = data.totalVolts
 		end
 		data.quests = QuestRules.new()
+		return data
+	end,
+	-- the Storm Log (prompt 16 part B): it's worked out from the stat
+	-- counters, so only claimed row rewards are new (none yet)
+	[13] = function(data: any): any
+		data.logClaimed = {}
 		return data
 	end,
 }

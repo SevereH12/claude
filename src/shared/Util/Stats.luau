@@ -29,6 +29,27 @@ Stats.PLAYTIME_MINUTES = "playtimeMinutes"
 Stats.PROMOTIONS = "researcherPromotions"
 Stats.GIFTS_SENT = "giftsSent"
 
+-- The Storm Log (Util/StormLog) reads these. A "visited" counter is 1 once
+-- the player has stood in that zone (or been in that world); it never goes
+-- higher. A "seen" counter counts the UTC days the player was in game while
+-- a Supercell (or a scheduled event, Config.EVENTS) was on.
+Stats.SUPERCELLS_SEEN = "seen.Supercell"
+
+-- "visited.zone.Mesa"
+function Stats.visitZoneKey(zoneId: string): string
+	return `visited.zone.{zoneId}`
+end
+
+-- "visited.world.Voltcliff"
+function Stats.visitWorldKey(worldId: string): string
+	return `visited.world.{worldId}`
+end
+
+-- "seen.event.Double Volts Weekend"
+function Stats.eventKey(eventName: string): string
+	return `seen.event.{eventName}`
+end
+
 -- Bolts caught of one type: "boltsCaught.Golden" ("Normal" for the rest).
 function Stats.typeKey(boltType: string): string
 	return `{Stats.BOLTS}.{boltType}`

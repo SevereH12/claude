@@ -353,6 +353,33 @@ saved with the player.
   quest** (your first unfinished quest counts as done) and **Next day**
   (new daily quests).
 
+### Storm Log
+
+The Storm Log is a collection book in the REWARDS panel's **LOG** tab
+(`Util/StormLog`, `Systems/StormLog`, `Lib/StormLogTab`). It has four pages:
+
+- **Bolts**: every bolt type (normal, Golden, Rainbow, ball lightning) in
+  every zone.
+- **Places**: every world and every zone you've been in.
+- **Team**: every researcher at every rank (hiring them is the first).
+- **Weather**: being in game for a Supercell and for each scheduled event.
+
+It's all worked out from the stat counters (new counters remember the
+zones and worlds you've visited and the Supercells and events you've
+seen), so the only thing saved is which rewards you've claimed.
+
+- **Rows**: finishing a row (say every bolt type in Mesa) gives a one-time
+  reward (Volts or a boost) with its CLAIM button.
+- **Pages**: each finished page gives **+2% Volts for good** on every sale
+  (and in the AFK Lounge), up to +8% for all four. The numbers are in
+  `Config.STORM_LOG`.
+- **On screen**: each page has a progress bar; found entries show their
+  icon and missing ones a grey "?" (tap one to see how to find it). New
+  entries and finished rows pop up a toast, and the menu's dot lights up
+  while a row's reward is waiting.
+- **Testing in Studio**: the TEST panel's **+Log entry** button marks the
+  next missing entry as found (Team entries need a real hire or promotion).
+
 ## Code layout
 
 - `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas, zone geometry

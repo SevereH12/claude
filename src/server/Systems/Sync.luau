@@ -14,6 +14,7 @@ local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local QuestRules = require(ReplicatedStorage.Shared.Util.Quests)
 local RewardRules = require(ReplicatedStorage.Shared.Util.Rewards)
+local StormLogRules = require(ReplicatedStorage.Shared.Util.StormLog)
 local PlayerData = require(script.Parent.PlayerData)
 
 local FLUSH_INTERVAL = 0.1
@@ -91,6 +92,10 @@ local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapsho
 		afk = Sync.afk[player],
 		glints = profile.glints,
 		quests = QuestRules.view(profile.quests, profile.stats, today),
+		log = StormLogRules.view(
+			StormLogRules.found(profile.stats.lifetime, profile.researchers),
+			profile.logClaimed
+		),
 	}
 end
 

@@ -2,7 +2,9 @@
 -- Stat counters (the rules and key names are Util/Stats). Systems call
 -- Stats.add(player, key, n) next to their Analytics calls; Stats.caught and
 -- Stats.sold add the several counters a catch or a sale moves. Playtime
--- counts here, one minute at a time.
+-- counts here, one minute at a time, and so do scheduled events seen.
+-- Stats.visited and Stats.saw keep the Storm Log's "visited" and "seen"
+-- counters (Systems/Movement, Systems/StormCycle call them).
 -- Counters and quests start a new day together: Stats.refresh rolls both
 -- over (and picks new quests) whenever the UTC day or week has changed. A
 -- day is the same one the login streak uses, so Studio's TEST "Next day"
@@ -15,6 +17,7 @@ local QuestRules = require(ReplicatedStorage.Shared.Util.Quests)
 local RewardRules = require(ReplicatedStorage.Shared.Util.Rewards)
 local StatRules = require(ReplicatedStorage.Shared.Util.Stats)
 local Types = require(ReplicatedStorage.Shared.Types)
+local Weather = require(ReplicatedStorage.Shared.Util.Weather)
 local PlayerData = require(script.Parent.PlayerData)
 local Sync = require(script.Parent.Sync)
 
@@ -86,9 +89,36 @@ function Stats.sold(player: Player, earned: number, fullBottle: boolean)
 	end
 end
 
+-- A "visited" counter (the Storm Log's Places page): set to 1 the first
+-- time, then left alone. Cheap to call often (Systems/Movement calls it
+-- every check).
+function Stats.visited(player: Player, key: string)
+	local profile = PlayerData.get(player)
+	if profile and (profile.stats.lifetime[key] or 0) == 0 then
+		Stats.add(player, key, 1)
+	end
+end
+
+-- A "seen" counter (the Storm Log's Weather page): counts once per UTC
+-- day the player was here for it. Cheap to call often.
+function Stats.saw(player: Player, key: string)
+	local profile = Stats.refresh(player)
+	if profile and (profile.stats.today[key] or 0) == 0 then
+		Stats.add(player, key, 1)
+	end
+end
+
+-- Any scheduled event on now counts as seen.
+local function seeEvents(player: Player)
+	for _, on in Weather.liveEvents() do
+		Stats.saw(player, StatRules.eventKey(on.event.name))
+	end
+end
+
 function Stats.init()
 	PlayerData.Loaded:Connect(function(player: Player)
 		Stats.refresh(player)
+		seeEvents(player)
 	end)
 end
 
@@ -99,6 +129,7 @@ function Stats.start()
 		task.wait(PLAYTIME_STEP)
 		for _, player in Players:GetPlayers() do
 			Stats.add(player, StatRules.PLAYTIME_MINUTES, 1)
+			seeEvents(player)
 		end
 	end
 end

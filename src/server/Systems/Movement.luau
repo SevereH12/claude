@@ -2,17 +2,21 @@
 -- Walk speed: normal inside storm zones (catching should take skill, and
 -- boots add a little), fast everywhere else so walking to the Power Plant
 -- isn't a chore. Also the server's zone lock: anyone standing in a zone
--- they haven't unlocked is put back just outside its gate.
+-- they haven't unlocked is put back just outside its gate. It also marks
+-- the zones and worlds a player has been in (the Storm Log).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
+local Portals = require(ReplicatedStorage.Shared.Util.Portals)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
+local StatRules = require(ReplicatedStorage.Shared.Util.Stats)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
 local Analytics = require(script.Parent.Analytics)
 local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
+local Stats = require(script.Parent.Stats)
 
 local CHECK_INTERVAL = 0.2
 local GATE_STEP_OUT = 6 -- studs outside a locked zone's gate to put players
@@ -46,6 +50,14 @@ local function update(player: Player)
 		zone = nil
 	end
 	Analytics.inZone(player, zone)
+	-- the Storm Log's Places page: zones and worlds visited
+	if zone then
+		Stats.visited(player, StatRules.visitZoneKey(zone.id))
+	end
+	local worldId = player:GetAttribute(Portals.WORLD_ATTRIBUTE)
+	if typeof(worldId) == "string" then
+		Stats.visited(player, StatRules.visitWorldKey(worldId))
+	end
 	local speed = Formulas.walkSpeed(
 		zone ~= nil,
 		if profile then profile.bootTier else 1,

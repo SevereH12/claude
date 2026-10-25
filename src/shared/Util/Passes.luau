@@ -36,6 +36,10 @@ Passes.SERVER_SURGE = "ServerSurge"
 -- marks it in an `owned` set, so it multiplies sales like a pass.
 Passes.EVENT = "Event_"
 
+-- A finished Storm Log page (Util/StormLog): LOG_PAGE .. its id marks it in
+-- an `owned` set, so each one adds Config.STORM_LOG.pageBonus to sales.
+Passes.LOG_PAGE = "LogPage_"
+
 -- The pass with this key, or nil.
 function Passes.def(key: string): Types.PassDef?
 	for _, pass in Config.PASSES do
@@ -46,9 +50,23 @@ function Passes.def(key: string): Types.PassDef?
 	return nil
 end
 
+-- The Storm Log's extra (0.02 per finished page in `owned`, up to
+-- Config.STORM_LOG.maxBonus): added up, then it multiplies like a pass.
+function Passes.logBonus(owned: Owned): number
+	local log = Config.STORM_LOG
+	local pages = 0
+	for _, page in log.pages do
+		if owned[Passes.LOG_PAGE .. page.id] then
+			pages += 1
+		end
+	end
+	return math.min(pages * log.pageBonus, log.maxBonus)
+end
+
 -- What a sale pays, times this: 2x Volts (pass or boost), VIP, the group
 -- bonus, a Server Storm, a Server Surge and any scheduled event multiply
--- (2 x 1.1 x 1.1 x 2 = 4.84, x2 more on a Double Volts Weekend).
+-- (2 x 1.1 x 1.1 x 2 = 4.84, x2 more on a Double Volts Weekend), and the
+-- Storm Log's finished pages add up to +8% on top.
 function Passes.sellMultiplier(owned: Owned): number
 	local multiplier = 1
 	if owned.DoubleVolts then
@@ -71,6 +89,7 @@ function Passes.sellMultiplier(owned: Owned): number
 			multiplier *= event.multiplier
 		end
 	end
+	multiplier *= 1 + Passes.logBonus(owned)
 	return multiplier
 end
 

@@ -17,13 +17,15 @@
 -- 4 days and 2 gifts a row, and on touch screens the cards grow to fit the
 -- TAP_MIN-tall CLAIM button and the larger minimum text, instead of the
 -- button covering the reward.
--- Two tabs: REWARDS (all of the above) and QUESTS: today's daily quests
+-- Three tabs: REWARDS (all of the above), QUESTS: today's daily quests
 -- and this week's quest (Util/Quests), each a card with what to do, a
 -- progress bar, the reward and a button: CLAIM when it's done, or REROLL
 -- (today's one free reroll) while it isn't. A quest reaching 100% shows a
 -- toast. Both only ask (ClaimQuest, RerollQuest); Systems/Quests decides.
+-- And LOG: the Storm Log collection book (Lib/StormLogTab, Util/StormLog),
+-- with CLAIM on each finished row.
 -- RewardsUI.ReadyChanged tells the menu when something is ready to claim
--- (a quest too).
+-- (a quest or a Log row too).
 -- Gentle nudges, as toasts with OPEN: the daily reward when you join (if
 -- it's ready), each playtime gift once when it's ready, and the group card
 -- once a visit after your first sale.
@@ -49,6 +51,7 @@ local Layout = require(script.Parent.Parent.Lib.Layout)
 local LayoutMath = require(script.Parent.Parent.Lib.LayoutMath)
 local SettingsStore = require(script.Parent.Parent.Lib.SettingsStore)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
+local StormLogTab = require(script.Parent.Parent.Lib.StormLogTab)
 local UI = require(script.Parent.Parent.Lib.UI)
 local State = require(script.Parent.State)
 
@@ -100,8 +103,10 @@ local player = Players.LocalPlayer
 local panel: Frame
 local list: ScrollingFrame
 local questList: ScrollingFrame
+local logList: ScrollingFrame
 local rewardsTab: TextButton
 local questsTab: TextButton
+local logTab: TextButton
 local dailyQuestCards: { QuestCard } = {}
 local weeklyQuestCards: { QuestCard } = {}
 local dailyNote: TextLabel
@@ -128,23 +133,33 @@ function RewardsUI.open()
 	UI.openPanel(panel)
 end
 
--- Shows the REWARDS or the QUESTS tab.
-local function selectTab(quests: boolean)
-	list.Visible = not quests
-	questList.Visible = quests
-	UI.setEnabled(rewardsTab, true, if quests then COLORS.panelDark else PINK)
-	UI.setEnabled(questsTab, true, if quests then PINK else COLORS.panelDark)
+type Tab = "rewards" | "quests" | "log"
+
+-- Shows the REWARDS, QUESTS or LOG tab.
+local function selectTab(tab: Tab)
+	list.Visible = tab == "rewards"
+	questList.Visible = tab == "quests"
+	logList.Visible = tab == "log"
+	UI.setEnabled(rewardsTab, true, if tab == "rewards" then PINK else COLORS.panelDark)
+	UI.setEnabled(questsTab, true, if tab == "quests" then PINK else COLORS.panelDark)
+	UI.setEnabled(logTab, true, if tab == "log" then PINK else COLORS.panelDark)
 end
 
 -- Opens the panel on the QUESTS tab.
 function RewardsUI.openQuests()
-	selectTab(true)
+	selectTab("quests")
+	RewardsUI.open()
+end
+
+-- Opens the panel on the LOG tab (the Storm Log).
+function RewardsUI.openLog()
+	selectTab("log")
 	RewardsUI.open()
 end
 
 -- Opens the panel scrolled down to the group card.
 local function openAtGroup()
-	selectTab(false)
+	selectTab("rewards")
 	RewardsUI.open()
 	task.spawn(function()
 		RunService.Heartbeat:Wait()
@@ -603,6 +618,11 @@ local function render(): (boolean, boolean, { number })
 	weeklyNote.Text = `New weekly quest in {daysHours(StatRules.untilNextWeek(now))}`
 	questsTab.Text = if claimable > 0 then `📋 QUESTS ({claimable})` else "📋 QUESTS"
 	anyReady = anyReady or claimable > 0
+
+	-- the Storm Log
+	local logReady = StormLogTab.render(snapshot, describe)
+	logTab.Text = if logReady > 0 then `📖 LOG ({logReady})` else "📖 LOG"
+	anyReady = anyReady or logReady > 0
 	return anyReady, canClaim, readyGifts
 end
 
@@ -706,7 +726,7 @@ function RewardsUI.init()
 		Parent = window.body,
 	})
 	UI.make(Instance.new("UIGridLayout"), {
-		CellSize = UDim2.new(0.5, -6, 1, 0),
+		CellSize = UDim2.new(1 / 3, -6, 1, 0),
 		CellPadding = UDim2.fromOffset(6, 0),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = tabBar,
@@ -741,9 +761,13 @@ function RewardsUI.init()
 	end
 	list = page("List")
 	questList = page("Quests")
-	local function tab(order: number, text: string, quests: boolean): TextButton
+	logList = page("Log")
+	local pages: { [Tab]: ScrollingFrame } = { rewards = list, quests = questList, log = logList }
+	local function tab(order: number, text: string, which: Tab): TextButton
+		local names: { [Tab]: string } =
+			{ rewards = "RewardsTab", quests = "QuestsTab", log = "LogTab" }
 		local button = UI.button({
-			Name = if quests then "QuestsTab" else "RewardsTab",
+			Name = names[which],
 			Text = text,
 			LayoutOrder = order,
 			BackgroundColor3 = COLORS.panelDark,
@@ -751,16 +775,20 @@ function RewardsUI.init()
 		})
 		UI.maxText(button, 18)
 		button.Activated:Connect(function()
-			if questList.Visible ~= quests then
+			if not pages[which].Visible then
 				UI.pop(button)
 				Sfx.play("tab")
-				selectTab(quests)
+				selectTab(which)
 			end
 		end)
 		return button
 	end
-	rewardsTab = tab(1, "🎁 REWARDS", false)
-	questsTab = tab(2, "📋 QUESTS", true)
+	rewardsTab = tab(1, "🎁 REWARDS", "rewards")
+	questsTab = tab(2, "📋 QUESTS", "quests")
+	logTab = tab(3, "📖 LOG", "log")
+
+	-- the LOG tab (Lib/StormLogTab)
+	StormLogTab.build(logList, RewardsUI.openLog)
 
 	-- the QUESTS tab
 	heading(questList, 1, "📋 DAILY QUESTS")
@@ -790,7 +818,7 @@ function RewardsUI.init()
 	})
 	UI.maxText(weeklyNote, 18)
 	UI.onLayout(fitQuests)
-	selectTab(false)
+	selectTab("rewards")
 
 	heading(list, 1, "📅 DAILY STREAK")
 	dayGrid = grid(list, 2, "Days", #Config.DAILY_REWARDS)

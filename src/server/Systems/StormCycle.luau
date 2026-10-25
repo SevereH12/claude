@@ -13,8 +13,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
+local StatRules = require(ReplicatedStorage.Shared.Util.Stats)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Weather = require(ReplicatedStorage.Shared.Util.Weather)
+local Stats = require(script.Parent.Stats)
+
+local SEEN_CHECK = 10 -- seconds between "who's here for the Supercell" checks
 
 local StormCycle = {}
 
@@ -73,7 +77,14 @@ end
 local function runSupercell()
 	local duration = Config.SUPERCELL.minutes * 60
 	setPhase("Storm", duration, true)
-	task.wait(duration)
+	-- everyone here (and anyone who joins) has seen it, for the Storm Log
+	local endsAt = now() + duration
+	repeat
+		for _, player in Players:GetPlayers() do
+			Stats.saw(player, StatRules.SUPERCELLS_SEEN)
+		end
+		task.wait(math.max(0, math.min(SEEN_CHECK, endsAt - now())))
+	until now() >= endsAt
 	supercellAt = Weather.nextSupercellAt(now(), random:NextNumber())
 	setPhase("Calm", Config.CALM_DURATION)
 	waitPhase()

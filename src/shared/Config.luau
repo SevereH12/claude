@@ -646,6 +646,27 @@ local EVENTS: { Types.EventDef } = {
 	},
 }
 
+-- The Storm Log (Util/StormLog, the LOG tab in REWARDS): a collection book
+-- worked out from the lifetime stat counters. Finishing a row (say every
+-- bolt type in Mesa) pays its page's `rowReward` once; every finished page
+-- adds `pageBonus` to all Volts for good, up to `maxBonus`.
+local STORM_LOG_PAGES: { Types.StormLogPageDef } = {
+	{ id = "Bolts", title = "BOLTS", icon = "⚡", rowReward = { charges = 250 } },
+	{
+		id = "Places",
+		title = "PLACES",
+		icon = "🗺",
+		rowReward = { boosts = { { key = "DoubleVolts", minutes = 15 } } },
+	},
+	{ id = "Team", title = "TEAM", icon = "🔬", rowReward = { charges = 400 } },
+	{
+		id = "Weather",
+		title = "WEATHER",
+		icon = "🌀",
+		rowReward = { charges = 300, boosts = { { key = "Lucky", minutes = 20 } } },
+	},
+}
+
 return table.freeze({
 	-- Saving
 	AUTOSAVE_INTERVAL = 60, -- seconds between autosaves per player
@@ -771,6 +792,11 @@ return table.freeze({
 		templates = table.freeze(QUEST_TEMPLATES),
 		-- the weekly quest pays about five daily quests
 		weeklyReward = { charges = 750, boosts = { { key = "DoubleVolts", minutes = 30 } } },
+	}),
+	STORM_LOG = table.freeze({
+		pageBonus = 0.02, -- +2% Volts per finished page
+		maxBonus = 0.08, -- never more than +8%
+		pages = table.freeze(STORM_LOG_PAGES),
 	}),
 	-- a boost reward for a pass the player owns pays Volts instead: this many
 	-- charges per minute of boost (about a minute of catching)

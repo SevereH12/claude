@@ -79,6 +79,10 @@ local function multipliers(effects: Passes.Owned): { Multiplier }
 			table.insert(list, { label = event.name, value = event.multiplier })
 		end
 	end
+	local logBonus = Passes.logBonus(effects)
+	if logBonus > 0 then
+		table.insert(list, { label = "Storm Log", value = 1 + logBonus })
+	end
 	return list
 end
 
