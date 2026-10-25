@@ -39,8 +39,9 @@ local function today(player: Player): number
 	return RewardRules.today(os.time()) + (if session then session.dayOffset else 0)
 end
 
--- `sku` names it in the economy stats ("Daily 3", "Gift 10 min").
-local function give(player: Player, profile: Types.Profile, reward: Types.Reward, sku: string)
+-- Pays a reward (Systems/Quests uses it too). `sku` names it in the
+-- economy stats ("Daily 3", "Gift 10 min").
+function Rewards.give(player: Player, profile: Types.Profile, reward: Types.Reward, sku: string)
 	local resolved = RewardRules.resolve(reward, Passes.owned(player))
 	local volts = Store.volts(resolved.charges, profile)
 	profile.volts += volts
@@ -74,7 +75,7 @@ local function onClaimDaily(player: Player)
 	end
 	profile.dailyStreak = streak
 	profile.lastDailyDay = day
-	give(player, profile, Config.DAILY_REWARDS[streak], `Daily {streak}`)
+	Rewards.give(player, profile, Config.DAILY_REWARDS[streak], `Daily {streak}`)
 	Analytics.dailyClaimed(player, streak)
 end
 
@@ -101,7 +102,7 @@ local function onClaimGift(player: Player, index: unknown)
 		return
 	end
 	session.claimed[index] = true
-	give(player, profile, gift.reward, `Gift {gift.minutes} min`)
+	Rewards.give(player, profile, gift.reward, `Gift {gift.minutes} min`)
 	Analytics.giftClaimed(player, gift.minutes)
 end
 

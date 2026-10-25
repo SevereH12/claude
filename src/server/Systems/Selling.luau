@@ -17,12 +17,14 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Types = require(ReplicatedStorage.Shared.Types)
+local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local Volumes = require(ReplicatedStorage.Shared.Util.Volumes)
 local Analytics = require(script.Parent.Analytics)
 local Map = require(script.Parent.Map)
 local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
 local ServerGoal = require(script.Parent.ServerGoal)
+local Stats = require(script.Parent.Stats)
 local Sync = require(script.Parent.Sync)
 
 local SELL_TAG = "SellArea"
@@ -80,12 +82,14 @@ end
 function Selling.payOut(player: Player, profile: Types.Profile)
 	local earned, missed = Passes.payout(player, profile.chargeValue)
 	local count = profile.chargeCount
+	local full = Formulas.isFull(count, Passes.capacity(player, profile))
 	profile.volts += earned
 	profile.totalVolts += earned
 	profile.chargeCount = 0
 	profile.chargeValue = 0
 	Sync.markDirty(player)
 	Analytics.sold(player, earned)
+	Stats.sold(player, earned, full)
 	ServerGoal.add(player, earned) -- every sale fills the server goal
 	soldRemote:FireClient(player, earned, count, missed)
 end

@@ -26,6 +26,65 @@ export type Profile = {
 	giftCredits: { [string]: { string } }, -- gifts paid for but not sent yet: product key -> purchase ids
 	glints: { number }, -- Glints per zone tier: glints[tier + 1] (Util/Research)
 	settings: { [string]: any }, -- the SETTINGS panel: Util/Settings values (Systems/Settings)
+	stats: StatsSave, -- stat counters (Util/Stats, Systems/Stats)
+	quests: QuestsSave, -- daily and weekly quests (Util/Quests, Systems/Quests)
+}
+
+-- Stat counters (Util/Stats): key -> count, three times over. `day` is the
+-- UTC day `today` counts, `week` the Monday-to-Sunday week `thisWeek` counts.
+export type StatsSave = {
+	lifetime: { [string]: number },
+	today: { [string]: number },
+	thisWeek: { [string]: number },
+	day: number,
+	week: number,
+}
+
+-- A quest template (Config.QUESTS.templates). `daily` / `weekly`: the
+-- amount at bottle tier 1 (nil = never picked for that period); `perTier`
+-- adds that fraction of it for every bottle tier above 1. For "Volts" the
+-- amounts are minutes of the player's grinding rate (Util/Afk).
+export type QuestKind = "Catch" | "CatchZone" | "Sell" | "Golden" | "Volts" | "Play" | "Promote"
+export type QuestTemplate = {
+	key: QuestKind,
+	daily: number?,
+	weekly: number?,
+	perTier: number?,
+	reward: Reward, -- a daily quest's reward (a weekly one pays Config.QUESTS.weeklyReward)
+}
+
+-- A picked quest: its template, the zone (CatchZone), how much it takes,
+-- the counter's value when it was picked (progress counts from there) and
+-- whether its reward was claimed.
+export type QuestSave = {
+	key: string,
+	zone: string?,
+	target: number,
+	base: number,
+	claimed: boolean,
+}
+
+export type QuestsSave = {
+	day: number, -- the UTC day `daily` was picked for
+	week: number, -- the week `weekly` was picked for (Util/Stats.weekOf)
+	daily: { QuestSave },
+	weekly: { QuestSave },
+	rerollDay: number, -- the UTC day the free reroll was last used
+}
+
+-- What the client sees of a quest (Util/Quests.view).
+export type QuestView = {
+	key: string,
+	zone: string?,
+	target: number,
+	progress: number,
+	claimed: boolean,
+}
+
+export type QuestsView = {
+	daily: { QuestView },
+	weekly: { QuestView },
+	rerollReady: boolean, -- today's free reroll is still there
 }
 
 -- A hired researcher. post is "Office" or a zone id.
@@ -60,6 +119,7 @@ export type Snapshot = {
 	giftCredits: { [string]: number }, -- gift products paid for but not sent yet
 	afk: AfkState?, -- in the AFK Lounge (Systems/Afk), nil when not
 	glints: { number }, -- Glints per zone tier (glints[tier + 1])
+	quests: QuestsView, -- today's and this week's quests with their progress
 }
 
 -- The player's AFK Lounge state, sent in the snapshot (Systems/Afk). The

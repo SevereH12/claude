@@ -550,6 +550,35 @@ local PLAYTIME_GIFTS: { Types.PlaytimeGift } = {
 	{ minutes = 60, reward = { charges = 400 } },
 }
 
+-- Daily and weekly quests (Util/Quests picks them, Systems/Quests pays
+-- them). Each day a player gets `daily` quests and each week `weekly`,
+-- picked from these templates by their userId and the date, so they're the
+-- same all day. Amounts are for bottle tier 1; `perTier` adds that fraction
+-- for each tier above (bigger bottles, bigger quests). "Volts" amounts are
+-- minutes of the player's grinding rate in their best zone (Util/Afk), so
+-- that quest takes the same time early or late. Rewards pay like the daily
+-- streak (`charges` = bolts from the best zone, Util/Store.volts).
+local QUEST_TEMPLATES: { Types.QuestTemplate } = {
+	{ key = "Catch", daily = 120, weekly = 900, perTier = 0.15, reward = { charges = 150 } },
+	{ key = "CatchZone", daily = 70, weekly = 500, perTier = 0.15, reward = { charges = 150 } },
+	{
+		key = "Sell",
+		daily = 4,
+		weekly = 30,
+		reward = { boosts = { { key = "DoubleVolts", minutes = 10 } } },
+	},
+	{
+		key = "Golden",
+		daily = 1,
+		weekly = 8,
+		reward = { boosts = { { key = "Lucky", minutes = 10 } } },
+	},
+	{ key = "Volts", daily = 15, weekly = 120, reward = { charges = 200 } },
+	{ key = "Play", daily = 20, weekly = 150, reward = { charges = 150 } },
+	-- weekly only, and only for players who have hired a researcher
+	{ key = "Promote", weekly = 1, reward = { charges = 200 } },
+}
+
 -- Gifting passes (Systems/Gifts): nobody can buy a game pass for someone
 -- else, so each pass has a "Gift: <pass>" Developer Product at the same
 -- price (product key "Gift" .. pass key). Buying one unlocks the pass's
@@ -735,6 +764,14 @@ return table.freeze({
 	}),
 	DAILY_REWARDS = table.freeze(DAILY_REWARDS),
 	PLAYTIME_GIFTS = table.freeze(PLAYTIME_GIFTS),
+	QUESTS = table.freeze({
+		daily = 3, -- daily quests per player
+		weekly = 1, -- weekly quests per player
+		zoneChoices = 3, -- a "catch in a zone" quest names one of their best this many zones
+		templates = table.freeze(QUEST_TEMPLATES),
+		-- the weekly quest pays about five daily quests
+		weeklyReward = { charges = 750, boosts = { { key = "DoubleVolts", minutes = 30 } } },
+	}),
 	-- a boost reward for a pass the player owns pays Volts instead: this many
 	-- charges per minute of boost (about a minute of catching)
 	REWARD_SWAP_CHARGES = 10,

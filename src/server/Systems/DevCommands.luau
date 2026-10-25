@@ -11,7 +11,8 @@
 -- you're in (or your best zone), "goldenBolt" drops a golden bolt where you
 -- stand, "supercell" starts a Supercell in 30 s and "event" (true/false)
 -- pretends the first scheduled event is on, and "serverGoal" fills a
--- quarter of the server goal as if you sold it. The repo and client code are public, so this
+-- quarter of the server goal as if you sold it, and "completeQuest" counts
+-- your first unfinished quest as done. The repo and client code are public, so this
 -- is the lock: it only obeys in Studio play tests or, in a live server, the
 -- user who owns the place; everything but "volts" is Studio only. To remove it:
 -- delete this file and Controllers/DevCommands.luau, and take "DevCommand"
@@ -32,8 +33,10 @@ local Gifts = require(script.Parent.Gifts)
 local Group = require(script.Parent.Group)
 local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
+local Quests = require(script.Parent.Quests)
 local Research = require(script.Parent.Research)
 local Rewards = require(script.Parent.Rewards)
+local Stats = require(script.Parent.Stats)
 local ServerGoal = require(script.Parent.ServerGoal)
 local StormCycle = require(script.Parent.StormCycle)
 local Strikes = require(script.Parent.Strikes)
@@ -109,6 +112,7 @@ local function onCommand(player: Player, name: unknown, value: unknown, extra: u
 		return
 	elseif name == "nextDay" then
 		Rewards.nextDay(player)
+		Stats.refresh(player) -- a new quest day too
 		print(`[DevCommands] {player.Name}: a day later`)
 	elseif name == "playtime" then
 		Rewards.addPlaytime(player, PLAYTIME_STEP)
@@ -148,6 +152,13 @@ local function onCommand(player: Player, name: unknown, value: unknown, extra: u
 	elseif name == "serverGoal" then
 		ServerGoal.testFill(player, 0.25)
 		print(`[DevCommands] {player.Name}: +25% server goal`)
+	elseif name == "completeQuest" then
+		local ok = Quests.testComplete(player)
+		print(
+			`[DevCommands] {player.Name}: {if ok
+				then "a quest is done"
+				else "no quest left to finish"}`
+		)
 	elseif name == "event" and typeof(value) == "boolean" then
 		workspace:SetAttribute(Weather.PRETEND_EVENT, value)
 		Sync.markDirty(player)

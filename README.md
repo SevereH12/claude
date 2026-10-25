@@ -326,6 +326,33 @@ numbers in `Config.SERVER_GOAL`).
 - **Testing in Studio**: the TEST panel's REWARDS list has **Server goal
   +25%** (four taps start a Surge); **Clear boosts** ends a Surge too.
 
+## Quests and stat counters
+
+The game counts what each player does (`Util/Stats`, `Systems/Stats`):
+bolts caught (overall, by bolt type, by zone and by type in each zone),
+sales, full bottles sold, bottles filled, Volts earned (from sales and the
+AFK Lounge), minutes played, researcher promotions and gifts sent. Each
+counter is kept three times: for good, for today (a new UTC day starts it
+again) and for this week (Monday 00:00 UTC starts it again). They're
+saved with the player.
+
+- **Quests**: every day each player gets 3 daily quests and every week 1
+  weekly quest, picked from the templates in `Config.QUESTS` (catch bolts,
+  catch bolts in one of your best zones, sell full bottles, catch a golden
+  bolt, earn Volts, play for a while, promote a researcher). The pick comes
+  from your user id and the date, so you get the same quests all day.
+- **Size**: amounts grow with your bottle. "Earn Volts" is minutes of your
+  grinding rate in your best zone, so it takes about as long early or late.
+- **Rewards**: like the daily streak (Volts from your best zone, or timed
+  boosts). The weekly quest pays about five daily ones.
+- **Reroll**: one free reroll a day swaps any unfinished quest.
+- **On screen**: REWARDS has a QUESTS tab: each quest has a progress bar,
+  its reward and a CLAIM (or REROLL) button. A toast pops up when a quest
+  hits 100%, and the menu's dot lights up while one is ready to claim.
+- **Testing in Studio**: the TEST panel's REWARDS list has **Complete
+  quest** (your first unfinished quest counts as done) and **Next day**
+  (new daily quests).
+
 ## Code layout
 
 - `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas, zone geometry

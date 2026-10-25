@@ -222,7 +222,7 @@ local migrated = PlayerData.migrate({
 	version = 11,
 	settings = { musicVolume = 0.4, sfxVolume = 0.8, ambienceVolume = 0.2, muted = true },
 })
-check(migrated.version == 12, "migrated to v12")
+check(migrated.version >= 12, "migrated to v12 (or a later version)")
 check(
 	migrated.settings.musicVolume == 0.4 and migrated.settings.muted == true,
 	"old sound settings kept"

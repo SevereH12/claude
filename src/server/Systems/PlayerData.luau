@@ -14,13 +14,15 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local QuestRules = require(ReplicatedStorage.Shared.Util.Quests)
 local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local SettingsRules = require(ReplicatedStorage.Shared.Util.Settings)
 local Signal = require(ReplicatedStorage.Shared.Util.Signal)
+local StatRules = require(ReplicatedStorage.Shared.Util.Stats)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local STORE_NAME = "StormBottler_PlayerData"
-local CURRENT_VERSION = 12
+local CURRENT_VERSION = 13
 -- A lock older than this belongs to a server that crashed; it may be taken.
 local LOCK_STALE_SECONDS = Config.AUTOSAVE_INTERVAL * 3
 local LOCKED_RETRIES = 5
@@ -64,6 +66,8 @@ local DEFAULT_PROFILE: Types.Profile = {
 	giftCredits = {},
 	glints = {},
 	settings = SettingsRules.defaults(),
+	stats = StatRules.new(),
+	quests = QuestRules.new(),
 }
 
 -- MIGRATIONS[n] turns a version-n profile into version n+1. When the profile
@@ -147,6 +151,17 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 	-- everything else starts at its default
 	[11] = function(data: any): any
 		data.settings = SettingsRules.sanitize(data.settings)
+		return data
+	end,
+	-- stat counters and quests (prompt 16): counting starts now, except
+	-- lifetime Volts earned, which is what they've earned so far; quests
+	-- are picked when the profile loads
+	[12] = function(data: any): any
+		data.stats = StatRules.new()
+		if typeof(data.totalVolts) == "number" and data.totalVolts > 0 then
+			data.stats.lifetime[StatRules.VOLTS_EARNED] = data.totalVolts
+		end
+		data.quests = QuestRules.new()
 		return data
 	end,
 }

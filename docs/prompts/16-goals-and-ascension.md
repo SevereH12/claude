@@ -3,7 +3,7 @@
 Follow the rules in `docs/prompts/README.md`. **Run it three times**; each
 run does the first unticked part, then ticks it.
 
-- [ ] Part A: stat counters, plus daily and weekly quests
+- [x] Part A: stat counters, plus daily and weekly quests
 - [ ] Part B: the Storm Log (a collection book)
 - [ ] Part C: Ascension (rebirth)
 

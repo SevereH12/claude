@@ -26,6 +26,7 @@ local Analytics = require(script.Parent.Analytics)
 local Boosts = require(script.Parent.Boosts)
 local Passes = require(script.Parent.Passes)
 local Research = require(script.Parent.Research)
+local Stats = require(script.Parent.Stats)
 local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local PlayerData = require(script.Parent.PlayerData)
 local StormCycle = require(script.Parent.StormCycle)
@@ -223,6 +224,12 @@ local function resolve(
 		end
 		Sync.markDirty(candidate.player)
 		Analytics.caught(candidate.player)
+		Stats.caught(
+			candidate.player,
+			boltType,
+			zone.id,
+			not candidate.toTank and units >= candidate.room
+		)
 	end
 
 	-- Rainbow: every catcher gets the same random timed boost, and the

@@ -37,9 +37,11 @@ local AfkRules = require(ReplicatedStorage.Shared.Util.Afk)
 local Portals = require(ReplicatedStorage.Shared.Util.Portals)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Volumes = require(ReplicatedStorage.Shared.Util.Volumes)
+local StatRules = require(ReplicatedStorage.Shared.Util.Stats)
 local Analytics = require(script.Parent.Analytics)
 local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
+local Stats = require(script.Parent.Stats)
 local Sync = require(script.Parent.Sync)
 local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
 
@@ -134,6 +136,7 @@ local function pay(player: Player, session: Session, profile: Types.Profile)
 	end
 	Sync.markDirty(player)
 	Analytics.afkEarned(player, whole)
+	Stats.add(player, StatRules.VOLTS_EARNED, whole)
 end
 
 -- AfkMinutes: how long this AFK session earned for.

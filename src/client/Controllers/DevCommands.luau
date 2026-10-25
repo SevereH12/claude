@@ -9,7 +9,8 @@
 -- Volts Weekend), Server goal +25% (a full meter starts a Server Surge), Simulate idle 17 min (the AFK Lounge's
 -- idle handler, Controllers/AfkUI), a Pretend group member toggle, the
 -- Sound board, which plays every sound in order with its name, and the Music
--- audition, every shortlisted track for 20 s (all Studio only). The server (Systems/DevCommands) checks again. To
+-- audition, every shortlisted track for 20 s, and Complete quest (all Studio
+-- only). The server (Systems/DevCommands) checks again. To
 -- remove it: delete this file and Systems/DevCommands.luau, and take
 -- "DevCommand" out of Shared/Remotes.
 
@@ -151,7 +152,7 @@ function DevCommands.init()
 	UI.onLayout(function()
 		UI.place(rewards, row(4))
 		local area = Layout.hud.test
-		UI.place(tools, { x = area.x + area.w + LayoutMath.GAP, y = area.y, w = 220, h = 14 * 48 })
+		UI.place(tools, { x = area.x + area.w + LayoutMath.GAP, y = area.y, w = 220, h = 15 * 48 })
 	end)
 	local function showLists(passesOn: boolean, rewardsOn: boolean)
 		list.Visible = passesOn
@@ -207,6 +208,21 @@ function DevCommands.init()
 	goalButton.Activated:Connect(function()
 		UI.pop(goalButton)
 		devRemote:FireServer("serverGoal")
+	end)
+	-- Complete quest: your first unfinished quest counts as done (CLAIM it
+	-- in REWARDS > QUESTS)
+	local questButton = UI.button({
+		Name = "CompleteQuest",
+		LayoutOrder = 15,
+		Text = "📋 Complete quest",
+		Size = UDim2.new(1, 0, 0, 40),
+		BackgroundColor3 = UI.COLORS.panelDark,
+		Parent = tools,
+	})
+	UI.maxText(questButton, 16)
+	questButton.Activated:Connect(function()
+		UI.pop(questButton)
+		devRemote:FireServer("completeQuest")
 	end)
 	-- Simulate idle 17 min (Studio only): runs the AFK idle handler, so the
 	-- VirtualUser nudge and the server-hop backup can be checked

@@ -12,6 +12,8 @@ local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local GiftRules = require(ReplicatedStorage.Shared.Util.Gifts)
 local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
+local QuestRules = require(ReplicatedStorage.Shared.Util.Quests)
+local RewardRules = require(ReplicatedStorage.Shared.Util.Rewards)
 local PlayerData = require(script.Parent.PlayerData)
 
 local FLUSH_INTERVAL = 0.1
@@ -56,6 +58,8 @@ local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapsho
 	local passes = Sync.passes[player] or {}
 	local effects = PassRules.withBoosts(passes, profile.boosts)
 	local rewards = Sync.rewards[player]
+	local dayOffset = if rewards then rewards.dayOffset else 0
+	local today = RewardRules.today(os.time()) + dayOffset
 	return {
 		volts = profile.volts,
 		totalVolts = profile.totalVolts,
@@ -76,7 +80,7 @@ local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapsho
 		daily = {
 			streak = profile.dailyStreak,
 			lastDay = profile.lastDailyDay,
-			dayOffset = if rewards then rewards.dayOffset else 0,
+			dayOffset = dayOffset,
 		},
 		gifts = {
 			startedAt = if rewards then rewards.startedAt else workspace:GetServerTimeNow(),
@@ -86,6 +90,7 @@ local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapsho
 		giftCredits = GiftRules.creditCounts(profile.giftCredits),
 		afk = Sync.afk[player],
 		glints = profile.glints,
+		quests = QuestRules.view(profile.quests, profile.stats, today),
 	}
 end
 

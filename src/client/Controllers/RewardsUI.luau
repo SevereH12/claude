@@ -17,7 +17,13 @@
 -- 4 days and 2 gifts a row, and on touch screens the cards grow to fit the
 -- TAP_MIN-tall CLAIM button and the larger minimum text, instead of the
 -- button covering the reward.
--- RewardsUI.ReadyChanged tells the menu when something is ready to claim.
+-- Two tabs: REWARDS (all of the above) and QUESTS: today's daily quests
+-- and this week's quest (Util/Quests), each a card with what to do, a
+-- progress bar, the reward and a button: CLAIM when it's done, or REROLL
+-- (today's one free reroll) while it isn't. A quest reaching 100% shows a
+-- toast. Both only ask (ClaimQuest, RerollQuest); Systems/Quests decides.
+-- RewardsUI.ReadyChanged tells the menu when something is ready to claim
+-- (a quest too).
 -- Gentle nudges, as toasts with OPEN: the daily reward when you join (if
 -- it's ready), each playtime gift once when it's ready, and the group card
 -- once a visit after your first sale.
@@ -32,8 +38,10 @@ local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Net = require(ReplicatedStorage.Shared.Net)
 local BoostRules = require(ReplicatedStorage.Shared.Util.Boosts)
 local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
+local QuestRules = require(ReplicatedStorage.Shared.Util.Quests)
 local RewardRules = require(ReplicatedStorage.Shared.Util.Rewards)
 local Signal = require(ReplicatedStorage.Shared.Util.Signal)
+local StatRules = require(ReplicatedStorage.Shared.Util.Stats)
 local Store = require(ReplicatedStorage.Shared.Util.Store)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Celebrate = require(script.Parent.Parent.Lib.Celebrate)
@@ -55,6 +63,8 @@ local PAD = 4
 local TITLE = 20
 local ICON = 40
 local BUTTON = 36 -- CLAIM's height; at least TAP_MIN points on touch
+local TAB_HEIGHT = 40
+local QUEST_HEIGHT = 92 -- a quest card, at least (taller when its button is)
 
 -- `wide`: a gift card (the text beside the icon); otherwise a day card
 -- (title, icon, text and CLAIM stacked)
@@ -69,6 +79,18 @@ type Card = {
 
 type Grid = { frame: Frame, layout: UIGridLayout, count: number }
 
+-- A quest card. `mode`: what its button does now.
+type QuestCard = {
+	frame: Frame,
+	title: TextLabel,
+	fill: Frame,
+	count: TextLabel,
+	reward: TextLabel,
+	button: TextButton,
+	stroke: UIStroke,
+	mode: "claim" | "reroll" | nil,
+}
+
 local RewardsUI = {}
 
 -- Fires true when something becomes ready to claim, false when nothing is.
@@ -77,6 +99,15 @@ RewardsUI.ReadyChanged = Signal.new() :: Signal.Signal<boolean>
 local player = Players.LocalPlayer
 local panel: Frame
 local list: ScrollingFrame
+local questList: ScrollingFrame
+local rewardsTab: TextButton
+local questsTab: TextButton
+local dailyQuestCards: { QuestCard } = {}
+local weeklyQuestCards: { QuestCard } = {}
+local dailyNote: TextLabel
+local weeklyNote: TextLabel
+-- each quest's done-ness at the last render (for the 100% toast)
+local questDone: { [string]: boolean } = {}
 local dayCards: { Card } = {}
 local giftCards: { Card } = {}
 local dayGrid: Grid
@@ -97,8 +128,23 @@ function RewardsUI.open()
 	UI.openPanel(panel)
 end
 
+-- Shows the REWARDS or the QUESTS tab.
+local function selectTab(quests: boolean)
+	list.Visible = not quests
+	questList.Visible = quests
+	UI.setEnabled(rewardsTab, true, if quests then COLORS.panelDark else PINK)
+	UI.setEnabled(questsTab, true, if quests then PINK else COLORS.panelDark)
+end
+
+-- Opens the panel on the QUESTS tab.
+function RewardsUI.openQuests()
+	selectTab(true)
+	RewardsUI.open()
+end
+
 -- Opens the panel scrolled down to the group card.
 local function openAtGroup()
+	selectTab(false)
 	RewardsUI.open()
 	task.spawn(function()
 		RunService.Heartbeat:Wait()
@@ -117,6 +163,15 @@ local function hoursMinutes(seconds: number): string
 		return `{minutes // 60}h {minutes % 60}m`
 	end
 	return `{minutes}m`
+end
+
+-- "3d 4h", or "5h 12m" under a day.
+local function daysHours(seconds: number): string
+	local hours = math.floor(seconds / 3600)
+	if hours >= 24 then
+		return `{hours // 24}d {hours % 24}h`
+	end
+	return hoursMinutes(seconds)
 end
 
 -- What a reward gives this player, as card text, and its icon: a boost's
@@ -257,6 +312,108 @@ local function fitCards()
 	fit(giftGrid, giftCards, if upright then 2 else 3, if touch then 52 else 44)
 end
 
+-- A quest card: what to do, a progress bar, the reward, and its button.
+local function buildQuestCard(
+	parent: Instance,
+	order: number,
+	period: QuestRules.Period,
+	index: number
+): QuestCard
+	local frame = UI.make(Instance.new("Frame"), {
+		Name = `Quest{index}`,
+		LayoutOrder = order,
+		BackgroundColor3 = COLORS.panelDark,
+		Size = UDim2.new(1, -12, 0, QUEST_HEIGHT),
+		Parent = parent,
+	})
+	UI.corner(frame, UDim.new(0, 12))
+	local stroke = UI.stroke(frame, 3)
+	local title = UI.label({
+		Title = true,
+		Name = "Title",
+		Text = "",
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromOffset(12, 8),
+		Size = UDim2.new(0.7, -12, 0, 24),
+		Parent = frame,
+	})
+	UI.maxText(title, 20)
+	local bar = UI.make(Instance.new("Frame"), {
+		Name = "Bar",
+		Position = UDim2.fromOffset(12, 38),
+		Size = UDim2.new(0.7, -12, 0, 20),
+		BackgroundColor3 = COLORS.panelBottom,
+		Parent = frame,
+	})
+	UI.corner(bar, UDim.new(0, 8))
+	local fill = UI.make(Instance.new("Frame"), {
+		Name = "Fill",
+		Size = UDim2.fromScale(0, 1),
+		BackgroundColor3 = COLORS.green,
+		Parent = bar,
+	})
+	UI.corner(fill, UDim.new(0, 8))
+	local count = UI.label({
+		Name = "Count",
+		Text = "",
+		Size = UDim2.fromScale(1, 1),
+		Parent = bar,
+	})
+	UI.maxText(count, 14)
+	local reward = UI.label({
+		Name = "Reward",
+		Text = "",
+		TextColor3 = COLORS.subtext,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromOffset(12, 62),
+		Size = UDim2.new(0.7, -12, 0, 22),
+		Parent = frame,
+	})
+	UI.maxText(reward, 16)
+	local button = UI.button({
+		Name = "Action",
+		Text = "",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -10, 0.5, 0),
+		Size = UDim2.new(0.28, 0, 0, BUTTON),
+		BackgroundColor3 = COLORS.green,
+		Parent = frame,
+	})
+	UI.maxText(button, 18)
+	local card: QuestCard = {
+		frame = frame,
+		title = title,
+		fill = fill,
+		count = count,
+		reward = reward,
+		button = button,
+		stroke = stroke,
+		mode = nil,
+	}
+	button.Activated:Connect(function()
+		if card.mode == "claim" then
+			UI.pop(button)
+			Net.get("ClaimQuest"):FireServer(period, index)
+		elseif card.mode == "reroll" then
+			UI.pop(button)
+			Net.get("RerollQuest"):FireServer(period, index)
+		end
+	end)
+	return card
+end
+
+-- Quest buttons are TAP_MIN points tall on touch; the cards grow to fit.
+local function fitQuests()
+	local button = LayoutMath.tapMin(Layout.class, Layout.scale, Vector2.new(0, BUTTON)).Y
+	local height = math.max(QUEST_HEIGHT, button + 20)
+	for _, cards in { dailyQuestCards, weeklyQuestCards } do
+		for _, card in cards do
+			card.frame.Size = UDim2.new(1, -12, 0, height)
+			card.button.Size = UDim2.new(0.28, 0, 0, button)
+		end
+	end
+end
+
 local function setCard(
 	card: Card,
 	image: number,
@@ -383,6 +540,69 @@ local function render(): (boolean, boolean, { number })
 			)
 		end
 	end
+
+	-- quests: today's and this week's
+	local quests = snapshot.quests
+	local claimable = 0
+	local function renderQuests(
+		views: { Types.QuestView },
+		cards: { QuestCard },
+		period: QuestRules.Period
+	)
+		for index, card in cards do
+			local view = views[index]
+			card.frame.Visible = view ~= nil
+			if not view then
+				continue
+			end
+			local text = QuestRules.describe(view)
+			local done = view.progress >= view.target
+			card.title.Text = text
+			card.fill.Size =
+				UDim2.fromScale(if view.target > 0 then view.progress / view.target else 1, 1)
+			card.count.Text =
+				`{Format.abbreviate(view.progress)} / {Format.abbreviate(view.target)}`
+			local rewardText = describe(QuestRules.reward(view.key, period), snapshot)
+			card.reward.Text = "Reward: " .. (string.gsub(rewardText, "\n", " · "))
+			local canClaimQuest = done and not view.claimed
+			card.button.Visible = true
+			if view.claimed then
+				card.mode = nil
+				card.button.Text = "✓ DONE"
+				UI.setEnabled(card.button, false, COLORS.green)
+			elseif canClaimQuest then
+				card.mode = "claim"
+				card.button.Text = "CLAIM"
+				UI.setEnabled(card.button, true, COLORS.green)
+				claimable += 1
+			elseif quests.rerollReady then
+				card.mode = "reroll"
+				card.button.Text = "🎲 REROLL"
+				UI.setEnabled(card.button, true, COLORS.storm)
+			else
+				card.mode = nil
+				card.button.Visible = false
+			end
+			card.stroke.Color = if canClaimQuest then COLORS.volt else COLORS.stroke
+			card.stroke.Thickness = if canClaimQuest then 5 else 3
+			-- the 100% toast: only when it changes to done while you watch
+			local id = `{period}{index}:{view.key}:{view.zone or ""}:{view.target}`
+			if questDone[id] == false and canClaimQuest then
+				UI.toast(`✅ Quest complete: {text}!`, "good", NUDGE_SECONDS, {
+					text = "CLAIM",
+					onTap = RewardsUI.openQuests,
+				})
+			end
+			questDone[id] = done
+		end
+	end
+	renderQuests(quests.daily, dailyQuestCards, "daily")
+	renderQuests(quests.weekly, weeklyQuestCards, "weekly")
+	dailyNote.Text = `New quests in {hoursMinutes(RewardRules.untilNextDay(now))}`
+		.. if quests.rerollReady then "  ·  🎲 1 free reroll today" else ""
+	weeklyNote.Text = `New weekly quest in {daysHours(StatRules.untilNextWeek(now))}`
+	questsTab.Text = if claimable > 0 then `📋 QUESTS ({claimable})` else "📋 QUESTS"
+	anyReady = anyReady or claimable > 0
 	return anyReady, canClaim, readyGifts
 end
 
@@ -478,29 +698,99 @@ function RewardsUI.init()
 	local _, root = Layout.screen("StormBottlerRewards", 5)
 	local window = UI.window(root, "RewardsPanel", "🎁 REWARDS", PINK, Vector2.new(680, 560))
 	panel = window.panel
-	-- one scrolling column: it all fits on a monitor, and scrolls on a phone
-	list = UI.make(Instance.new("ScrollingFrame"), {
-		Name = "List",
-		Size = UDim2.fromScale(1, 1),
+	-- the two tabs along the top
+	local tabBar = UI.make(Instance.new("Frame"), {
+		Name = "Tabs",
+		Size = UDim2.new(1, 0, 0, TAB_HEIGHT),
 		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollBarThickness = 6,
 		Parent = window.body,
 	})
-	UI.make(Instance.new("UIListLayout"), {
-		Padding = UDim.new(0, GAP),
+	UI.make(Instance.new("UIGridLayout"), {
+		CellSize = UDim2.new(0.5, -6, 1, 0),
+		CellPadding = UDim2.fromOffset(6, 0),
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = list,
+		Parent = tabBar,
 	})
-	-- room under the last card when scrolled to the bottom
-	UI.make(Instance.new("UIPadding"), {
-		PaddingTop = UDim.new(0, 2),
-		PaddingBottom = UDim.new(0, 12),
-		PaddingLeft = UDim.new(0, 2),
-		Parent = list,
+	-- each tab is one scrolling column: it all fits on a monitor, and
+	-- scrolls on a phone
+	local function page(name: string): ScrollingFrame
+		local frame = UI.make(Instance.new("ScrollingFrame"), {
+			Name = name,
+			Position = UDim2.fromOffset(0, TAB_HEIGHT + 8),
+			Size = UDim2.new(1, 0, 1, -(TAB_HEIGHT + 8)),
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			CanvasSize = UDim2.new(),
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			ScrollBarThickness = 6,
+			Parent = window.body,
+		})
+		UI.make(Instance.new("UIListLayout"), {
+			Padding = UDim.new(0, GAP),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Parent = frame,
+		})
+		-- room under the last card when scrolled to the bottom
+		UI.make(Instance.new("UIPadding"), {
+			PaddingTop = UDim.new(0, 2),
+			PaddingBottom = UDim.new(0, 12),
+			PaddingLeft = UDim.new(0, 2),
+			Parent = frame,
+		})
+		return frame
+	end
+	list = page("List")
+	questList = page("Quests")
+	local function tab(order: number, text: string, quests: boolean): TextButton
+		local button = UI.button({
+			Name = if quests then "QuestsTab" else "RewardsTab",
+			Text = text,
+			LayoutOrder = order,
+			BackgroundColor3 = COLORS.panelDark,
+			Parent = tabBar,
+		})
+		UI.maxText(button, 18)
+		button.Activated:Connect(function()
+			if questList.Visible ~= quests then
+				UI.pop(button)
+				Sfx.play("tab")
+				selectTab(quests)
+			end
+		end)
+		return button
+	end
+	rewardsTab = tab(1, "🎁 REWARDS", false)
+	questsTab = tab(2, "📋 QUESTS", true)
+
+	-- the QUESTS tab
+	heading(questList, 1, "📋 DAILY QUESTS")
+	for index = 1, Config.QUESTS.daily do
+		table.insert(dailyQuestCards, buildQuestCard(questList, 1 + index, "daily", index))
+	end
+	dailyNote = UI.label({
+		Name = "DailyNote",
+		LayoutOrder = 10,
+		Text = "",
+		TextColor3 = COLORS.volt,
+		Size = UDim2.new(1, -12, 0, 22),
+		Parent = questList,
 	})
+	UI.maxText(dailyNote, 18)
+	heading(questList, 11, "🏆 WEEKLY QUEST")
+	for index = 1, Config.QUESTS.weekly do
+		table.insert(weeklyQuestCards, buildQuestCard(questList, 11 + index, "weekly", index))
+	end
+	weeklyNote = UI.label({
+		Name = "WeeklyNote",
+		LayoutOrder = 20,
+		Text = "",
+		TextColor3 = COLORS.volt,
+		Size = UDim2.new(1, -12, 0, 22),
+		Parent = questList,
+	})
+	UI.maxText(weeklyNote, 18)
+	UI.onLayout(fitQuests)
+	selectTab(false)
 
 	heading(list, 1, "📅 DAILY STREAK")
 	dayGrid = grid(list, 2, "Days", #Config.DAILY_REWARDS)
