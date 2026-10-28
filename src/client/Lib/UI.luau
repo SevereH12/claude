@@ -712,6 +712,44 @@ function UI.onLayout(apply: () -> ())
 	end)
 end
 
+-- A see-through frame over the whole of `object`, for things that sit on
+-- its edges and corners (a shortcut chip, a dot, the tutorial's glow).
+-- A button's children are laid out inside its UIPadding, so a dot put at
+-- its corner would end up inside it; the overlay undoes the padding, and
+-- follows it when the title nudge changes it. One per object.
+function UI.overlay(object: GuiObject): Frame
+	local existing = object:FindFirstChild("Overlay")
+	if existing and existing:IsA("Frame") then
+		return existing
+	end
+	local overlay = UI.make(Instance.new("Frame"), {
+		Name = "Overlay",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 5,
+		Parent = object,
+	})
+	local pad = object:FindFirstChildOfClass("UIPadding")
+	if pad then
+		-- the padded area is (1 - left - right) of the width less the offsets;
+		-- scale it back up to the full box and move it out by the padding
+		local function fit()
+			local left, right = pad.PaddingLeft, pad.PaddingRight
+			local top, bottom = pad.PaddingTop, pad.PaddingBottom
+			local w = 1 - left.Scale - right.Scale
+			local h = 1 - top.Scale - bottom.Scale
+			local ox = left.Offset + right.Offset
+			local oy = top.Offset + bottom.Offset
+			local x, y = -left.Scale / w, -top.Scale / h
+			overlay.Position = UDim2.new(x, x * ox - left.Offset, y, y * oy - top.Offset)
+			overlay.Size = UDim2.new(1 / w, ox / w, 1 / h, oy / h)
+		end
+		fit()
+		pad.Changed:Connect(fit)
+	end
+	return overlay
+end
+
 -- A small chip in a button's corner naming the shortcut for `action`
 -- (Util/Settings.ACTIONS), as the player has bound it: the controller button
 -- ("Y") on a gamepad (Layout class Console), the key ("M") on a PC
@@ -727,7 +765,7 @@ function UI.padHint(button: GuiObject, action: string)
 		BackgroundColor3 = UI.COLORS.panelDark,
 		BackgroundTransparency = 0,
 		ZIndex = 5,
-		Parent = button,
+		Parent = UI.overlay(button), -- on the corner, not inside the padding
 	})
 	UI.corner(hint, UDim.new(0.5, 0))
 	local padKey = SettingsRules.bindKey("Controller", action)
