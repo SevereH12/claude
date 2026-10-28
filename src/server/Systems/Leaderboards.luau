@@ -19,6 +19,7 @@ local CollectionService = game:GetService("CollectionService")
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local UserService = game:GetService("UserService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -30,6 +31,7 @@ local PlayerData = require(script.Parent.PlayerData)
 local SETTINGS = Config.LEADERBOARDS
 local TICK = 15 -- seconds between checks for values to write
 local RETRIES = 3
+local SHUTDOWN_WAIT = if RunService:IsStudio() then 5 else 25 -- seconds a closing server waits for the last writes
 
 local Leaderboards = {}
 
@@ -43,6 +45,7 @@ local testMode = false
 local written: { [Player]: Written } = {}
 -- per player: their values when they left (the profile is gone by then)
 local latest: { [Player]: { [string]: number } } = {}
+local leavingWrites = 0 -- last writes of players leaving, still going
 local names: { [number]: string } = {}
 local warned: { [string]: boolean } = {}
 
@@ -271,11 +274,21 @@ function Leaderboards.init()
 	end)
 	PlayerData.Leaving:Connect(function(player: Player, profile: Types.Profile)
 		latest[player] = LeaderboardRules.values(profile)
+		leavingWrites += 1
 		task.spawn(function()
 			writePlayer(player, true)
 			written[player] = nil
 			latest[player] = nil
+			leavingWrites -= 1
 		end)
+	end)
+	-- a closing server waits (a little) for the last writes of everyone
+	-- leaving (PlayerData fires Leaving for them when it closes)
+	game:BindToClose(function()
+		local deadline = os.clock() + SHUTDOWN_WAIT
+		while leavingWrites > 0 and os.clock() < deadline do
+			task.wait(0.1)
+		end
 	end)
 	CollectionService:GetInstanceAddedSignal(LeaderboardRules.BOARD_TAG):Connect(function()
 		task.defer(updateBoards) -- the map was rebuilt: fill the new board

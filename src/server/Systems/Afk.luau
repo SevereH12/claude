@@ -10,8 +10,8 @@
 -- every recomputeSeconds (a boost running out, a purchase, a Server Storm,
 -- a new Premium membership) and paid in whole Volts every payEverySeconds,
 -- the fraction carried over. Leaving the box stops it straight away (what
--- was earned so far is paid). Boosts keep counting down while AFK: they're
--- being used. The state goes in the snapshot (Sync.afk) for the AFK screen.
+-- was earned so far is paid; leaving the game pays it too). Boosts keep
+-- counting down while AFK: they're being used. The state goes in the snapshot (Sync.afk) for the AFK screen.
 --
 -- Staying connected: Roblox disconnects after about 20 idle minutes. While
 -- AFK the client answers Players.LocalPlayer.Idled with VirtualUser
@@ -146,12 +146,15 @@ local function logMinutes(session: Session, player: Player)
 	end
 end
 
-local function stop(player: Player)
+-- Ends the player's AFK session, paying what was earned so far. `leaving`
+-- is the profile of a player who is leaving (PlayerData.get no longer
+-- finds it then).
+local function stop(player: Player, leaving: Types.Profile?)
 	local session = sessions[player]
 	if not session then
 		return
 	end
-	local profile = PlayerData.get(player)
+	local profile = leaving or PlayerData.get(player)
 	if session.active and profile then
 		pay(player, session, profile)
 	end
@@ -356,12 +359,13 @@ function Afk.start()
 	for _, player in Players:GetPlayers() do
 		task.spawn(onPlayerAdded, player)
 	end
+	-- leaving (or the server closing): pay the last part of the AFK
+	-- earnings before PlayerData's final save
+	PlayerData.Leaving:Connect(function(player: Player, profile: Types.Profile)
+		stop(player, profile)
+	end)
 	Players.PlayerRemoving:Connect(function(player)
-		local session = sessions[player]
-		if session then
-			logMinutes(session, player)
-		end
-		sessions[player] = nil
+		stop(player) -- pays too, if this runs before PlayerData's leave step
 		rejoining[player] = nil
 		Sync.afk[player] = nil
 	end)

@@ -45,6 +45,7 @@ local Notifications = {}
 local optInRemote: RemoteEvent
 local map: MemoryStoreSortedMap? = nil
 local warned: { [string]: boolean } = {}
+local queueing = 0 -- reminders still being queued (a closing server waits for them)
 
 -- Logs a problem once per server (setup that's simply missing is printed,
 -- not warned: it isn't an error until the user sets it up).
@@ -209,7 +210,11 @@ local function onLeaving(player: Player, profile: Types.Profile)
 	end
 	local items = NotifyRules.plan(player.UserId, profile.lastDailyDay, profile.loginRun, os.time())
 	for _, item in items do
-		task.spawn(queueItem, item)
+		queueing += 1
+		task.spawn(function()
+			queueItem(item)
+			queueing -= 1
+		end)
 	end
 end
 
@@ -261,6 +266,12 @@ function Notifications.init()
 	Rewards.DailyClaimed:Connect(onDailyClaimed)
 	PlayerData.Loaded:Connect(onLoaded)
 	PlayerData.Leaving:Connect(onLeaving)
+	game:BindToClose(function()
+		local deadline = os.clock() + 10
+		while queueing > 0 and os.clock() < deadline do
+			task.wait(0.1)
+		end
+	end)
 	local _, problem = setupProblem("daily")
 	if problem then
 		logOnce(

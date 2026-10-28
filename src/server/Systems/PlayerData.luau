@@ -471,10 +471,16 @@ local function onPlayerRemoving(player: Player)
 	release(session)
 end
 
+-- The server is closing. BindToClose can run before PlayerRemoving, so
+-- this does the "player is leaving" step itself (the last leaderboard
+-- write, the reminders, the last AFK pay) before the final save.
 local function onShutdown()
 	for player, session in sessions do
 		sessions[player] = nil
-		task.spawn(release, session)
+		task.spawn(function()
+			PlayerData.Leaving:Fire(player, session.profile)
+			release(session)
+		end)
 	end
 	local deadline = os.clock() + SHUTDOWN_TIMEOUT
 	while pendingReleases > 0 and os.clock() < deadline do
