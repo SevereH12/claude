@@ -80,7 +80,7 @@ check(nextDay.day == 501 and nextDay.seconds == 0 and not nextDay.claimed[1], "a
 local broken = Rewards.playtimeToday({ day = 500, seconds = 0 / 0, claimed = "x" }, 500)
 check(broken.seconds == 0 and #broken.claimed == #gifts, "a broken save is cleaned up")
 local migrated18 = PlayerData.migrate({ version = 17, volts = 0, bottleTier = 1 })
-check(migrated18.version == 18 and migrated18.playtime.day == 0 and migrated18.playtime.seconds == 0, "the v18 migration adds playtime")
+check(migrated18.version >= 18 and migrated18.playtime.day == 0 and migrated18.playtime.seconds == 0, "the v18 migration adds playtime")
 
 -- the boost countdown, stacking and cap ---------------------------------------
 local left = {}

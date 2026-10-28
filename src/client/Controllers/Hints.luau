@@ -181,7 +181,9 @@ local function show(def: Types.HintDef)
 		`💡 {HintRules.text(def)}`,
 		"info",
 		SETTINGS.showSeconds,
-		if opener then { text = "OPEN", onTap = opener } else nil,
+		if opener
+			then { text = if def.open == "sell" then "SELL" else "OPEN", onTap = opener }
+			else nil,
 		true
 	)
 	if def.glow then

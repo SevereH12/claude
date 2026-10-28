@@ -25,7 +25,8 @@ Plant for Volts, and buy bigger bottles.
   leaderboards.
 - **Store** (everything off sale until the owner turns it on): 8 Game
   Passes, Volts packs, boosts and gifting.
-- **Settings**, sound and music, a new-player tutorial, phone
+- **Settings**, sound and music, a new-player tutorial and one-time
+  gameplay tips after it, phone
   notifications, an admin panel, error reports and server-side movement
   checks.
 - **Saving**: every player's profile saves with retries and session
@@ -318,8 +319,8 @@ server only stores what `Settings.sanitize` lets through.
   the player's own Roblox graphics level.
 - **Accessibility & HUD**: Reduce flashing, Camera shake, Colourblind rings
   (dashed rings with a ⚡ and a high-contrast zone colour set), Text size,
-  and switches for pop-ups, name tags, pass offers, chat announcements and
-  gift reminders. Before their first storm every player is asked once
+  and switches for pop-ups, name tags, pass offers, chat announcements,
+  gift reminders and gameplay tips. Before their first storm every player is asked once
   whether to reduce flashing. Warning rings always show.
 - Code reads settings with `Lib/SettingsStore` (`get`, `set`, `watch`,
   `Changed`), so changes apply at once.
@@ -483,6 +484,43 @@ of the screen with one line at a time:
   ascended) never sees it.
 - **Testing in Studio**: the TEST panel's REWARDS list has **Restart
   tutorial** (starts it again from step 1).
+
+**Gameplay tips** (`Config.HINTS`, `Util/Hints`, `Systems/Hints`,
+`Controllers/Hints`). After the tutorial, the rest of the game is shown a
+little at a time: when something becomes useful, a small two-line toast
+starting with 💡 appears for 8 seconds, and the button it's about glows
+softly for 20 seconds (the MENU button, then the right tile once the menu
+is open, or the SELL button or the server goal meter). Tapping the toast
+opens that panel. Each tip shows **once ever**.
+
+- **What they cover**: boots and storm drag, a new zone opening, a new
+  world's portal, Teleport, hiring a researcher, posting one, Glints,
+  promotions, the Storm Log, the daily streak, playtime gifts, quests and
+  rerolls, the TOP leaderboards, invites, the group bonus, Boosts, the AFK
+  Lounge, rare bolts, Supercells, events, the server goal and Surge, Remote
+  Sell (if you own it), Ascension (when you can), Settings and the friends
+  boost.
+- **When**: never during the tutorial, never with a panel or the menu
+  open, never while you're catching in a storm (or for 10 seconds after a
+  catch), never in the AFK Lounge, not in the first minute after joining
+  or after the tutorial, and at least 90 seconds apart. If several are
+  ready, the first in the list goes first.
+- **Editing them**: everything is in one list in `Config.HINTS` (near the
+  top of `Config.luau`): each tip's id, its trigger (`when`, and `minutes`
+  into the visit), its text, what tapping it opens and what glows. The
+  triggers themselves are short functions in `Util/Hints.CONDITIONS`.
+  Never rename an id (a renamed tip shows again to everyone).
+- **Saving**: the ids shown are saved in the profile (`hintsSeen`). The
+  client says when it showed one; the server only accepts known ids, a few
+  a minute. Players from before tips existed don't get tips for things
+  they've clearly done (hired a researcher, bought boots, claimed a daily
+  reward, been in two zones, ...).
+- **Turning them off**: ⚙️ SETTINGS → Accessibility & HUD → **Gameplay
+  tips**.
+- **Testing in Studio**: TEST → 🎁 REWARDS → **💡 Reset gameplay tips**
+  (every tip can show again; the first a few seconds later, and the
+  time-based ones straight away). `tools/harness/test_hints.luau` checks
+  the triggers, the order, the timing and the once-only rule.
 
 **Friends boost** (`Systems/Friends`): +5% Volts for each Roblox friend
 in your server, up to 3 (+15%). The server checks friendships when
@@ -716,7 +754,7 @@ lines.
     `StormLog`, `Ascension`, `Afk`, `ServerGoal`, `Boosts`, `Passes`,
     `PassPerks`, `Store`, `Receipts`, `RemoteSell`, `Gifts`, `Friends`,
     `Invites`, `Group`, `Leaderboards`, `Notifications`, `Settings`,
-    `Stats`, `Tutorial`, `Analytics`, `Admin`, `Errors`,
+    `Stats`, `Tutorial`, `Hints`, `Analytics`, `Admin`, `Errors`,
     `PrivateServer` and the Studio-only `DevCommands`.
   - `Lib/`: `MapBuilder` (builds the map) and `RateLimit`.
   - `World/`: the map framework and its three style packs (WeatherLab,
