@@ -1,8 +1,9 @@
 --!strict
 -- Developer Product receipts: the only code that sets
 -- MarketplaceService.ProcessReceipt. Gift products and boosts (for the
--- buyer or a gift) go to Systems/Gifts; a Server Storm (Systems/Boosts) and
--- Volts packs (Config.VOLT_PACKS) are granted here, to the buyer in this
+-- buyer or a gift) go to Systems/Gifts; a Server Storm (Systems/Boosts),
+-- Volts packs (Config.VOLT_PACKS) and Glint packs (Config.GLINT_PACKS,
+-- through Research.addGlints) are granted here, to the buyer in this
 -- server. Each purchase is granted exactly once: the profile remembers the
 -- newest purchase ids (Util/Store), and Roblox only hears PurchaseGranted
 -- once the grant has been saved; until then it asks again later (when the
@@ -18,12 +19,14 @@ local BoostRules = require(ReplicatedStorage.Shared.Util.Boosts)
 local Config = require(ReplicatedStorage.Shared.Config)
 local GiftRules = require(ReplicatedStorage.Shared.Util.Gifts)
 local Net = require(ReplicatedStorage.Shared.Net)
+local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local Store = require(ReplicatedStorage.Shared.Util.Store)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Analytics = require(script.Parent.Analytics)
 local Boosts = require(script.Parent.Boosts)
 local Gifts = require(script.Parent.Gifts)
 local PlayerData = require(script.Parent.PlayerData)
+local Research = require(script.Parent.Research)
 local Sync = require(script.Parent.Sync)
 
 local Receipts = {}
@@ -82,6 +85,17 @@ local function processReceipt(receipt: { [string]: any }): Enum.ProductPurchaseD
 			local left = Boosts.startStorm(player)
 			Analytics.serverStorm(player, math.round(left / 60))
 			purchasedRemote:FireClient(player, player.UserId, storm.key, 0)
+		end)
+	end
+	local glintPack = Store.glintPackById(receipt.ProductId)
+	if glintPack then
+		local name = Store.glintPackName(glintPack)
+		return forBuyer(receipt, name, function(player, profile)
+			Research.addGlints(player, glintPack.tier, glintPack.glints)
+			local balance = ResearchMath.glintsOf(profile.glints, glintPack.tier)
+			Analytics.glintPackBought(player, name, glintPack.glints, balance)
+			purchasedRemote:FireClient(player, player.UserId, glintPack.key, glintPack.glints)
+			print(`[Receipts] {player.Name} bought {name}`)
 		end)
 	end
 	local pack = packFor(receipt.ProductId)

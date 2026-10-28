@@ -437,6 +437,76 @@ local VOLT_PACKS: { Types.VoltPackDef } = {
 	},
 }
 
+-- Glint packs: Developer Products in the Boosts store's GLINTS tab, paid by
+-- Systems/Receipts through Research.addGlints. Each gives `glints` Glints
+-- of zone tier `tier` (named after that tier's first zone by
+-- Util/Store.glintPackName: "75 Mesa Glints"). Promotions to rank r use
+-- Glints of tier r or higher (Util/Research), so every tier from 1 to
+-- Research.maxRank() is sold, in the three GLINT_PACK_SIZES. A new zone
+-- tier only needs a new GLINT_PACK_IDS entry (test_store checks they're all
+-- there). Product ids (0 = not made yet: COMING SOON) and icons from
+-- tools/store/store_ids.json; `price` is Robux, shown only until Roblox's
+-- real price loads.
+local GLINT_PACK_SIZES = {
+	{ glints = 25, price = 49 },
+	{ glints = 75, price = 129 },
+	{ glints = 200, price = 299 },
+}
+-- per tier, one { productId, image } per size above
+local GLINT_PACK_IDS: { { { number } } } = {
+	-- Mesa
+	{
+		{ 3723409066, 106646452907190 },
+		{ 3723409071, 86050122499118 },
+		{ 3723409076, 110418945381056 },
+	},
+	-- Generator Yard
+	{
+		{ 3723409088, 93711400451731 },
+		{ 3723409096, 136067487656085 },
+		{ 3723409106, 109633642600836 },
+	},
+	-- Tidewire Beach
+	{
+		{ 3723409114, 103943102403916 },
+		{ 3723409122, 137356781076828 },
+		{ 3723409129, 86927726189030 },
+	},
+	-- Rune Spire
+	{
+		{ 3723409131, 96480493320873 },
+		{ 3723409136, 99593697135380 },
+		{ 3723409142, 125762760144431 },
+	},
+	-- Cloudshore
+	{
+		{ 3723409146, 102566545460570 },
+		{ 3723409151, 139171288068107 },
+		{ 3723409158, 94029678500929 },
+	},
+	-- Ember Mesa
+	{
+		{ 3723409167, 111224099727669 },
+		{ 3723409174, 123552861063810 },
+		{ 3723409178, 107282482238549 },
+	},
+}
+local GLINT_PACKS: { Types.GlintPackDef } = {}
+for tier, ids in GLINT_PACK_IDS do
+	for index, size in GLINT_PACK_SIZES do
+		local id = ids[index] or { 0, 0 }
+		local pack: Types.GlintPackDef = {
+			key = `Tier{tier}Glints{size.glints}`,
+			tier = tier,
+			glints = size.glints,
+			price = size.price,
+			productId = id[1],
+			image = id[2],
+		}
+		table.insert(GLINT_PACKS, pack)
+	end
+end
+
 -- Offers, the free 2x Volts trial and purchases (Controllers/Offers,
 -- Systems/Store, Systems/Receipts, Util/Store).
 local STORE = {
@@ -986,6 +1056,7 @@ return table.freeze({
 	VIP_GOLD = VIP_GOLD,
 	BOLT_COLOURS = table.freeze(BOLT_COLOURS),
 	VOLT_PACKS = table.freeze(VOLT_PACKS),
+	GLINT_PACKS = table.freeze(GLINT_PACKS),
 	STORE = table.freeze(STORE),
 	BOOSTS = table.freeze(BOOSTS),
 	BOOST_CAP = 2 * 60 * 60, -- seconds reward boosts can stack up to (bought time adds in full)

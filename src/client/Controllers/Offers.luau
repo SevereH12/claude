@@ -17,8 +17,8 @@
 --   (StartTrial, checked by Systems/Store: a 2x Volts boost). When any 2x
 --   Volts boost ends (the trial, a reward), a card says what it earned.
 --   Thanks: when anyone buys a pass, a chat line for everyone; the buyer
---   (of a pass, a Volts pack, a boost or a Server Storm) gets sparks and a
---   toast.
+--   (of a pass, a Volts or Glint pack, a boost or a Server Storm) gets
+--   sparks and a toast.
 -- Offers shown and tapped are reported for the stats (StoreEvent).
 
 local CollectionService = game:GetService("CollectionService")
@@ -330,6 +330,11 @@ local function onPurchased(userId: number, key: string, volts: number)
 	for _, pack in Config.VOLT_PACKS do
 		if pack.key == key then
 			UI.toast(`Thank you! +{Format.abbreviate(volts)} ⚡ Volts from {pack.name}`, "good", 5)
+		end
+	end
+	for _, pack in Config.GLINT_PACKS do
+		if pack.key == key then
+			UI.toast(`Thank you! +{Store.glintPackName(pack)} 💎`, "good", 5)
 		end
 	end
 end

@@ -1,4 +1,4 @@
-"""Loads store_items.json and adds the derived "giftPasses" group: a
+"""Loads store_items.json (passes, Volts packs, boosts, Glint packs) and adds the derived "giftPasses" group: a
 "Gift: <pass>" Developer Product for every game pass, at the same price.
 Shared by make_icons.py, create_store.py and upload_icons.py."""
 import json, os
@@ -6,7 +6,13 @@ import json, os
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # Which Open Cloud kind each group is created as.
-GROUP_KIND = {"passes": "pass", "products": "product", "giftPasses": "product", "boosts": "product"}
+GROUP_KIND = {"passes": "pass", "products": "product", "giftPasses": "product", "boosts": "product",
+              "glintPacks": "product"}
+
+# Groups whose NEW items are created on sale (the user's call for the Glint
+# packs). Every other new item starts off sale; items that already exist are
+# never changed.
+CREATE_ON_SALE = {"glintPacks"}
 
 
 def load():

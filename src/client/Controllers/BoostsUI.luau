@@ -1,6 +1,6 @@
 --!strict
--- Boosts panel (from the menu): the store. Three tabs, GAME PASSES, BOOSTS
--- and VOLTS, each a grid of cards (icon, name, what it gives, Robux price).
+-- Boosts panel (from the menu): the store. Four tabs, GAME PASSES, BOOSTS,
+-- VOLTS and GLINTS, each a grid of cards (icon, name, what it gives, Robux price).
 -- Prices are Roblox's (GetProductInfo: price optimization can personalise
 -- them); Config's only show until they load. BUY opens Roblox's purchase
 -- window, only ever when tapped; the server grants (Systems/Passes,
@@ -20,6 +20,10 @@
 --     left, and can't be bought while a purchase would pass its 60 minutes.
 --   VOLTS: Config.VOLT_PACKS, each showing this player's real amount (it
 --     grows with progress: Util/Store) and about how long it takes to catch.
+--   GLINTS: Config.GLINT_PACKS, one card per zone tier (its Glints pay for
+--     researcher promotions) with a BUY for each size, and how many of that
+--     tier's Glints you have. Tiers past your best zone are dimmed but
+--     still sold ("for promotions to rank N").
 -- The store reports visits, card taps and purchase windows for the stats
 -- (StoreEvent: Systems/Store). BoostsUI.openAt(key) opens it at one card
 -- (the offers' SEE).
@@ -35,12 +39,14 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Net = require(ReplicatedStorage.Shared.Net)
 local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
+local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local Store = require(ReplicatedStorage.Shared.Util.Store)
 local GiftRules = require(ReplicatedStorage.Shared.Util.Gifts)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Layout = require(script.Parent.Parent.Lib.Layout)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
+local ZoneColours = require(script.Parent.Parent.Lib.ZoneColours)
 local GiftUI = require(script.Parent.GiftUI)
 local State = require(script.Parent.State)
 
@@ -50,7 +56,8 @@ local CARD_HEIGHT = 168
 local CARD_GAP = 10
 local SWATCH_GAP = 10
 local TAB_HEIGHT = 46
-local TAB_COUNT = 3
+local TAB_COUNT = 4
+local DIM = 0.55 -- a Glint card for a tier you haven't reached
 local PINK = Color3.fromRGB(255, 120, 170) -- the GIFT buttons
 local SWATCH_HEIGHT = 56
 local DEFAULT_BOLT = Color3.fromRGB(120, 175, 255) -- StrikeFX's default glow
@@ -62,12 +69,25 @@ type Card = {
 	detail: string,
 	price: number,
 }
-type CardParts = { frame: Frame, buy: TextButton, detail: TextLabel, status: TextLabel }
+type CardParts = {
+	frame: Frame,
+	title: TextLabel,
+	buy: TextButton,
+	detail: TextLabel,
+	status: TextLabel,
+}
 type Tab = { button: TextButton, grid: ScrollingFrame }
 type Placed = { tab: Tab, order: number, parts: CardParts } -- where a card is, for openAt
 type PassCard = { pass: Types.PassDef, parts: CardParts, gift: TextButton }
 type PackCard = { pack: Types.VoltPackDef, parts: CardParts }
 type BoostCard = { product: Types.BoostProductDef, parts: CardParts }
+-- one zone tier's Glint packs (smallest first), a BUY each
+type GlintCard = {
+	tier: number,
+	packs: { Types.GlintPackDef },
+	parts: CardParts,
+	buttons: { TextButton },
+}
 type Swatch = { index: number, button: TextButton }
 
 local BoostsUI = {}
@@ -82,6 +102,7 @@ local placed: { [string]: Placed } = {} -- by pass, boost or pack key
 local passCards: { PassCard } = {}
 local packCards: { PackCard } = {}
 local boostCards: { BoostCard } = {}
+local glintCards: { GlintCard } = {}
 local prices: { [string]: number } = {} -- pass, boost or pack key -> Robux, from Roblox
 local picker: Frame
 local pickerGrid: UIGridLayout
@@ -207,6 +228,7 @@ local function buildCard(parent: Instance, order: number, card: Card, onLook: ()
 		UI.maxText(icon, 44)
 	end
 	local name = UI.label({
+		Name = "Title",
 		Title = true,
 		Text = string.upper(card.name),
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -244,7 +266,7 @@ local function buildCard(parent: Instance, order: number, card: Card, onLook: ()
 		Parent = frame,
 	})
 	UI.maxText(buy, 24)
-	return { frame = frame, buy = buy, detail = detail, status = status }
+	return { frame = frame, title = name, buy = buy, detail = detail, status = status }
 end
 
 -- Seconds left as a clock: "4:05", or "1:04:05" past an hour.
@@ -395,6 +417,30 @@ local function render()
 		else
 			parts.status.Text = `{Store.packTime(pack)} of catching`
 			UI.setEnabled(parts.buy, true, COLORS.green)
+		end
+	end
+	local reached = if snapshot then Store.reachedTier(snapshot) else 0
+	for _, card in glintCards do
+		local parts, tier = card.parts, card.tier
+		local have = if snapshot then ResearchMath.glintsOf(snapshot.glints, tier) else 0
+		parts.detail.Text = `You have {Format.abbreviate(have)} {Store.tierName(tier)} Glints`
+		-- a tier past your best zone: dimmed, but still for sale
+		local dim = tier > reached
+		parts.frame.BackgroundTransparency = if dim then DIM else 0
+		local icon = parts.frame:FindFirstChild("Icon")
+		if icon and icon:IsA("ImageLabel") then
+			icon.ImageTransparency = if dim then DIM else 0
+		end
+		parts.status.Text = `For promotions to rank {tier}`
+		parts.status.TextColor3 = if dim then COLORS.subtext else COLORS.volt
+		for index, pack in card.packs do
+			local button = card.buttons[index]
+			local price = Format.abbreviate(prices[pack.key] or pack.price)
+			button.Text = `+{pack.glints} 💎\n{ROBUX} {price}`
+			UI.setEnabled(button, pack.productId ~= 0, COLORS.green)
+			if pack.productId == 0 then
+				parts.status.Text = "COMING SOON"
+			end
 		end
 	end
 end
@@ -653,6 +699,61 @@ local function buildPackCard(tab: Tab, order: number, pack: Types.VoltPackDef)
 	loadPrice(pack.key, pack.productId, Enum.InfoType.Product)
 end
 
+-- One zone tier's Glint packs: the card's BUY becomes the first of three.
+local function buildGlintCard(tab: Tab, order: number, tier: number, packs: { Types.GlintPackDef })
+	local zone = ResearchMath.tierZone(tier)
+	local parts = buildCard(tab.grid, order, {
+		icon = "💎",
+		image = packs[math.min(2, #packs)].image,
+		name = `{Store.tierName(tier)} Glints`,
+		detail = "",
+		price = packs[1].price,
+	}, function()
+		storeEvent:FireServer("card", packs[1].key)
+	end)
+	parts.title.TextColor3 = ZoneColours.of(zone, COLORS.storm)
+	local buttons: { TextButton } = {}
+	local count = #packs
+	local gaps = 20 + 8 * (count - 1) -- 10 each side, 8 between
+	local step = 8 - gaps / count -- how far each button's offset moves on from the last
+	for index, pack in packs do
+		local button = parts.buy
+		if index > 1 then
+			button = UI.button({
+				Name = "Buy",
+				Text = "",
+				BackgroundColor3 = COLORS.green,
+				Parent = parts.frame,
+			})
+		end
+		-- `count` buttons across the bottom
+		button.AnchorPoint = Vector2.new(0, 1)
+		button.Position = UDim2.new((index - 1) / count, 10 + (index - 1) * step, 1, -10)
+		button.Size = UDim2.new(1 / count, -gaps / count, 0, 48)
+		local limit = button:FindFirstChildOfClass("UITextSizeConstraint")
+		if limit then
+			limit.MaxTextSize = 18 -- the card's own BUY (two lines now)
+		else
+			UI.maxText(button, 18)
+		end
+		button.Activated:Connect(function()
+			UI.pop(button)
+			storeEvent:FireServer("card", pack.key)
+			if pack.productId == 0 then
+				UI.toast(`{Store.glintPackName(pack)} is coming soon!`, "volt")
+				return
+			end
+			prompt(pack.key, function()
+				MarketplaceService:PromptProductPurchase(player, pack.productId)
+			end)
+		end)
+		table.insert(buttons, button)
+		placed[pack.key] = { tab = tab, order = order, parts = parts }
+		loadPrice(pack.key, pack.productId, Enum.InfoType.Product)
+	end
+	table.insert(glintCards, { tier = tier, packs = packs, parts = parts, buttons = buttons })
+end
+
 local function buildTab(body: Frame, order: number, title: string): Tab
 	-- TAB_COUNT tabs across, 6 apart
 	local button = UI.button({
@@ -706,6 +807,22 @@ function BoostsUI.init()
 	local voltTab = buildTab(window.body, 3, "VOLTS")
 	for index, pack in Config.VOLT_PACKS do
 		buildPackCard(voltTab, index, pack)
+	end
+	-- a card per zone tier, lowest first, its packs smallest first
+	local glintTab = buildTab(window.body, 4, "GLINTS")
+	for tier = 1, ResearchMath.maxRank() do
+		local packs: { Types.GlintPackDef } = {}
+		for _, pack in Config.GLINT_PACKS do
+			if pack.tier == tier then
+				table.insert(packs, pack)
+			end
+		end
+		table.sort(packs, function(a, b)
+			return a.glints < b.glints
+		end)
+		if #packs > 0 then
+			buildGlintCard(glintTab, #glintCards + 1, tier, packs)
+		end
 	end
 	buildPicker(window.body)
 	selectTab(passTab)

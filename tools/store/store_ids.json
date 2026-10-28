@@ -41,7 +41,25 @@
     "LuckyBoost": 96996679069158,
     "BigBottlesBoost": 73734835193406,
     "BoostBundle": 84026702746532,
-    "ServerStorm": 128152813396668
+    "ServerStorm": 128152813396668,
+    "Tier1Glints25": 106646452907190,
+    "Tier1Glints75": 86050122499118,
+    "Tier1Glints200": 110418945381056,
+    "Tier2Glints25": 93711400451731,
+    "Tier2Glints75": 136067487656085,
+    "Tier2Glints200": 109633642600836,
+    "Tier3Glints25": 103943102403916,
+    "Tier3Glints75": 137356781076828,
+    "Tier3Glints200": 86927726189030,
+    "Tier4Glints25": 96480493320873,
+    "Tier4Glints75": 99593697135380,
+    "Tier4Glints200": 125762760144431,
+    "Tier5Glints25": 102566545460570,
+    "Tier5Glints75": 139171288068107,
+    "Tier5Glints200": 94029678500929,
+    "Tier6Glints25": 111224099727669,
+    "Tier6Glints75": 123552861063810,
+    "Tier6Glints200": 107282482238549
   },
   "giftPasses": {
     "GiftDoubleVolts": 3721137563,
@@ -59,5 +77,25 @@
     "BigBottlesBoost": 3721137685,
     "BoostBundle": 3721137691,
     "ServerStorm": 3721137706
+  },
+  "glintPacks": {
+    "Tier1Glints25": 3723409066,
+    "Tier1Glints75": 3723409071,
+    "Tier1Glints200": 3723409076,
+    "Tier2Glints25": 3723409088,
+    "Tier2Glints75": 3723409096,
+    "Tier2Glints200": 3723409106,
+    "Tier3Glints25": 3723409114,
+    "Tier3Glints75": 3723409122,
+    "Tier3Glints200": 3723409129,
+    "Tier4Glints25": 3723409131,
+    "Tier4Glints75": 3723409136,
+    "Tier4Glints200": 3723409142,
+    "Tier5Glints25": 3723409146,
+    "Tier5Glints75": 3723409151,
+    "Tier5Glints200": 3723409158,
+    "Tier6Glints25": 3723409167,
+    "Tier6Glints75": 3723409174,
+    "Tier6Glints200": 3723409178
   }
 }

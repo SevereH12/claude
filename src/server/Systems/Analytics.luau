@@ -409,6 +409,23 @@ function Analytics.packBought(player: Player, pack: Types.VoltPackDef, volts: nu
 	Analytics.storeStep(player, 4)
 end
 
+-- A Glint pack was paid out: `glints` Glints in, `balance` that tier's
+-- Glints now (Glints are their own currency in the economy stats).
+function Analytics.glintPackBought(player: Player, name: string, glints: number, balance: number)
+	send(`economy {name}`, function()
+		AnalyticsService:LogEconomyEvent(
+			player,
+			Enum.AnalyticsEconomyFlowType.Source,
+			"Glints",
+			glints,
+			balance,
+			"IAP",
+			name
+		)
+	end)
+	Analytics.storeStep(player, 4)
+end
+
 local function onLoaded(player: Player, profile: Types.Profile)
 	local session: Session = { joinedAt = os.clock(), profile = profile, reached = {} }
 	sessions[player] = session

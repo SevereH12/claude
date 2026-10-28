@@ -377,6 +377,16 @@ export type VoltPackDef = {
 	price: number, -- Robux, a fallback until the real price loads
 }
 
+-- A Glint pack (Config.GLINT_PACKS): `glints` Glints of zone tier `tier`.
+export type GlintPackDef = {
+	key: string,
+	tier: number, -- the zone tier (Util/Research): pays for promotions up to this rank
+	glints: number,
+	productId: number, -- Developer Product id (0 = not created yet)
+	image: number, -- icon asset id (0 = draw a gem)
+	price: number, -- Robux, a fallback until the real price loads
+}
+
 -- A lightning colour Bolt Colours owners can pick (Config.BOLT_COLOURS).
 export type BoltColourDef = {
 	name: string,
