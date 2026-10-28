@@ -14,8 +14,10 @@
 --   ├── EventChip    under that, while a scheduled event is on (Config.EVENTS,
 --   │                Util/Weather): "🎉 Double Volts Weekend 2x · 1d 4h"
 --   ├── FriendsChip  "👥 +10% friends" while Roblox friends are in your server
---   │                (Systems/Friends): under the boosts (under the server
---   │                goal meter on a sideways phone or tablet)
+--   │                (Systems/Friends): under the boosts' chips
+--   │  Every chip is sized for its text (LayoutMath.chipText/chipWidth) and
+--   │  shows the longest wording that fits it (LayoutMath.fitText), so a
+--   │  number is never cut off on any screen or Text size.
 --   ├── ServerGoal   a slim meter under that (Systems/ServerGoal, read from
 --   │                workspace attributes): "⚡ Server goal 62%", or the
 --   │                Server Surge's time left while one is on. Tap it: a
@@ -24,7 +26,9 @@
 --   │                with the Chemist's TANK count beside it
 --   └── RemoteSell   Remote Sell pass owners: a SELL button at the bar's
 --                    right end (the bar shrinks to make room); it charges
---                    up for 1.5s, then sells (keyboard V, gamepad L1).
+--                    up for 1.5s, then sells (keyboard V, gamepad L1). Its
+--                    own outline turns into a yellow ring that fills left
+--                    to right while it charges and while it recharges.
 --                    Without the pass it shows locked while a full bottle is
 --                    far from a station (HUD.setSellNudge: Controllers/Offers)
 -- The MENU button (shop, research, teleport, boosts) is Controllers/Menu.
@@ -55,6 +59,7 @@ local COLORS = UI.COLORS
 local FULL_PULSE = TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
 local SURGE_COLOR = Color3.fromRGB(90, 220, 255) -- the server goal meter's fill
 local SELL_WIDTH = 104 -- design pixels the SELL button takes from the bar's slot
+local SELL_RING = 4 -- the charge ring's thickness (the button's usual outline is 3)
 
 local HUD = {}
 
@@ -70,8 +75,8 @@ local bottleLabel: TextLabel
 local bottleValue: TextLabel
 local tankLabel: TextLabel
 local sellButton: TextButton
-local sellRing: Frame
-local sellProgress: UIGradient
+local sellStroke: UIStroke -- the SELL button's own outline: the charge ring while it charges
+local sellProgress: UIGradient -- on that outline: yellow up to the charge, dark after
 local hasRemoteSell = false
 local sellNudge: (() -> ())? = nil -- set while the locked SELL shows: what a tap does
 local boostRow: Frame
@@ -80,6 +85,7 @@ local boostChips: { [string]: TextLabel } = {} -- by boost key
 local stormChip: TextLabel
 local eventChip: TextLabel
 local friendsChip: TextLabel
+local friendsCount = 0 -- Roblox friends in the server (the last snapshot's)
 local goalMeter: TextButton
 local goalMeterFill: Frame
 local goalMeterLabel: TextLabel
@@ -282,6 +288,40 @@ local function buildBottleBar()
 	UI.maxText(tankLabel, 20)
 end
 
+-- Room each side of a chip's text (LayoutMath.CHIP_PAD), so its rounded
+-- ends never cover the first or last letter.
+local function padChip(label: TextLabel)
+	local pad = label:FindFirstChildOfClass("UIPadding")
+		or UI.make(Instance.new("UIPadding"), { Parent = label })
+	pad.PaddingLeft = UDim.new(0, LayoutMath.CHIP_PAD)
+	pad.PaddingRight = UDim.new(0, LayoutMath.CHIP_PAD)
+end
+
+-- A rounded chip: title-font text on a coloured pill, hidden until shown.
+local function makeChip(name: string, color: Color3, parent: Instance): TextLabel
+	local label = UI.label({
+		Title = true,
+		Name = name,
+		Text = "",
+		Visible = false,
+		TextColor3 = COLORS.text,
+		BackgroundColor3 = color,
+		BackgroundTransparency = 0,
+		Parent = parent,
+	})
+	UI.corner(label, UDim.new(0.5, 0))
+	UI.stroke(label, 2)
+	UI.maxText(label, 18)
+	padChip(label)
+	return label
+end
+
+-- The longest of `options` that fits a chip as wide as `rect` (see
+-- LayoutMath.fitText): long names give way to the time, never the reverse.
+local function fit(options: { string }, rect: LayoutMath.Rect): string
+	return LayoutMath.fitText(options, rect.w, Layout.chipText())
+end
+
 -- A chip per boost (Config.BOOSTS order), shown while it runs.
 local BOOST_COLORS: { [string]: Color3 } = {
 	DoubleVolts = COLORS.voltDeep,
@@ -301,73 +341,25 @@ local function buildBoostRow()
 		Parent = boostRow,
 	})
 	for index, boost in Config.BOOSTS do
-		local chip = UI.label({
-			Title = true,
-			Name = boost.key,
-			LayoutOrder = index,
-			Text = "",
-			Visible = false,
-			TextColor3 = COLORS.text,
-			BackgroundColor3 = BOOST_COLORS[boost.key] or COLORS.panelTop,
-			BackgroundTransparency = 0,
-			Parent = boostRow,
-		})
-		UI.corner(chip, UDim.new(0.5, 0))
-		UI.stroke(chip, 2)
-		UI.maxText(chip, 18)
-		boostChips[boost.key] = chip
+		local boostChip = makeChip(boost.key, BOOST_COLORS[boost.key] or COLORS.panelTop, boostRow)
+		boostChip.LayoutOrder = index
+		boostChips[boost.key] = boostChip
 	end
 end
 
 -- The Server Storm's chip under the goal card.
 local function buildStormChip()
-	stormChip = UI.label({
-		Title = true,
-		Name = "StormChip",
-		Text = "",
-		Visible = false,
-		TextColor3 = COLORS.text,
-		BackgroundColor3 = Color3.fromRGB(130, 70, 230),
-		BackgroundTransparency = 0,
-		Parent = screenGui,
-	})
-	UI.corner(stormChip, UDim.new(0.5, 0))
-	UI.stroke(stormChip, 2)
-	UI.maxText(stormChip, 18)
+	stormChip = makeChip("StormChip", Color3.fromRGB(130, 70, 230), screenGui)
 end
 
 -- A scheduled event's chip under the Server Storm's.
 local function buildEventChip()
-	eventChip = UI.label({
-		Title = true,
-		Name = "EventChip",
-		Text = "",
-		Visible = false,
-		TextColor3 = COLORS.text,
-		BackgroundColor3 = Color3.fromRGB(230, 150, 20),
-		BackgroundTransparency = 0,
-		Parent = screenGui,
-	})
-	UI.corner(eventChip, UDim.new(0.5, 0))
-	UI.stroke(eventChip, 2)
-	UI.maxText(eventChip, 18)
+	eventChip = makeChip("EventChip", Color3.fromRGB(230, 150, 20), screenGui)
 end
 
 -- The friends boost's chip (shown while a friend is in the server).
 local function buildFriendsChip()
-	friendsChip = UI.label({
-		Title = true,
-		Name = "FriendsChip",
-		Text = "",
-		Visible = false,
-		TextColor3 = COLORS.text,
-		BackgroundColor3 = Color3.fromRGB(60, 170, 110),
-		BackgroundTransparency = 0,
-		Parent = screenGui,
-	})
-	UI.corner(friendsChip, UDim.new(0.5, 0))
-	UI.stroke(friendsChip, 2)
-	UI.maxText(friendsChip, 18)
+	friendsChip = makeChip("FriendsChip", Color3.fromRGB(60, 170, 110), screenGui)
 end
 
 -- The server goal meter under the event chip: a fill bar with its text on
@@ -405,6 +397,7 @@ local function buildGoalMeter()
 		Parent = goalMeter,
 	})
 	UI.maxText(goalMeterLabel, 16)
+	padChip(goalMeterLabel)
 	goalMeter.Activated:Connect(function()
 		UI.pop(goalMeter)
 		local top = Weather.decodeTop(workspace:GetAttribute(Weather.GOAL_TOP))
@@ -420,7 +413,10 @@ local function buildGoalMeter()
 	end)
 end
 
--- The SELL button's charge-up ring: an outline that fills left to right.
+-- The SELL button. Its charge ring is the button's own outline (so it
+-- follows the rounded corners exactly): while it charges or recharges the
+-- outline turns into a thicker ring, yellow from the left up to how far it
+-- has got and dark after; when it's ready it's a plain outline again.
 local function buildSellButton()
 	sellButton = UI.button({
 		Name = "RemoteSell",
@@ -431,23 +427,21 @@ local function buildSellButton()
 	})
 	UI.maxText(sellButton, 26)
 	UI.padHint(sellButton, "RemoteSell")
-	sellRing = UI.make(Instance.new("Frame"), {
+	-- UI.button gives it two outlines: the border (Border) and the text's (Contextual)
+	local border: UIStroke? = nil
+	for _, child in sellButton:GetChildren() do
+		if child:IsA("UIStroke") and child.ApplyStrokeMode == Enum.ApplyStrokeMode.Border then
+			border = child
+		end
+	end
+	assert(border, "UI.button makes an outline")
+	sellStroke = border
+	sellStroke.LineJoinMode = Enum.LineJoinMode.Round
+	sellProgress = UI.make(Instance.new("UIGradient"), {
 		Name = "ChargeRing",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.new(1, 10, 1, 10),
-		BackgroundTransparency = 1,
-		Visible = false,
-		ZIndex = 4,
-		Parent = sellButton,
+		Enabled = false,
+		Parent = sellStroke,
 	})
-	UI.corner(sellRing, UDim.new(0.3, 0))
-	local stroke = UI.make(Instance.new("UIStroke"), {
-		Thickness = 4,
-		Color = COLORS.volt,
-		Parent = sellRing,
-	})
-	sellProgress = UI.make(Instance.new("UIGradient"), { Parent = stroke })
 	sellButton.Activated:Connect(function()
 		local nudge = sellNudge
 		if hasRemoteSell then
@@ -470,17 +464,30 @@ function HUD.setSellNudge(onTap: (() -> ())?)
 	HUD.place()
 end
 
-local function setSellProgress(fraction: number)
-	if fraction <= 0.001 then
-		sellProgress.Transparency = NumberSequence.new(1)
-	elseif fraction >= 0.999 then
-		sellProgress.Transparency = NumberSequence.new(0)
+-- The charge ring: `fraction` (0 to 1) of it yellow, from the left; nil
+-- puts the plain outline back. The gradient tints the outline (it
+-- multiplies its colour), so the outline goes white while the ring shows.
+local function setSellRing(fraction: number?)
+	if fraction == nil then
+		sellProgress.Enabled = false
+		sellStroke.Color = COLORS.stroke
+		sellStroke.Thickness = 3
+		return
+	end
+	local filled = math.clamp(fraction, 0, 1)
+	sellStroke.Color = Color3.new(1, 1, 1)
+	sellStroke.Thickness = SELL_RING
+	sellProgress.Enabled = true
+	if filled <= 0.001 then
+		sellProgress.Color = ColorSequence.new(COLORS.stroke)
+	elseif filled >= 0.998 then
+		sellProgress.Color = ColorSequence.new(COLORS.volt)
 	else
-		sellProgress.Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 0),
-			NumberSequenceKeypoint.new(fraction, 0),
-			NumberSequenceKeypoint.new(fraction + 0.001, 1),
-			NumberSequenceKeypoint.new(1, 1),
+		sellProgress.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, COLORS.volt),
+			ColorSequenceKeypoint.new(filled, COLORS.volt),
+			ColorSequenceKeypoint.new(filled + 0.001, COLORS.stroke),
+			ColorSequenceKeypoint.new(1, COLORS.stroke),
 		})
 	end
 end
@@ -501,26 +508,31 @@ function HUD.remoteSell()
 	UI.pop(sellButton)
 	task.spawn(function()
 		local values = Config.PASS_VALUES
-		sellRing.Visible = true
+		-- charge up: the ring fills, then it sells
 		sellButton.Text = "..."
 		local started = os.clock()
 		while os.clock() - started < values.remoteSellChargeUp do
-			setSellProgress((os.clock() - started) / values.remoteSellChargeUp)
+			setSellRing((os.clock() - started) / values.remoteSellChargeUp)
 			RunService.RenderStepped:Wait()
 		end
-		sellRing.Visible = false
-		setSellProgress(0)
 		Net.get("RemoteSell"):FireServer()
 		sellCharging = false
-		-- greyed out with a countdown until the server's cooldown is over
-		sellReadyAt = os.clock() + values.remoteSellCooldown
+		-- recharge: greyed out with a countdown until the server's cooldown is
+		-- over, the ring filling again from empty; ready: the ring goes
+		local cooldown = values.remoteSellCooldown
+		local cooldownStart = os.clock()
+		sellReadyAt = cooldownStart + cooldown
 		UI.setEnabled(sellButton, false, COLORS.green)
 		while os.clock() < sellReadyAt do
+			setSellRing((os.clock() - cooldownStart) / cooldown)
 			sellButton.Text = tostring(math.ceil(sellReadyAt - os.clock()))
-			task.wait(0.2)
+			RunService.RenderStepped:Wait()
 		end
-		sellButton.Text = "SELL"
-		UI.setEnabled(sellButton, true, COLORS.green)
+		setSellRing(nil)
+		if hasRemoteSell then
+			sellButton.Text = "SELL"
+			UI.setEnabled(sellButton, true, COLORS.green)
+		end
 	end)
 end
 
@@ -534,8 +546,16 @@ local function renderBoosts()
 		local left = if ends then math.ceil(ends - now) else 0
 		chip.Visible = left > 0
 		if left > 0 then
-			local clock = if left >= 3600
-				then string.format("%d:%02d:%02d", left // 3600, left // 60 % 60, left % 60)
+			-- the chips are sized for "⚡ 1:05:00" (LayoutMath.BOOST_SAMPLE);
+			-- ten hours or more shows hours only
+			local clock = if left >= 36000
+				then `{left // 3600}h`
+				elseif left >= 3600 then string.format(
+					"%d:%02d:%02d",
+					left // 3600,
+					left // 60 % 60,
+					left % 60
+				)
 				else string.format("%d:%02d", left // 60, left % 60)
 			chip.Text = `{boost.icon} {clock}`
 			chip.LayoutOrder = index
@@ -554,9 +574,14 @@ local function renderServerStorm()
 	stormChip.Visible = left > 0
 	if left > 0 then
 		local by = workspace:GetAttribute(BoostRules.STORM_BY)
-		local name = if typeof(by) == "string" then ` · {by}` else ""
-		stormChip.Text =
-			string.format("🌩️ SERVER 2x%s · %d:%02d", name, left // 60, left % 60)
+		local clock = string.format("%d:%02d", left // 60, left % 60)
+		local options: { string } = {}
+		if typeof(by) == "string" and by ~= "" then
+			table.insert(options, `🌩️ SERVER 2x · {by} · {clock}`)
+		end
+		table.insert(options, `🌩️ SERVER 2x · {clock}`)
+		table.insert(options, `🌩️ 2x · {clock}`)
+		stormChip.Text = fit(options, Layout.hud.serverStorm)
 	end
 end
 
@@ -566,8 +591,13 @@ local function renderEvent()
 	eventChip.Visible = active ~= nil
 	if active then
 		local event = active.event
-		eventChip.Text =
-			`🎉 {event.name} {event.multiplier}x · {Weather.formatLeft(active.left)}`
+		local left = Weather.formatLeft(active.left)
+		eventChip.Text = fit({
+			`🎉 {event.name} {event.multiplier}x · {left}`,
+			`🎉 {event.name} · {left}`,
+			`🎉 {event.multiplier}x EVENT · {left}`,
+			`🎉 {event.multiplier}x · {left}`,
+		}, Layout.hud.event)
 	end
 end
 
@@ -586,15 +616,18 @@ local function renderGoalMeter()
 	)
 	if surge > 0 then
 		goalMeter.BackgroundColor3 = Color3.fromRGB(30, 110, 150)
-		goalMeterLabel.Text = string.format(
-			"⚡ SERVER SURGE %dx · %d:%02d",
-			Config.SERVER_GOAL.multiplier,
-			surge // 60,
-			surge % 60
-		)
+		local multiplier = Config.SERVER_GOAL.multiplier
+		local clock = string.format("%d:%02d", surge // 60, surge % 60)
+		goalMeterLabel.Text = fit({
+			`⚡ SERVER SURGE {multiplier}x · {clock}`,
+			`⚡ SURGE {multiplier}x · {clock}`,
+			`⚡ {multiplier}x · {clock}`,
+		}, Layout.hud.serverGoal)
 	else
 		goalMeter.BackgroundColor3 = COLORS.panelDark
-		goalMeterLabel.Text = `⚡ Server goal {math.floor(fraction * 100)}%`
+		local percent = math.floor(fraction * 100)
+		goalMeterLabel.Text =
+			fit({ `⚡ Server goal {percent}%`, `⚡ Goal {percent}%` }, Layout.hud.serverGoal)
 	end
 end
 
@@ -663,6 +696,16 @@ local function renderGoal(snapshot: Types.Snapshot)
 		else `{Format.abbreviate(snapshot.volts)} / {Format.abbreviate(goal.price)} ⚡`
 end
 
+-- The friends chip: "👥 +10% friends", or "👥 +10%" where that won't fit.
+local function renderFriends()
+	local text = Social.chipText(friendsCount)
+	friendsChip.Visible = text ~= ""
+	if text ~= "" then
+		local short = string.gsub(text, " friends$", "")
+		friendsChip.Text = fit({ text, short }, Layout.hud.friends)
+	end
+end
+
 local function render(snapshot: Types.Snapshot)
 	if lastChargeCount < 0 then
 		displayedVolts.Value = snapshot.volts -- loading in: no count-up
@@ -670,9 +713,8 @@ local function render(snapshot: Types.Snapshot)
 		TweenService:Create(displayedVolts, UI.TWEEN.countUp, { Value = snapshot.volts }):Play()
 	end
 	renderGoal(snapshot)
-	local friendsText = Social.chipText(snapshot.friends or 0)
-	friendsChip.Visible = friendsText ~= ""
-	friendsChip.Text = friendsText
+	friendsCount = snapshot.friends or 0
+	renderFriends()
 
 	local bottle = Formulas.bottle(snapshot.bottleTier)
 	local capacity = snapshot.capacity -- Big Bottles included
@@ -722,19 +764,24 @@ function HUD.place()
 	UI.place(eventChip, hud.event)
 	UI.place(goalMeter, hud.serverGoal)
 	UI.place(friendsChip, hud.friends)
-	-- the boosts' chips: three across a row, or stacked in a column
+	-- the boosts' chips: across a row, or stacked in a column (LayoutMath
+	-- sized either for the whole of "⚡ 1:05:00")
 	local boosts = hud.boosts
 	UI.place(boostRow, boosts)
-	local across = boosts.w > boosts.h
+	local count = LayoutMath.HUD.boostCount
+	local gap = LayoutMath.GAP
+	local chipHeight = LayoutMath.chipHeight(Layout.chipText())
+	local across = boosts.h < 2 * chipHeight
 	boostList.FillDirection = if across
 		then Enum.FillDirection.Horizontal
 		else Enum.FillDirection.Vertical
 	local chipSize = if across
-		then UDim2.new(1 / 3, -LayoutMath.GAP, 1, 0)
-		else UDim2.new(1, 0, 0, LayoutMath.HUD.boostHeight)
-	for _, chip in boostChips do
-		chip.Size = chipSize
+		then UDim2.fromOffset((boosts.w - (count - 1) * gap) / count, boosts.h)
+		else UDim2.fromOffset(boosts.w, chipHeight)
+	for _, boostChip in boostChips do
+		boostChip.Size = chipSize
 	end
+	renderFriends()
 	local bar = hud.bar
 	local showSell = hasRemoteSell or sellNudge ~= nil
 	sellButton.Visible = showSell

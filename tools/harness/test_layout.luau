@@ -70,7 +70,40 @@ for _, level in { 0, 1, 2 } do
 				right = (viewport.X - TOPBAR_RIGHT) / scale,
 				height = TOPBAR / scale,
 			}
-		local hud = LayoutMath.hud(got, area, topbar)
+		local chipText = LayoutMath.chipText(got, scale, level)
+		local hud = LayoutMath.hud(got, area, topbar, nil, chipText)
+		-- chips: tall enough for their text at the smallest size Roblox may
+		-- draw it, and wide enough for the whole of it (no cut-off numbers)
+		check(
+			chipText >= LayoutMath.minTextSize(got, scale, level),
+			`{name}: chips are sized for at least the smallest text`
+		)
+		local chipH = LayoutMath.chipHeight(chipText)
+		local count = LayoutMath.HUD.boostCount
+		local G = LayoutMath.GAP
+		local across = hud.boosts.h < 2 * chipH
+		local boostChip = if across
+			then Vector2.new((hud.boosts.w - (count - 1) * G) / count, hud.boosts.h)
+			else Vector2.new(hud.boosts.w, (hud.boosts.h - (count - 1) * G) / count)
+		check(
+			boostChip.X + 1e-6 >= LayoutMath.chipWidth(LayoutMath.BOOST_SAMPLE, chipText),
+			`{name}: a boost chip fits "{LayoutMath.BOOST_SAMPLE}" ({boostChip.X} wide)`
+		)
+		check(boostChip.Y + 1e-6 >= chipH, `{name}: a boost chip is tall enough for its text`)
+		-- every other chip's shortest wording fits (the HUD shows the longest that does)
+		local shortest = {
+			serverStorm = "🌩️ 2x · 59:59",
+			event = "🎉 2x · 23h 59m",
+			serverGoal = "⚡ 2x · 59:59",
+			friends = "👥 +50%",
+		}
+		for key, text in shortest do
+			check(
+				LayoutMath.chipWidth(text, chipText) <= hud[key].w,
+				`{name}: {key} fits "{text}"`
+			)
+			check(hud[key].h >= chipText + 6, `{name}: {key} is tall enough for its text`)
+		end
 		for _, block in LayoutMath.topbarBlocks(area, topbar) do
 			for key, r in hud do
 				check(
@@ -96,7 +129,7 @@ for _, level in { 0, 1, 2 } do
 		-- while the tutorial shows, its step card takes the toasts' place and
 		-- they (and the zone banner) move under it: everything still fits,
 		-- and the card stays clear of every HUD piece and the thumb controls
-		local withCard = LayoutMath.hud(got, area, topbar, true)
+		local withCard = LayoutMath.hud(got, area, topbar, true, chipText)
 		for key, r in withCard do
 			if key ~= "test" then
 				check(LayoutMath.inside(r, area), `{name} (tutorial): {key} is on screen`)
@@ -223,6 +256,19 @@ check(
 	LayoutMath.scale("Desktop", Vector2.new(3840, 2160))
 		== 2 * LayoutMath.scale("Desktop", Vector2.new(1920, 1080)),
 	"4K is twice 1080p"
+)
+-- the HUD picks the longest wording that fits, else the shortest
+check(
+	LayoutMath.fitText({ "a long long long long text", "short" }, 80, 14) == "short",
+	"fitText falls back to a shorter wording"
+)
+check(
+	LayoutMath.fitText({ "fits", "f" }, 200, 14) == "fits",
+	"fitText keeps the full wording when it fits"
+)
+check(
+	LayoutMath.textWidth("⚡ 1:05:00", 10) > LayoutMath.textWidth("⚡ 14:32", 10),
+	"a longer time is measured wider"
 )
 local laptopWithPad = { touch = false, keyboard = true, gamepad = true, preferred = "Gamepad" }
 check(

@@ -87,7 +87,8 @@ LayoutMath.HUD = table.freeze({
 	barHeight = 52,
 	menuSize = 84,
 	boostHeight = 28, -- one boost chip
-	boostWidth = 78, -- one chip in the sideways column
+	boostWidth = 78, -- one chip in the sideways column (at least; wider when its text needs it)
+	boostCount = 3, -- boost chips (Config.BOOSTS)
 	serverGoalHeight = 24, -- the slim server goal meter
 	cardWidth = 398, -- three tiles of 118 + gaps of 10 + padding 12 each side
 	cardHeight = 214, -- two rows of 90 + gap 10 + padding 12 each side
@@ -188,6 +189,76 @@ function LayoutMath.fit(design: Vector2, area: Vector2): Vector2
 	return Vector2.new(math.min(design.X, area.X - edge), math.min(design.Y, area.Y - edge))
 end
 
+-- Chips (the boosts' "⚡ 14:32", the Server Storm's, an event's, the friends
+-- chip, the Server Surge text) ------------------------------------------------
+-- Their text is the title font (Luckiest Guy), scaled to fit. Roblox can
+-- shrink it only down to the smallest text size (minTextSize: bigger on a
+-- phone and with a bigger Text size setting); a chip too narrow for its
+-- text at that size cuts the text off. So chips are sized here for their
+-- text at CHIP_TEXT (or the smallest text size, if that's bigger), and the
+-- HUD picks the longest wording that fits (LayoutMath.fitText).
+LayoutMath.CHIP_TEXT = 14 -- design pixels: chips are at least this big for their text
+LayoutMath.CHIP_PAD = 8 -- design pixels left clear each side of a chip's text (its rounded ends)
+LayoutMath.BOOST_SAMPLE = "⚡ 1:05:00" -- the widest a boost chip's text gets
+
+-- The text size chips are sized for on this device and Text size setting.
+function LayoutMath.chipText(class: DeviceClass, scale: number, textLevel: number?): number
+	return math.max(LayoutMath.CHIP_TEXT, LayoutMath.minTextSize(class, scale, textLevel))
+end
+
+-- A chip's height for text of `size`.
+function LayoutMath.chipHeight(size: number): number
+	return math.max(LayoutMath.HUD.boostHeight, size + 10)
+end
+
+-- How wide `text` is in the title font at `size` (design pixels). An
+-- estimate on the safe side (measured from Luckiest Guy, every glyph rounded
+-- up): it's never narrower than the real text.
+local NARROW = {
+	[" "] = true,
+	[":"] = true,
+	["."] = true,
+	[","] = true,
+	["'"] = true,
+	["!"] = true,
+	["|"] = true,
+}
+local WIDE = { m = true, w = true, M = true, W = true, ["%"] = true, ["@"] = true }
+function LayoutMath.textWidth(text: string, size: number): number
+	local ems = 0
+	for _, code in utf8.codes(text) do
+		local char = utf8.char(code)
+		if code == 0xFE0F or code == 0x200D then
+			continue -- emoji style marks and joiners take no room
+		elseif code == 0xB7 or NARROW[char] then
+			ems += 0.3
+		elseif code > 0x7F then
+			ems += 1.3 -- an emoji or another symbol
+		elseif WIDE[char] then
+			ems += 0.95
+		else
+			ems += 0.71
+		end
+	end
+	return ems * size
+end
+
+-- The width a chip needs to show `text` at `size`, its padding included.
+function LayoutMath.chipWidth(text: string, size: number): number
+	return math.ceil(LayoutMath.textWidth(text, size) + 2 * LayoutMath.CHIP_PAD)
+end
+
+-- The first of `options` (longest wording first) that fits a chip `width`
+-- wide at text `size`; the last (shortest) if none does.
+function LayoutMath.fitText(options: { string }, width: number, size: number): string
+	for _, text in options do
+		if LayoutMath.chipWidth(text, size) <= width then
+			return text
+		end
+	end
+	return options[#options]
+end
+
 local function rect(x: number, y: number, w: number, h: number): Rect
 	return { x = x, y = y, w = w, h = h }
 end
@@ -210,7 +281,14 @@ end
 -- `tutorial`: the tutorial's step card is showing (Controllers/Tutorial):
 -- it takes the toasts' place and they move down under it; the zone banner
 -- covers the card while it shows.
-function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?, tutorial: boolean?): Hud
+-- `chipText`: the text size chips are sized for (LayoutMath.chipText).
+function LayoutMath.hud(
+	class: DeviceClass,
+	area: Vector2,
+	topbar: Topbar?,
+	tutorial: boolean?,
+	chipText: number?
+): Hud
 	local H = LayoutMath.HUD
 	local M, G = LayoutMath.MARGIN, LayoutMath.GAP
 	local W, T = area.X, area.Y
@@ -232,35 +310,59 @@ function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?, tuto
 	-- timer, but a phone or tablet held sideways is short of height (MENU
 	-- must stay above the thumbstick), so there they're a column beside
 	-- Volts, below a bottle bar along the top.
+	-- every chip is tall enough for its text, and a boost chip wide enough
+	-- for "⚡ 1:05:00" (BOOST_SAMPLE)
+	local textSize = chipText or LayoutMath.CHIP_TEXT
+	local chipH = LayoutMath.chipHeight(textSize)
+	local boostW = LayoutMath.chipWidth(LayoutMath.BOOST_SAMPLE, textSize)
+	local count = H.boostCount
 	local volts = rect(M, topFor(M, H.statWidth), H.statWidth, H.voltsHeight)
 	local storm = rect(M, volts.y + volts.h + G, H.statWidth, H.stormHeight)
-	local boosts = if touch and not upright
-		then rect(
+	local goalX = W - M - H.goalWidth
+	local sideways = touch and not upright
+	local column = count * chipH + (count - 1) * G
+	local boosts
+	if sideways then
+		boosts = rect(
 			volts.x + volts.w + G,
 			math.max(volts.y, M + H.barHeight + G),
-			H.boostWidth,
-			3 * H.boostHeight + 2 * G
+			math.max(H.boostWidth, boostW),
+			column
 		)
-		else rect(M, storm.y + storm.h + G, H.statWidth, H.boostHeight)
-	local goalX = W - M - H.goalWidth
+	else
+		-- a row under the storm timer (at least as wide as it) if that stays
+		-- well clear of the goal column, else a column
+		local chipW = math.max(boostW, (H.statWidth - (count - 1) * G) / count)
+		local rowW = count * chipW + (count - 1) * G
+		boosts = if M + rowW <= goalX - 2 * G
+			then rect(M, storm.y + storm.h + G, rowW, chipH)
+			else rect(M, storm.y + storm.h + G, boostW, column)
+	end
 	local goal = rect(goalX, topFor(goalX, H.goalWidth), H.goalWidth, H.goalHeight)
-	local serverStorm = rect(goalX, goal.y + goal.h + G, H.goalWidth, H.boostHeight)
-	-- the friends chip: under the boosts' row (a sideways phone or tablet,
-	-- short of height on the left, has it under the server goal meter)
-	local sideways = touch and not upright
-	local friends = rect(M, boosts.y + boosts.h + G, H.statWidth, H.boostHeight)
-	local leftBottom = math.max(storm.y + storm.h, boosts.y + boosts.h)
-	local leftRight = math.max(volts.x + volts.w, boosts.x + boosts.w)
-	if not sideways then
-		leftBottom = math.max(leftBottom, friends.y + friends.h)
+	local serverStorm = rect(goalX, goal.y + goal.h + G, H.goalWidth, chipH)
+	-- the friends chip: under the boosts' chips (on a sideways phone or
+	-- tablet that's under their column beside Volts, as wide as it)
+	local friends = if sideways
+		then rect(boosts.x, boosts.y + boosts.h + G, boosts.w, chipH)
+		else rect(M, boosts.y + boosts.h + G, H.statWidth, chipH)
+	local leftBottom = math.max(storm.y + storm.h, friends.y + friends.h)
+	local leftRight = math.max(volts.x + volts.w, boosts.x + boosts.w, friends.x + friends.w)
+	-- how far down the left-edge pieces reach (MENU goes under them; the
+	-- sideways boosts column is beside Volts, not over MENU)
+	local edgeBottom = storm.y + storm.h
+	for _, piece in { boosts, friends } do
+		if piece.x < M + H.menuSize + G then
+			edgeBottom = math.max(edgeBottom, piece.y + piece.h)
+		end
 	end
-	local event = rect(goalX, serverStorm.y + serverStorm.h + G, H.goalWidth, H.boostHeight)
-	local serverGoal = rect(goalX, event.y + event.h + G / 2, H.goalWidth, H.serverGoalHeight)
+	local event = rect(goalX, serverStorm.y + serverStorm.h + G, H.goalWidth, chipH)
+	local serverGoal = rect(
+		goalX,
+		event.y + event.h + G / 2,
+		H.goalWidth,
+		math.max(H.serverGoalHeight, textSize + 6)
+	)
 	local rightBottom = serverGoal.y + serverGoal.h
-	if sideways then
-		friends = rect(goalX, rightBottom + G / 2, H.goalWidth, H.boostHeight)
-		rightBottom = friends.y + friends.h
-	end
 
 	-- the bottle bar, and on a phone or tablet held upright MENU beside it
 	local bar
@@ -292,15 +394,25 @@ function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?, tuto
 		end
 		return y
 	end
-	local toastWidth = math.min(H.toastWidth, W - 2 * M)
-	local toastX = (W - toastWidth) / 2
+	-- centred, or moved right past the top-left pieces when that keeps it
+	-- clear of both corners (so it needn't drop below them; it may narrow
+	-- by up to a tenth to fit there): its x and width
+	local function middle(w: number): (number, number)
+		local x = (W - w) / 2
+		local left = leftRight + G
+		local room = goal.x - G - left
+		if x < left and room >= 0.9 * w then
+			return left, math.min(w, room)
+		end
+		return x, w
+	end
+	local toastX, toastWidth = middle(math.min(H.toastWidth, W - 2 * M))
 	local centerTop = if upright and menu
 		then menu.y + menu.h + G
 		elseif touch then bar.y + bar.h + G
 		else topFor(toastX, toastWidth)
 	-- the tutorial's step card first (while it shows, the toasts go under it)
-	local tutorialWidth = math.min(H.tutorialWidth, W - 2 * M)
-	local tutorialX = (W - tutorialWidth) / 2
+	local tutorialX, tutorialWidth = middle(math.min(H.tutorialWidth, W - 2 * M))
 	local tutorialRect = rect(
 		tutorialX,
 		belowCorners(tutorialX, tutorialWidth, centerTop),
@@ -336,7 +448,7 @@ function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?, tuto
 		-- upright: the card opens under the button
 		card = rect(M, menu.y + menu.h + G, H.cardWidth, H.cardHeight)
 	else
-		local below = leftBottom + 2 * G
+		local below = edgeBottom + 2 * G
 		if banner.x < M + H.menuSize + G or toasts.x < M + H.menuSize + G then
 			below = math.max(below, banner.y + banner.h + 2 * G)
 		end

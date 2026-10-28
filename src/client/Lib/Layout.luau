@@ -41,6 +41,12 @@ Layout.topbar = { left = 0, right = 0, height = 0 } :: LayoutMath.Topbar
 Layout.hud = LayoutMath.hud("Desktop", Layout.area, Layout.topbar)
 Layout.Changed = Signal.new() :: Signal.Signal<DeviceClass>
 
+-- The text size HUD chips are sized for now (LayoutMath.chipText): the
+-- HUD picks each chip's wording with it (LayoutMath.fitText).
+function Layout.chipText(): number
+	return LayoutMath.chipText(Layout.class, Layout.scale, Layout.textLevel)
+end
+
 local screens: { Screen } = {}
 -- an empty frame filling the first screen's padded root: its size and
 -- position are the area every screen builds in
@@ -105,7 +111,7 @@ local function remeasure(): boolean
 		or math.abs(topbar.right - oldBar.right) > 0.5
 	Layout.area = area
 	Layout.topbar = topbar
-	Layout.hud = LayoutMath.hud(Layout.class, area, topbar, Layout.tutorial)
+	Layout.hud = LayoutMath.hud(Layout.class, area, topbar, Layout.tutorial, Layout.chipText())
 	return changed
 end
 
@@ -145,7 +151,7 @@ end
 function Layout.setTutorial(on: boolean)
 	if on ~= Layout.tutorial then
 		Layout.tutorial = on
-		Layout.hud = LayoutMath.hud(Layout.class, Layout.area, Layout.topbar, on)
+		Layout.hud = LayoutMath.hud(Layout.class, Layout.area, Layout.topbar, on, Layout.chipText())
 		Layout.Changed:Fire(Layout.class)
 	end
 end
