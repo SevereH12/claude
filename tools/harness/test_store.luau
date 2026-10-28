@@ -105,7 +105,8 @@ end
 
 -- a receipt finds its Glint pack, and nothing else claims it ---------------------
 for _, pack in Config.GLINT_PACKS do
-	check(Store.glintPackById(pack.productId) == pack, `{pack.key}'s receipt finds it`)
+	local found = Store.glintPackById(pack.productId)
+	check(found ~= nil and found.key == pack.key, `{pack.key}'s receipt finds it`)
 	check(Gifts.byProductId(pack.productId) == nil, `{pack.key}'s receipt isn't a gift`)
 	check(Boosts.productById(pack.productId) == nil, `{pack.key}'s receipt isn't a boost`)
 end
