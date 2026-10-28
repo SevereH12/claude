@@ -32,6 +32,10 @@ local random = {
 -- the numbers ----------------------------------------------------------------------
 check(fx.simpleDistance < fx.drawDistance, "simple starts before strikes stop being drawn")
 check(fx.dim > 0 and fx.dim < 1, "the flicker dims but never hides")
+check(fx.softGlowRadius > 0 and fx.softGlowRadius < fx.glowRadius, "Soft glow is smaller than Full")
+check(fx.glowStrength > 0 and fx.glowStrength < 1, "the glow is see-through")
+check(fx.softGlowStrength > 0 and fx.softGlowStrength < fx.glowStrength, "Soft glow is dimmer")
+check(fx.glowLayers >= 4 and fx.glowTime > 0, "enough layers for a smooth glow")
 
 -- how much is drawn ------------------------------------------------------------------
 local function level(distance, sameWorld, mine, setting)

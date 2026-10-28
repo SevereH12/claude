@@ -568,7 +568,17 @@ says `[Notifications] not sending ...`):
    HTTP Requests** on.
 
 The game must have at least 100 visits before Roblox sends any. Studio
-can't send real notifications.
+can't send real notifications (Dashboard secrets only reach live servers):
+there it prints `[Notifications] Studio: would send ...` and sends nothing.
+If Roblox answers 429 (too many) or 5xx, the reminder stays queued and is
+tried again a minute later; any other error drops it. The key is never
+printed or logged.
+
+**Testing it**: publish, join the live game, claim the daily reward and
+tap YES (and allow it in Roblox's prompt), then in the ADMIN panel press
+**🔔 TEST NOTIFY**. It sends you "daily reward ready" straight away (once a
+minute at most) and shows Roblox's answer. Roblox delivers at most one a
+day, so a second test the same day can say sent and still not arrive.
 
 ## Admin panel, error reports and streaming
 

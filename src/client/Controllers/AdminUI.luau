@@ -10,6 +10,9 @@
 --   * RESET PROFILE: tap twice to confirm; it starts their save again
 --   * TEST ERROR: a test error on the server and on this device, to check
 --     error reporting
+--   * TEST NOTIFY: sends you a "daily reward ready" phone notification
+--     now (live servers only; Roblox delivers it if you've allowed this
+--     game's notifications, at most one a day)
 --   * the box at the bottom: this server's most recent errors (Systems/
 --     Errors), or a looked-up player's data
 -- The button only shows; the server checks every request (Systems/Admin).
@@ -185,11 +188,12 @@ local function build(root: Frame)
 	local boostLength = button(r5, "BoostLength", "", COLORS.panelTop, s5[2], 0.2)
 	local boostButton = button(r5, "GiveBoost", "🚀 GIVE BOOST", COLORS.calm, s5[3], 0.4)
 
-	-- 6. reset, test error
+	-- 6. reset, test error, test notification
 	local r6 = row(body, 6)
-	local s6 = cells({ 0.5, 0.5 })
-	local resetButton = button(r6, "Reset", "🧨 RESET PROFILE", COLORS.red, s6[1], 0.5)
-	local testButton = button(r6, "TestError", "🐞 TEST ERROR", COLORS.panelTop, s6[2], 0.5)
+	local s6 = cells({ 0.36, 0.32, 0.32 })
+	local resetButton = button(r6, "Reset", "🧨 RESET PROFILE", COLORS.red, s6[1], 0.36)
+	local testButton = button(r6, "TestError", "🐞 TEST ERROR", COLORS.panelTop, s6[2], 0.32)
+	local notifyButton = button(r6, "TestNotify", "🔔 TEST NOTIFY", COLORS.panelTop, s6[3], 0.32)
 
 	-- 7. what the server said
 	status = UI.label({
@@ -338,6 +342,9 @@ local function build(root: Frame)
 		task.spawn(function()
 			error("[Admin] test error from the client")
 		end)
+	end)
+	notifyButton.Activated:Connect(function()
+		send("testNotify")
 	end)
 	refresh.Activated:Connect(function()
 		send("open")
