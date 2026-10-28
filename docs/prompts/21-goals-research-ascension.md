@@ -2,7 +2,7 @@
 
 Follow the rules in `docs/prompts/README.md`. **One run.**
 
-- [ ] The goal card also tracks hiring and promoting researchers and the
+- [x] The goal card also tracks hiring and promoting researchers and the
   next Ascension, picks the goal closest to done, and opens the right
   panel when tapped
 
