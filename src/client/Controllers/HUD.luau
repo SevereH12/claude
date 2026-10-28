@@ -7,7 +7,7 @@
 --   ├── BoostRow     one chip per running timed boost ("⚡ 14:32"): a row
 --   │                under the storm timer, a column beside Volts on a
 --   │                sideways phone or tablet (LayoutMath.hud.boosts)
---   ├── GoalCard     top right: the closest next goal and Volts towards it
+--   ├── GoalCard     top right: the goal closest to done (Util/Goals), a button
 --   ├── StormChip    under it, while a Server Storm is on (Systems/Boosts,
 --   │                read from workspace attributes): its latest buyer and
 --   │                time left ("🌩️ SERVER 2x · Alex · 14:32")
@@ -41,9 +41,9 @@ local TweenService = game:GetService("TweenService")
 local BoostRules = require(ReplicatedStorage.Shared.Util.Boosts)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
+local Goals = require(ReplicatedStorage.Shared.Util.Goals)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
-local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Social = require(ReplicatedStorage.Shared.Util.Social)
 local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local Types = require(ReplicatedStorage.Shared.Types)
@@ -52,6 +52,8 @@ local Layout = require(script.Parent.Parent.Lib.Layout)
 local LayoutMath = require(script.Parent.Parent.Lib.LayoutMath)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
+local ResearchUI = require(script.Parent.ResearchUI)
+local ShopUI = require(script.Parent.ShopUI)
 local State = require(script.Parent.State)
 local Storm = require(script.Parent.Storm)
 
@@ -96,6 +98,7 @@ local goalTitle: TextLabel
 local goalDetail: TextLabel
 local goalFill: Frame
 local goalAmount: TextLabel
+local shownGoal: Goals.Goal? = nil -- the goal on the card (what tapping it opens)
 local displayedVolts: NumberValue
 local fullPulse: Tween?
 local lastChargeCount = -1
@@ -207,6 +210,38 @@ local function buildGoalCard()
 		Parent = bar,
 	})
 	UI.maxText(goalAmount, 14)
+
+	-- the whole card is a see-through button on top: tapping it opens where
+	-- the goal is done
+	local tap = UI.make(Instance.new("TextButton"), {
+		Name = "Tap",
+		Text = "",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 5,
+		Parent = goalCard,
+	})
+	UI.clickSound(tap, true)
+	tap.Activated:Connect(function()
+		local goal = shownGoal
+		if not goal then
+			return
+		end
+		UI.pop(goalCard, 0.95)
+		if goal.kind == "hire" or goal.kind == "promote" then
+			ResearchUI.open()
+		elseif goal.kind == "boots" then
+			ShopUI.openBoots()
+		else
+			-- bottle, zone and ascend: the bottles tab, at the next bottle (or
+			-- the top one, with the ASCEND row under it)
+			local snapshot = State.current
+			local top = #Config.BOTTLES
+			local nextTier = if snapshot then math.min(snapshot.bottleTier + 1, top) else top
+			ShopUI.focusBottle(if goal.kind == "ascend" then top else nextTier)
+			ShopUI.open()
+		end
+	end)
 end
 
 local function buildBottleBar()
@@ -675,25 +710,33 @@ local function setFull(full: boolean)
 	end
 end
 
-local GOAL_TITLES: { [Progression.GoalKind]: string } = {
+local GOAL_TITLES: { [Goals.GoalKind]: string } = {
 	zone = "UNLOCK",
 	bottle = "NEXT BOTTLE:",
 	boots = "NEXT BOOTS:",
+	hire = "HIRE:",
+	promote = "PROMOTE:",
+	ascend = "ASCEND:",
 }
 
+-- The goal closest to done (Util/Goals). There always is one once the top
+-- bottle is owned (the next Ascension), so the card stays up.
 local function renderGoal(snapshot: Types.Snapshot)
-	local goal = Progression.nextGoals(snapshot)[1]
+	local goal = Goals.pick(snapshot)
+	shownGoal = goal
 	goalCard.Visible = goal ~= nil
 	if not goal then
 		return
 	end
 	goalTitle.Text = `{GOAL_TITLES[goal.kind]} {string.upper(goal.title)}`
 	goalDetail.Text = goal.detail
-	local fraction = if goal.price > 0 then math.clamp(snapshot.volts / goal.price, 0, 1) else 1
+	local fraction = Goals.fraction(goal)
 	TweenService:Create(goalFill, UI.TWEEN.fast, { Size = UDim2.fromScale(fraction, 1) }):Play()
-	goalAmount.Text = if fraction >= 1
-		then "READY! Open the SHOP"
-		else `{Format.abbreviate(snapshot.volts)} / {Format.abbreviate(goal.price)} ⚡`
+	local amount = `{Format.abbreviate(goal.current)} / {Format.abbreviate(goal.target)}`
+	goalAmount.Text = if goal.ready
+		then `READY! {goal.readyText}`
+		elseif goal.unit == "glints" then `{amount} ✨ {goal.zone or ""}`
+		else `{amount} ⚡`
 end
 
 -- The friends chip: "👥 +10% friends", or "👥 +10%" where that won't fit.
