@@ -6,7 +6,9 @@
 --     per researcher: portrait, name · role with rank stars, level, perk
 --     now and next, the data bar, a status line, and two buttons: "📍 POST"
 --     (opens the post picker) and HIRE / PROMOTE. PROMOTE shows Glint
---     progress while it's short and needs two taps to confirm.
+--     progress while it's short and needs two taps to confirm. At the
+--     Office, a HIRE short of Volts or a PROMOTE short of Glints stays
+--     tappable and offers the pack that covers it (Controllers/TopUpUI).
 --   * LOG: the Storm Log collection book (Lib/StormLogTab). The tab shows
 --     "(n)" when n rows can be claimed, and ResearchUI.ReadyChanged tells
 --     the menu (the RESEARCH dot).
@@ -38,6 +40,7 @@ local UI = require(script.Parent.Parent.Lib.UI)
 local ZoneColours = require(script.Parent.Parent.Lib.ZoneColours)
 local Researchers = require(script.Parent.Researchers)
 local State = require(script.Parent.State)
+local TopUpUI = require(script.Parent.TopUpUI)
 
 local COLORS = UI.COLORS
 
@@ -187,6 +190,17 @@ local function promoteBlock(
 		return reason
 	end
 	return if atOffice then nil else "Visit the Research Office"
+end
+
+-- Glints this researcher's promotion is short (0 when Glints aren't what
+-- stops it: top rank, level too low, or enough already).
+local function glintsShort(save: Types.ResearcherSave, glints: { number }): number
+	local rank = save.rank or 0
+	if rank >= ResearchMath.maxRank() or save.level < #Config.RESEARCH_LEVELS then
+		return 0
+	end
+	local cost = Config.RESEARCH_PRESTIGE.glintCost[rank + 1]
+	return math.max(0, cost - ResearchMath.glintsFor(glints, rank + 1))
 end
 
 -- A promotion: the stars pop in, sparks, and the researcher jumps.
@@ -357,11 +371,8 @@ local function renderCard(
 		card.hire.Visible = true
 		card.promote.Visible = false
 		card.hire.Text = `HIRE {Format.abbreviate(def.price)} ⚡`
-		UI.setEnabled(
-			card.hire,
-			unlocked and atOffice and snapshot.volts >= def.price,
-			COLORS.green
-		)
+		-- short of Volts it still looks buyable: tapping offers a top-up
+		UI.setEnabled(card.hire, unlocked and atOffice, COLORS.green)
 		return
 	end
 
@@ -411,7 +422,10 @@ local function renderCard(
 	else
 		card.promote.Text = `PROMOTE ✨{Format.abbreviate(cost)}`
 	end
-	UI.setEnabled(card.promote, block == nil, COLORS.volt)
+	-- short of Glints (and at the Office) it still looks buyable: tapping
+	-- offers a Glint pack
+	local fixable = atOffice and glintsShort(save, glints) > 0
+	UI.setEnabled(card.promote, block == nil or fixable, COLORS.volt)
 	if block == nil then
 		card.stroke.Color = COLORS.volt
 		card.stroke.Thickness = 5
@@ -799,6 +813,12 @@ local function buildCard(list: Instance, index: number, def: Types.ResearcherDef
 		if snapshot and not snapshot.researchers[def.id] then
 			if inOffice() then
 				UI.pop(hire)
+				local previous = Config.RESEARCHERS[index - 1]
+				local unlocked = previous == nil or snapshot.researchers[previous.id] ~= nil
+				if unlocked and snapshot.volts < def.price then
+					TopUpUI.volts(def.price - snapshot.volts)
+					return
+				end
 				hireRemote:FireServer(def.id)
 			else
 				UI.toast("Visit the Research Office to hire", "info")
@@ -815,7 +835,14 @@ local function buildCard(list: Instance, index: number, def: Types.ResearcherDef
 		if not snapshot or not save then
 			return
 		end
-		local reason = promoteBlock(save, snapshot.glints or {}, inOffice())
+		local glints = snapshot.glints or {}
+		local reason = promoteBlock(save, glints, inOffice())
+		local short = glintsShort(save, glints)
+		if reason and short > 0 and inOffice() then
+			UI.pop(promote)
+			TopUpUI.glints(short, (save.rank or 0) + 1)
+			return
+		end
 		if reason then
 			UI.toast(reason, "info")
 			return

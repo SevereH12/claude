@@ -4,6 +4,9 @@
 -- the price itself. Once you own the top bottle, an ASCEND row shows under
 -- the bottles (Util/Ascension): its button asks the server, which opens the
 -- confirm screen (Controllers/AscensionUI).
+-- A next tier or ASCEND you can't afford yet still looks like a buy button
+-- with its price: tapping it offers the Volts pack that covers the
+-- difference (Controllers/TopUpUI). Owned and locked tiers stay greyed.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -20,6 +23,7 @@ local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
 local AscensionUI = require(script.Parent.AscensionUI)
 local State = require(script.Parent.State)
+local TopUpUI = require(script.Parent.TopUpUI)
 
 local COLORS = UI.COLORS
 local ROW_HEIGHT = 76 -- pixels; the list scrolls when the rows don't fit
@@ -74,8 +78,8 @@ function ShopUI.isOpen(): boolean
 	return panel ~= nil and panel.Visible
 end
 
--- The ASCEND row: shown once the top bottle is owned, its button lit when
--- the player has the Volts too (the server checks again).
+-- The ASCEND row: shown once the top bottle is owned. Short of Volts, its
+-- button shows the cost and offers a top-up (the server checks again).
 local function renderAscend(snapshot: Types.Snapshot)
 	local row = ascendRow
 	if not row then
@@ -92,7 +96,8 @@ local function renderAscend(snapshot: Types.Snapshot)
 		)} ⚡`
 	local ready = AscensionRules.canAscend(snapshot)
 	row.button.Text = if ready then "🌟 ASCEND" else `{Format.abbreviate(cost)} ⚡`
-	UI.setEnabled(row.button, ready, PURPLE)
+	-- only the top bottle (the row is hidden without it) or Volts stop it
+	UI.setEnabled(row.button, snapshot.bottleTier >= AscensionRules.topTier(), PURPLE)
 end
 
 local function render(snapshot: Types.Snapshot)
@@ -105,7 +110,7 @@ local function render(snapshot: Types.Snapshot)
 				UI.setEnabled(row.button, false, COLORS.green)
 			elseif row.tier == owned + 1 then
 				row.button.Text = `{Format.abbreviate(row.item.price)} ⚡`
-				UI.setEnabled(row.button, snapshot.volts >= row.item.price, COLORS.green)
+				UI.setEnabled(row.button, true, COLORS.green) -- short of Volts: a top-up offer
 			else
 				row.button.Text = "LOCKED"
 				UI.setEnabled(row.button, false, COLORS.green)
@@ -225,6 +230,12 @@ local function buildRow(tab: Tab, tier: number, item: Item)
 	UI.maxText(button, 24)
 	button.Activated:Connect(function()
 		UI.pop(button)
+		-- the next tier, short of Volts: offer a top-up instead of asking
+		local snapshot = State.current
+		if snapshot and tier == tab.ownedTier(snapshot) + 1 and snapshot.volts < item.price then
+			TopUpUI.volts(item.price - snapshot.volts)
+			return
+		end
 		tab.remote:FireServer(tier)
 	end)
 
@@ -361,6 +372,14 @@ function ShopUI.init()
 		UI.maxText(button, 24)
 		button.Activated:Connect(function()
 			UI.pop(button)
+			local snapshot = State.current
+			if snapshot and snapshot.bottleTier >= AscensionRules.topTier() then
+				local cost = AscensionRules.cost(snapshot.ascension)
+				if snapshot.volts < cost then
+					TopUpUI.volts(cost - snapshot.volts)
+					return
+				end
+			end
 			AscensionUI.ask()
 		end)
 		ascendRow = { frame = frame, title = title, detail = detail, button = button }

@@ -4,7 +4,7 @@ Follow the rules in `docs/prompts/README.md`. **Run it twice**; each run
 does the first unticked part, then ticks it.
 
 - [x] Part A: Glint packs (new developer products, sold in the store)
-- [ ] Part B: every buy button stays tappable; when you're short, it offers
+- [x] Part B: every buy button stays tappable; when you're short, it offers
   the cheapest pack that covers the difference
 
 The user's choices:
