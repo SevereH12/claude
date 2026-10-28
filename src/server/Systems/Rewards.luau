@@ -186,4 +186,17 @@ function Rewards.init()
 	end)
 end
 
+-- A new UTC day while playing: new playtime gifts (checked every half minute).
+function Rewards.start()
+	while true do
+		task.wait(30)
+		for player, session in Sync.rewards do
+			local profile = PlayerData.get(player)
+			if profile and today(player) ~= session.day then
+				startDay(player, profile, session.dayOffset)
+			end
+		end
+	end
+end
+
 return Rewards
