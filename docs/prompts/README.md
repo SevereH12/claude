@@ -79,6 +79,12 @@ and stops if it isn't. To run one, say: "Do `docs/prompts/<file>`".
     gifts, an audit log), error reporting and streaming for lower memory.
     Part B: a data deletion tool, store page art (icon and thumbnails) and
     private servers.
+19. `19-ui-polish-and-research.md`: **run it twice.** Part A: text that
+    should be centred is (the chunky font sat high, lists sat left), no
+    black bits at rounded corners, and progress bars that show (the Log's
+    didn't). Part B: the Research panel gets TEAM and LOG tabs (the Storm
+    Log moves there from Rewards), a Glints display in zone colours, and
+    compact researcher cards with one POST picker.
 
 Researchers (all five parts done) live in `researchers/`.
 
