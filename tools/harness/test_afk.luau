@@ -46,7 +46,7 @@ local SETS = {
 -- (Util/Speed.typicalBootTier), so every row runs at the same in-zone
 -- speed: the zone's storm drag cancels the boots (Util/Speed).
 local ROWS = {
-	{ "Shoreline", 1, 1, { 688, 1375, 1740, 1913, 3827 } }, -- Rain Boots, Jar
+	{ "Shoreline", 1, 1, { 1480, 2957, 3742, 4114, 8231 } }, -- Rain Boots, Jar
 	{ "Mesa", 1, 3, { 2774, 5549, 7487, 8236, 16472 } }, -- Rain Boots, Flask
 	{ "Yard", 4, 5, { 9187, 18375, 23709, 26080, 52160 } }, -- Gale Striders, Storm Cell
 	{ "Spire", 7, 7, { 184050, 368101, 468973, 515871, 1031741 } }, -- Arc Runners, Dynamo Drum

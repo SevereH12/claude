@@ -132,12 +132,14 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		mode = "Shared",
 		chargeValue = 5,
 		chargeSize = 1,
-		strikeInterval = 0.8,
+		-- quick to leave: Mesa's size and fast strikes, so a new player has
+		-- the Flask in about 2 minutes of storm play
+		strikeInterval = 0.6,
 		order = 1,
 		requiresBottle = 1, -- open to everyone
 		theme = "Beach",
-		width = 112,
-		depth = 132,
+		width = 96,
+		depth = 104,
 		floor = 4,
 	},
 	Mesa = {
