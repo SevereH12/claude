@@ -252,7 +252,7 @@ add({
 	choices = { "Off", "Soft", "Full" },
 	section = "Graphics",
 	label = "Lightning glow",
-	hint = "The light and flash when a bolt lands",
+	hint = "The flash when a bolt lands near you",
 })
 add({
 	key = "shadows",

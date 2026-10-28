@@ -4,8 +4,8 @@
 --
 --   Forecast      -> faint dashed ring (your Forecaster), gone at the public warning
 --   StrikeWarning -> glowing ring + light pillar; inner disc fills until the bolt lands
---   StrikeLanded  -> forked, flickering bolt; area lights up; sparks,
---                    scorch mark, thunder. Arcs into each
+--   StrikeLanded  -> forked, flickering bolt; sparks and thunder (nothing
+--                    is drawn on the floor). Arcs into each
 --                    catcher's bottle, in their bolt colour (Bolt Colours
 --                    pick, else VIP gold). If we caught it: screen flash,
 --                    camera shake, "+5" popup ("x2 ASSAYED" if high grade).
@@ -28,10 +28,7 @@
 -- How much is drawn (Util/StrikeFx, numbers in Config.STRIKE_FX): your own
 -- strikes in full; another world's not at all, and silent; other players'
 -- less the further away they are, and Others' lightning can only lower
--- that. At most maxLights strike lights shine at once (a new one replaces
--- the oldest). The flash hangs lightHeight studs up and casts no shadows,
--- so it lights the floor evenly (a shadowed light just above a floor made
--- of many parts lit it in hard-edged patches that cut off).
+-- that.
 
 local Debris = game:GetService("Debris")
 local Lighting = game:GetService("Lighting")
@@ -70,7 +67,6 @@ local FORECAST_DASHES = 24
 local BALLOON_MUTED = Color3.fromRGB(120, 124, 130)
 
 local FADE = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local SLOW_FADE = TweenInfo.new(4, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 local POPUP_RISE = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 type Warning = { anchor: BasePart, pillar: BasePart, orb: BasePart? }
@@ -413,49 +409,16 @@ local function catchSound(): string
 	return `catch_{math.clamp(math.ceil(fill * 5), 1, 5)}`
 end
 
--- Strike lights: at most Config.STRIKE_FX.maxLights at once (a new one
--- replaces the oldest), each gone once it has faded.
-local LIGHT_FADE = 0.6
-local lights: StrikeFx.Budget<PointLight> = StrikeFx.newBudget(Config.STRIKE_FX.maxLights)
-local function budgetLight(light: PointLight)
-	local oldest = StrikeFx.admit(lights, light)
-	if oldest then
-		oldest:Destroy()
-	end
-	light.Destroying:Once(function()
-		StrikeFx.release(lights, light)
-	end)
-	Debris:AddItem(light, LIGHT_FADE + 0.05)
-end
-
--- Impact: light burst, sparks, scorch mark. `simple` (Util/StrikeFx said
--- simple): none of it, just the bolt. The light follows Lightning glow, the
--- sparks Rain and particles.
+-- Impact: sparks, and a screen flash when it's near you. Nothing is drawn
+-- on the floor (no light patch, ring or scorch mark). `simple` (Util/StrikeFx
+-- said simple): none of it, just the bolt. The flash follows Lightning
+-- glow, the sparks Rain and particles.
 local function impact(position: Vector3, simple: boolean)
 	if simple then
 		return
 	end
 	local anchor = anchorAt(position + Vector3.new(0, 0.3, 0), 5)
 	local glow = SettingsStore.get("glow")
-
-	if glow ~= "Off" then
-		local fx = Config.STRIKE_FX
-		local soft = glow == "Soft"
-		local above = UI.make(Instance.new("Attachment"), {
-			Position = Vector3.new(0, fx.lightHeight, 0),
-			Parent = anchor,
-		})
-		local burst = UI.make(Instance.new("PointLight"), {
-			Color = GLOW_COLOR,
-			Brightness = if soft then fx.softBrightness else fx.lightBrightness,
-			Range = if soft then fx.softRange else fx.lightRange,
-			Shadows = false,
-			Parent = above,
-		})
-		local fade = TweenInfo.new(LIGHT_FADE, Enum.EasingStyle.Quad)
-		TweenService:Create(burst, fade, { Brightness = 0 }):Play()
-		budgetLight(burst)
-	end
 
 	local sparkOrigin = UI.make(Instance.new("Attachment"), { Parent = anchor })
 	local sparks = UI.make(Instance.new("ParticleEmitter"), {
@@ -475,16 +438,6 @@ local function impact(position: Vector3, simple: boolean)
 		Parent = sparkOrigin,
 	})
 	sparks:Emit(math.round(45 * SettingsStore.get("particleAmount")))
-
-	local scorch = groundRing(anchor, {
-		Radius = 3.5,
-		InnerRadius = 0,
-		Height = 0.1,
-		Color3 = Color3.fromRGB(20, 18, 25),
-		Transparency = 0.35,
-		Parent = anchor,
-	})
-	TweenService:Create(scorch, SLOW_FADE, { Transparency = 1 }):Play()
 
 	-- strikes near you light up the whole screen for a moment
 	local camera = workspace.CurrentCamera

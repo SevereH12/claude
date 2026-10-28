@@ -31,7 +31,6 @@ local random = {
 
 -- the numbers ----------------------------------------------------------------------
 check(fx.simpleDistance < fx.drawDistance, "simple starts before strikes stop being drawn")
-check(fx.maxLights >= 1, "at least one strike light")
 check(fx.dim > 0 and fx.dim < 1, "the flicker dims but never hides")
 
 -- how much is drawn ------------------------------------------------------------------
@@ -162,20 +161,6 @@ for _, segments in { 4, 9 } do
 	check(changed, "the restrike path is a little different")
 	check(same(path[2], before), "the original path is left as it was")
 end
-
--- the light budget -----------------------------------------------------------------
-local budget = StrikeFx.newBudget(3)
-check(StrikeFx.admit(budget, "a") == nil, "light 1 fits")
-check(StrikeFx.admit(budget, "b") == nil, "light 2 fits")
-check(StrikeFx.admit(budget, "c") == nil, "light 3 fits")
-check(StrikeFx.admit(budget, "d") == "a", "light 4 replaces the oldest")
-check(#budget.live == 3, "never more than the budget")
-StrikeFx.release(budget, "c")
-check(#budget.live == 2 and table.find(budget.live, "c") == nil, "a light that ends leaves the budget")
-StrikeFx.release(budget, "zzz")
-check(#budget.live == 2, "releasing an unknown light changes nothing")
-check(StrikeFx.admit(budget, "e") == nil, "its place is free again")
-check(StrikeFx.admit(budget, "f") == "b", "then the oldest goes again")
 
 if failures > 0 then
 	error(`{failures} strike effect checks failed`)
