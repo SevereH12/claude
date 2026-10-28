@@ -88,7 +88,7 @@ local function setTitle(player: Player)
 		made.Parent = head
 		title = made
 	end
-	assert(title)
+	assert(title, "the Ascension title was just made")
 	local vip = player:GetAttribute(PassRules.ATTRIBUTE .. "VIP") == true
 	title.StudsOffsetWorldSpace = Vector3.new(0, TITLE_HEIGHT + (if vip then ABOVE_VIP else 0), 0)
 	local label = title:FindFirstChild("Text")
