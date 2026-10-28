@@ -118,28 +118,4 @@ function StrikeFx.brightness(elapsed: number, calm: boolean): number?
 	return (1 - t) ^ 2 -- eases out: quick at first, then gently to nothing
 end
 
--- Light budget: at most `max` strike lights alive at once. `admit` adds a
--- new one and hands back the oldest when that goes over (destroy it);
--- `release` forgets one that ended by itself.
-export type Budget<T> = { max: number, live: { T } }
-
-function StrikeFx.newBudget<T>(max: number): Budget<T>
-	return { max = max, live = {} }
-end
-
-function StrikeFx.admit<T>(budget: Budget<T>, item: T): T?
-	table.insert(budget.live, item)
-	if #budget.live > budget.max then
-		return table.remove(budget.live, 1)
-	end
-	return nil
-end
-
-function StrikeFx.release<T>(budget: Budget<T>, item: T)
-	local index = table.find(budget.live, item)
-	if index then
-		table.remove(budget.live, index)
-	end
-end
-
 return StrikeFx
