@@ -23,7 +23,7 @@ local TutorialRules = require(ReplicatedStorage.Shared.Util.Tutorial)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local STORE_NAME = "StormBottler_PlayerData"
-local CURRENT_VERSION = 17
+local CURRENT_VERSION = 18
 -- A lock older than this belongs to a server that crashed; it may be taken.
 local LOCK_STALE_SECONDS = Config.AUTOSAVE_INTERVAL * 3
 local LOCKED_RETRIES = 5
@@ -77,6 +77,9 @@ local DEFAULT_PROFILE: Types.Profile = {
 	loginRun = 0,
 	bestLoginRun = 0,
 	notifyAsked = false,
+	notifyYes = false,
+	playtime = { day = 0, seconds = 0, claimed = {} },
+	invitedBy = 0,
 }
 
 -- MIGRATIONS[n] turns a version-n profile into version n+1. When the profile
@@ -203,6 +206,16 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 		data.loginRun = streak
 		data.bestLoginRun = streak
 		data.notifyAsked = false
+		return data
+	end,
+	-- after the October 2026 review: playtime gifts count per UTC day
+	-- (none played yet), reminders need a YES (we don't know what those
+	-- already asked answered, so they keep getting them: Roblox drops them
+	-- for anyone who said no), and nobody has an inviter waiting to be paid
+	[17] = function(data: any): any
+		data.playtime = { day = 0, seconds = 0, claimed = {} }
+		data.notifyYes = data.notifyAsked == true
+		data.invitedBy = 0
 		return data
 	end,
 }

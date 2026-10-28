@@ -119,8 +119,10 @@ The REWARDS panel (MENU → 🎁 REWARDS; a red dot means something is ready):
   midnight UTC). Coming back the next day continues the streak; missing a
   day, or the day after day 7, starts again at day 1
   (`Config.DAILY_REWARDS`).
-- **Playtime gifts**: six gifts every visit, at 5, 10, 20, 30, 45 and 60
-  minutes of play (`Config.PLAYTIME_GIFTS`).
+- **Playtime gifts**: six gifts a day, at 5, 10, 20, 30, 45 and 60
+  minutes of play that UTC day (`Config.PLAYTIME_GIFTS`). Playtime is
+  saved, so leaving and rejoining carries on where you were (it doesn't
+  give the gifts again); a new day starts them again.
 - Volts rewards are counted in charges × the bolt value of the player's
   best zone, so they're worth the same playtime early or late. Boost
   rewards (2x Volts, Lucky, Big Bottles) give a pass's effect for a while;
@@ -315,8 +317,11 @@ numbers in `Config.SERVER_GOAL`).
 - **How big it is**: each player's grinding rate (what the AFK screen
   works out for their best zone) added up, times 15 minutes. So a full
   server of late-game players and two new players both take about 15
-  minutes. It's worked out again when someone joins or leaves, and it
-  never drops below what's already filled plus 10%, so it can't get stuck.
+  minutes. Players who have been in the AFK Lounge for 5 minutes or more
+  (`afkExcludeMinutes`) are left out, since they can't help fill it; they
+  count again when they leave the lounge. It's worked out again when
+  someone joins, leaves, or starts or stops being left out, and it never
+  drops below what's already filled plus 10%, so it can't get stuck.
 - **Server Surge**: a full meter starts 10 minutes of 2x Volts for
   everyone, with a banner and a chat line. It stacks with a Server Storm
   (both on: 4x). The meter then empties and the next goal is 1.5x bigger;
@@ -435,10 +440,11 @@ AFK Lounge). Studio test: **Pretend friends +1** in the TEST panel.
 
 **Invites** (`Systems/Invites`, the **INVITE** button in REWARDS): opens
 Roblox's own invite window. When a friend who has **never played before**
-joins from your invite, they get a welcome gift of 100 charges and you get
-a 2x Volts Boost in your gift inbox (so you get it even if you're offline).
-Limits: 5 rewarded invites a day per inviter, and only for Roblox accounts
-at least 3 days old. Numbers are in `Config.TUTORIAL`, `Config.FRIENDS`
+joins from your invite, they get a welcome gift of 100 charges, and once
+they've played 10 minutes (or made their first sale) you get a 2x Volts
+Boost in your gift inbox (so you get it even if you're offline). Limits: 5
+rewarded invites a day per inviter, and only for Roblox accounts at least
+14 days old (so alt accounts don't pay). Numbers are in `Config.TUTORIAL`, `Config.FRIENDS`
 and `Config.INVITES`. Studio can't send real invites: look for
 `[Invites]` lines in the output on a live server.
 
@@ -467,8 +473,8 @@ counting past day 7). Each is saved in its own OrderedDataStore
 **Phone notifications** (`Util/Notifications`, `Systems/Notifications`).
 After a player claims a daily reward for the first time, a message asks
 "Remind me when my daily reward is ready?". YES opens Roblox's own
-notifications prompt. It's only ever asked once. When someone who was
-asked leaves, two reminders wait in a MemoryStore queue: **daily reward
+notifications prompt. It's only ever asked once, and the YES is saved
+(`notifyYes`). When someone who tapped YES leaves (or the server closes), two reminders wait in a MemoryStore queue: **daily reward
 ready** (at midnight UTC, if they claimed today) and **streak ends soon**
 (3 hours before their streak would break). Any running server sends due
 reminders each minute, and each is sent only once. Coming back cancels

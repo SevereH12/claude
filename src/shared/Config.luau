@@ -782,6 +782,10 @@ return table.freeze({
 		stuckMargin = 0.1,
 		minGoal = 1000,
 		topCount = 3,
+		-- a player who has been in the AFK Lounge this long doesn't count
+		-- toward the goal's size (they can't help fill it); leaving the
+		-- lounge counts them again
+		afkExcludeMinutes = 5,
 	}),
 	DAILY_REWARDS = table.freeze(DAILY_REWARDS),
 	PLAYTIME_GIFTS = table.freeze(PLAYTIME_GIFTS),
@@ -844,7 +848,10 @@ return table.freeze({
 		welcomeCharges = 100,
 		inviterReward = "DoubleVoltsBoost",
 		dailyCap = 5,
-		minAccountAgeDays = 3,
+		minAccountAgeDays = 14, -- the new player's account must be this old for the inviter's reward
+		-- the inviter is only paid once the new player has played this many
+		-- minutes in all, or made their first sale (stops alt accounts)
+		playMinutes = 10,
 	}),
 	-- Leaderboards (Systems/Leaderboards, Util/Leaderboards): one
 	-- OrderedDataStore per board. Each player's values are written every

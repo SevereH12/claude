@@ -119,8 +119,22 @@ check(Social.welcomeRefusal({ isNew = true, userId = 10, referrerId = "20", acco
 check(Social.welcomeRefusal({ isNew = true, userId = 10, referrerId = 10, accountAge = 30 }) == "self", "you can't invite yourself")
 local young = { isNew = true, userId = 10, referrerId = 20, accountAge = 2 }
 check(Social.welcomeRefusal(young) == nil, "a young account still gets the welcome gift")
-check(Social.inviterRefusal(young) == "tooYoung", "but its inviter gets nothing (under 3 days)")
-check(Social.inviterRefusal({ isNew = true, userId = 10, referrerId = 20, accountAge = 3 }) == nil, "3 days old is enough")
+local minAge = Config.INVITES.minAccountAgeDays
+check(minAge >= 14, "accounts must be 14+ days old for the inviter's reward")
+check(Social.inviterRefusal(young) == "tooYoung", `but its inviter gets nothing (under {minAge} days)`)
+check(Social.inviterRefusal({ isNew = true, userId = 10, referrerId = 20, accountAge = minAge - 1 }) == "tooYoung", "a day short is too young")
+check(Social.inviterRefusal({ isNew = true, userId = 10, referrerId = 20, accountAge = minAge }) == nil, `{minAge} days old is enough`)
+
+-- the inviter is paid only once the new player has really played
+local playMinutes = Config.INVITES.playMinutes
+check(not Social.inviteEarned({}), "a new player who did nothing earns their inviter nothing yet")
+check(not Social.inviteEarned({ [Stats.PLAYTIME_MINUTES] = playMinutes - 1 }), "not before the minutes")
+check(Social.inviteEarned({ [Stats.PLAYTIME_MINUTES] = playMinutes }), `{playMinutes} minutes is enough`)
+check(Social.inviteEarned({ [Stats.SALES] = 1 }), "or a first sale")
+local v17 = PlayerData.migrate({ version = 17, volts = 0, bottleTier = 1, notifyAsked = true })
+check(v17.invitedBy == 0, "the v18 migration: no inviter waiting")
+check(v17.notifyYes == true, "players asked before v18 keep their reminders")
+check(PlayerData.migrate({ version = 17, volts = 0, notifyAsked = false }).notifyYes == false, "and those never asked get none")
 
 -- the daily cap
 local record = nil

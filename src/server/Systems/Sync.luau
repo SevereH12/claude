@@ -150,7 +150,8 @@ function Sync.init()
 		Sync.setupUntil[player] = nil
 		Sync.passes[player] = nil
 		Sync.store[player] = nil
-		Sync.rewards[player] = nil
+		-- Sync.rewards is cleared by Systems/Rewards when the player's
+		-- profile leaves (it saves today's playtime from it first)
 	end)
 end
 

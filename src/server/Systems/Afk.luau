@@ -11,7 +11,10 @@
 -- a new Premium membership) and paid in whole Volts every payEverySeconds,
 -- the fraction carried over. Leaving the box stops it straight away (what
 -- was earned so far is paid; leaving the game pays it too). Boosts keep
--- counting down while AFK: they're being used. The state goes in the snapshot (Sync.afk) for the AFK screen.
+-- counting down while AFK: they're being used. The state goes in the
+-- snapshot (Sync.afk) for the AFK screen.
+-- After Config.SERVER_GOAL.afkExcludeMinutes in the lounge a player no
+-- longer counts toward the server goal's size (ServerGoal.setAway).
 --
 -- Staying connected: Roblox disconnects after about 20 idle minutes. While
 -- AFK the client answers Players.LocalPlayer.Idled with VirtualUser
@@ -38,9 +41,11 @@ local Portals = require(ReplicatedStorage.Shared.Util.Portals)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Volumes = require(ReplicatedStorage.Shared.Util.Volumes)
 local StatRules = require(ReplicatedStorage.Shared.Util.Stats)
+local Weather = require(ReplicatedStorage.Shared.Util.Weather)
 local Analytics = require(script.Parent.Analytics)
 local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
+local ServerGoal = require(script.Parent.ServerGoal)
 local Stats = require(script.Parent.Stats)
 local Sync = require(script.Parent.Sync)
 local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
@@ -162,6 +167,7 @@ local function stop(player: Player, leaving: Types.Profile?)
 	sessions[player] = nil
 	Sync.afk[player] = nil
 	Sync.markDirty(player)
+	ServerGoal.setAway(player, false) -- out of the lounge: counts for the goal again
 end
 
 local function enter(player: Player)
@@ -211,6 +217,8 @@ local function check(player: Player)
 		return
 	end
 	local now = os.clock()
+	-- long in the lounge: left out of the server goal's size
+	ServerGoal.setAway(player, not Weather.countsForGoal(now - session.insideSince))
 	if not session.active then
 		if now - session.insideSince < AFK.enterSeconds then
 			return

@@ -48,7 +48,28 @@ function Rewards.loginRun(lastClaimDay: number, today: number, run: number): num
 	return 1
 end
 
--- May this playtime gift be claimed, `elapsed` seconds into the session?
+-- Today's playtime gifts from the saved ones: the same day carries on
+-- (seconds played and gifts claimed, cleaned up), any other day (or a
+-- broken save) starts again at 0 with nothing claimed. So leaving and
+-- rejoining doesn't give the gifts again: they're once per UTC day.
+function Rewards.playtimeToday(saved: any, today: number): Types.PlaytimeSave
+	local count = #Config.PLAYTIME_GIFTS
+	local claimed = table.create(count, false)
+	if typeof(saved) ~= "table" or saved.day ~= today then
+		return { day = today, seconds = 0, claimed = claimed }
+	end
+	local seconds = if typeof(saved.seconds) == "number" and saved.seconds == saved.seconds
+		then math.max(saved.seconds, 0)
+		else 0
+	if typeof(saved.claimed) == "table" then
+		for index = 1, count do
+			claimed[index] = saved.claimed[index] == true
+		end
+	end
+	return { day = today, seconds = seconds, claimed = claimed }
+end
+
+-- May this playtime gift be claimed, `elapsed` seconds into the day's playtime?
 function Rewards.giftReady(gift: Types.PlaytimeGift, elapsed: number, claimed: boolean): boolean
 	return not claimed and elapsed >= gift.minutes * 60
 end

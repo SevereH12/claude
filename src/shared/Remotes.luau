@@ -12,7 +12,8 @@
 -- Both ways: Ascend (asks, then confirms with the server's token; the server
 -- answers with the confirm screen's details or the new level), Tutorial
 -- (the client asks to "skip"; the server says "finished"), Admin (the admin
--- panel's requests and the server's answers; Systems/Admin)
+-- panel's requests and the server's answers; Systems/Admin), NotifyOptIn
+-- (the server asks about reminders; the client says when YES was tapped)
 -- Client -> server: ClientError (a client script error, Systems/Errors)
 
 export type RemoteName =

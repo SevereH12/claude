@@ -4,8 +4,11 @@
 --   * Asking: after a daily reward claim, a player who's never been asked
 --     gets "Remind me when my daily reward is ready?" (the NotifyOptIn
 --     remote; Controllers/RewardsUI shows it, and YES opens Roblox's own
---     ExperienceNotificationService:PromptOptIn). Asked once, ever.
---   * Queueing: when a player who was asked leaves, "daily reward ready"
+--     ExperienceNotificationService:PromptOptIn). Asked once, ever. YES
+--     comes back on the same remote and is saved (profile.notifyYes).
+--   * Only players who tapped YES get reminders queued (Roblox would drop
+--     the rest anyway, but each costs a MemoryStore write and a call).
+--   * Queueing: when a player who said YES leaves, "daily reward ready"
 --     and "streak ends soon" are put in a MemoryStore sorted map, keyed by
 --     when they're due. When they come back, those are taken out again.
 --   * Sending: every server looks for due items each minute and claims each
@@ -24,6 +27,7 @@ local HttpService = game:GetService("HttpService")
 local MemoryStoreService = game:GetService("MemoryStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
@@ -32,6 +36,7 @@ local Types = require(ReplicatedStorage.Shared.Types)
 local PlayerData = require(script.Parent.PlayerData)
 local Rewards = require(script.Parent.Rewards)
 local Sync = require(script.Parent.Sync)
+local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
 
 local SETTINGS = Config.NOTIFICATIONS
 local URL = "https://apis.roblox.com/cloud/v2/users/%d/notifications"
@@ -203,9 +208,9 @@ local function queueItem(item: NotifyRules.Item)
 	end
 end
 
--- The player left: queue their reminders (only if they were asked).
+-- The player left: queue their reminders (only if they said YES).
 local function onLeaving(player: Player, profile: Types.Profile)
-	if not profile.notifyAsked then
+	if not profile.notifyYes then
 		return
 	end
 	local items = NotifyRules.plan(player.UserId, profile.lastDailyDay, profile.loginRun, os.time())
@@ -220,7 +225,7 @@ end
 
 -- The player is back: their reminders aren't needed.
 local function onLoaded(player: Player, profile: Types.Profile)
-	if not profile.notifyAsked then
+	if not profile.notifyYes then
 		return
 	end
 	local queue = getMap()
@@ -247,6 +252,20 @@ local function onDailyClaimed(player: Player, profile: Types.Profile)
 	print(`[Notifications] asked {player.Name} about daily reminders`)
 end
 
+-- The client says YES was tapped on the question (rate-limited; only
+-- after the server asked).
+local function onYes(player: Player)
+	if not RateLimit.allow(player, "NotifyOptIn", 0.2, 2) then
+		return
+	end
+	local profile = PlayerData.get(player)
+	if not profile or not profile.notifyAsked or profile.notifyYes then
+		return
+	end
+	profile.notifyYes = true
+	print(`[Notifications] {player.Name} said yes to daily reminders`)
+end
+
 -- Studio TEST: queues a "daily" reminder for this player, due now; the
 -- next send (within a minute) claims it and sends it, or logs why not.
 function Notifications.testQueue(player: Player)
@@ -263,6 +282,7 @@ end
 
 function Notifications.init()
 	optInRemote = Net.get("NotifyOptIn")
+	optInRemote.OnServerEvent:Connect(onYes)
 	Rewards.DailyClaimed:Connect(onDailyClaimed)
 	PlayerData.Loaded:Connect(onLoaded)
 	PlayerData.Leaving:Connect(onLeaving)

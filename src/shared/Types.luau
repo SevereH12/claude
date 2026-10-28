@@ -34,7 +34,14 @@ export type Profile = {
 	loginRun: number, -- days in a row the daily reward was claimed (keeps counting past day 7), 0 = never
 	bestLoginRun: number, -- the longest loginRun ever (the "Longest streak" leaderboard)
 	notifyAsked: boolean, -- asked "Remind me when my daily reward is ready?" (asked once, ever)
+	notifyYes: boolean, -- tapped YES on that question (reminders are only queued then)
+	playtime: PlaytimeSave, -- today's playtime gifts (Util/Rewards.playtimeToday)
+	invitedBy: number, -- who invited this new player, until the inviter is paid (Systems/Invites); 0 = nobody
 }
+
+-- Playtime gifts count playtime per UTC day, across visits: the day, the
+-- seconds played that day before this visit, and which gifts were claimed.
+export type PlaytimeSave = { day: number, seconds: number, claimed: { boolean } }
 
 -- A leaderboard row (Systems/Leaderboards): rank 1 is the top.
 export type LeaderboardEntry = { userId: number, name: string, value: number }
@@ -191,7 +198,8 @@ export type StoreSession = {
 -- This session's playtime gifts and the Studio "Next day" offset
 -- (Systems/Rewards).
 export type RewardSession = {
-	startedAt: number, -- workspace:GetServerTimeNow() when the session's playtime began
+	startedAt: number, -- workspace:GetServerTimeNow() when today's playtime began (now minus the seconds played today)
+	day: number, -- the UTC day (with dayOffset) these gifts are for
 	claimed: { boolean }, -- per Config.PLAYTIME_GIFTS entry
 	dayOffset: number, -- Studio only: days added to today
 }

@@ -3,7 +3,7 @@
 --   * the 7-day login streak: claimed days ticked, today's glowing with
 --     CLAIM, later days dimmed, and "Next reward in 5h 12m" (to the next UTC
 --     day) once today's is claimed
---   * the 6 playtime gifts of this visit, each counting down ("in 3:41") or
+--   * the 6 playtime gifts of today (UTC), each counting down ("in 3:41") or
 --     showing CLAIM
 -- Each card shows what this player would really get: Volts grow with their
 -- best zone, and a boost for a pass they own says so and pays Volts instead
@@ -581,7 +581,7 @@ local function render(): (boolean, boolean, { number })
 		then `Day {nextDay} is ready to claim!`
 		else `Next reward in {hoursMinutes(RewardRules.untilNextDay(now))}`
 
-	-- this visit's playtime gifts
+	-- today's playtime gifts
 	local elapsed = now - snapshot.gifts.startedAt
 	for index, card in giftCards do
 		local gift = Config.PLAYTIME_GIFTS[index]
@@ -758,6 +758,7 @@ local function askAboutReminders()
 	UI.toast("🔔 Remind me when my daily reward is ready?", "info", 12, {
 		text = "YES",
 		onTap = function()
+			Net.get("NotifyOptIn"):FireServer() -- the server only queues reminders after a YES
 			local shown, err = pcall(function()
 				ExperienceNotificationService:PromptOptIn()
 			end)
@@ -921,7 +922,7 @@ function RewardsUI.init()
 	})
 	UI.maxText(nextLabel, 18)
 
-	heading(list, 4, "⏱ PLAYTIME GIFTS (this visit)")
+	heading(list, 4, "⏱ PLAYTIME GIFTS (today)")
 	giftGrid = grid(list, 5, "Gifts", #Config.PLAYTIME_GIFTS)
 	local claimGift = Net.get("ClaimGift")
 	for index, gift in Config.PLAYTIME_GIFTS do
@@ -988,7 +989,7 @@ function RewardsUI.init()
 	end
 	local inviteText = UI.label({
 		Title = true,
-		Text = `New players you invite get a welcome gift, you get a {reward.name}. Friends here: +{math.round(
+		Text = `New players you invite get a welcome gift, you get a {reward.name} once they've played {Config.INVITES.playMinutes} min. Friends here: +{math.round(
 			Config.FRIENDS.perFriend * 100
 		)}% Volts each`,
 		TextXAlignment = Enum.TextXAlignment.Left,
