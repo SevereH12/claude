@@ -5,22 +5,35 @@ Plant for Volts, and buy bigger bottles.
 
 ## Features
 
-- **Storm cycle**: 90s storms, 20s calm (first storm 8s after the server
-  starts). The sky darkens, clouds roll in and it rains during storms.
-- **Zones** with glowing force-field borders and entrance arches:
-  - **Shoreline** (yellow): everyone in the circle catches. 5 Volts per charge.
-  - **Mesa** (orange, up the ramp): only the closest player catches. 20 Volts per charge.
-- **Strikes**: a ring and light pillar appear 1.5s before each bolt. Stand in
-  the ring to catch a charge. The bottle is always in your hand.
-- **Speed**: normal speed inside zones, fast everywhere else.
-- **Selling**: step on the glowing SELL pad at the Power Plant.
-- **Bottles**: Jar (5) → Flask (15) → Battery Pack (40) → Storm Cell (100).
-- **Saving**: Volts, bottle tier and held charges save (retries, session
-  locking, autosave every 60s, save on leave and shutdown).
-- **HUD**: Volts, storm timer, bottle fill bar, server city meter (placeholder).
+- **Storms**: 90 s storms and 20 s of calm. During a storm, lightning
+  strikes the storm zones: a ring appears 1.5 s before each bolt, and
+  standing in it catches the charge. Rare bolts (Golden, Rainbow, ball
+  lightning), Supercells and Server Storms make some storms special.
+- **Three worlds**, joined by portals: **Barometer Bay** (Shoreline,
+  Mesa, and Aurora Reef for Roblox Premium members), **Voltcliff Works**
+  (Generator Yard, Tidewire Beach, Thunderhead Mesa) and **Stormspire
+  Isles** (Rune Spire, Cloudshore, Ember Mesa). In "Shared" zones everyone
+  in the ring catches; in the Mesas only the closest player does.
+- **Selling**: stand at a Power Plant sell station (or use the Remote
+  Sell pass) and your charges become Volts.
+- **Progress**: 9 bottles (Jar to Storm Core) and 9 pairs of boots, a
+  Research Office with 5 researchers to hire, post and promote, and
+  **Ascension** (start again for +50% Volts per level).
+- **Rewards**: a 7-day login streak, playtime gifts every day, daily and
+  weekly quests, the Storm Log collection book, an AFK Lounge, a server
+  goal that starts a 2x Server Surge, friends and invite rewards, and
+  leaderboards.
+- **Store** (everything off sale until the owner turns it on): 8 Game
+  Passes, Volts packs, boosts and gifting.
+- **Settings**, sound and music, a new-player tutorial and one-time
+  gameplay tips after it, phone
+  notifications, an admin panel, error reports and server-side movement
+  checks.
+- **Saving**: every player's profile saves with retries and session
+  locking, every 60 s, when they leave and when the server shuts down.
 
 Every number (timings, values, prices, radius, walk speeds) is in
-`src/shared/Config.luau`.
+`src/shared/Config.luau`. The sections below explain each part.
 
 ## Getting it into Roblox Studio
 
@@ -119,8 +132,10 @@ The REWARDS panel (MENU → 🎁 REWARDS; a red dot means something is ready):
   midnight UTC). Coming back the next day continues the streak; missing a
   day, or the day after day 7, starts again at day 1
   (`Config.DAILY_REWARDS`).
-- **Playtime gifts**: six gifts every visit, at 5, 10, 20, 30, 45 and 60
-  minutes of play (`Config.PLAYTIME_GIFTS`).
+- **Playtime gifts**: six gifts a day, at 5, 10, 20, 30, 45 and 60
+  minutes of play that UTC day (`Config.PLAYTIME_GIFTS`). Playtime is
+  saved, so leaving and rejoining carries on where you were (it doesn't
+  give the gifts again); a new day starts them again.
 - Volts rewards are counted in charges × the bolt value of the player's
   best zone, so they're worth the same playtime early or late. Boost
   rewards (2x Volts, Lucky, Big Bottles) give a pass's effect for a while;
@@ -140,6 +155,35 @@ playtime, Clear boosts and Pretend group member (Studio only). Stats are
 under **Analytics**: custom events DailyClaimed, PlaytimeGift and
 GroupJoined, and reward Volts in Economy (TimedReward).
 
+## Boots and storm drag
+
+Boots make you run faster inside storm zones, and each zone's storm slows
+you back down, so every new zone starts out as a fresh race to the bolts.
+
+- **Boots**: each pair adds 4 more speed than the last (Puddle Jumpers +4
+  up to Cloud Walkers +32), only inside storm zones. Between zones
+  everyone runs at 30 (45 with Jet Boots), whatever boots they wear.
+- **Storm drag**: every zone's storm takes some speed away. Nobody types
+  it in: `Util/Speed` works it out from the bottle and boot prices, so a
+  new zone gets one by itself. It's the bonus of the boots a typical
+  player owns when that zone opens, where "typical" means someone who
+  always buys the cheaper of the next bottle and the next boots (the
+  order the HUD's goals show). So a typical player walks into every zone
+  at 18 (a little over Roblox's default 16; `Config.WALK_SPEED_IN_ZONE`),
+  and every pair they buy while there makes them faster again.
+- Today's drags: Shoreline, Mesa and Aurora Reef 0, Generator Yard 12,
+  Tidewire Beach 20, Thunderhead Mesa and Rune Spire 24, Cloudshore 28,
+  Ember Mesa 32. The Premium zone drags like your best zone.
+- Your speed in a zone never drops below 10 or goes above 28
+  (`Config.ZONE_SPEED`), so leaving a zone always speeds you up.
+- On screen: walking into a zone with drag shows a note ("Storm drag -12
+  speed: you run 18 here"), and the shop's BOOTS rows say how fast each
+  pair runs in your best zone.
+- The AFK Lounge and the movement checks use the same speeds.
+- To tune it: change `speedBonus` in `Config.BOOTS` (the drags follow by
+  themselves), or `Config.ZONE_SPEED`. `tools/harness/test_speed.luau`
+  checks the rules and prints every zone's drag and speeds.
+
 ## AFK Lounge
 
 The Night Shift Lounge in Barometer Bay's village (or MENU → 🌀 TELEPORT →
@@ -147,8 +191,9 @@ AFK LOUNGE) pays Volts while you rest. Stand on its rug for 10 seconds and
 you earn **10% of what you'd make grinding your best zone** (15% for
 Roblox Premium members), paid every minute:
 
-- The grinding rate counts your bottle (and Big Bottles), your boots (how
-  many strikes you can reach), your best zone's bolt value, and everything
+- The grinding rate counts your bottle (and Big Bottles), your boots
+  against your best zone's storm drag (how many strikes you can reach),
+  your best zone's bolt value, and everything
   that multiplies a sale: 2x Volts, VIP, Lucky Charges, running boosts,
   the group bonus and a Server Storm. It's worked out again every 15
   seconds, so a boost running out or a new purchase shows straight away.
@@ -174,10 +219,16 @@ Mesa 1, ... Ember Mesa 6). At level 5 you can promote one at the Research
 Office: it costs **Glints** (one for every bolt you catch, of that zone's
 tier; promotion to rank r takes Glints of tier r or higher), and sends the
 researcher back to level 1 a rank higher, with a 10% stronger perk.
-In the Research panel the Glints line sits at the top, each card shows the
-rank as gold stars (the name tags above the models too), and a level-5
-researcher's Hire button becomes **PROMOTE** (tap twice to confirm). Zones
-above a researcher's rank show 🔒 in the post picker.
+The Research panel has two tabs, **TEAM** and **LOG** (the Storm Log).
+TEAM starts with a strip of Glints chips, one per zone tier in that zone's
+colour (a dimmed "?" until you have some; tap one to see where those Glints
+come from and which promotions they pay for). Under it each researcher has
+a compact card: the rank as gold stars (the name tags above the models
+too), level, perk, data bar, and two buttons: **📍 POST** opens one shared
+post picker (Office, then the zones under each world's name; zones above
+the researcher's rank show 🔒 and the rank they need), and HIRE becomes
+**PROMOTE** once hired (it shows Glint progress like "✨ 37/65 Mesa" while
+you're short; tap twice to confirm).
 
 The numbers (`Config.RESEARCH_PRESTIGE`) come from
 `python3 tools/balance/prestige.py`, which works out how much data and how
@@ -269,8 +320,8 @@ server only stores what `Settings.sanitize` lets through.
   the player's own Roblox graphics level.
 - **Accessibility & HUD**: Reduce flashing, Camera shake, Colourblind rings
   (dashed rings with a ⚡ and a high-contrast zone colour set), Text size,
-  and switches for pop-ups, name tags, pass offers, chat announcements and
-  gift reminders. Before their first storm every player is asked once
+  and switches for pop-ups, name tags, pass offers, chat announcements,
+  gift reminders and gameplay tips. Before their first storm every player is asked once
   whether to reduce flashing. Warning rings always show.
 - Code reads settings with `Lib/SettingsStore` (`get`, `set`, `watch`,
   `Changed`), so changes apply at once.
@@ -315,8 +366,11 @@ numbers in `Config.SERVER_GOAL`).
 - **How big it is**: each player's grinding rate (what the AFK screen
   works out for their best zone) added up, times 15 minutes. So a full
   server of late-game players and two new players both take about 15
-  minutes. It's worked out again when someone joins or leaves, and it
-  never drops below what's already filled plus 10%, so it can't get stuck.
+  minutes. Players who have been in the AFK Lounge for 5 minutes or more
+  (`afkExcludeMinutes`) are left out, since they can't help fill it; they
+  count again when they leave the lounge. It's worked out again when
+  someone joins, leaves, or starts or stops being left out, and it never
+  drops below what's already filled plus 10%, so it can't get stuck.
 - **Server Surge**: a full meter starts 10 minutes of 2x Volts for
   everyone, with a banner and a chat line. It stacks with a Server Storm
   (both on: 4x). The meter then empties and the next goal is 1.5x bigger;
@@ -355,14 +409,19 @@ saved with the player.
 
 ### Storm Log
 
-The Storm Log is a collection book in the REWARDS panel's **LOG** tab
-(`Util/StormLog`, `Systems/StormLog`, `Lib/StormLogTab`). It has four pages:
+The Storm Log is a collection book in the RESEARCH panel's **LOG** tab
+(`Util/StormLog`, `Systems/StormLog`, `Lib/StormLogTab`). The tab shows
+"(n)" when n rows can be claimed, and the menu's RESEARCH dot lights. It has four pages:
 
 - **Bolts**: every bolt type (normal, Golden, Rainbow, ball lightning) in
   every zone.
 - **Places**: every world and every zone you've been in.
 - **Team**: every researcher at every rank (hiring them is the first).
 - **Weather**: being in game for a Supercell and for each scheduled event.
+
+The Roblox Premium zone (Aurora Reef) is a **bonus**: its Bolts row and
+its Places entry are shown, but the pages (and the Barometer Bay row) can
+be finished without it, so everyone can reach the full +8%.
 
 It's all worked out from the stat counters (new counters remember the
 zones and worlds you've visited and the Supercells and events you've
@@ -427,6 +486,43 @@ of the screen with one line at a time:
 - **Testing in Studio**: the TEST panel's REWARDS list has **Restart
   tutorial** (starts it again from step 1).
 
+**Gameplay tips** (`Config.HINTS`, `Util/Hints`, `Systems/Hints`,
+`Controllers/Hints`). After the tutorial, the rest of the game is shown a
+little at a time: when something becomes useful, a small two-line toast
+starting with 💡 appears for 8 seconds, and the button it's about glows
+softly for 20 seconds (the MENU button, then the right tile once the menu
+is open, or the SELL button or the server goal meter). Tapping the toast
+opens that panel. Each tip shows **once ever**.
+
+- **What they cover**: boots and storm drag, a new zone opening, a new
+  world's portal, Teleport, hiring a researcher, posting one, Glints,
+  promotions, the Storm Log, the daily streak, playtime gifts, quests and
+  rerolls, the TOP leaderboards, invites, the group bonus, Boosts, the AFK
+  Lounge, rare bolts, Supercells, events, the server goal and Surge, Remote
+  Sell (if you own it), Ascension (when you can), Settings and the friends
+  boost.
+- **When**: never during the tutorial, never with a panel or the menu
+  open, never while you're catching in a storm (or for 10 seconds after a
+  catch), never in the AFK Lounge, not in the first minute after joining
+  or after the tutorial, and at least 90 seconds apart. If several are
+  ready, the first in the list goes first.
+- **Editing them**: everything is in one list in `Config.HINTS` (near the
+  top of `Config.luau`): each tip's id, its trigger (`when`, and `minutes`
+  into the visit), its text, what tapping it opens and what glows. The
+  triggers themselves are short functions in `Util/Hints.CONDITIONS`.
+  Never rename an id (a renamed tip shows again to everyone).
+- **Saving**: the ids shown are saved in the profile (`hintsSeen`). The
+  client says when it showed one; the server only accepts known ids, a few
+  a minute. Players from before tips existed don't get tips for things
+  they've clearly done (hired a researcher, bought boots, claimed a daily
+  reward, been in two zones, ...).
+- **Turning them off**: ⚙️ SETTINGS → Accessibility & HUD → **Gameplay
+  tips**.
+- **Testing in Studio**: TEST → 🎁 REWARDS → **💡 Reset gameplay tips**
+  (every tip can show again; the first a few seconds later, and the
+  time-based ones straight away). `tools/harness/test_hints.luau` checks
+  the triggers, the order, the timing and the once-only rule.
+
 **Friends boost** (`Systems/Friends`): +5% Volts for each Roblox friend
 in your server, up to 3 (+15%). The server checks friendships when
 someone joins and forgets them when they leave. A green chip on the HUD
@@ -435,10 +531,11 @@ AFK Lounge). Studio test: **Pretend friends +1** in the TEST panel.
 
 **Invites** (`Systems/Invites`, the **INVITE** button in REWARDS): opens
 Roblox's own invite window. When a friend who has **never played before**
-joins from your invite, they get a welcome gift of 100 charges and you get
-a 2x Volts Boost in your gift inbox (so you get it even if you're offline).
-Limits: 5 rewarded invites a day per inviter, and only for Roblox accounts
-at least 3 days old. Numbers are in `Config.TUTORIAL`, `Config.FRIENDS`
+joins from your invite, they get a welcome gift of 100 charges, and once
+they've played 10 minutes (or made their first sale) you get a 2x Volts
+Boost in your gift inbox (so you get it even if you're offline). Limits: 5
+rewarded invites a day per inviter, and only for Roblox accounts at least
+14 days old (so alt accounts don't pay). Numbers are in `Config.TUTORIAL`, `Config.FRIENDS`
 and `Config.INVITES`. Studio can't send real invites: look for
 `[Invites]` lines in the output on a live server.
 
@@ -467,8 +564,8 @@ counting past day 7). Each is saved in its own OrderedDataStore
 **Phone notifications** (`Util/Notifications`, `Systems/Notifications`).
 After a player claims a daily reward for the first time, a message asks
 "Remind me when my daily reward is ready?". YES opens Roblox's own
-notifications prompt. It's only ever asked once. When someone who was
-asked leaves, two reminders wait in a MemoryStore queue: **daily reward
+notifications prompt. It's only ever asked once, and the YES is saved
+(`notifyYes`). When someone who tapped YES leaves (or the server closes), two reminders wait in a MemoryStore queue: **daily reward
 ready** (at midnight UTC, if they claimed today) and **streak ends soon**
 (3 hours before their streak would break). Any running server sends due
 reminders each minute, and each is sent only once. Coming back cancels
@@ -625,21 +722,65 @@ In a private server its owner gets a small green **[Owner]** chat tag
 (`Systems/PrivateServer`, `Controllers/VipChat`). Everything else works the
 same as in a public server.
 
+## Movement checks (anti-cheat)
+
+The client moves its own character, so a cheat script could teleport onto
+lightning rings or run faster. `Systems/AntiCheat` (rules in
+`Util/AntiCheat`, numbers in `Config.ANTI_CHEAT`) looks at every player's
+position 5 times a second. If someone moved further across the ground than
+their walk speed allows (×1.5, plus 6 studs, over about a second), they
+can't catch bolts, touch ball lightning or sell at a station for 5
+seconds. Jet Boots, boots, jumping and falling are allowed for, and so is
+every move the server makes (portals, the Teleport panel, the AFK Lounge,
+Ascension's trip home, the zone lock, respawning). Nobody is kicked: lag
+can look like a teleport. Someone caught 3 or more times shows in the
+admin panel's list as `[cheat]`, and the output prints `[AntiCheat]`
+lines.
+
 ## Code layout
 
-- `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas, zone geometry
-- `plugin/` → the Studio updater plugin (not part of the game)
-- `src/server` → ServerScriptService.Server
-  - `Systems/`: PlayerData (saving), Map, StormCycle, Strikes, Bottles, Movement, Selling, Shop, Sync
-  - `Lib/`: MapBuilder, RateLimit
-  - `World/`: the map framework and its three style packs (WeatherLab is live).
-    The ground is built from parts (`World/Blocks`), not Roblox Terrain.
-- `src/client` → StarterPlayerScripts.Client
-  - `Controllers/`: State, Storm, StrikeFX, HUD, ShopUI, ZoneBanner
-  - `Lib/`: UI helpers
+- `src/shared` → ReplicatedStorage.Shared: `Config` (every number),
+  `Types`, `Remotes` (every remote's name), `Net`, and `Util/`: the pure
+  rules (no Roblox services) both sides use and the harness tests:
+  formulas, zones, progression, passes, rewards, quests, the Storm Log,
+  Ascension, research, weather and the server goal, settings, social,
+  leaderboards, notifications, admin rules (`Ops`), walk speed and storm
+  drag (`Speed`) and movement checks (`AntiCheat`).
+- `src/server` → ServerScriptService.Server (a Script). It loads every
+  system in `Systems/`, calls each one's `init()` and then `start()`.
+  - `Systems/`: one module per feature. The core: `PlayerData` (saving),
+    `Sync` (sends each player their state), `StormCycle`, `Strikes`,
+    `Selling`, `Shop`, `Bottles`, `Boots`, `Movement`, `Travel`,
+    `AntiCheat`, `Map`. Then `Research`, `Rewards`, `Quests`,
+    `StormLog`, `Ascension`, `Afk`, `ServerGoal`, `Boosts`, `Passes`,
+    `PassPerks`, `Store`, `Receipts`, `RemoteSell`, `Gifts`, `Friends`,
+    `Invites`, `Group`, `Leaderboards`, `Notifications`, `Settings`,
+    `Stats`, `Tutorial`, `Hints`, `Analytics`, `Admin`, `Errors`,
+    `PrivateServer` and the Studio-only `DevCommands`.
+  - `Lib/`: `MapBuilder` (builds the map) and `RateLimit`.
+  - `World/`: the map framework and its three style packs (WeatherLab,
+    StormPunk, SkyIsles). The ground is built from parts (`World/Blocks`),
+    not Roblox Terrain.
+- `src/client` → StarterPlayerScripts.Client (a LocalScript)
+  - `Controllers/`: `State` (the latest snapshot), the HUD and menu, one
+    controller per panel (shop, research, rewards, boosts, gifts,
+    settings, teleport, AFK, Ascension, admin), the storm and strike
+    effects, music and sound, the tutorial and the Studio TEST panel.
+  - `Lib/`: UI helpers (`UI`, `Layout`, `LayoutMath`), sounds (`Sfx`),
+    settings, toasts and the Log and leaderboard tabs.
+- `plugin/` → the Studio updater plugin (not part of the game).
+- `tools/` → the test harness (`tools/harness`, run with Lune), map
+  checks and renders, and store, audio and ops scripts.
 
 ## Checks
 
 - Format: `stylua src`
 - Lint: `selene src`
+- Game rules: `lune run tools/harness/test_<name>.luau` for each test in
+  `tools/harness/` (`test_gameplay.luau Game`, and `test_layout.luau`
+  takes an output path)
+- The map: `tools/check_world.sh Game <outdir>`
 - Data deletion script: `python3 tools/ops/test_erase_user.py` (offline)
+
+GitHub runs the format, lint, harness and map checks on every push to
+`main` and to the working branch (`.github/workflows/ci.yml`).

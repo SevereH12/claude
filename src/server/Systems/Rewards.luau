@@ -2,8 +2,9 @@
 -- The 7-day login streak and playtime gifts (Config.DAILY_REWARDS and
 -- PLAYTIME_GIFTS; the rules are Util/Rewards). ClaimDaily and
 -- ClaimGift(index) only ask: rate-limited, and the server decides
--- everything. A day is a UTC calendar day; playtime counts from when the
--- profile loaded and starts again each visit.
+-- everything. A day is a UTC calendar day. Playtime gifts count playtime
+-- per UTC day, across visits (saved in profile.playtime): leaving and
+-- rejoining carries on where you were, and a new day starts them again.
 -- A reward pays Volts in charges (Util/Store.volts: the player's best bolt,
 -- so it's worth the same playtime early or late) and timed boosts
 -- (Systems/Boosts); a boost for a pass they own pays Volts instead. The
@@ -87,6 +88,32 @@ local function onClaimDaily(player: Player)
 	Rewards.DailyClaimed:Fire(player, profile)
 end
 
+-- Seconds played today, as of now.
+local function playedToday(session: Types.RewardSession): number
+	return math.max(workspace:GetServerTimeNow() - session.startedAt, 0)
+end
+
+-- Starts today's gifts from the profile (on join, and when a new UTC day
+-- starts while playing). The session's claimed list is the profile's own.
+local function startDay(player: Player, profile: Types.Profile, dayOffset: number)
+	local day = RewardRules.today(os.time()) + dayOffset
+	profile.playtime = RewardRules.playtimeToday(profile.playtime, day)
+	Sync.rewards[player] = {
+		startedAt = workspace:GetServerTimeNow() - profile.playtime.seconds,
+		claimed = profile.playtime.claimed,
+		dayOffset = dayOffset,
+		day = day,
+	}
+	Sync.markDirty(player)
+end
+
+-- Saves today's playtime into the profile (claims, leaving).
+local function savePlaytime(profile: Types.Profile, session: Types.RewardSession)
+	if profile.playtime.day == session.day then
+		profile.playtime.seconds = playedToday(session)
+	end
+end
+
 local function onClaimGift(player: Player, index: unknown)
 	if not RateLimit.allow(player, "ClaimGift", 2, 4) then
 		return
@@ -104,12 +131,16 @@ local function onClaimGift(player: Player, index: unknown)
 	if not profile or not session then
 		return
 	end
-	local gift = Config.PLAYTIME_GIFTS[index]
-	local elapsed = workspace:GetServerTimeNow() - session.startedAt
-	if not RewardRules.giftReady(gift, elapsed, session.claimed[index]) then
+	if today(player) ~= session.day then
+		startDay(player, profile, session.dayOffset) -- a new UTC day: new gifts
 		return
 	end
-	session.claimed[index] = true
+	local gift = Config.PLAYTIME_GIFTS[index]
+	if not RewardRules.giftReady(gift, playedToday(session), session.claimed[index]) then
+		return
+	end
+	session.claimed[index] = true -- the profile's list too
+	savePlaytime(profile, session)
 	Rewards.give(player, profile, gift.reward, `Gift {gift.minutes} min`)
 	Analytics.giftClaimed(player, gift.minutes)
 end
@@ -143,14 +174,29 @@ function Rewards.init()
 	Net.get("ClaimGift").OnServerEvent:Connect(onClaimGift)
 	Net.get("GroupJoined").OnServerEvent:Connect(onGroupJoined)
 	Group.Joined:Connect(Analytics.groupJoined)
-	PlayerData.Loaded:Connect(function(player: Player)
-		Sync.rewards[player] = {
-			startedAt = workspace:GetServerTimeNow(),
-			claimed = table.create(#Config.PLAYTIME_GIFTS, false),
-			dayOffset = 0,
-		}
-		Sync.markDirty(player)
+	PlayerData.Loaded:Connect(function(player: Player, profile: Types.Profile)
+		startDay(player, profile, 0)
 	end)
+	PlayerData.Leaving:Connect(function(player: Player, profile: Types.Profile)
+		local session = Sync.rewards[player]
+		if session then
+			savePlaytime(profile, session)
+		end
+		Sync.rewards[player] = nil
+	end)
+end
+
+-- A new UTC day while playing: new playtime gifts (checked every half minute).
+function Rewards.start()
+	while true do
+		task.wait(30)
+		for player, session in Sync.rewards do
+			local profile = PlayerData.get(player)
+			if profile and today(player) ~= session.day then
+				startDay(player, profile, session.dayOffset)
+			end
+		end
+	end
 end
 
 return Rewards

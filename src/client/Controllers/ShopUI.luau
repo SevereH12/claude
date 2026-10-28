@@ -12,6 +12,8 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Net = require(ReplicatedStorage.Shared.Net)
 local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
+local Progression = require(ReplicatedStorage.Shared.Util.Progression)
+local Speed = require(ReplicatedStorage.Shared.Util.Speed)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Layout = require(script.Parent.Parent.Lib.Layout)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
@@ -129,6 +131,16 @@ local function selectTab(tab: Tab)
 	hint.Text = tab.hint
 end
 
+-- Opens the shop on the BOOTS tab (a gameplay tip, Controllers/Hints).
+function ShopUI.openBoots()
+	for _, tab in tabs do
+		if tab.title == "BOOTS" then
+			selectTab(tab)
+		end
+	end
+	ShopUI.open()
+end
+
 -- The tutorial: shows the BOTTLES tab, scrolled to this tier's row, and
 -- returns its Buy button to point at (nil if there's no such row).
 function ShopUI.focusBottle(tier: number): GuiObject?
@@ -153,7 +165,7 @@ local function buildRow(tab: Tab, tier: number, item: Item)
 	local frame = UI.make(Instance.new("Frame"), {
 		Name = item.name,
 		LayoutOrder = tier,
-		Size = UDim2.new(1, -12, 0, ROW_HEIGHT),
+		Size = UDim2.new(1, 0, 0, ROW_HEIGHT),
 		BackgroundColor3 = COLORS.panelDark,
 		Parent = tab.list,
 	})
@@ -242,27 +254,12 @@ local function buildTab(
 		Parent = body,
 	})
 	UI.maxText(tabButton, 22)
-	local list = UI.make(Instance.new("ScrollingFrame"), {
+	local list = UI.list(body, {
 		Name = title .. "List",
 		Position = UDim2.fromOffset(0, 86),
 		Size = UDim2.new(1, 0, 1, -86),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollBarThickness = 6,
 		Visible = false,
-		Parent = body,
-	})
-	UI.make(Instance.new("UIListLayout"), {
-		Padding = UDim.new(0, 10),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = list,
-	})
-	UI.make(Instance.new("UIPadding"), {
-		PaddingTop = UDim.new(0, 4),
-		PaddingLeft = UDim.new(0, 4),
-		Parent = list,
+		gap = 10,
 	})
 	local tab: Tab = {
 		title = title,
@@ -326,7 +323,7 @@ function ShopUI.init()
 		local frame = UI.make(Instance.new("Frame"), {
 			Name = "Ascend",
 			LayoutOrder = #Config.BOTTLES + 1,
-			Size = UDim2.new(1, -12, 0, ROW_HEIGHT),
+			Size = UDim2.new(1, 0, 0, ROW_HEIGHT),
 			BackgroundColor3 = COLORS.panelDark,
 			Visible = false,
 			Parent = bottles.list,
@@ -372,7 +369,7 @@ function ShopUI.init()
 	local boots = buildTab(
 		2,
 		"BOOTS",
-		"Boots make you faster inside storm zones, so you reach bolts first.",
+		"Boots beat each zone's storm drag, so you reach bolts first.",
 		Net.get("BuyBoots"),
 		function(snapshot)
 			return snapshot.bootTier
@@ -386,6 +383,20 @@ function ShopUI.init()
 			detail = if def.speedBonus > 0
 				then `+{def.speedBonus} speed in storm zones`
 				else "Your starter pair",
+			-- the speed these boots give in the player's best zone, after
+			-- its storm drag (Util/Speed)
+			describe = function(snapshot)
+				local badge = `+{def.speedBonus}`
+				local zone = Progression.bestZone(snapshot)
+				local base = if def.speedBonus > 0
+					then `+{def.speedBonus} speed`
+					else "Starter pair"
+				if not zone then
+					return badge, base
+				end
+				local speed = Speed.withDrag(tier, Speed.drag(zone, snapshot))
+				return badge, `{base}: runs {speed} in {zone.displayName}`
+			end,
 		})
 	end
 

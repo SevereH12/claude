@@ -48,8 +48,9 @@ Studio" checks and list them in your report instead.
   `DEFAULT_PROFILE` (and a test for the migration).
 - Every client->server remote is rate-limited and validated
   (`Systems/Shop.luau` is the pattern). Server owns all state.
-- Don't put game passes or products on sale, and don't change prices:
-  everything stays off sale until the user says otherwise.
+- All 8 passes and 17 products are **on sale** (since 2026-10-28, the
+  user's call). Don't change their prices or sale state, or the game page,
+  without asking.
 - Settings go through `Util/Settings` and `Lib/SettingsStore`; sounds
   through `Lib/Sfx` (no new sound uploads); UI through `Lib/UI` and
   `Lib/Layout` (the layout test must pass).

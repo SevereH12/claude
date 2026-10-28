@@ -9,6 +9,9 @@
 --     (Config.ERRORS.recent), with how many times each happened.
 -- Client errors are rate-limited: Config.ERRORS.perPlayer a minute per
 -- player and perServer a minute for the whole server; the rest are dropped.
+-- So made-up errors can't flood anything: at most Config.ERRORS.maxReported
+-- fingerprints are sent to Analytics per server (the list never grows past
+-- it), and at most maxClientReports of them from players' devices.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ScriptContext = game:GetService("ScriptContext")
@@ -18,13 +21,14 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Ops = require(ReplicatedStorage.Shared.Util.Ops)
 local Analytics = require(script.Parent.Analytics)
+local AntiCheat = require(script.Parent.AntiCheat)
 local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
 
 local SETTINGS = Config.ERRORS
 
 export type ErrorEntry = {
 	fingerprint: string,
-	source: string, -- "server" or "client"
+	source: string, -- "server", "client", or "cheat" (Systems/AntiCheat)
 	message: string, -- the first line, cut to Config.ERRORS.messageLength
 	who: string, -- the player whose device it happened on ("" for the server)
 	time: number, -- os.time() of the latest one
@@ -35,6 +39,8 @@ local Errors = {}
 
 local recent: { ErrorEntry } = {} -- newest first
 local reported: { [string]: boolean } = {} -- fingerprints sent to analytics
+local reportedCount = 0 -- keys in `reported` (capped: Config.ERRORS.maxReported)
+local clientReports = 0 -- client fingerprints sent (capped: maxClientReports)
 local serverWindow = Ops.newWindow(SETTINGS.perServer, 60)
 local recording = false
 
@@ -81,8 +87,16 @@ local function record(source: string, scriptName: string, message: string, playe
 			table.remove(recent)
 		end
 		local key = `{source}|{fingerprint}`
-		if not reported[key] then
+		if
+			source ~= "cheat" -- the admin panel only: it isn't an error
+			and not reported[key]
+			and Ops.mayReport(source, reportedCount, clientReports)
+		then
 			reported[key] = true
+			reportedCount += 1
+			if source == "client" then
+				clientReports += 1
+			end
 			Analytics.error(fingerprint, source, player)
 		end
 	end)
@@ -129,6 +143,10 @@ end
 function Errors.init()
 	ScriptContext.Error:Connect(onServerError)
 	Net.get("ClientError").OnServerEvent:Connect(onClientError)
+	-- repeat impossible moves (Systems/AntiCheat) go in the panel's list too
+	AntiCheat.Logged:Connect(function(player: Player, text: string)
+		record("cheat", "AntiCheat", text, player)
+	end)
 end
 
 return Errors

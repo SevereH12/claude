@@ -45,7 +45,7 @@ for rank = 0, Research.maxRank() do
 	)
 end
 check(Research.nextThreshold(#Config.RESEARCH_LEVELS) == nil, "no next threshold at max")
-local LEVEL5 = { 1150, 1800, 2850, 3700, 3700, 4500, 4500 }
+local LEVEL5 = { 950, 1600, 2900, 4300, 4900, 5450, 5450 }
 for rank = 0, 6 do
 	check(
 		Research.nextThreshold(4, rank) == LEVEL5[rank + 1],
@@ -172,7 +172,7 @@ check(not ok and why and string.find(why, "level 5"), `not before level 5 ({why}
 ok, why =
 	Research.canPromote({ level = 5, data = 0, post = "Office", rank = 0 }, glints({ 999, 10 }))
 check(
-	not ok and why == "Needs 35 more Mesa Glints",
+	not ok and why == "Needs 40 more Mesa Glints",
 	`rank 1 needs Mesa Glints, not Shoreline ones ({why})`
 )
 ok = Research.canPromote({ level = 5, data = 0, post = "Office", rank = 0 }, glints({ 0, 20, 30 }))
@@ -184,10 +184,10 @@ ok, why = Research.canPromote(
 check(not ok and why == "Already at the top rank", `the top rank can't go higher ({why})`)
 
 -- Glint spending: lowest eligible tier first, then higher ones ------------------------
-local after = Research.spendGlints({ 50, 20, 30, 0, 0, 0, 0 }, 1) -- costs 45 of tier 1+
+local after = Research.spendGlints({ 50, 20, 40, 0, 0, 0, 0 }, 1) -- costs 50 of tier 1+
 check(
-	after and after[1] == 50 and after[2] == 0 and after[3] == 5,
-	"rank 1: Mesa's 20 first, then 25 Generator Yard"
+	after and after[1] == 50 and after[2] == 0 and after[3] == 10,
+	"rank 1: Mesa's 20 first, then 30 Generator Yard"
 )
 check(Research.spendGlints({ 100, 10 }, 1) == nil, "not enough: nothing spent")
 local exact = Research.spendGlints({ 0, 0, 65 }, 2)

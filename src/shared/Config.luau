@@ -19,19 +19,22 @@ local BOTTLES: { Types.BottleDef } = {
 	{ name = "Storm Core", capacity = 4_000, price = 5_000_000 },
 }
 
--- In-zone walk speed is WALK_SPEED_IN_ZONE + speedBonus. Keep every tier
--- below WALK_SPEED_OUTSIDE: boots only matter inside storm zones, where
--- speed decides who reaches a bolt first.
+-- Boots add speedBonus to your walk speed inside storm zones (never
+-- between zones). Each zone's storm takes some back ("storm drag", worked
+-- out by Util/Speed from these prices and the bottles' prices), so a
+-- typical player walks into every zone at WALK_SPEED_IN_ZONE and every
+-- pair bought there makes them faster again. In-zone speed stays between
+-- ZONE_SPEED.min and ZONE_SPEED.max.
 local BOOTS: { Types.BootsDef } = {
 	{ name = "Rain Boots", speedBonus = 0, price = 0 }, -- everyone starts with these
-	{ name = "Puddle Jumpers", speedBonus = 2, price = 300 },
-	{ name = "Squall Skippers", speedBonus = 3, price = 900 },
-	{ name = "Gale Striders", speedBonus = 4, price = 2_000 },
-	{ name = "Thunder Treads", speedBonus = 6, price = 10_000 },
-	{ name = "Coil Striders", speedBonus = 7, price = 35_000 },
-	{ name = "Arc Runners", speedBonus = 8, price = 150_000 },
-	{ name = "Sky Treads", speedBonus = 9, price = 600_000 },
-	{ name = "Cloud Walkers", speedBonus = 10, price = 3_000_000 },
+	{ name = "Puddle Jumpers", speedBonus = 4, price = 300 },
+	{ name = "Squall Skippers", speedBonus = 8, price = 900 },
+	{ name = "Gale Striders", speedBonus = 12, price = 2_000 },
+	{ name = "Thunder Treads", speedBonus = 16, price = 10_000 },
+	{ name = "Coil Striders", speedBonus = 20, price = 35_000 },
+	{ name = "Arc Runners", speedBonus = 24, price = 150_000 },
+	{ name = "Sky Treads", speedBonus = 28, price = 600_000 },
+	{ name = "Cloud Walkers", speedBonus = 32, price = 3_000_000 },
 }
 
 local RESEARCHERS: { Types.ResearcherDef } = {
@@ -646,7 +649,7 @@ local EVENTS: { Types.EventDef } = {
 	},
 }
 
--- The Storm Log (Util/StormLog, the LOG tab in REWARDS): a collection book
+-- The Storm Log (Util/StormLog, the LOG tab in RESEARCH): a collection book
 -- worked out from the lifetime stat counters. Finishing a row (say every
 -- bolt type in Mesa) pays its page's `rowReward` once; every finished page
 -- adds `pageBonus` to all Volts for good, up to `maxBonus`.
@@ -664,6 +667,211 @@ local STORM_LOG_PAGES: { Types.StormLogPageDef } = {
 		title = "WEATHER",
 		icon = "🌀",
 		rowReward = { charges = 300, boosts = { { key = "Lucky", minutes = 20 } } },
+	},
+}
+
+-- Gameplay tips (Util/Hints, Systems/Hints, Controllers/Hints): after the
+-- new-player tutorial, small one-time hints (a short toast and a gentle glow
+-- on the right button) show each part of the game when it becomes useful.
+-- Each shows once ever (saved as profile.hintsSeen). Rules for when one may
+-- show: the tutorial is done, it's on in SETTINGS ("Gameplay tips"), no
+-- panel or menu is open, the player isn't catching in a storm or AFK, at
+-- least `firstDelay` seconds after joining (or finishing the tutorial) and
+-- `gapSeconds` after the last hint. Then the first hint in this list whose
+-- trigger is true (and that wasn't seen) shows.
+--
+-- Each hint:
+--   id      saved in the profile: never rename one (a new id shows again)
+--   when    its trigger, a condition name from Util/Hints.CONDITIONS
+--   minutes (optional) and only after this many minutes in this visit
+--   text    what it says (keep it short: it's a two-line toast).
+--           {groupBonus}, {friendBonus} and {friendMax} are filled in.
+--   open    (optional) tapping it opens: shop, shopBoots, research,
+--           researchLog, rewards, quests, top, boosts, teleport, settings,
+--           sell (Controllers/Hints)
+--   glow    (optional) what glows while it shows: a menu tile ("SHOP",
+--           "RESEARCH", "TELEPORT", "BOOSTS", "REWARDS", "SETTINGS"; the
+--           MENU button glows until the menu is open) or a HUD piece
+--           ("RemoteSell", "ServerGoal")
+local HINTS: { Types.HintDef } = {
+	-- things that are happening right now come first
+	{
+		id = "remoteSell",
+		when = "remoteSellFull",
+		text = "Your bottle's full: Remote Sell sells it from anywhere!",
+		open = "sell",
+		glow = "RemoteSell",
+	},
+	{
+		id = "ascend",
+		when = "canAscend",
+		text = "You can Ascend! Start again for +50% Volts for good.",
+		open = "shop",
+		glow = "SHOP",
+	},
+	{
+		id = "portal",
+		when = "worldOpen",
+		text = "A portal at the hub is open: a whole new world awaits!",
+		open = "teleport",
+		glow = "TELEPORT",
+	},
+	{
+		id = "newZone",
+		when = "zoneOpen",
+		text = "A new zone is open past its gate. Bigger zones pay more per bolt!",
+		open = "teleport",
+		glow = "TELEPORT",
+	},
+	{
+		id = "rareBolt",
+		when = "sawRareBolt",
+		text = "Gold, rainbow and orb bolts pay up to 25x. Race to their rings!",
+	},
+	{
+		id = "supercell",
+		when = "sawSupercell",
+		text = "Supercells come about once an hour: double strikes, more gold bolts.",
+	},
+	{
+		id = "event",
+		when = "eventOn",
+		text = "An event is on: every sale pays more. Its chip is under the goal.",
+	},
+	-- progress
+	{
+		id = "boots",
+		when = "bootsAffordable",
+		text = "Boots make you faster in storms, and each zone's storm drag slows you.",
+		open = "shopBoots",
+		glow = "SHOP",
+	},
+	{
+		id = "hireResearcher",
+		when = "canHire",
+		text = "Researchers help you catch. Hire one at the Research Center.",
+		open = "research",
+		glow = "RESEARCH",
+	},
+	{
+		id = "postResearcher",
+		when = "unposted",
+		text = "Post a researcher in a zone (📍 POST) to gather data there.",
+		open = "research",
+		glow = "RESEARCH",
+	},
+	{
+		id = "glints",
+		when = "hasGlints",
+		text = "Every bolt you catch gives Glints: see them at the top of RESEARCH.",
+		open = "research",
+		glow = "RESEARCH",
+	},
+	{
+		id = "promote",
+		when = "researcherLevel5",
+		text = "A level 5 researcher can be promoted with Glints: a rank up!",
+		open = "research",
+		glow = "RESEARCH",
+	},
+	{
+		id = "stormLog",
+		when = "logStarted",
+		text = "The Storm Log (RESEARCH › LOG) collects every bolt, place and storm.",
+		open = "researchLog",
+		glow = "RESEARCH",
+	},
+	-- rewards and the rest, as the visit goes on
+	{
+		id = "dailyStreak",
+		when = "claimedDaily",
+		text = "Come back tomorrow: the daily reward grows for 7 days in a row.",
+		open = "rewards",
+		glow = "REWARDS",
+	},
+	{
+		id = "playtimeGifts",
+		when = "always",
+		minutes = 3,
+		text = "Free gifts unlock as you play each day. They wait in REWARDS.",
+		open = "rewards",
+		glow = "REWARDS",
+	},
+	{
+		id = "serverGoal",
+		when = "hasSold",
+		minutes = 4,
+		text = "Every sale fills the server goal. A full one starts a 2x Surge!",
+		glow = "ServerGoal",
+	},
+	{
+		id = "quests",
+		when = "always",
+		minutes = 6,
+		text = "Quests pay extra, and one free reroll a day swaps one you don't like.",
+		open = "quests",
+		glow = "REWARDS",
+	},
+	{
+		id = "friendsBoost",
+		when = "hasFriends",
+		text = "Friends in your server give +{friendBonus}% Volts each (up to {friendMax}).",
+	},
+	{
+		id = "boosts",
+		when = "hasSold",
+		minutes = 9,
+		text = "Boosts give 2x Volts, luck or bigger bottles for a while.",
+		open = "boosts",
+		glow = "BOOSTS",
+	},
+	{
+		id = "teleport",
+		when = "zoneOpen",
+		minutes = 11,
+		text = "TELEPORT jumps you to any zone or world you've unlocked.",
+		open = "teleport",
+		glow = "TELEPORT",
+	},
+	{
+		id = "afkLounge",
+		when = "always",
+		minutes = 14,
+		text = "Stepping away? The AFK Lounge pays Volts while you rest.",
+		open = "teleport",
+		glow = "TELEPORT",
+	},
+	{
+		id = "leaderboards",
+		when = "always",
+		minutes = 18,
+		text = "See where you rank on the leaderboards: REWARDS › TOP.",
+		open = "top",
+		glow = "REWARDS",
+	},
+	{
+		id = "group",
+		when = "notGroupMember",
+		minutes = 22,
+		text = "Group members get +{groupBonus}% Volts on every sale. Join in REWARDS.",
+		open = "rewards",
+		glow = "REWARDS",
+	},
+	{
+		id = "invite",
+		when = "always",
+		minutes = 26,
+		text = "Invite a friend (REWARDS › INVITE): you both get a reward.",
+		open = "rewards",
+		glow = "REWARDS",
+	},
+	{
+		id = "settings",
+		when = "always",
+		minutes = 30,
+		text = "Keys, sound, graphics and text size are all in ⚙️ SETTINGS.",
+		open = "settings",
+		glow = "SETTINGS",
 	},
 }
 
@@ -710,9 +918,14 @@ return table.freeze({
 	EVENTS = table.freeze(EVENTS),
 
 	-- Movement: you move faster between zones so travel isn't a chore.
-	-- Boots add their speedBonus inside zones only (see BOOTS).
-	WALK_SPEED_IN_ZONE = 16, -- Roblox default
+	-- Boots add their speedBonus inside zones only, and each zone's storm
+	-- drag takes some away (see BOOTS and Util/Speed).
+	WALK_SPEED_IN_ZONE = 18, -- a little over the Roblox default (16); a typical player's speed on entering a zone
 	WALK_SPEED_OUTSIDE = 30,
+	-- In-zone speed never goes below min (no boots in a late zone) or above
+	-- max (great boots in an early zone). Keep max below WALK_SPEED_OUTSIDE,
+	-- so leaving a zone always speeds you up.
+	ZONE_SPEED = table.freeze({ min = 10, max = 28 }),
 
 	-- Premium zones pay this many times the best other zone the player can
 	-- enter, so they're worth a visit at every stage (Progression.boltValue)
@@ -724,6 +937,25 @@ return table.freeze({
 	-- The menu's Teleport panel: seconds between trips (walking through a
 	-- portal has its own short cooldown in Systems/Travel)
 	TELEPORT_COOLDOWN = 10,
+
+	-- Movement checks (Util/AntiCheat, Systems/AntiCheat): the server looks
+	-- at every player's position every `checkEvery` seconds. Moving further
+	-- across the ground than walk speed x time x `slack` + `extraStuds`,
+	-- measured over the last `windowSeconds`, is impossible: for
+	-- `suspectSeconds` that player can't catch, touch ball lightning or
+	-- sell at a station. Nobody is kicked (lag can look like a teleport).
+	-- Moves the server makes (portals, teleports, the AFK Lounge, respawns,
+	-- the zone lock) aren't checked for `graceSeconds`. After `logAfter`
+	-- impossible moves a player shows in the admin panel's list.
+	ANTI_CHEAT = table.freeze({
+		checkEvery = 0.2,
+		windowSeconds = 1,
+		slack = 1.5,
+		extraStuds = 6,
+		suspectSeconds = 5,
+		graceSeconds = 3,
+		logAfter = 3,
+	}),
 
 	-- Researchers (Storm Society)
 	RESEARCH_LEVELS = table.freeze({ 0, 40, 150, 400, 1000 }), -- field data needed for level 1..5
@@ -737,8 +969,8 @@ return table.freeze({
 	-- that rank costs, in Glints of its tier or higher, and each rank makes
 	-- the perk perkBonusPerRank stronger.
 	RESEARCH_PRESTIGE = table.freeze({
-		dataScale = table.freeze({ 1.15, 1.8, 2.85, 3.7, 3.7, 4.5, 4.5 }),
-		glintCost = table.freeze({ 45, 65, 130, 85, 165, 50 }),
+		dataScale = table.freeze({ 0.95, 1.6, 2.9, 4.3, 4.9, 5.45, 5.45 }),
+		glintCost = table.freeze({ 50, 65, 135, 85, 165, 30 }),
 		perkBonusPerRank = 0.10,
 	}),
 
@@ -782,6 +1014,10 @@ return table.freeze({
 		stuckMargin = 0.1,
 		minGoal = 1000,
 		topCount = 3,
+		-- a player who has been in the AFK Lounge this long doesn't count
+		-- toward the goal's size (they can't help fill it); leaving the
+		-- lounge counts them again
+		afkExcludeMinutes = 5,
 	}),
 	DAILY_REWARDS = table.freeze(DAILY_REWARDS),
 	PLAYTIME_GIFTS = table.freeze(PLAYTIME_GIFTS),
@@ -829,6 +1065,15 @@ return table.freeze({
 		catches = 3,
 		rewardCharges = 50,
 	}),
+	-- Gameplay tips after the tutorial (the list and its rules: HINTS above)
+	HINTS = table.freeze({
+		gapSeconds = 90, -- at least this long between two hints
+		firstDelay = 60, -- none this soon after joining or finishing the tutorial
+		showSeconds = 8, -- how long the toast stays
+		glowSeconds = 20, -- how long its button glows
+		quietAfterCatch = 10, -- none this soon after a catch
+		list = table.freeze(HINTS),
+	}),
 	-- Friends boost (Systems/Friends, Util/Passes): +perFriend Volts on every
 	-- sale for each Roblox friend in your server, counting up to `max`.
 	FRIENDS = table.freeze({
@@ -844,7 +1089,10 @@ return table.freeze({
 		welcomeCharges = 100,
 		inviterReward = "DoubleVoltsBoost",
 		dailyCap = 5,
-		minAccountAgeDays = 3,
+		minAccountAgeDays = 14, -- the new player's account must be this old for the inviter's reward
+		-- the inviter is only paid once the new player has played this many
+		-- minutes in all, or made their first sale (stops alt accounts)
+		playMinutes = 10,
 	}),
 	-- Leaderboards (Systems/Leaderboards, Util/Leaderboards): one
 	-- OrderedDataStore per board. Each player's values are written every
@@ -985,6 +1233,11 @@ return table.freeze({
 		perServer = 300,
 		recent = 20,
 		messageLength = 300, -- characters kept from a message
+		-- spam limits per server: errors remembered as "already sent to
+		-- Analytics" (after that, new ones aren't sent), and new client
+		-- errors sent to Analytics (a cheater can make up messages)
+		maxReported = 500,
+		maxClientReports = 50,
 	}),
 
 	-- Streaming (Lib/MapBuilder): phones only load the map near the player.

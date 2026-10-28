@@ -34,7 +34,15 @@ export type Profile = {
 	loginRun: number, -- days in a row the daily reward was claimed (keeps counting past day 7), 0 = never
 	bestLoginRun: number, -- the longest loginRun ever (the "Longest streak" leaderboard)
 	notifyAsked: boolean, -- asked "Remind me when my daily reward is ready?" (asked once, ever)
+	notifyYes: boolean, -- tapped YES on that question (reminders are only queued then)
+	playtime: PlaytimeSave, -- today's playtime gifts (Util/Rewards.playtimeToday)
+	invitedBy: number, -- who invited this new player, until the inviter is paid (Systems/Invites); 0 = nobody
+	hintsSeen: { [string]: boolean }, -- gameplay tips already shown, by hint id (Util/Hints)
 }
+
+-- Playtime gifts count playtime per UTC day, across visits: the day, the
+-- seconds played that day before this visit, and which gifts were claimed.
+export type PlaytimeSave = { day: number, seconds: number, claimed: { boolean } }
 
 -- A leaderboard row (Systems/Leaderboards): rank 1 is the top.
 export type LeaderboardEntry = { userId: number, name: string, value: number }
@@ -158,6 +166,18 @@ export type Snapshot = {
 	ascension: number, -- Ascension level (Util/Ascension)
 	tutorialStep: number, -- the tutorial's step (Util/Tutorial), 0 = not showing
 	friends: number, -- Roblox friends in this server that count for the friends boost (0 to Config.FRIENDS.max)
+	hintsSeen: { [string]: boolean }, -- gameplay tips already shown (Util/Hints)
+}
+
+-- A gameplay tip (Config.HINTS list; the rules: Util/Hints). See Config
+-- for what each field means.
+export type HintDef = {
+	id: string,
+	when: string,
+	minutes: number?,
+	text: string,
+	open: string?,
+	glow: string?,
 }
 
 -- The player's AFK Lounge state, sent in the snapshot (Systems/Afk). The
@@ -191,7 +211,8 @@ export type StoreSession = {
 -- This session's playtime gifts and the Studio "Next day" offset
 -- (Systems/Rewards).
 export type RewardSession = {
-	startedAt: number, -- workspace:GetServerTimeNow() when the session's playtime began
+	startedAt: number, -- workspace:GetServerTimeNow() when today's playtime began (now minus the seconds played today)
+	day: number, -- the UTC day (with dayOffset) these gifts are for
 	claimed: { boolean }, -- per Config.PLAYTIME_GIFTS entry
 	dayOffset: number, -- Studio only: days added to today
 }
@@ -372,7 +393,8 @@ export type BottleDef = {
 	price: number,
 }
 
--- speedBonus: added to the walk speed inside storm zones only.
+-- speedBonus: added to the walk speed inside storm zones only (each zone's
+-- storm drag takes some back: Util/Speed).
 export type BootsDef = {
 	name: string,
 	speedBonus: number,

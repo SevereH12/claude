@@ -122,6 +122,21 @@ for i = 1, 1000 do
 end
 check(sent == 300, `300 client errors a minute per server (sent {sent})`)
 
+-- spam caps on what goes to Analytics (Systems/Errors)
+local maxReported, maxClient = Config.ERRORS.maxReported, Config.ERRORS.maxClientReports
+check(Ops.mayReport("client", 0, 0) and Ops.mayReport("server", 0, 0), "the first errors are sent")
+check(not Ops.mayReport("client", maxClient, maxClient), `no more than {maxClient} client errors`)
+check(Ops.mayReport("server", maxClient, maxClient), "server errors still go after the client cap")
+check(not Ops.mayReport("server", maxReported, 0), `no more than {maxReported} in all`)
+local reportedCount, clientCount = 0, 0
+for _ = 1, 10000 do
+	if Ops.mayReport("client", reportedCount, clientCount) then
+		reportedCount += 1
+		clientCount += 1
+	end
+end
+check(clientCount == maxClient, `a flood of made-up client errors sends {maxClient} (sent {clientCount})`)
+
 -- streaming: the built map ---------------------------------------------------------
 local MapBuilder = world:require("ServerScriptService.Server.Lib.MapBuilder")
 local map = MapBuilder.build()

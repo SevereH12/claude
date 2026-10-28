@@ -7,6 +7,7 @@
 --     with numbers and player names taken out)
 --   * cleanReason, banLabel, summary: small helpers for the panel
 --   * newWindow / allow: "at most N per minute" counters
+--   * mayReport: the per-server caps on errors sent to Analytics
 
 local Config = require(script.Parent.Parent.Config)
 
@@ -166,6 +167,16 @@ function Ops.allow(window: Window, now: number): boolean
 	end
 	window.count += 1
 	return true
+end
+
+-- May one more new error fingerprint be sent to Analytics? `reported` is
+-- how many this server has sent, `clientReports` how many of those came
+-- from players' devices (Config.ERRORS.maxReported, maxClientReports).
+function Ops.mayReport(source: string, reported: number, clientReports: number): boolean
+	if reported >= Config.ERRORS.maxReported then
+		return false
+	end
+	return source ~= "client" or clientReports < Config.ERRORS.maxClientReports
 end
 
 return Ops

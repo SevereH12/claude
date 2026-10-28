@@ -398,7 +398,27 @@ lifetime[Stats.SUPERCELLS_SEEN] = 1
 found = StormLog.found(lifetime, researchers)
 check(found["Weather:Supercell"], "a Supercell seen is found")
 
--- a whole page, and the bonus
+-- a whole page, and the bonus: Premium zones are bonuses, not needed
+local aurora = StormLog.row("Bolts:Aurora")
+check(aurora and aurora.bonus, "the Premium zone's Bolts row is a bonus")
+for _, row in pageIds.Bolts.rows do
+	if not row.bonus then
+		for _, entry in row.entries do
+			lifetime[entry.stats[1]] = 1
+		end
+	end
+end
+found = StormLog.found(lifetime, researchers)
+check(StormLog.pageDone(pageIds.Bolts, found), "the Bolts page finishes without the Premium zone")
+check(not StormLog.rowDone(aurora, found), "but the bonus row itself needs its own bolts")
+local bayRow = StormLog.row("Places:Bay")
+local auroraEntryNeeded = false
+for _, entry in bayRow.entries do
+	if entry.id == "Places:zone:Aurora" then
+		auroraEntryNeeded = not entry.bonus
+	end
+end
+check(not auroraEntryNeeded, "visiting the Premium zone isn't needed for its world's row")
 for _, row in pageIds.Bolts.rows do
 	for _, entry in row.entries do
 		lifetime[entry.stats[1]] = 1
@@ -509,6 +529,20 @@ check(ascender.dailyStreak == 4 and ascender.lastDailyDay == 20000, "the reward 
 check(ascender.settings.musicVolume == 0.3, "settings stay")
 check(ascender.stats.lifetime.boltsCaught == 777, "stats stay")
 check(Ascension.ascend(ascender) == nil and ascender.ascension == 1, "can't ascend again straight away")
+-- researchers in zones they can't enter after an Ascension go back to the Office
+local poster = fullProfile()
+poster.researchers = {
+	Forecaster = { post = "Ember", data = 0, level = 2, rank = 5 },
+	StormChaser = { post = "Shoreline", data = 0, level = 1, rank = 0 },
+	Chemist = { post = "Aurora", data = 0, level = 1, rank = 0 },
+}
+local moving = Ascension.researchersToMove(poster, false)
+check(#moving == 2 and moving[1] == "Forecaster" and table.find(moving, "Chemist"), "late and Premium zones move (not Premium)")
+check(#Ascension.researchersToMove(poster, true) == 1, "a Premium member keeps the Premium zone")
+local movedLevel, moved = Ascension.ascend(poster, false)
+check(movedLevel == 1 and #moved == 2, "ascend says who moved")
+check(poster.researchers.Forecaster.post == "Office" and poster.researchers.Forecaster.rank == 5, "moved to the Office, rank kept")
+check(poster.researchers.StormChaser.post == "Shoreline", "a researcher in an open zone stays")
 local notReady = fullProfile()
 notReady.bottleTier = top - 1
 check(Ascension.ascend(notReady) == nil and notReady.volts == 25_000_000, "a refused Ascension changes nothing")

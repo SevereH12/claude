@@ -22,8 +22,12 @@ local TeleportUI = require(script.Parent.TeleportUI)
 
 local Shortcuts = {}
 
--- Esc / gamepad B: the open panel first, then the menu card.
+-- Esc / gamepad B: the Research post picker first (the panel stays open),
+-- then the open panel, then the menu card.
 local function back()
+	if ResearchUI.closePicker() then
+		return
+	end
 	if not UI.closePanels() then
 		Menu.close()
 	end

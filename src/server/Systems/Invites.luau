@@ -11,7 +11,11 @@
 --   * the inviter gets Config.INVITES.inviterReward (a boost) through their
 --     gift inbox (Systems/Gifts.sendReward), so it reaches them here, in
 --     another server, or on their next join if they're offline. Its inbox id
---     is invite-<new player's id>, so it can only arrive once.
+--     is invite-<new player's id>, so it can only arrive once. It's paid
+--     only once the new player has played Config.INVITES.playMinutes
+--     minutes in all or made a sale (Util/Social.inviteEarned): until then
+--     the inviter's id waits in the new player's profile (invitedBy), over
+--     as many visits as it takes.
 -- Abuse limits: the inviter's reward needs the new player's account to be
 -- at least Config.INVITES.minAccountAgeDays old, and an inviter is rewarded
 -- at most Config.INVITES.dailyCap times a UTC day: counted in DataStore
@@ -21,6 +25,7 @@
 -- output: Studio can't make real invites.
 
 local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -32,6 +37,7 @@ local Rewards = require(script.Parent.Rewards)
 
 local STORE_NAME = "StormBottler_Invites"
 local DAY = 86400
+local CHECK_INTERVAL = 15 -- seconds between checks of invited players' playtime
 
 local Invites = {}
 
@@ -67,6 +73,41 @@ local function countInvite(inviterId: number, newUserId: number): boolean
 	return counted
 end
 
+-- Pays the inviter (once the new player has played enough): counts it in
+-- today's cap, then sends the boost to their gift inbox.
+local function payInviter(player: Player, inviterId: number)
+	if not countInvite(inviterId, player.UserId) then
+		print(`[Invites] no reward for user {inviterId} (today's limit, or counted already)`)
+		return
+	end
+	local entry: Types.GiftEntry = {
+		id = SocialRules.inviteGiftId(player.UserId),
+		kind = "boost",
+		key = Config.INVITES.inviterReward,
+		fromId = player.UserId,
+		fromName = `{player.DisplayName} (your invite)`,
+		time = os.time(),
+	}
+	if Gifts.sendReward(inviterId, entry) then
+		print(`[Invites] reward sent to user {inviterId}'s gift inbox`)
+	else
+		warn(`[Invites] couldn't send user {inviterId}'s reward`)
+	end
+end
+
+-- An invited player whose inviter is waiting (profile.invitedBy): pay the
+-- inviter once they've played enough (Util/Social.inviteEarned). It's
+-- saved, so it carries on over later visits.
+local function checkWaiting(player: Player, profile: Types.Profile)
+	local inviterId = profile.invitedBy
+	if inviterId == 0 or not SocialRules.inviteEarned(profile.stats.lifetime) then
+		return
+	end
+	profile.invitedBy = 0 -- before anything yields: paid once
+	print(`[Invites] {player.Name} has played enough: rewarding user {inviterId}`)
+	task.spawn(payInviter, player, inviterId)
+end
+
 local function onLoaded(player: Player, profile: Types.Profile)
 	local ok, joinData = pcall(function()
 		return player:GetJoinData()
@@ -94,29 +135,28 @@ local function onLoaded(player: Player, profile: Types.Profile)
 		print(`[Invites] no reward for user {inviterId} ({inviterRefusal})`)
 		return
 	end
-	if not countInvite(inviterId, player.UserId) then
-		print(`[Invites] no reward for user {inviterId} (today's limit, or counted already)`)
-		return
-	end
-	local entry: Types.GiftEntry = {
-		id = SocialRules.inviteGiftId(player.UserId),
-		kind = "boost",
-		key = Config.INVITES.inviterReward,
-		fromId = player.UserId,
-		fromName = `{player.DisplayName} (your invite)`,
-		time = os.time(),
-	}
-	if Gifts.sendReward(inviterId, entry) then
-		print(`[Invites] reward sent to user {inviterId}'s gift inbox`)
-	else
-		warn(`[Invites] couldn't send user {inviterId}'s reward`)
-	end
+	profile.invitedBy = inviterId
+	print(
+		`[Invites] user {inviterId} is rewarded once {player.Name} plays {Config.INVITES.playMinutes} minutes or sells`
+	)
 end
 
 function Invites.init()
 	PlayerData.Loaded:Connect(function(player: Player, profile: Types.Profile)
 		task.spawn(onLoaded, player, profile)
 	end)
+end
+
+function Invites.start()
+	while true do
+		task.wait(CHECK_INTERVAL)
+		for _, player in Players:GetPlayers() do
+			local profile = PlayerData.get(player)
+			if profile then
+				checkWaiting(player, profile)
+			end
+		end
+	end
 end
 
 return Invites

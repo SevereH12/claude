@@ -63,9 +63,24 @@ for index, gift in gifts do
 	)
 	check(
 		not Rewards.giftReady(gift, gift.minutes * 60 + 999, true),
-		`gift {index}: once a session`
+		`gift {index}: once a day`
 	)
 end
+
+-- playtime gifts count per UTC day, across visits (profile.playtime)
+local fresh = Rewards.playtimeToday(nil, 500)
+check(fresh.day == 500 and fresh.seconds == 0 and #fresh.claimed == #gifts, "no save: a fresh day")
+check(fresh.claimed[1] == false, "nothing claimed yet")
+local saved = { day = 500, seconds = 1800, claimed = { true, true, true } }
+local sameDay = Rewards.playtimeToday(saved, 500)
+check(sameDay.seconds == 1800 and sameDay.claimed[3] and not sameDay.claimed[4], "rejoining the same day carries on")
+check(not Rewards.giftReady(gifts[1], sameDay.seconds, sameDay.claimed[1]), "a claimed gift can't be claimed again after a rejoin")
+local nextDay = Rewards.playtimeToday(saved, 501)
+check(nextDay.day == 501 and nextDay.seconds == 0 and not nextDay.claimed[1], "a new day starts again")
+local broken = Rewards.playtimeToday({ day = 500, seconds = 0 / 0, claimed = "x" }, 500)
+check(broken.seconds == 0 and #broken.claimed == #gifts, "a broken save is cleaned up")
+local migrated18 = PlayerData.migrate({ version = 17, volts = 0, bottleTier = 1 })
+check(migrated18.version >= 18 and migrated18.playtime.day == 0 and migrated18.playtime.seconds == 0, "the v18 migration adds playtime")
 
 -- the boost countdown, stacking and cap ---------------------------------------
 local left = {}

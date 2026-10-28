@@ -200,8 +200,13 @@ local function pointAt(target: GuiObject?, side: string?)
 	if padding then
 		local w = 1 - padding.PaddingLeft.Scale - padding.PaddingRight.Scale
 		local h = 1 - padding.PaddingTop.Scale - padding.PaddingBottom.Scale
-		pointer.Position =
-			UDim2.fromScale(-padding.PaddingLeft.Scale / w, -padding.PaddingTop.Scale / h)
+		-- (the title nudge moves the top and bottom padding by offsets)
+		pointer.Position = UDim2.new(
+			-padding.PaddingLeft.Scale / w,
+			-padding.PaddingLeft.Offset,
+			-padding.PaddingTop.Scale / h,
+			-padding.PaddingTop.Offset
+		)
 		pointer.Size = UDim2.fromScale(1 / w, 1 / h)
 	else
 		pointer.Position = UDim2.new()

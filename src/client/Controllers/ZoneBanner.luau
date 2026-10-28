@@ -1,8 +1,8 @@
 --!strict
 -- Big title card when you walk into a zone ("SHORELINE - everyone in the
--- circle catches"), plus two toasts (UI.toast): a short note when you leave
--- a zone (speed boost) and why a zone is locked when you walk up to its
--- gate. Every other message is a toast too; this banner is only for zone
+-- circle catches"), plus toasts (UI.toast): how much the zone's storm slows
+-- you down when you walk in (Util/Speed), a short note when you leave a zone
+-- (speed boost) and why a zone is locked when you walk up to its gate. Every other message is a toast too; this banner is only for zone
 -- titles and Server Storms (Controllers/Announcements). Each shows once per event: the card not again for the same zone
 -- within REPEAT_TIME (walking along a zone's edge flips in and out), the
 -- leave note at most every REPEAT_TIME, the gate reason once until you've
@@ -14,6 +14,7 @@ local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
+local Speed = require(ReplicatedStorage.Shared.Util.Speed)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
 local Layout = require(script.Parent.Parent.Lib.Layout)
@@ -149,6 +150,11 @@ function ZoneBanner.start()
 							`{zone.tagline} · each bolt fills {size}`,
 							ZoneColours.of(zone, zone.color)
 						)
+						-- the storm's drag: better boots beat it
+						local drag = snapshot and Speed.dragText(snapshot, zone)
+						if drag then
+							UI.toast(`⛈️ {drag}. Better boots run faster!`, "info")
+						end
 					end
 				elseif current then
 					UI.toastEvery(

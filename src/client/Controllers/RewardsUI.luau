@@ -3,7 +3,7 @@
 --   * the 7-day login streak: claimed days ticked, today's glowing with
 --     CLAIM, later days dimmed, and "Next reward in 5h 12m" (to the next UTC
 --     day) once today's is claimed
---   * the 6 playtime gifts of this visit, each counting down ("in 3:41") or
+--   * the 6 playtime gifts of today (UTC), each counting down ("in 3:41") or
 --     showing CLAIM
 -- Each card shows what this player would really get: Volts grow with their
 -- best zone, and a boost for a pass they own says so and pays Volts instead
@@ -21,20 +21,19 @@
 -- 4 days and 2 gifts a row, and on touch screens the cards grow to fit the
 -- TAP_MIN-tall CLAIM button and the larger minimum text, instead of the
 -- button covering the reward.
--- Four tabs: REWARDS (all of the above), QUESTS: today's daily quests
+-- Three tabs: REWARDS (all of the above), QUESTS: today's daily quests
 -- and this week's quest (Util/Quests), each a card with what to do, a
 -- progress bar, the reward and a button: CLAIM when it's done, or REROLL
 -- (today's one free reroll) while it isn't. A quest reaching 100% shows a
 -- toast. Both only ask (ClaimQuest, RerollQuest); Systems/Quests decides.
--- And LOG: the Storm Log collection book (Lib/StormLogTab, Util/StormLog),
--- with CLAIM on each finished row. And TOP: the leaderboards
--- (Lib/LeaderboardTab, Systems/Leaderboards).
+-- And TOP: the leaderboards (Lib/LeaderboardTab, Systems/Leaderboards).
+-- (The Storm Log is the Research panel's LOG tab, Controllers/ResearchUI.)
 -- After the first daily claim the server may ask (NotifyOptIn) "Remind me
 -- when my daily reward is ready?": a toast whose YES opens Roblox's own
 -- notifications prompt (ExperienceNotificationService), if this player can
 -- be asked. It's asked once, ever (Systems/Notifications).
 -- RewardsUI.ReadyChanged tells the menu when something is ready to claim
--- (a quest or a Log row too).
+-- (a quest too).
 -- Gentle nudges, as toasts with OPEN: the daily reward when you join (if
 -- it's ready), each playtime gift once when it's ready, and the group card
 -- once a visit after your first sale.
@@ -55,15 +54,14 @@ local QuestRules = require(ReplicatedStorage.Shared.Util.Quests)
 local RewardRules = require(ReplicatedStorage.Shared.Util.Rewards)
 local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local StatRules = require(ReplicatedStorage.Shared.Util.Stats)
-local Store = require(ReplicatedStorage.Shared.Util.Store)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Celebrate = require(script.Parent.Parent.Lib.Celebrate)
 local Layout = require(script.Parent.Parent.Lib.Layout)
 local LeaderboardTab = require(script.Parent.Parent.Lib.LeaderboardTab)
 local LayoutMath = require(script.Parent.Parent.Lib.LayoutMath)
 local SettingsStore = require(script.Parent.Parent.Lib.SettingsStore)
+local RewardText = require(script.Parent.Parent.Lib.RewardText)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
-local StormLogTab = require(script.Parent.Parent.Lib.StormLogTab)
 local UI = require(script.Parent.Parent.Lib.UI)
 local State = require(script.Parent.State)
 
@@ -98,8 +96,7 @@ type Grid = { frame: Frame, layout: UIGridLayout, count: number }
 type QuestCard = {
 	frame: Frame,
 	title: TextLabel,
-	fill: Frame,
-	count: TextLabel,
+	bar: UI.Bar,
 	reward: TextLabel,
 	button: TextButton,
 	stroke: UIStroke,
@@ -115,11 +112,9 @@ local player = Players.LocalPlayer
 local panel: Frame
 local list: ScrollingFrame
 local questList: ScrollingFrame
-local logList: ScrollingFrame
 local topList: ScrollingFrame
 local rewardsTab: TextButton
 local questsTab: TextButton
-local logTab: TextButton
 local topTab: TextButton
 local dailyQuestCards: { QuestCard } = {}
 local weeklyQuestCards: { QuestCard } = {}
@@ -147,17 +142,15 @@ function RewardsUI.open()
 	UI.openPanel(panel)
 end
 
-type Tab = "rewards" | "quests" | "log" | "top"
+type Tab = "rewards" | "quests" | "top"
 
--- Shows the REWARDS, QUESTS, LOG or TOP tab.
+-- Shows the REWARDS, QUESTS or TOP tab.
 local function selectTab(tab: Tab)
 	list.Visible = tab == "rewards"
 	questList.Visible = tab == "quests"
-	logList.Visible = tab == "log"
 	topList.Visible = tab == "top"
 	UI.setEnabled(rewardsTab, true, if tab == "rewards" then PINK else COLORS.panelDark)
 	UI.setEnabled(questsTab, true, if tab == "quests" then PINK else COLORS.panelDark)
-	UI.setEnabled(logTab, true, if tab == "log" then PINK else COLORS.panelDark)
 	UI.setEnabled(topTab, true, if tab == "top" then PINK else COLORS.panelDark)
 end
 
@@ -170,12 +163,6 @@ end
 -- Opens the panel on the QUESTS tab.
 function RewardsUI.openQuests()
 	selectTab("quests")
-	RewardsUI.open()
-end
-
--- Opens the panel on the LOG tab (the Storm Log).
-function RewardsUI.openLog()
-	selectTab("log")
 	RewardsUI.open()
 end
 
@@ -211,39 +198,8 @@ local function daysHours(seconds: number): string
 	return hoursMinutes(seconds)
 end
 
--- What a reward gives this player, as card text, and its icon: a boost's
--- pass art, or a Volts pack's (bigger reward, bigger pack).
-local function describe(reward: Types.Reward, snapshot: Types.Snapshot): (string, number)
-	local resolved = RewardRules.resolve(reward, snapshot.passes)
-	local lines: { string } = {}
-	if resolved.charges > 0 then
-		table.insert(lines, `+{Format.abbreviate(Store.volts(resolved.charges, snapshot))} ⚡`)
-	end
-	for _, boost in resolved.boosts do
-		local def = BoostRules.def(boost.key)
-		if def then
-			table.insert(lines, `{def.name} {boost.minutes}m`)
-		end
-	end
-	for _, key in resolved.swapped do
-		local def = BoostRules.def(key)
-		local pass = if def then PassRules.def(def.pass) else nil
-		if pass then
-			table.insert(lines, `(you own {pass.name})`)
-		end
-	end
-	local image = 0
-	local first = resolved.boosts[1]
-	if resolved.charges == 0 and first then
-		local def = BoostRules.def(first.key)
-		local pass = if def then PassRules.def(def.pass) else nil
-		image = if pass then pass.image else 0
-	else
-		local size = if resolved.charges >= 1000 then 3 elseif resolved.charges >= 250 then 2 else 1
-		image = Config.VOLT_PACKS[size].image
-	end
-	return table.concat(lines, "\n"), image
-end
+-- What a reward gives this player, as card text, and its icon.
+local describe = RewardText.describe
 
 -- A day or gift card: a title, an icon, what it gives, and a button
 -- (placed by fitCards).
@@ -342,8 +298,11 @@ local function fitCards()
 			height = placeCard(card, button, textHeight)
 		end
 		local rows = math.ceil(grid.count / columns)
-		grid.layout.CellSize = UDim2.new(1 / columns, -GAP, 0, height)
-		grid.frame.Size = UDim2.new(1, -12, 0, rows * height + (rows - 1) * GAP)
+		-- the cells and the gaps between them fill the width (offsets are
+		-- whole pixels: rounded up, so the last cell never wraps)
+		local trim = math.ceil(GAP * (columns - 1) / columns)
+		grid.layout.CellSize = UDim2.new(1 / columns, -trim, 0, height)
+		grid.frame.Size = UDim2.new(1, 0, 0, rows * height + (rows - 1) * GAP)
 	end
 	fit(dayGrid, dayCards, if upright then 4 else 7, if touch then 84 else 60)
 	fit(giftGrid, giftCards, if upright then 2 else 3, if touch then 52 else 44)
@@ -356,54 +315,37 @@ local function buildQuestCard(
 	period: QuestRules.Period,
 	index: number
 ): QuestCard
-	local frame = UI.make(Instance.new("Frame"), {
+	-- (UI.card pads 10 pixels inside, so positions start at its padding)
+	local frame, stroke = UI.card({
 		Name = `Quest{index}`,
 		LayoutOrder = order,
-		BackgroundColor3 = COLORS.panelDark,
-		Size = UDim2.new(1, -12, 0, QUEST_HEIGHT),
+		Size = UDim2.new(1, 0, 0, QUEST_HEIGHT),
 		Parent = parent,
 	})
-	UI.corner(frame, UDim.new(0, 12))
-	local stroke = UI.stroke(frame, 3)
 	local title = UI.label({
 		Title = true,
 		Name = "Title",
 		Text = "",
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(12, 8),
-		Size = UDim2.new(0.7, -12, 0, 24),
+		Position = UDim2.fromOffset(2, -2),
+		Size = UDim2.new(0.7, -6, 0, 24),
 		Parent = frame,
 	})
 	UI.maxText(title, 20)
-	local bar = UI.make(Instance.new("Frame"), {
+	local bar = UI.bar(frame, {
 		Name = "Bar",
-		Position = UDim2.fromOffset(12, 38),
-		Size = UDim2.new(0.7, -12, 0, 20),
-		BackgroundColor3 = COLORS.panelBottom,
-		Parent = frame,
+		Position = UDim2.fromOffset(2, 26),
+		Size = UDim2.new(0.7, -6, 0, 20),
+		color = COLORS.green,
+		text = 14,
 	})
-	UI.corner(bar, UDim.new(0, 8))
-	local fill = UI.make(Instance.new("Frame"), {
-		Name = "Fill",
-		Size = UDim2.fromScale(0, 1),
-		BackgroundColor3 = COLORS.green,
-		Parent = bar,
-	})
-	UI.corner(fill, UDim.new(0, 8))
-	local count = UI.label({
-		Name = "Count",
-		Text = "",
-		Size = UDim2.fromScale(1, 1),
-		Parent = bar,
-	})
-	UI.maxText(count, 14)
 	local reward = UI.label({
 		Name = "Reward",
 		Text = "",
 		TextColor3 = COLORS.subtext,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(12, 62),
-		Size = UDim2.new(0.7, -12, 0, 22),
+		Position = UDim2.fromOffset(2, 50),
+		Size = UDim2.new(0.7, -6, 0, 22),
 		Parent = frame,
 	})
 	UI.maxText(reward, 16)
@@ -411,7 +353,7 @@ local function buildQuestCard(
 		Name = "Action",
 		Text = "",
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -10, 0.5, 0),
+		Position = UDim2.fromScale(1, 0.5),
 		Size = UDim2.new(0.28, 0, 0, BUTTON),
 		BackgroundColor3 = COLORS.green,
 		Parent = frame,
@@ -420,8 +362,7 @@ local function buildQuestCard(
 	local card: QuestCard = {
 		frame = frame,
 		title = title,
-		fill = fill,
-		count = count,
+		bar = bar,
 		reward = reward,
 		button = button,
 		stroke = stroke,
@@ -445,7 +386,7 @@ local function fitQuests()
 	local height = math.max(QUEST_HEIGHT, button + 20)
 	for _, cards in { dailyQuestCards, weeklyQuestCards } do
 		for _, card in cards do
-			card.frame.Size = UDim2.new(1, -12, 0, height)
+			card.frame.Size = UDim2.new(1, 0, 0, height)
 			card.button.Size = UDim2.new(0.28, 0, 0, button)
 		end
 	end
@@ -581,7 +522,7 @@ local function render(): (boolean, boolean, { number })
 		then `Day {nextDay} is ready to claim!`
 		else `Next reward in {hoursMinutes(RewardRules.untilNextDay(now))}`
 
-	-- this visit's playtime gifts
+	-- today's playtime gifts
 	local elapsed = now - snapshot.gifts.startedAt
 	for index, card in giftCards do
 		local gift = Config.PLAYTIME_GIFTS[index]
@@ -622,10 +563,9 @@ local function render(): (boolean, boolean, { number })
 			local text = QuestRules.describe(view)
 			local done = view.progress >= view.target
 			card.title.Text = text
-			card.fill.Size =
-				UDim2.fromScale(if view.target > 0 then view.progress / view.target else 1, 1)
-			card.count.Text =
-				`{Format.abbreviate(view.progress)} / {Format.abbreviate(view.target)}`
+			card.bar.setFraction(if view.target > 0 then view.progress / view.target else 1)
+			local count = card.bar.label :: TextLabel
+			count.Text = `{Format.abbreviate(view.progress)} / {Format.abbreviate(view.target)}`
 			local rewardText = describe(QuestRules.reward(view.key, period), snapshot)
 			card.reward.Text = "Reward: " .. (string.gsub(rewardText, "\n", " · "))
 			local canClaimQuest = done and not view.claimed
@@ -667,11 +607,6 @@ local function render(): (boolean, boolean, { number })
 	weeklyNote.Text = `New weekly quest in {daysHours(StatRules.untilNextWeek(now))}`
 	questsTab.Text = if claimable > 0 then `📋 QUESTS ({claimable})` else "📋 QUESTS"
 	anyReady = anyReady or claimable > 0
-
-	-- the Storm Log
-	local logReady = StormLogTab.render(snapshot, describe)
-	logTab.Text = if logReady > 0 then `📖 LOG ({logReady})` else "📖 LOG"
-	anyReady = anyReady or logReady > 0
 	return anyReady, canClaim, readyGifts
 end
 
@@ -720,7 +655,7 @@ local function heading(parent: Instance, order: number, text: string): TextLabel
 		Text = text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Bottom,
-		Size = UDim2.new(1, -12, 0, HEADING),
+		Size = UDim2.new(1, 0, 0, HEADING),
 		Parent = parent,
 	})
 	UI.maxText(label, 24)
@@ -737,6 +672,7 @@ local function grid(parent: Instance, order: number, name: string, count: number
 	})
 	local layout = UI.make(Instance.new("UIGridLayout"), {
 		CellPadding = UDim2.fromOffset(GAP, GAP),
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = frame,
 	})
@@ -758,6 +694,7 @@ local function askAboutReminders()
 	UI.toast("🔔 Remind me when my daily reward is ready?", "info", 12, {
 		text = "YES",
 		onTap = function()
+			Net.get("NotifyOptIn"):FireServer() -- the server only queues reminders after a YES
 			local shown, err = pcall(function()
 				ExperienceNotificationService:PromptOptIn()
 			end)
@@ -792,7 +729,7 @@ function RewardsUI.init()
 	local _, root = Layout.screen("StormBottlerRewards", 5)
 	local window = UI.window(root, "RewardsPanel", "🎁 REWARDS", PINK, Vector2.new(680, 560))
 	panel = window.panel
-	-- the four tabs along the top
+	-- the three tabs along the top
 	local tabBar = UI.make(Instance.new("Frame"), {
 		Name = "Tabs",
 		Size = UDim2.new(1, 0, 0, TAB_HEIGHT),
@@ -800,7 +737,7 @@ function RewardsUI.init()
 		Parent = window.body,
 	})
 	UI.make(Instance.new("UIGridLayout"), {
-		CellSize = UDim2.new(1 / 4, -6, 1, 0),
+		CellSize = UDim2.new(1 / 3, -6, 1, 0),
 		CellPadding = UDim2.fromOffset(6, 0),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = tabBar,
@@ -808,40 +745,20 @@ function RewardsUI.init()
 	-- each tab is one scrolling column: it all fits on a monitor, and
 	-- scrolls on a phone
 	local function page(name: string): ScrollingFrame
-		local frame = UI.make(Instance.new("ScrollingFrame"), {
+		return UI.list(window.body, {
 			Name = name,
 			Position = UDim2.fromOffset(0, TAB_HEIGHT + 8),
 			Size = UDim2.new(1, 0, 1, -(TAB_HEIGHT + 8)),
-			BackgroundTransparency = 1,
-			BorderSizePixel = 0,
-			CanvasSize = UDim2.new(),
-			AutomaticCanvasSize = Enum.AutomaticSize.Y,
-			ScrollBarThickness = 6,
-			Parent = window.body,
+			gap = GAP,
 		})
-		UI.make(Instance.new("UIListLayout"), {
-			Padding = UDim.new(0, GAP),
-			SortOrder = Enum.SortOrder.LayoutOrder,
-			Parent = frame,
-		})
-		-- room under the last card when scrolled to the bottom
-		UI.make(Instance.new("UIPadding"), {
-			PaddingTop = UDim.new(0, 2),
-			PaddingBottom = UDim.new(0, 12),
-			PaddingLeft = UDim.new(0, 2),
-			Parent = frame,
-		})
-		return frame
 	end
 	list = page("List")
 	questList = page("Quests")
-	logList = page("Log")
 	topList = page("Top")
-	local pages: { [Tab]: ScrollingFrame } =
-		{ rewards = list, quests = questList, log = logList, top = topList }
+	local pages: { [Tab]: ScrollingFrame } = { rewards = list, quests = questList, top = topList }
 	local function tab(order: number, text: string, which: Tab): TextButton
 		local names: { [Tab]: string } =
-			{ rewards = "RewardsTab", quests = "QuestsTab", log = "LogTab", top = "TopTab" }
+			{ rewards = "RewardsTab", quests = "QuestsTab", top = "TopTab" }
 		local button = UI.button({
 			Name = names[which],
 			Text = text,
@@ -861,14 +778,10 @@ function RewardsUI.init()
 	end
 	rewardsTab = tab(1, "🎁 REWARDS", "rewards")
 	questsTab = tab(2, "📋 QUESTS", "quests")
-	logTab = tab(3, "📖 LOG", "log")
-	topTab = tab(4, "🏆 TOP", "top")
+	topTab = tab(3, "🏆 TOP", "top")
 
 	-- the TOP tab (Lib/LeaderboardTab)
 	LeaderboardTab.build(topList)
-
-	-- the LOG tab (Lib/StormLogTab)
-	StormLogTab.build(logList, RewardsUI.openLog)
 
 	-- the QUESTS tab
 	heading(questList, 1, "📋 DAILY QUESTS")
@@ -880,7 +793,7 @@ function RewardsUI.init()
 		LayoutOrder = 10,
 		Text = "",
 		TextColor3 = COLORS.volt,
-		Size = UDim2.new(1, -12, 0, 22),
+		Size = UDim2.new(1, 0, 0, 22),
 		Parent = questList,
 	})
 	UI.maxText(dailyNote, 18)
@@ -893,7 +806,7 @@ function RewardsUI.init()
 		LayoutOrder = 20,
 		Text = "",
 		TextColor3 = COLORS.volt,
-		Size = UDim2.new(1, -12, 0, 22),
+		Size = UDim2.new(1, 0, 0, 22),
 		Parent = questList,
 	})
 	UI.maxText(weeklyNote, 18)
@@ -916,12 +829,12 @@ function RewardsUI.init()
 		LayoutOrder = 3,
 		Text = "",
 		TextColor3 = COLORS.volt,
-		Size = UDim2.new(1, -12, 0, 22),
+		Size = UDim2.new(1, 0, 0, 22),
 		Parent = list,
 	})
 	UI.maxText(nextLabel, 18)
 
-	heading(list, 4, "⏱ PLAYTIME GIFTS (this visit)")
+	heading(list, 4, "⏱ PLAYTIME GIFTS (today)")
 	giftGrid = grid(list, 5, "Gifts", #Config.PLAYTIME_GIFTS)
 	local claimGift = Net.get("ClaimGift")
 	for index, gift in Config.PLAYTIME_GIFTS do
@@ -939,7 +852,7 @@ function RewardsUI.init()
 		Name = "Group",
 		LayoutOrder = 7,
 		BackgroundColor3 = COLORS.panelDark,
-		Size = UDim2.new(1, -12, 0, GROUP_HEIGHT),
+		Size = UDim2.new(1, 0, 0, GROUP_HEIGHT),
 		Parent = list,
 	})
 	UI.corner(groupCard, UDim.new(0, 12))
@@ -975,7 +888,7 @@ function RewardsUI.init()
 		Name = "Invite",
 		LayoutOrder = 9,
 		BackgroundColor3 = COLORS.panelDark,
-		Size = UDim2.new(1, -12, 0, GROUP_HEIGHT),
+		Size = UDim2.new(1, 0, 0, GROUP_HEIGHT),
 		Parent = list,
 	})
 	UI.corner(inviteCard, UDim.new(0, 12))
@@ -988,7 +901,7 @@ function RewardsUI.init()
 	end
 	local inviteText = UI.label({
 		Title = true,
-		Text = `New players you invite get a welcome gift, you get a {reward.name}. Friends here: +{math.round(
+		Text = `New players you invite get a welcome gift, you get a {reward.name} once they've played {Config.INVITES.playMinutes} min. Friends here: +{math.round(
 			Config.FRIENDS.perFriend * 100
 		)}% Volts each`,
 		TextXAlignment = Enum.TextXAlignment.Left,

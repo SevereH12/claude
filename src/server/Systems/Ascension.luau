@@ -8,7 +8,10 @@
 --   2. Ascend(token) from the confirm screen: the server checks the token
 --      (this player's, not run out, used once) and the rules again, then
 --      resets the player (Ascension.ascend), moves them to Barometer Bay's
---      spawn and answers ("done", newLevel).
+--      spawn and answers ("done", newLevel). Researchers posted to zones
+--      the player can't enter any more go back to the Office (the offer
+--      names them as `moving`, for the confirm screen). The profile is
+--      saved straight away.
 -- Both steps are rate-limited. The +50% per level needs nothing here:
 -- Systems/Passes adds it to every sale.
 --
@@ -24,9 +27,11 @@ local AscensionRules = require(ReplicatedStorage.Shared.Util.Ascension)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
+local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local StatRules = require(ReplicatedStorage.Shared.Util.Stats)
 local Types = require(ReplicatedStorage.Shared.Types)
 local PlayerData = require(script.Parent.PlayerData)
+local Research = require(script.Parent.Research)
 local Stats = require(script.Parent.Stats)
 local Sync = require(script.Parent.Sync)
 local Travel = require(script.Parent.Travel)
@@ -106,12 +111,22 @@ local function offer(player: Player, profile: Types.Profile, remote: RemoteEvent
 	local token = HttpService:GenerateGUID(false)
 	local seconds = Config.ASCENSION.confirmSeconds
 	pending[player] = { token = token, expires = os.clock() + seconds }
+	-- researchers who'll go back to the Office, by name, for the confirm screen
+	local moving: { string } = {}
+	for _, roleId in AscensionRules.researchersToMove(profile, Progression.playerIsPremium(player)) do
+		for _, def in Config.RESEARCHERS do
+			if def.id == roleId then
+				table.insert(moving, def.name)
+			end
+		end
+	end
 	remote:FireClient(player, "offer", {
 		token = token,
 		level = profile.ascension + 1,
 		cost = AscensionRules.cost(profile.ascension),
 		seconds = seconds,
 		bonus = AscensionRules.bonusText(profile.ascension + 1),
+		moving = moving,
 	})
 end
 
@@ -125,17 +140,22 @@ local function confirm(player: Player, profile: Types.Profile, token: string, re
 		remote:FireClient(player, "refused", "That took too long: press ASCEND again")
 		return
 	end
-	local level = AscensionRules.ascend(profile)
+	local level, moved = AscensionRules.ascend(profile, Progression.playerIsPremium(player))
 	if not level then
 		local _, reason = AscensionRules.canAscend(profile)
 		remote:FireClient(player, "refused", reason)
 		return
 	end
 	Stats.add(player, StatRules.ASCENSIONS, 1)
+	if #moved > 0 then
+		Research.movedToOffice(player, moved)
+	end
 	Sync.markDirty(player)
 	show(player, profile)
 	print(`[Ascension] {player.Name} ascended to level {level}`)
 	remote:FireClient(player, "done", level)
+	-- saved straight away (like a purchase), so a server crash can't undo it
+	task.spawn(PlayerData.saveNow, player)
 	task.spawn(Travel.sendHome, player)
 end
 

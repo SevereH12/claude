@@ -11,7 +11,8 @@
 -- Sound board, which plays every sound in order with its name, and the Music
 -- audition, every shortlisted track for 20 s, Complete quest, +Log entry,
 -- Ready to ascend, Restart tutorial, Pretend friends +1, Leaderboard test
--- data (fills REWARDS > TOP with made-up players) and Queue test reminder
+-- data (fills REWARDS > TOP with made-up players), Queue test reminder and
+-- Reset gameplay tips (every tip can show again, the first in a few seconds)
 -- (all Studio only). The server (Systems/DevCommands) checks again. To
 -- remove it: delete this file and Systems/DevCommands.luau, and take
 -- "DevCommand" out of Shared/Remotes.
@@ -29,6 +30,7 @@ local LayoutMath = require(script.Parent.Parent.Lib.LayoutMath)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
 local AfkUI = require(script.Parent.AfkUI)
+local Hints = require(script.Parent.Hints)
 local Music = require(script.Parent.Music)
 
 local DevCommands = {}
@@ -117,20 +119,10 @@ function DevCommands.init()
 	})
 	UI.maxText(rewards, 16)
 	-- it scrolls: there are more tools than fit under the menu
-	local tools = UI.make(Instance.new("ScrollingFrame"), {
+	local tools = UI.list(screenGui, {
 		Name = "RewardToolList",
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollBarThickness = 6,
 		Visible = false,
-		Parent = screenGui,
-	})
-	UI.make(Instance.new("UIListLayout"), {
-		Padding = UDim.new(0, 8),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = tools,
+		gap = 8,
 	})
 	UI.onLayout(function()
 		UI.place(rewards, row(4))
@@ -177,6 +169,10 @@ function DevCommands.init()
 		toolButton.Activated:Connect(function()
 			UI.pop(toolButton)
 			devRemote:FireServer(tool.command)
+			if tool.command == "resetHints" then
+				-- and the first one may show a few seconds from now
+				Hints.resetForTest()
+			end
 		end)
 	end
 	-- Server goal +25%: as if you sold a quarter of the goal (four fill it
@@ -209,7 +205,7 @@ function DevCommands.init()
 		UI.pop(questButton)
 		devRemote:FireServer("completeQuest")
 	end)
-	-- +Log entry: the next Storm Log entry counts as found (REWARDS > LOG)
+	-- +Log entry: the next Storm Log entry counts as found (RESEARCH > LOG)
 	local logButton = UI.button({
 		Name = "LogEntry",
 		LayoutOrder = 16,
@@ -271,6 +267,7 @@ function DevCommands.init()
 		{
 			{ text = "🏆 Leaderboard test data", command = "testLeaderboard" },
 			{ text = "🔔 Queue test reminder", command = "testNotify" },
+			{ text = "💡 Reset gameplay tips", command = "resetHints" },
 		}
 	do
 		local toolButton = UI.button({

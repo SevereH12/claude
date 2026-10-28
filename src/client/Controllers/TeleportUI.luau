@@ -95,7 +95,7 @@ local function rowFrame(
 	local frame = UI.make(Instance.new("Frame"), {
 		Name = id,
 		LayoutOrder = index,
-		Size = UDim2.new(1, -12, 0, ROW_HEIGHT),
+		Size = UDim2.new(1, 0, 0, ROW_HEIGHT),
 		BackgroundColor3 = COLORS.panelDark,
 		Parent = list,
 	})
@@ -215,26 +215,11 @@ function TeleportUI.init()
 		Parent = window.body,
 	})
 	UI.maxText(hint, 18)
-	local list = UI.make(Instance.new("ScrollingFrame"), {
+	local list = UI.list(window.body, {
 		Name = "List",
 		Position = UDim2.fromOffset(0, 30),
 		Size = UDim2.new(1, 0, 1, -30),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollBarThickness = 6,
-		Parent = window.body,
-	})
-	UI.make(Instance.new("UIListLayout"), {
-		Padding = UDim.new(0, 10),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = list,
-	})
-	UI.make(Instance.new("UIPadding"), {
-		PaddingTop = UDim.new(0, 4),
-		PaddingLeft = UDim.new(0, 4),
-		Parent = list,
+		gap = 10,
 	})
 	for index, world in Config.WORLDS do
 		buildRow(list, index, world)

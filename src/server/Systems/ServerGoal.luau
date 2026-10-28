@@ -8,9 +8,13 @@
 --
 -- Its size is every present player's grinding rate (Util/Afk, with their
 -- own passes, boosts, group bonus and any event, but not a Server Storm or
--- Surge, which come and go) added up, times SERVER_GOAL.minutes. It's
--- worked out again when someone joins (once their data loads) or leaves,
--- and never drops below what's filled plus 10%, so it can't get stuck.
+-- Surge, which come and go) added up, times SERVER_GOAL.minutes. Players
+-- who have been in the AFK Lounge for SERVER_GOAL.afkExcludeMinutes are
+-- left out (they can't help fill it; Systems/Afk tells us, through
+-- ServerGoal.setAway), and count again when they leave the lounge. It's
+-- worked out again when someone joins (once their data loads), leaves, or
+-- starts or stops being left out, and never drops below what's filled plus
+-- 10%, so it can't get stuck.
 --
 -- Filling it starts a Server Surge (Systems/Boosts.startSurge): 2x Volts
 -- for everyone for 10 minutes. Then the meter empties, the round's
@@ -42,6 +46,7 @@ local size = GOAL.minGoal
 local round = 0 -- goals reached this hour
 local hourStart = os.clock()
 local contributed: { [string]: number } = {} -- Volts this round, by display name
+local away: { [Player]: boolean } = {} -- long in the AFK Lounge: left out of the size
 
 -- A player's grinding rate (Volts a second in their best zone), without
 -- the server-wide timers.
@@ -75,7 +80,7 @@ end
 function ServerGoal.recompute(leaving: Player?)
 	local rates: { number } = {}
 	for _, player in Players:GetPlayers() do
-		if player ~= leaving then
+		if player ~= leaving and not away[player] then
 			local rate = rateOf(player)
 			if rate then
 				table.insert(rates, rate)
@@ -112,6 +117,17 @@ function ServerGoal.add(player: Player, volts: number)
 	end
 end
 
+-- Systems/Afk: has this player been in the AFK Lounge long enough to be
+-- left out of the goal's size (Util/Weather.countsForGoal)? Works the size
+-- out again when that changes.
+function ServerGoal.setAway(player: Player, isAway: boolean)
+	if (away[player] == true) == isAway then
+		return
+	end
+	away[player] = if isAway then true else nil
+	ServerGoal.recompute()
+end
+
 -- Studio TEST tool: adds a share of the goal as if `player` sold it.
 function ServerGoal.testFill(player: Player, share: number)
 	ServerGoal.add(player, math.max(math.ceil(size * share), 1))
@@ -122,6 +138,7 @@ function ServerGoal.init()
 		ServerGoal.recompute()
 	end)
 	Players.PlayerRemoving:Connect(function(player)
+		away[player] = nil
 		ServerGoal.recompute(player)
 	end)
 end

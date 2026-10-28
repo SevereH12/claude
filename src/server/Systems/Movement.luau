@@ -1,19 +1,21 @@
 --!strict
--- Walk speed: normal inside storm zones (catching should take skill, and
--- boots add a little), fast everywhere else so walking to the Power Plant
--- isn't a chore. Also the server's zone lock: anyone standing in a zone
--- they haven't unlocked is put back just outside its gate. It also marks
--- the zones and worlds a player has been in (the Storm Log).
+-- Walk speed: normal inside storm zones (catching should take skill; boots
+-- speed you up and each zone's storm drag slows you down: Util/Speed), fast
+-- everywhere else so walking to the Power Plant isn't a chore. Also the
+-- server's zone lock: anyone standing in a zone they haven't unlocked is put
+-- back just outside its gate. It also marks the zones and worlds a player
+-- has been in (the Storm Log).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local Portals = require(ReplicatedStorage.Shared.Util.Portals)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
+local Speed = require(ReplicatedStorage.Shared.Util.Speed)
 local StatRules = require(ReplicatedStorage.Shared.Util.Stats)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
 local Analytics = require(script.Parent.Analytics)
+local AntiCheat = require(script.Parent.AntiCheat)
 local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
 local Stats = require(script.Parent.Stats)
@@ -46,6 +48,7 @@ local function update(player: Player)
 				* CFrame.new(0, 1 - part.Size.Y / 2, -part.Size.Z / 2 - GATE_STEP_OUT)
 			local position = outside.Position + Vector3.new(0, 3.5, 0)
 			local body = character :: Model
+			AntiCheat.allowMove(player)
 			body:PivotTo(CFrame.lookAt(position, position + part.CFrame.LookVector))
 		end
 		zone = nil
@@ -60,9 +63,12 @@ local function update(player: Player)
 	if typeof(worldId) == "string" then
 		Stats.visited(player, StatRules.visitWorldKey(worldId))
 	end
-	local speed = Formulas.walkSpeed(
-		zone ~= nil,
-		if profile then profile.bootTier else 1,
+	local progress: Progression.Progress = if profile
+		then { bottleTier = profile.bottleTier, bootTier = profile.bootTier }
+		else { bottleTier = 1, bootTier = 1 }
+	local speed = Speed.walkSpeed(
+		progress,
+		zone,
 		Passes.owned(player) -- Jet Boots: faster between zones
 	)
 	if humanoid.WalkSpeed ~= speed then

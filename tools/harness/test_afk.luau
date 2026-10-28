@@ -2,7 +2,7 @@
 -- The AFK Lounge's rate (shared/Util/Afk): the expected Volts per hour for
 -- each stage (docs/prompts/12-afk-zone.md, recomputed for the current
 -- Config: with the Dynamo Drum the best zone is now Rune Spire, not
--- Thunderhead Mesa), the reach chance cap, the best zone, Big Bottles,
+-- Thunderhead Mesa, and each zone's storm drag counts), the reach chance cap, the best zone, Big Bottles,
 -- an expiring boost and the Premium rate.
 --   lune run tools/harness/test_afk.luau
 local World = require("./World")
@@ -41,13 +41,16 @@ local SETS = {
 		effects = with(ALL, { [Passes.GROUP] = true, [Passes.SERVER_STORM] = true }),
 	},
 }
--- best zone, boots tier (speed bonus), bottle tier, then Volts per hour per set
+-- best zone, boots tier, bottle tier, then Volts per hour per set. Each row
+-- wears the boots a typical player has when that zone opens
+-- (Util/Speed.typicalBootTier), so every row runs at the same in-zone
+-- speed: the zone's storm drag cancels the boots (Util/Speed).
 local ROWS = {
-	{ "Shoreline", 1, 1, { 575, 1149, 1454, 1600, 3199 } }, -- +0 boots, Jar
-	{ "Mesa", 3, 3, { 3017, 6035, 8143, 8957, 17914 } }, -- +3, Flask
-	{ "Yard", 4, 5, { 10830, 21660, 27948, 30743, 61485 } }, -- +4, Storm Cell
-	{ "Spire", 6, 7, { 271380, 542761, 691496, 760646, 1521292 } }, -- +7, Dynamo Drum
-	{ "Ember", 9, 9, { 2447204, 4894408, 6191426, 6810568, 13621137 } }, -- +10, Storm Core
+	{ "Shoreline", 1, 1, { 688, 1375, 1740, 1913, 3827 } }, -- Rain Boots, Jar
+	{ "Mesa", 1, 3, { 2774, 5549, 7487, 8236, 16472 } }, -- Rain Boots, Flask
+	{ "Yard", 4, 5, { 9187, 18375, 23709, 26080, 52160 } }, -- Gale Striders, Storm Cell
+	{ "Spire", 7, 7, { 184050, 368101, 468973, 515871, 1031741 } }, -- Arc Runners, Dynamo Drum
+	{ "Ember", 9, 9, { 1475242, 2950484, 3732362, 4105598, 8211196 } }, -- Cloud Walkers, Storm Core
 }
 
 -- the table, and Premium paying exactly 1.5x -----------------------------------------
@@ -77,8 +80,12 @@ check(
 )
 
 -- the reach chance is capped at 1 ----------------------------------------------------
-local _, ember = Afk.rate({ bottleTier = 9, bootTier = 9 }, {}, false)
-check(ember.chance == 1, `a fast player in Ember Mesa reaches every strike (chance {ember.chance})`)
+local _, fast = Afk.rate({ bottleTier = 3, bootTier = 9 }, {}, false)
+check(fast.chance == 1, `a fast player in Mesa reaches every strike (chance {fast.chance})`)
+-- boots past the typical pair speed up the lounge too (more strikes reached)
+local typical = Afk.rate({ bottleTier = 7, bootTier = 7 }, {}, false)
+local better = Afk.rate({ bottleTier = 7, bootTier = 9 }, {}, false)
+check(better > typical, "better boots than typical pay more in the lounge")
 local _, shore = Afk.rate({ bottleTier = 1, bootTier = 1 }, {}, false)
 check(
 	shore.chance > 0 and shore.chance < 1,

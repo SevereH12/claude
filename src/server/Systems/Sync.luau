@@ -1,6 +1,8 @@
 --!strict
 -- Sends each player their latest state. Systems that change a profile call
--- Sync.markDirty(player); changes are batched and sent 10 times a second.
+-- Sync.markDirty(player); changes are batched: checked 10 times a second,
+-- but each player gets at most MAX_SENDS_PER_SECOND snapshots a second
+-- (the snapshot is big, and in a busy storm every catch marks it dirty).
 -- Also keeps the Volts leaderboard stat up to date.
 
 local Players = game:GetService("Players")
@@ -19,8 +21,10 @@ local StormLogRules = require(ReplicatedStorage.Shared.Util.StormLog)
 local PlayerData = require(script.Parent.PlayerData)
 
 local FLUSH_INTERVAL = 0.1
+local MAX_SENDS_PER_SECOND = 4
 
 local dirty: { [Player]: boolean } = {}
+local lastSent: { [Player]: number } = {} -- os.clock() of the last snapshot
 
 local Sync = {}
 
@@ -104,6 +108,7 @@ local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapsho
 		ascension = profile.ascension,
 		tutorialStep = profile.tutorialStep,
 		friends = Sync.friends[player] or 0,
+		hintsSeen = profile.hintsSeen,
 	}
 end
 
@@ -142,10 +147,12 @@ function Sync.init()
 	Players.PlayerMembershipChanged:Connect(Sync.markDirty)
 	Players.PlayerRemoving:Connect(function(player)
 		dirty[player] = nil
+		lastSent[player] = nil
 		Sync.setupUntil[player] = nil
 		Sync.passes[player] = nil
 		Sync.store[player] = nil
-		Sync.rewards[player] = nil
+		-- Sync.rewards is cleared by Systems/Rewards when the player's
+		-- profile leaves (it saves today's playtime from it first)
 	end)
 end
 
@@ -153,10 +160,15 @@ function Sync.start()
 	local remote = Net.get("StateSnapshot")
 	while true do
 		task.wait(FLUSH_INTERVAL)
+		local now = os.clock()
 		for player in dirty do
+			if now - (lastSent[player] or -math.huge) < 1 / MAX_SENDS_PER_SECOND then
+				continue -- sent very recently: it stays dirty for the next flush
+			end
 			dirty[player] = nil
 			local profile = PlayerData.get(player)
 			if profile and player.Parent then
+				lastSent[player] = now
 				updateLeaderstats(player, profile)
 				remote:FireClient(player, toSnapshot(player, profile))
 			end

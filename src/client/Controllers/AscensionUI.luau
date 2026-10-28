@@ -22,7 +22,14 @@ local COLORS = UI.COLORS
 local PURPLE = Color3.fromRGB(170, 110, 255)
 local BANNER_SECONDS = 3.5
 
-type Offer = { token: string, level: number, cost: number, seconds: number, bonus: string }
+type Offer = {
+	token: string,
+	level: number,
+	cost: number,
+	seconds: number,
+	bonus: string,
+	moving: { string }?, -- researchers who go back to the Office
+}
 
 local AscensionUI = {}
 
@@ -75,8 +82,10 @@ local function showOffer(offer: Offer)
 	current = offer
 	offerId += 1
 	local mine = offerId
+	local moving = if typeof(offer.moving) == "table" then offer.moving else {}
 	heading.Text = `Ascend to level {offer.level} {AscensionRules.stars(offer.level)}? `
 		.. `Every sale pays {offer.bonus} Volts for good. You need {Format.abbreviate(offer.cost)} Volts.`
+		.. (if #moving > 0 then `\nBack to the Office: {table.concat(moving, ", ")}` else "")
 	UI.setEnabled(confirmButton, true, PURPLE)
 	UI.openPanel(panel)
 	-- the countdown: the server's token runs out at the same time

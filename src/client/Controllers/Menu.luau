@@ -89,7 +89,8 @@ local Menu = {}
 local dock: Frame
 local catcher: TextButton -- the dim backdrop behind the card: a click on it closes the card
 local menuButton: TextButton
-local icon: TextLabel
+local icon: Frame -- the MENU button's icon: three bars (an X while the card is open)
+local iconBars: { Frame } = {} -- top, middle, bottom
 local card: Frame
 local cardScale: UIScale
 local tileScales: { UIScale } = {}
@@ -112,8 +113,75 @@ function Menu.tile(name: string): GuiObject?
 	return tiles[name]
 end
 
+-- The icon's bars, closed (☰: three across) and open (✕: the top and
+-- bottom ones crossed in the middle, the middle one gone): each bar's
+-- height in the icon (0 to 1) and its turn in degrees.
+local BAR_Y = { 0.2, 0.5, 0.8 }
+local BAR_LONG = 0.82 -- a bar's length (share of the icon's width)
+local BAR_CROSS = 0.95 -- a crossed bar's length (the X's arms nearly reach the corners)
+local BAR_THICK = 0.2 -- a bar's thickness (share of the icon's height)
+local BAR_MOVE = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+-- Draws the ☰ icon from three rounded bars (Frames, so it's crisp at any
+-- size and needs no image upload), styled like the HUD's text: volt yellow
+-- with a dark outline.
+local function buildIcon(parent: GuiObject)
+	icon = UI.make(Instance.new("Frame"), {
+		Name = "Icon",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		-- the top 56% of the button (inside its padding), above the caption
+		Position = UDim2.fromScale(0.5, 0.29),
+		Size = UDim2.fromScale(0.56, 0.56),
+		BackgroundTransparency = 1,
+		Parent = parent,
+	})
+	UI.make(Instance.new("UIAspectRatioConstraint"), {
+		AspectRatio = 1,
+		DominantAxis = Enum.DominantAxis.Height,
+		Parent = icon,
+	})
+	for index, y in BAR_Y do
+		local bar = UI.make(Instance.new("Frame"), {
+			Name = `Bar{index}`,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, y),
+			Size = UDim2.fromScale(BAR_LONG, BAR_THICK),
+			BackgroundColor3 = COLORS.volt,
+			BorderSizePixel = 0,
+			Parent = icon,
+		})
+		UI.corner(bar, UDim.new(0.5, 0))
+		UI.stroke(bar, 2)
+		UI.gradient(bar, Color3.new(1, 1, 1), Color3.fromRGB(255, 200, 150))
+		iconBars[index] = bar
+	end
+end
+
+-- Turns the icon into an ✕ (open) or back into ☰, with a quarter turn.
 local function setIcon(open: boolean)
-	icon.Text = if open then "✕" else "☰"
+	for index, bar in iconBars do
+		local middle = index == 2
+		local target = if open and not middle
+			then {
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromScale(BAR_CROSS, BAR_THICK),
+				Rotation = if index == 1 then 45 else -45,
+				BackgroundTransparency = 0,
+			}
+			else {
+				Position = UDim2.fromScale(0.5, BAR_Y[index]),
+				Size = UDim2.fromScale(if open then 0 else BAR_LONG, BAR_THICK),
+				Rotation = 0,
+				BackgroundTransparency = if open then 1 else 0,
+			}
+		TweenService:Create(bar, BAR_MOVE, target):Play()
+		local outline = bar:FindFirstChildOfClass("UIStroke")
+		if outline then
+			TweenService
+				:Create(outline, BAR_MOVE, { Transparency = if open and middle then 1 else 0 })
+				:Play()
+		end
+	end
 	icon.Rotation = if open then -90 else 90
 	TweenService:Create(icon, ICON_TURN, { Rotation = 0 }):Play()
 end
@@ -228,8 +296,10 @@ local function canAfford(snapshot: Types.Snapshot): (boolean, boolean)
 	return shop, research
 end
 
+-- RESEARCH's dot also lights when a Storm Log row can be claimed (its LOG tab).
 local function renderBadges(snapshot: Types.Snapshot)
 	local shop, research = canAfford(snapshot)
+	research = research or ResearchUI.isReady()
 	if buyDots.SHOP then
 		buyDots.SHOP.Visible = shop
 	end
@@ -337,15 +407,7 @@ function Menu.init()
 	if corner then
 		corner.CornerRadius = UDim.new(0, 18)
 	end
-	icon = UI.label({
-		Title = true,
-		Text = "☰",
-		TextColor3 = COLORS.volt,
-		Position = UDim2.fromScale(0, -0.04),
-		Size = UDim2.fromScale(1, 0.66),
-		Parent = menuButton,
-	})
-	UI.maxText(icon, 40)
+	buildIcon(menuButton)
 	local caption = UI.label({
 		Title = true,
 		Text = "MENU",
@@ -387,6 +449,11 @@ function Menu.start()
 		renderBadges(State.current)
 	end
 	State.Changed:Connect(renderBadges)
+	ResearchUI.ReadyChanged:Connect(function()
+		if State.current then
+			renderBadges(State.current)
+		end
+	end)
 end
 
 return Menu

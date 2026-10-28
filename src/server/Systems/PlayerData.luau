@@ -14,6 +14,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local HintRules = require(ReplicatedStorage.Shared.Util.Hints)
 local QuestRules = require(ReplicatedStorage.Shared.Util.Quests)
 local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local SettingsRules = require(ReplicatedStorage.Shared.Util.Settings)
@@ -23,7 +24,7 @@ local TutorialRules = require(ReplicatedStorage.Shared.Util.Tutorial)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local STORE_NAME = "StormBottler_PlayerData"
-local CURRENT_VERSION = 17
+local CURRENT_VERSION = 19
 -- A lock older than this belongs to a server that crashed; it may be taken.
 local LOCK_STALE_SECONDS = Config.AUTOSAVE_INTERVAL * 3
 local LOCKED_RETRIES = 5
@@ -77,6 +78,10 @@ local DEFAULT_PROFILE: Types.Profile = {
 	loginRun = 0,
 	bestLoginRun = 0,
 	notifyAsked = false,
+	notifyYes = false,
+	playtime = { day = 0, seconds = 0, claimed = {} },
+	invitedBy = 0,
+	hintsSeen = {}, -- a new player gets every gameplay tip (after the tutorial)
 }
 
 -- MIGRATIONS[n] turns a version-n profile into version n+1. When the profile
@@ -203,6 +208,23 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 		data.loginRun = streak
 		data.bestLoginRun = streak
 		data.notifyAsked = false
+		return data
+	end,
+	-- after the October 2026 review: playtime gifts count per UTC day
+	-- (none played yet), reminders need a YES (we don't know what those
+	-- already asked answered, so they keep getting them: Roblox drops them
+	-- for anyone who said no), and nobody has an inviter waiting to be paid
+	[17] = function(data: any): any
+		data.playtime = { day = 0, seconds = 0, claimed = {} }
+		data.notifyYes = data.notifyAsked == true
+		data.invitedBy = 0
+		return data
+	end,
+	-- gameplay tips (after the tutorial): the tips for things a player has
+	-- clearly done already (hired a researcher, bought boots, claimed a
+	-- daily reward, ...) count as seen; they get the rest
+	[18] = function(data: any): any
+		data.hintsSeen = HintRules.alreadyUsed(data)
 		return data
 	end,
 }
@@ -471,10 +493,16 @@ local function onPlayerRemoving(player: Player)
 	release(session)
 end
 
+-- The server is closing. BindToClose can run before PlayerRemoving, so
+-- this does the "player is leaving" step itself (the last leaderboard
+-- write, the reminders, the last AFK pay) before the final save.
 local function onShutdown()
 	for player, session in sessions do
 		sessions[player] = nil
-		task.spawn(release, session)
+		task.spawn(function()
+			PlayerData.Leaving:Fire(player, session.profile)
+			release(session)
+		end)
 	end
 	local deadline = os.clock() + SHUTDOWN_TIMEOUT
 	while pendingReleases > 0 and os.clock() < deadline do

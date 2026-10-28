@@ -7,10 +7,12 @@
 --     Config.FRIENDS.max of them (Util/Passes applies it).
 --   Invites: when a brand-new player (no saved profile yet) joins from an
 --     invite, they get a welcome gift; the inviter gets a reward, but only
---     if the new player's account is old enough and the inviter hasn't had
+--     if the new player's account is old enough, once the new player has
+--     really played (Social.inviteEarned), and if the inviter hasn't had
 --     Config.INVITES.dailyCap rewarded invites already today (UTC).
 
 local Config = require(script.Parent.Parent.Config)
+local Stats = require(script.Parent.Stats)
 
 local Social = {}
 
@@ -69,6 +71,14 @@ function Social.inviterRefusal(join: Join): string?
 		return "tooYoung"
 	end
 	return nil
+end
+
+-- Has the invited player played enough for their inviter to be paid?
+-- Config.INVITES.playMinutes minutes in all, or a first sale (`lifetime`:
+-- their lifetime stat counters, Util/Stats).
+function Social.inviteEarned(lifetime: { [string]: number }): boolean
+	return (lifetime[Stats.PLAYTIME_MINUTES] or 0) >= Config.INVITES.playMinutes
+		or (lifetime[Stats.SALES] or 0) >= 1
 end
 
 -- An inviter's saved count (DataStore StormBottler_Invites): the UTC day

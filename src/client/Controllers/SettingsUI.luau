@@ -73,7 +73,7 @@ local function row(page: Instance, order: number, def: Rules.Def, height: number
 	local frame = UI.make(Instance.new("Frame"), {
 		Name = def.key,
 		LayoutOrder = order,
-		Size = UDim2.new(1, -12, 0, height),
+		Size = UDim2.new(1, 0, 0, height),
 		BackgroundColor3 = COLORS.panelDark,
 		Parent = page,
 	})
@@ -380,14 +380,14 @@ local function buildControls(page: ScrollingFrame)
 		TextColor3 = COLORS.subtext,
 		TextWrapped = true,
 		LayoutOrder = 0,
-		Size = UDim2.new(1, -12, 0, 60),
+		Size = UDim2.new(1, 0, 0, 60),
 		Parent = page,
 	})
 	UI.maxText(touchNote, 20)
 	local header = UI.make(Instance.new("Frame"), {
 		Name = "Header",
 		LayoutOrder = 1,
-		Size = UDim2.new(1, -12, 0, 26),
+		Size = UDim2.new(1, 0, 0, 26),
 		BackgroundTransparency = 1,
 		Parent = page,
 	})
@@ -435,7 +435,7 @@ local function buildControls(page: ScrollingFrame)
 		TextColor3 = COLORS.subtext,
 		TextWrapped = true,
 		LayoutOrder = #Rules.ACTIONS + 2,
-		Size = UDim2.new(1, -12, 0, 30),
+		Size = UDim2.new(1, 0, 0, 30),
 		Parent = page,
 	})
 	UI.maxText(closeNote, 14)
@@ -466,27 +466,12 @@ local function selectTab(tab: Tab)
 end
 
 local function buildPage(body: Instance, section: string): ScrollingFrame
-	local page = UI.make(Instance.new("ScrollingFrame"), {
+	local page = UI.list(body, {
 		Name = section,
 		Position = UDim2.fromOffset(0, TAB_HEIGHT + 8),
 		Size = UDim2.new(1, 0, 1, -(TAB_HEIGHT + FOOTER_HEIGHT + 16)),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollBarThickness = 6,
 		Visible = false,
-		Parent = body,
-	})
-	UI.make(Instance.new("UIListLayout"), {
-		Padding = UDim.new(0, 8),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = page,
-	})
-	UI.make(Instance.new("UIPadding"), {
-		PaddingTop = UDim.new(0, 2),
-		PaddingLeft = UDim.new(0, 4),
-		Parent = page,
+		gap = 8,
 	})
 	if section == "Controls" then
 		buildControls(page)
@@ -506,7 +491,7 @@ local function buildPage(body: Instance, section: string): ScrollingFrame
 		local soon = UI.label({
 			Text = "Coming soon",
 			TextColor3 = COLORS.subtext,
-			Size = UDim2.new(1, -12, 0, 60),
+			Size = UDim2.new(1, 0, 0, 60),
 			Parent = page,
 		})
 		UI.maxText(soon, 20)

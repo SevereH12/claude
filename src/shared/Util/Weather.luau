@@ -214,6 +214,13 @@ end
 -- second from Util/Afk) added up, times SERVER_GOAL.minutes, times growth
 -- for each goal already reached this hour (`round`, 0 for the first). At
 -- least minGoal, and never below goalFloor(filled).
+-- Does a player count toward the goal's size? Not once they've been in
+-- the AFK Lounge for SERVER_GOAL.afkExcludeMinutes (`loungeSeconds`: how
+-- long they've been in it, nil when they aren't).
+function Weather.countsForGoal(loungeSeconds: number?): boolean
+	return loungeSeconds == nil or loungeSeconds < GOAL.afkExcludeMinutes * 60
+end
+
 function Weather.goalSize(rates: { number }, round: number, filled: number): number
 	local sum = 0
 	for _, rate in rates do

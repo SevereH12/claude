@@ -195,6 +195,12 @@ check(
 -- the size: the rates added up, times 15 minutes
 check(Weather.goalSize({ 10, 20 }, 0, 0) == 30 * 15 * 60, "two players at 10 and 20 V/s: 27,000")
 check(Weather.goalSize({}, 0, 0) == GOAL.minGoal, "an empty server: the smallest goal")
+-- long AFK players don't make the goal bigger
+local afkSeconds = GOAL.afkExcludeMinutes * 60
+check(GOAL.afkExcludeMinutes == 5, "AFK for 5 minutes stops counting")
+check(Weather.countsForGoal(nil), "a player out of the lounge counts")
+check(Weather.countsForGoal(afkSeconds - 1), "a player just in the lounge still counts")
+check(not Weather.countsForGoal(afkSeconds), "5 minutes in the lounge: not counted")
 check(Weather.goalSize({ 0.01 }, 0, 0) == GOAL.minGoal, "a tiny rate: the smallest goal")
 check(Weather.goalSize({ 0 / 0, -5, 10 }, 0, 0) == 9000, "NaN and negative rates are skipped")
 -- each goal this hour is 1.5x the last

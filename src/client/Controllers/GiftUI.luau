@@ -128,7 +128,7 @@ local function fillPlayers()
 				Text = "",
 				AutoButtonColor = true,
 				BackgroundColor3 = COLORS.panelDark,
-				Size = UDim2.new(1, -10, 0, ROW_HEIGHT),
+				Size = UDim2.new(1, 0, 0, ROW_HEIGHT),
 				Parent = playerList,
 			})
 			UI.corner(row, UDim.new(0, 12))
@@ -383,21 +383,11 @@ function GiftUI.init()
 		Parent = pickPage,
 	})
 	UI.maxText(here, 18)
-	playerList = UI.make(Instance.new("ScrollingFrame"), {
+	playerList = UI.list(pickPage, {
 		Name = "Players",
 		Position = UDim2.fromOffset(0, 146),
 		Size = UDim2.new(1, 0, 1, -146),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollBarThickness = 6,
-		Parent = pickPage,
-	})
-	UI.make(Instance.new("UIListLayout"), {
-		Padding = UDim.new(0, 8),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = playerList,
+		gap = 8,
 	})
 
 	-- 2. the confirm screen

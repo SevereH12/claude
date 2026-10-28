@@ -53,12 +53,15 @@ end
 
 -- Boots only help inside storm zones; between zones everyone walks at
 -- WALK_SPEED_OUTSIDE (50% faster with the Jet Boots pass, in `owned`, the
--- player's Game Pass keys).
+-- player's Game Pass keys). Inside zones this is the fastest these boots
+-- go anywhere (a zone with no storm drag, capped at ZONE_SPEED.max); the
+-- speed in a given zone is Util/Speed.inZone.
 function Formulas.walkSpeed(inZone: boolean, bootTier: number, owned: PassRules.Owned?): number
 	if not inZone then
 		return PassRules.outsideSpeed(Config.WALK_SPEED_OUTSIDE, owned or {})
 	end
-	return Config.WALK_SPEED_IN_ZONE + Formulas.boots(bootTier).speedBonus
+	local speed = Config.WALK_SPEED_IN_ZONE + Formulas.boots(bootTier).speedBonus
+	return math.min(speed, Config.ZONE_SPEED.max)
 end
 
 -- The world with this id (the first world for an unknown id).

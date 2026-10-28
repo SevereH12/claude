@@ -12,6 +12,9 @@
 --   * Weather: one row, an entry for the Supercell and each scheduled event
 -- A finished row pays its page's rowReward once (CLAIM in the LOG tab).
 -- A finished page adds +2% Volts for good (Passes.logBonus, up to +8%).
+-- Roblox Premium zones are bonuses: their Bolts row and their Places entry
+-- are shown, but a page (and a world's Places row) can be finished
+-- without them, so nobody needs Premium for the whole Log bonus.
 
 local Config = require(script.Parent.Parent.Config)
 local Types = require(script.Parent.Parent.Types)
@@ -29,6 +32,7 @@ export type Entry = {
 	stats: { string }?,
 	role: string?,
 	rank: number?,
+	bonus: boolean?, -- a Premium zone's: not needed to finish its row
 }
 
 export type Row = {
@@ -36,6 +40,7 @@ export type Row = {
 	page: string,
 	label: string,
 	entries: { Entry },
+	bonus: boolean?, -- a Premium zone's row: not needed to finish its page
 }
 
 export type Page = {
@@ -138,8 +143,9 @@ local function boltRows(zones: { Types.ZoneDef }): { Row }
 		table.insert(rows, {
 			id = `Bolts:{zone.id}`,
 			page = "Bolts",
-			label = zone.displayName,
+			label = if zone.premium then `{zone.displayName} (Premium bonus)` else zone.displayName,
 			entries = entries,
+			bonus = zone.premium == true,
 		})
 	end
 	return rows
@@ -161,8 +167,10 @@ local function placeRows(zones: { Types.ZoneDef }): { Row }
 					id = `Places:zone:{zone.id}`,
 					label = zone.displayName,
 					icon = "📍",
-					hint = `Walk into {zone.displayName}{zoneNeeds(zone)}`,
+					hint = `Walk into {zone.displayName}{zoneNeeds(zone)}`
+						.. (if zone.premium then ", a bonus: not needed for the row" else ""),
 					stats = keys,
+					bonus = zone.premium == true,
 				})
 			end
 		end
@@ -326,15 +334,20 @@ function StormLog.found(
 	return found
 end
 
--- How many of a row's entries are found, and how many it has.
+-- How many of the entries a row needs are found, and how many it needs
+-- (a bonus entry isn't needed, except in a bonus row, which needs all).
 function StormLog.rowProgress(row: Row, found: Found): (number, number)
-	local count = 0
+	local count, total = 0, 0
 	for _, entry in row.entries do
+		if entry.bonus and not row.bonus then
+			continue
+		end
+		total += 1
 		if found[entry.id] then
 			count += 1
 		end
 	end
-	return count, #row.entries
+	return count, total
 end
 
 function StormLog.rowDone(row: Row, found: Found): boolean
@@ -342,10 +355,14 @@ function StormLog.rowDone(row: Row, found: Found): boolean
 	return count == total
 end
 
--- How many of a page's entries are found, and how many it has.
+-- How many of the entries a page needs are found, and how many it needs
+-- (bonus rows and entries aren't needed).
 function StormLog.pageProgress(page: Page, found: Found): (number, number)
 	local count, total = 0, 0
 	for _, row in page.rows do
+		if row.bonus then
+			continue
+		end
 		local c, t = StormLog.rowProgress(row, found)
 		count += c
 		total += t

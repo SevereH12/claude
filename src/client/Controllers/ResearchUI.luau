@@ -1,9 +1,21 @@
 --!strict
--- Research panel: one card per researcher with their rank stars, perk, field
--- data, a post picker, a Hire button and (at level 5) a Promote button, under
--- a line of Glints per zone tier. Hiring, posting and promoting just ask the
--- server, which re-checks everything (including that you're standing in the
--- Research Office).
+-- RESEARCH panel, two tabs:
+--   * TEAM: a strip of Glints chips (one per zone tier, in that zone's
+--     colour, with a gem drawn in UI; tap one to see where those Glints
+--     come from and which promotions they pay for), then one compact card
+--     per researcher: portrait, name · role with rank stars, level, perk
+--     now and next, the data bar, a status line, and two buttons: "📍 POST"
+--     (opens the post picker) and HIRE / PROMOTE. PROMOTE shows Glint
+--     progress while it's short and needs two taps to confirm.
+--   * LOG: the Storm Log collection book (Lib/StormLogTab). The tab shows
+--     "(n)" when n rows can be claimed, and ResearchUI.ReadyChanged tells
+--     the menu (the RESEARCH dot).
+-- The post picker is one overlay inside the panel, shared by every card:
+-- Office, then the zones under their world's name. It closes on a pick, a
+-- tap outside it, or Esc / gamepad B (Shortcuts asks closePicker first),
+-- without closing the panel.
+-- Hiring, posting and promoting just ask the server, which re-checks
+-- everything (including that you're standing in the Research Office).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -14,12 +26,16 @@ local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local Net = require(ReplicatedStorage.Shared.Net)
 local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local ResearchSites = require(ReplicatedStorage.Shared.Util.ResearchSites)
+local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local Types = require(ReplicatedStorage.Shared.Types)
 local ResearcherModels = require(script.Parent.Parent.Lib.ResearcherModels)
 local Celebrate = require(script.Parent.Parent.Lib.Celebrate)
 local Layout = require(script.Parent.Parent.Lib.Layout)
+local RewardText = require(script.Parent.Parent.Lib.RewardText)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
+local StormLogTab = require(script.Parent.Parent.Lib.StormLogTab)
 local UI = require(script.Parent.Parent.Lib.UI)
+local ZoneColours = require(script.Parent.Parent.Lib.ZoneColours)
 local Researchers = require(script.Parent.Researchers)
 local State = require(script.Parent.State)
 
@@ -28,39 +44,79 @@ local COLORS = UI.COLORS
 type Card = {
 	def: Types.ResearcherDef,
 	index: number,
+	stroke: UIStroke,
 	title: TextLabel,
 	level: TextLabel,
 	now: TextLabel,
 	next: TextLabel,
 	status: TextLabel,
-	fill: Frame,
+	bar: UI.Bar,
 	barText: TextLabel,
+	post: TextButton,
 	hire: TextButton,
 	promote: TextButton,
-	posts: { [string]: TextButton },
 }
+
+type Chip = {
+	tier: number,
+	button: TextButton,
+	stroke: UIStroke,
+	gem: Frame,
+	gemStroke: UIStroke,
+	count: TextLabel,
+	name: TextLabel,
+}
+
+type Tab = "team" | "log"
 
 local CONFIRM_SECONDS = 4 -- a second PROMOTE tap within this confirms
 local TIP_TEXT =
 	"Your researchers can't work here yet: catch bolts here for Glints and promote them at the Research Office."
+local DESIGN = Vector2.new(680, 560) -- the same as the REWARDS panel
+local TAB_HEIGHT = 40
+local STRIP = 80 -- the Glints strip
+local GAP = 8
+local CHIP_GAP = 6
+local PICK_HEIGHT = 40 -- a post picker button
 
 local ResearchUI = {}
 
-local screenGui: Frame -- the panel's Layout root
+-- Fires true when a Storm Log row can be claimed, false when none can.
+ResearchUI.ReadyChanged = Signal.new() :: Signal.Signal<boolean>
+
 local panel: Frame
 local cards: { Card } = {}
+local chips: { Chip } = {}
 local hireRemote: RemoteEvent
 local postRemote: RemoteEvent
 local promoteRemote: RemoteEvent
-local glintsLabel: TextLabel
-local postIds: { string } = { "Office" }
+local teamPage: Frame
+local logList: ScrollingFrame
+local teamTab: TextButton
+local logTab: TextButton
+local picker: TextButton -- the dim catcher over the panel (a tap on it closes the picker)
+local pickerTitle: TextLabel
+local pickerButtons: { [string]: TextButton } = {}
+local pickerFor: Card? = nil
 local postNames: { [string]: string } = { Office = "Office" }
 local knownLevels: { [string]: number } = {}
 local knownRanks: { [string]: number } = {} -- for the promotion moment
+local knownGlints: { [number]: number } = {} -- for the chip pop
 local confirmUntil: { [string]: number } = {} -- role id -> os.clock() the confirm tap runs out
 local lastBottleTier: number? = nil
 local rendered = false -- the first render is just loading in (no "hired" sound)
 local tipShown = false
+local logReady = false
+
+local render: (snapshot: Types.Snapshot) -> ()
+
+-- Shows the TEAM or LOG tab.
+local function selectTab(tab: Tab)
+	teamPage.Visible = tab == "team"
+	logList.Visible = tab == "log"
+	UI.setEnabled(teamTab, true, if tab == "team" then COLORS.storm else COLORS.panelDark)
+	UI.setEnabled(logTab, true, if tab == "log" then COLORS.storm else COLORS.panelDark)
+end
 
 function ResearchUI.toggle()
 	UI.togglePanel(panel)
@@ -68,6 +124,29 @@ end
 
 function ResearchUI.open()
 	UI.openPanel(panel)
+end
+
+-- Opens the panel on the LOG tab (the Storm Log's toasts use this).
+function ResearchUI.openLog()
+	selectTab("log")
+	UI.openPanel(panel)
+end
+
+-- Can a Storm Log row be claimed? (The menu's RESEARCH dot.)
+function ResearchUI.isReady(): boolean
+	return logReady
+end
+
+-- Closes the post picker if it's open. True if it was (Esc / gamepad B
+-- then leaves the panel open).
+function ResearchUI.closePicker(): boolean
+	if not picker or not picker.Visible then
+		return false
+	end
+	picker.Visible = false
+	pickerFor = nil
+	UI.selectFirst(panel)
+	return true
 end
 
 -- 2.75, 12, 0.5: at most two decimals, no trailing zeros
@@ -93,18 +172,8 @@ local function zoneName(tier: number): string
 	return if zone then zone.displayName else `Tier {tier}`
 end
 
--- "Shoreline Glints: 12 · Mesa Glints: 37": every tier you have any of.
-local function glintsText(glints: { number }): string
-	local parts = {}
-	for tier = 0, ResearchMath.maxRank() do
-		local count = ResearchMath.glintsOf(glints, tier)
-		if count > 0 then
-			table.insert(parts, `{zoneName(tier)} Glints: {Format.abbreviate(count)}`)
-		end
-	end
-	return if #parts > 0
-		then `✨ {table.concat(parts, " · ")}`
-		else "✨ Glints: catch bolts in a zone to earn its Glints"
+local function tierColour(tier: number): Color3
+	return ZoneColours.of(ResearchMath.tierZone(tier), COLORS.storm)
 end
 
 -- Why this researcher can't be promoted right now (nil = they can).
@@ -166,126 +235,448 @@ local function inOffice(): boolean
 	return root ~= nil and root:IsA("BasePart") and ResearchSites.inOffice(root.Position)
 end
 
-local function render(snapshot: Types.Snapshot)
-	local atOffice = inOffice()
-	local now = workspace:GetServerTimeNow()
-	local glints = snapshot.glints or {}
-	glintsLabel.Text = glintsText(glints)
-	checkTip(snapshot)
-	local wasRendered = rendered
-	rendered = true
-	for _, card in cards do
-		local def = card.def
-		local save = snapshot.researchers[def.id]
-		local previous = Config.RESEARCHERS[card.index - 1]
-		local unlocked = previous == nil or snapshot.researchers[previous.id] ~= nil
-
-		local rank = if save then save.rank or 0 else 0
-		card.title.Text = `{string.upper(`{def.name} · {def.role}`)}{stars(rank)}`
-		local known = knownRanks[def.id]
-		if save then
-			if known == nil and wasRendered then
-				Sfx.play("hired")
-			end
-			knownRanks[def.id] = rank
-			if known and rank > known then
-				celebrate(card, rank)
-			end
+-- Where a tier's Glints come from and what they pay for, asked of the rules
+-- (Util/Research.glintsFor) with one Glint of that tier.
+local function chipInfo(tier: number): string
+	local zones: { string } = {}
+	for _, zone in Formulas.sortedZones() do
+		if ResearchMath.zoneTier(zone) == tier then
+			table.insert(zones, zone.displayName)
 		end
-
-		if save then
-			local maxLevel = #Config.RESEARCH_LEVELS
-			local nextAt = ResearchMath.nextThreshold(save.level, rank)
-			card.level.Text = `Lv {save.level} / {maxLevel}`
-			card.now.Text = perkText(def, save.level, rank)
-			card.next.Text = if nextAt
-				then `Next (Lv {save.level + 1}): {perkText(def, save.level + 1, rank)}`
-				elseif rank < ResearchMath.maxRank() then `Promote for rank {rank + 1}`
-				else "Max level and rank"
-			card.fill.Size =
-				UDim2.fromScale(if nextAt then math.clamp(save.data / nextAt, 0, 1) else 1, 1)
-			card.barText.Text = if nextAt
-				then `{Format.abbreviate(save.data)} / {Format.abbreviate(nextAt)} data`
-				else `{Format.abbreviate(save.data)} data`
-			local readyIn = (snapshot.setupUntil[def.id] or 0) - now
-			card.status.Text = if save.post == "Office"
-				then "At the Research Office"
-				elseif
-					readyIn > 0
-				then `Setting up in {postNames[save.post] or save.post}... {math.ceil(
-					readyIn
-				)}s`
-				else `Working in {postNames[save.post] or save.post}`
-			card.hire.Text = "HIRED"
-			UI.setEnabled(card.hire, false, COLORS.green)
-			card.hire.Visible = save.level < maxLevel or rank >= ResearchMath.maxRank()
-			card.promote.Visible = not card.hire.Visible
-			if card.promote.Visible then
-				local cost = Config.RESEARCH_PRESTIGE.glintCost[rank + 1]
-				local confirming = (confirmUntil[def.id] or 0) > os.clock()
-				card.promote.Text = if confirming
-					then `TAP AGAIN: Lv 1, rank {rank + 1}, +{math.floor(
-						Config.RESEARCH_PRESTIGE.perkBonusPerRank * 100 + 0.5
-					)}% perk, works in {zoneName(rank + 1)}`
-					else `PROMOTE: {cost} Glints`
-				UI.setEnabled(
-					card.promote,
-					promoteBlock(save, glints, atOffice) == nil,
-					COLORS.volt
-				)
-			end
-		else
-			card.hire.Visible = true
-			card.promote.Visible = false
-			card.level.Text = "Lv -"
-			card.now.Text = perkText(def, 1, 0)
-			card.next.Text = ""
-			card.fill.Size = UDim2.fromScale(0, 1)
-			card.barText.Text = "Not hired"
-			card.status.Text = if not unlocked
-				then `Hire {previous.name} first`
-				elseif snapshot.volts < def.price then `Need {Format.abbreviate(
-					def.price - snapshot.volts
-				)} more ⚡`
-				elseif atOffice then "Ready to hire"
-				else "Hire at the Research Center"
-			card.hire.Text = `{Format.abbreviate(def.price)} ⚡`
-			UI.setEnabled(
-				card.hire,
-				unlocked and atOffice and snapshot.volts >= def.price,
-				COLORS.green
-			)
+	end
+	local probe: { number } = {}
+	for index = 0, ResearchMath.maxRank() do
+		probe[index + 1] = if index == tier then 1 else 0
+	end
+	local ranks: { number } = {}
+	for rank = 1, ResearchMath.maxRank() do
+		if ResearchMath.glintsFor(probe, rank) > 0 then
+			table.insert(ranks, rank)
 		end
+	end
+	local from = `💎 {zoneName(tier)} Glints: one for every bolt you catch in {table.concat(
+		zones,
+		" or "
+	)}.`
+	if #ranks == 0 then
+		return `{from} They don't pay for any promotion.`
+	elseif #ranks == 1 then
+		return `{from} They pay for promotion to rank {ranks[1]}.`
+	end
+	return `{from} They pay for promotions to rank {ranks[1]} to {ranks[#ranks]}.`
+end
 
-		for postId, button in card.posts do
-			local selected = save ~= nil and save.post == postId
-			local zone = Config.ZONES[postId]
-			local locked = zone ~= nil and not ResearchMath.canPost(rank, zone)
-			button.Text = if locked
-				then `🔒 {string.upper(postNames[postId])}`
-				else string.upper(postNames[postId])
-			UI.setEnabled(button, save ~= nil and not selected and not locked, COLORS.storm)
-			if selected then
-				button.BackgroundColor3 = COLORS.volt
-			end
+-- The Glints strip: each chip's count, colour and pop when it rises.
+local function renderChips(glints: { number })
+	for _, chip in chips do
+		local count = ResearchMath.glintsOf(glints, chip.tier)
+		local colour = tierColour(chip.tier)
+		local has = count > 0
+		chip.count.Text = if has then Format.abbreviate(count) else "?"
+		chip.count.TextTransparency = if has then 0 else 0.4
+		chip.name.TextTransparency = if has then 0 else 0.5
+		chip.name.TextColor3 = colour:Lerp(Color3.new(1, 1, 1), 0.35)
+		chip.gem.BackgroundColor3 = if has then colour else COLORS.disabled
+		chip.gemStroke.Color = if has then colour:Lerp(Color3.new(1, 1, 1), 0.6) else COLORS.stroke
+		chip.button.BackgroundColor3 = COLORS.panelDark:Lerp(colour, if has then 0.35 else 0.1)
+		chip.stroke.Color = if has then colour else COLORS.stroke
+		local before = knownGlints[chip.tier]
+		knownGlints[chip.tier] = count
+		if before and count > before and panel.Visible then
+			UI.pop(chip.button, 1.15)
 		end
 	end
 end
 
+-- The picker's buttons for one researcher: locked zones show 🔒 and the
+-- rank they need, the current post is volt.
+local function renderPicker(snapshot: Types.Snapshot)
+	local card = pickerFor
+	if not card then
+		return
+	end
+	local save = snapshot.researchers[card.def.id]
+	local rank = if save then save.rank or 0 else 0
+	pickerTitle.Text = `📍 POST {string.upper(card.def.name)}`
+	for postId, button in pickerButtons do
+		local zone = Config.ZONES[postId]
+		local name = string.upper(postNames[postId])
+		local locked = zone ~= nil and not ResearchMath.canPost(rank, zone)
+		local current = save ~= nil and save.post == postId
+		button.Text = if locked
+			then `🔒 {name} · RANK {ResearchMath.zoneTier(zone :: Types.ZoneDef)}`
+			elseif current then `✓ {name}`
+			else name
+		UI.setEnabled(button, not locked, if current then COLORS.volt else COLORS.storm)
+	end
+end
+
+local function renderCard(
+	card: Card,
+	snapshot: Types.Snapshot,
+	atOffice: boolean,
+	wasRendered: boolean
+)
+	local def = card.def
+	local glints = snapshot.glints or {}
+	local now = workspace:GetServerTimeNow()
+	local save = snapshot.researchers[def.id]
+	local previous = Config.RESEARCHERS[card.index - 1]
+	local unlocked = previous == nil or snapshot.researchers[previous.id] ~= nil
+
+	local rank = if save then save.rank or 0 else 0
+	card.title.Text = `{string.upper(`{def.name} · {def.role}`)}{stars(rank)}`
+	local known = knownRanks[def.id]
+	if save then
+		if known == nil and wasRendered then
+			Sfx.play("hired")
+		end
+		knownRanks[def.id] = rank
+		if known and rank > known then
+			celebrate(card, rank)
+		end
+	end
+	card.stroke.Color = COLORS.stroke
+	card.stroke.Thickness = 3
+
+	if not save then
+		card.level.Text = "Lv -"
+		card.now.Text = perkText(def, 1, 0)
+		card.next.Text = ""
+		card.bar.setFraction(0)
+		card.barText.Text = "Not hired"
+		card.status.Text = if not unlocked
+			then `Hire {previous.name} first`
+			elseif snapshot.volts < def.price then `Need {Format.abbreviate(
+				def.price - snapshot.volts
+			)} more ⚡`
+			elseif atOffice then "Ready to hire"
+			else "Hire at the Research Center"
+		card.post.Text = "📍 POST"
+		UI.setEnabled(card.post, false, COLORS.storm)
+		card.hire.Visible = true
+		card.promote.Visible = false
+		card.hire.Text = `HIRE {Format.abbreviate(def.price)} ⚡`
+		UI.setEnabled(
+			card.hire,
+			unlocked and atOffice and snapshot.volts >= def.price,
+			COLORS.green
+		)
+		return
+	end
+
+	local maxLevel = #Config.RESEARCH_LEVELS
+	local nextAt = ResearchMath.nextThreshold(save.level, rank)
+	card.level.Text = `Lv {save.level} / {maxLevel}`
+	card.now.Text = perkText(def, save.level, rank)
+	card.next.Text = if nextAt
+		then `Next (Lv {save.level + 1}): {perkText(def, save.level + 1, rank)}`
+		elseif rank < ResearchMath.maxRank() then `Promote for rank {rank + 1}`
+		else "Max level and rank"
+	card.bar.setFraction(if nextAt then save.data / nextAt else 1)
+	card.barText.Text = if nextAt
+		then `{Format.abbreviate(save.data)} / {Format.abbreviate(nextAt)} data`
+		else `{Format.abbreviate(save.data)} data`
+	local postName = postNames[save.post] or save.post
+	local readyIn = (snapshot.setupUntil[def.id] or 0) - now
+	card.status.Text = if save.post == "Office"
+		then "At the Research Office"
+		elseif readyIn > 0 then `Setting up in {postName}... {math.ceil(readyIn)}s`
+		else `Working in {postName}`
+	card.post.Text = `📍 {string.upper(postName)}`
+	UI.setEnabled(card.post, true, COLORS.storm)
+
+	if rank >= ResearchMath.maxRank() then
+		card.hire.Visible = true
+		card.promote.Visible = false
+		card.hire.Text = "★ TOP RANK"
+		UI.setEnabled(card.hire, false, COLORS.green)
+		return
+	end
+	card.hire.Visible = false
+	card.promote.Visible = true
+	local target = rank + 1
+	local cost = Config.RESEARCH_PRESTIGE.glintCost[target]
+	local have = ResearchMath.glintsFor(glints, target)
+	local confirming = (confirmUntil[def.id] or 0) > os.clock()
+	local block = promoteBlock(save, glints, atOffice)
+	if have < cost then
+		card.promote.Text =
+			`✨ {Format.abbreviate(have)}/{Format.abbreviate(cost)} {zoneName(target)}`
+	elseif confirming then
+		card.promote.Text = "TAP AGAIN"
+		card.status.Text = `Promote: Lv 1, rank {target}, +{math.floor(
+			Config.RESEARCH_PRESTIGE.perkBonusPerRank * 100 + 0.5
+		)}% perk, works in {zoneName(target)}`
+	else
+		card.promote.Text = `PROMOTE ✨{Format.abbreviate(cost)}`
+	end
+	UI.setEnabled(card.promote, block == nil, COLORS.volt)
+	if block == nil then
+		card.stroke.Color = COLORS.volt
+		card.stroke.Thickness = 5
+	end
+end
+
+-- TEAM: the Glints strip, the cards and the picker (if it's open).
+local function renderTeam(snapshot: Types.Snapshot)
+	local atOffice = inOffice()
+	renderChips(snapshot.glints or {})
+	checkTip(snapshot)
+	local wasRendered = rendered
+	rendered = true
+	for _, card in cards do
+		renderCard(card, snapshot, atOffice, wasRendered)
+	end
+	renderPicker(snapshot)
+end
+
+-- LOG: the Storm Log, the tab's count and the menu's dot.
+local function renderLog(snapshot: Types.Snapshot)
+	local claimable = StormLogTab.render(snapshot, RewardText.describe)
+	logTab.Text = if claimable > 0 then `📖 LOG ({claimable})` else "📖 LOG"
+	local ready = claimable > 0
+	if ready ~= logReady then
+		logReady = ready
+		ResearchUI.ReadyChanged:Fire(ready)
+	end
+end
+
+render = function(snapshot: Types.Snapshot)
+	renderTeam(snapshot)
+	renderLog(snapshot)
+end
+
+local function openPicker(card: Card)
+	local snapshot = State.current
+	if not snapshot or not snapshot.researchers[card.def.id] then
+		UI.toast(`Hire {card.def.name} first`, "info")
+		return
+	end
+	pickerFor = card
+	renderPicker(snapshot)
+	picker.Visible = true
+	UI.selectFirst(picker)
+end
+
+local function pick(postId: string)
+	local card = pickerFor
+	local snapshot = State.current
+	local save = if card and snapshot then snapshot.researchers[card.def.id] else nil
+	if not card or not save then
+		ResearchUI.closePicker()
+		return
+	end
+	local zone = Config.ZONES[postId]
+	if zone and not ResearchMath.canPost(save.rank, zone) then
+		local tier = ResearchMath.zoneTier(zone)
+		UI.toast(`Needs rank {tier} to work in {zone.displayName}`, "info")
+		return
+	end
+	if save.post ~= postId then
+		postRemote:FireServer(card.def.id, postId)
+	end
+	ResearchUI.closePicker()
+end
+
+-- The one post picker, over the whole panel (above its tabs and cards).
+local function buildPicker()
+	picker = UI.make(Instance.new("TextButton"), {
+		Name = "PostPicker",
+		Text = "",
+		AutoButtonColor = false,
+		Selectable = false,
+		BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 0.45,
+		Size = UDim2.fromScale(1, 1),
+		Visible = false,
+		ZIndex = 20,
+		Parent = panel,
+	})
+	UI.corner(picker, UDim.new(0, 14))
+	picker.Activated:Connect(function()
+		ResearchUI.closePicker()
+	end)
+	local box = UI.panel({
+		Name = "Box",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(0.7, 0, 0.86, 0),
+		Parent = picker,
+	})
+	-- a tap on the box (between its buttons) isn't a tap outside it
+	UI.make(Instance.new("TextButton"), {
+		Name = "Absorb",
+		Text = "",
+		AutoButtonColor = false,
+		Selectable = false,
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 0,
+		Parent = box,
+	})
+	UI.padding(box, 12)
+	pickerTitle = UI.label({
+		Title = true,
+		Text = "📍 POST",
+		Size = UDim2.new(1, 0, 0, 34),
+		Parent = box,
+	})
+	UI.maxText(pickerTitle, 26)
+	local list = UI.list(box, {
+		Name = "Posts",
+		Position = UDim2.fromOffset(0, 42),
+		Size = UDim2.new(1, 0, 1, -42),
+		gap = 6,
+	})
+	local order = 0
+	local function button(postId: string)
+		order += 1
+		local item = UI.button({
+			Name = postId,
+			Text = string.upper(postNames[postId]),
+			LayoutOrder = order,
+			Size = UDim2.new(1, 0, 0, PICK_HEIGHT),
+			BackgroundColor3 = COLORS.storm,
+			Parent = list,
+		})
+		UI.maxText(item, 20)
+		item.Activated:Connect(function()
+			UI.pop(item)
+			pick(postId)
+		end)
+		pickerButtons[postId] = item
+	end
+	button("Office")
+	for _, world in Config.WORLDS do
+		local zones: { Types.ZoneDef } = {}
+		for _, zone in Formulas.sortedZones() do
+			if zone.world == world.id then
+				table.insert(zones, zone)
+			end
+		end
+		if #zones > 0 then
+			order += 1
+			local heading = UI.label({
+				Title = true,
+				Name = `{world.id}Heading`,
+				LayoutOrder = order,
+				Text = world.displayName,
+				TextColor3 = COLORS.subtext,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextYAlignment = Enum.TextYAlignment.Bottom,
+				Size = UDim2.new(1, 0, 0, 28),
+				Parent = list,
+			})
+			UI.maxText(heading, 20)
+			for _, zone in zones do
+				button(zone.id)
+			end
+		end
+	end
+	-- closing the panel closes the picker too
+	panel:GetPropertyChangedSignal("Visible"):Connect(function()
+		if not panel.Visible then
+			picker.Visible = false
+			pickerFor = nil
+		end
+	end)
+end
+
+-- One Glints chip: a gem (a square turned 45°, with a gradient and an
+-- outline), the count and the zone's name.
+local function buildChip(parent: Instance, tier: number, width: UDim)
+	local button = UI.make(Instance.new("TextButton"), {
+		Name = `Tier{tier}`,
+		Text = "",
+		AutoButtonColor = true,
+		LayoutOrder = tier,
+		BackgroundColor3 = COLORS.panelDark,
+		Size = UDim2.new(width, UDim.new(1, 0)),
+		Parent = parent,
+	})
+	UI.corner(button, UDim.new(0, 10))
+	local stroke = UI.stroke(button, 3)
+	UI.clickSound(button, true)
+	local gem = UI.make(Instance.new("Frame"), {
+		Name = "Gem",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0, 20),
+		Size = UDim2.fromOffset(18, 18),
+		Rotation = 45,
+		BackgroundColor3 = COLORS.disabled,
+		Parent = button,
+	})
+	UI.corner(gem, UDim.new(0, 3))
+	UI.make(Instance.new("UIGradient"), {
+		Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(120, 120, 140)),
+		Rotation = 45, -- lit from the top corner
+		Parent = gem,
+	})
+	local gemStroke = UI.stroke(gem, 2)
+	local count = UI.label({
+		Title = true,
+		Name = "Count",
+		Text = "?",
+		Position = UDim2.fromOffset(0, 34),
+		Size = UDim2.new(1, 0, 0, 22),
+		Parent = button,
+	})
+	UI.maxText(count, 22)
+	local name = UI.label({
+		Name = "Zone",
+		Text = zoneName(tier),
+		Position = UDim2.new(0, 3, 0, 57),
+		Size = UDim2.new(1, -6, 0, 18),
+		Parent = button,
+	})
+	UI.maxText(name, 13)
+	button.Activated:Connect(function()
+		UI.pop(button)
+		UI.toast(chipInfo(tier), "info", 7)
+	end)
+	table.insert(chips, {
+		tier = tier,
+		button = button,
+		stroke = stroke,
+		gem = gem,
+		gemStroke = gemStroke,
+		count = count,
+		name = name,
+	})
+end
+
+local function buildStrip(parent: Instance)
+	local strip = UI.make(Instance.new("Frame"), {
+		Name = "Glints",
+		Size = UDim2.new(1, 0, 0, STRIP),
+		BackgroundTransparency = 1,
+		Parent = parent,
+	})
+	UI.padding(strip, 3) -- room for the chip outlines
+	UI.make(Instance.new("UIListLayout"), {
+		FillDirection = Enum.FillDirection.Horizontal,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		Padding = UDim.new(0, CHIP_GAP),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = strip,
+	})
+	local tiers = ResearchMath.maxRank() + 1
+	local width = UDim.new(1 / tiers, -CHIP_GAP * (tiers - 1) / tiers)
+	for tier = 0, ResearchMath.maxRank() do
+		buildChip(strip, tier, width)
+	end
+end
+
 local function buildCard(list: Instance, index: number, def: Types.ResearcherDef)
-	local frame = UI.make(Instance.new("Frame"), {
+	local frame, stroke = UI.card({
 		Name = def.id,
 		LayoutOrder = index,
-		Size = UDim2.new(1, -12, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundColor3 = COLORS.panelDark,
 		Parent = list,
 	})
-	UI.corner(frame, UDim.new(0, 12))
-	UI.stroke(frame, 3)
-	UI.padding(frame, 8)
 	UI.make(Instance.new("UIListLayout"), {
-		Padding = UDim.new(0, 4),
+		Padding = UDim.new(0, 6),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = frame,
 	})
@@ -306,32 +697,17 @@ local function buildCard(list: Instance, index: number, def: Types.ResearcherDef
 		return label
 	end
 
-	local titleRow = row(1, 28)
-	local title = text(titleRow, {
-		Title = true,
-		Text = string.upper(`{def.name} · {def.role}`),
-		RichText = true, -- the gold rank stars
-		Size = UDim2.fromScale(0.72, 1),
-	}, 24)
-	local level = text(titleRow, {
-		Title = true,
-		Text = "Lv -",
-		TextColor3 = COLORS.volt,
-		TextXAlignment = Enum.TextXAlignment.Right,
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.fromScale(1, 0),
-		Size = UDim2.fromScale(0.26, 1),
-	}, 24)
-
-	-- portrait on the left, perk and next-level text beside it
-	local portraitRow = row(2, 64)
+	-- the top: the portrait, and beside it the name, level, perk and next
+	local top = row(1, 70)
 	local portrait = UI.make(Instance.new("ViewportFrame"), {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.fromScale(0, 0.5),
 		Size = UDim2.fromOffset(64, 64),
 		BackgroundColor3 = COLORS.stroke,
 		BackgroundTransparency = 0.4,
 		Ambient = Color3.fromRGB(190, 190, 200),
 		LightColor = Color3.fromRGB(255, 250, 235),
-		Parent = portraitRow,
+		Parent = top,
 	})
 	UI.corner(portrait, UDim.new(0, 8))
 	local model = ResearcherModels.build(def.id)
@@ -346,93 +722,78 @@ local function buildCard(list: Instance, index: number, def: Types.ResearcherDef
 	camera.Parent = portrait
 	portrait.CurrentCamera = camera
 
-	local now = text(portraitRow, {
+	local title = text(top, {
+		Title = true,
+		Text = string.upper(`{def.name} · {def.role}`),
+		RichText = true, -- the gold rank stars
+		Position = UDim2.fromOffset(74, 0),
+		Size = UDim2.new(1, -74 - 96, 0, 26),
+	}, 22)
+	local level = text(top, {
+		Title = true,
+		Text = "Lv -",
+		TextColor3 = COLORS.volt,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.fromScale(1, 0),
+		Size = UDim2.fromOffset(92, 26),
+	}, 22)
+	local now = text(top, {
 		Text = "",
-		Position = UDim2.new(0, 72, 0, 0),
-		Size = UDim2.new(1, -72, 0.55, 0),
+		Position = UDim2.fromOffset(74, 28),
+		Size = UDim2.new(1, -74, 0, 22),
 	}, 16)
-	local next = text(portraitRow, {
+	local next = text(top, {
 		Text = "",
 		TextColor3 = COLORS.subtext,
-		Position = UDim2.new(0, 72, 0.55, 0),
-		Size = UDim2.new(1, -72, 0.45, 0),
+		Position = UDim2.fromOffset(74, 50),
+		Size = UDim2.new(1, -74, 0, 20),
 	}, 14)
 
-	local bar = row(4, 18)
-	bar.BackgroundTransparency = 0
-	bar.BackgroundColor3 = COLORS.stroke
-	UI.corner(bar, UDim.new(0.5, 0))
-	local clip = UI.make(Instance.new("CanvasGroup"), {
+	local dataBar = UI.bar(row(2, 18), {
+		Name = "DataBar",
 		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
-		Parent = bar,
+		color = COLORS.storm,
+		text = 13,
 	})
-	UI.corner(clip, UDim.new(0.5, 0))
-	local fill = UI.make(Instance.new("Frame"), {
-		Size = UDim2.fromScale(0, 1),
-		BackgroundColor3 = COLORS.storm,
-		BorderSizePixel = 0,
-		Parent = clip,
-	})
-	local barText = text(bar, {
-		Text = "",
-		TextXAlignment = Enum.TextXAlignment.Center,
-		Size = UDim2.fromScale(1, 1),
-	}, 13)
+	local barText = dataBar.label :: TextLabel
 
-	local status = text(row(5, 18), {
+	local status = text(row(3, 18), {
 		Text = "",
 		TextColor3 = COLORS.calm,
 		Size = UDim2.fromScale(1, 1),
 	}, 14)
 
-	-- post picker: Office plus each zone in Config order
-	local picker = UI.make(Instance.new("Frame"), {
-		LayoutOrder = 6,
-		Size = UDim2.new(1, 0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundTransparency = 1,
-		Parent = frame,
+	-- the bottom: POST and HIRE / PROMOTE side by side
+	local buttons = row(4, 38)
+	local post = UI.button({
+		Name = "Post",
+		Text = "📍 POST",
+		Size = UDim2.new(0.5, -4, 1, 0),
+		BackgroundColor3 = COLORS.storm,
+		Parent = buttons,
 	})
-	UI.make(Instance.new("UIGridLayout"), {
-		CellSize = UDim2.new(0.32, 0, 0, 28),
-		CellPadding = UDim2.fromOffset(4, 4),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = picker,
-	})
-	local posts: { [string]: TextButton } = {}
-	for order, postId in postIds do
-		local button = UI.button({
-			Name = postId,
-			Text = string.upper(postNames[postId]),
-			LayoutOrder = order,
-			BackgroundColor3 = COLORS.storm,
-			Parent = picker,
-		})
-		UI.maxText(button, 16)
-		button.Activated:Connect(function()
-			local save = if State.current then State.current.researchers[def.id] else nil
-			local zone = Config.ZONES[postId]
-			if save and zone and not ResearchMath.canPost(save.rank, zone) then
-				local tier = ResearchMath.zoneTier(zone)
-				UI.toast(`Needs rank {tier} to work in {zone.displayName}`, "info")
-			elseif save and save.post ~= postId then
-				UI.pop(button)
-				postRemote:FireServer(def.id, postId)
-			end
-		end)
-		posts[postId] = button
-	end
+	UI.maxText(post, 18)
+	local card: Card
+	post.Activated:Connect(function()
+		UI.pop(post)
+		openPicker(card)
+	end)
 
-	local hire = UI.button({
-		Name = "Hire",
-		Text = "...",
-		LayoutOrder = 7,
-		Size = UDim2.new(1, 0, 0, 34),
-		BackgroundColor3 = COLORS.green,
-		Parent = frame,
-	})
-	UI.maxText(hire, 22)
+	local function right(name: string, color: Color3): TextButton
+		local button = UI.button({
+			Name = name,
+			Text = "...",
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.fromScale(1, 0),
+			Size = UDim2.new(0.5, -4, 1, 0),
+			BackgroundColor3 = color,
+			Parent = buttons,
+		})
+		UI.maxText(button, 18)
+		return button
+	end
+	local hire = right("Hire", COLORS.green)
 	hire.Activated:Connect(function()
 		local snapshot = State.current
 		if snapshot and not snapshot.researchers[def.id] then
@@ -445,17 +806,9 @@ local function buildCard(list: Instance, index: number, def: Types.ResearcherDef
 		end
 	end)
 
-	-- in the hire button's place once they reach level 5
-	local promote = UI.button({
-		Name = "Promote",
-		Text = "PROMOTE",
-		LayoutOrder = 8,
-		Visible = false,
-		Size = UDim2.new(1, 0, 0, 34),
-		BackgroundColor3 = COLORS.volt,
-		Parent = frame,
-	})
-	UI.maxText(promote, 20)
+	-- in the hire button's place once they're hired (until the top rank)
+	local promote = right("Promote", COLORS.volt)
+	promote.Visible = false
 	promote.Activated:Connect(function()
 		local snapshot = State.current
 		local save = if snapshot then snapshot.researchers[def.id] else nil
@@ -473,29 +826,31 @@ local function buildCard(list: Instance, index: number, def: Types.ResearcherDef
 			promoteRemote:FireServer(def.id)
 		else
 			confirmUntil[def.id] = os.clock() + CONFIRM_SECONDS
-			render(snapshot)
+			renderTeam(snapshot)
 			task.delay(CONFIRM_SECONDS, function()
 				if State.current then
-					render(State.current)
+					renderTeam(State.current)
 				end
 			end)
 		end
 	end)
 
-	table.insert(cards, {
+	card = {
 		def = def,
 		index = index,
+		stroke = stroke,
 		title = title,
 		level = level,
 		now = now,
 		next = next,
 		status = status,
-		fill = fill,
+		bar = dataBar,
 		barText = barText,
+		post = post,
 		hire = hire,
 		promote = promote,
-		posts = posts,
-	})
+	}
+	table.insert(cards, card)
 end
 
 -- The server publishes "<post>:<level>:<rank>" in Research_<RoleId> on the
@@ -530,63 +885,88 @@ function ResearchUI.init()
 	postRemote = Net.get("PostResearcher")
 	promoteRemote = Net.get("PromoteResearcher")
 	for _, zone in Formulas.sortedZones() do
-		table.insert(postIds, zone.id)
 		postNames[zone.id] = zone.displayName
 	end
 
 	local _, root = Layout.screen("StormBottlerResearch", 6) -- above the shop if both are open
-	screenGui = root
-	local window = UI.window(
-		screenGui,
-		"ResearchPanel",
-		"🔬 STORM SOCIETY",
-		COLORS.storm,
-		Vector2.new(640, 560)
-	)
+	local window = UI.window(root, "ResearchPanel", "🔬 RESEARCH", COLORS.storm, DESIGN)
 	panel = window.panel
+
+	-- the two tabs along the top
+	local tabBar = UI.make(Instance.new("Frame"), {
+		Name = "Tabs",
+		Size = UDim2.new(1, 0, 0, TAB_HEIGHT),
+		BackgroundTransparency = 1,
+		Parent = window.body,
+	})
+	UI.make(Instance.new("UIGridLayout"), {
+		CellSize = UDim2.new(1 / 2, -6, 1, 0),
+		CellPadding = UDim2.fromOffset(6, 0),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = tabBar,
+	})
+	local function tab(order: number, text: string, which: Tab): TextButton
+		local button = UI.button({
+			Name = if which == "team" then "TeamTab" else "LogTab",
+			Text = text,
+			LayoutOrder = order,
+			BackgroundColor3 = COLORS.panelDark,
+			Parent = tabBar,
+		})
+		UI.maxText(button, 18)
+		button.Activated:Connect(function()
+			local page: GuiObject = if which == "team" then teamPage else logList
+			if not page.Visible then
+				UI.pop(button)
+				Sfx.play("tab")
+				selectTab(which)
+			end
+		end)
+		return button
+	end
+	teamTab = tab(1, "👥 TEAM", "team")
+	logTab = tab(2, "📖 LOG", "log")
+
+	-- TEAM: the Glints strip over the researcher cards
+	teamPage = UI.make(Instance.new("Frame"), {
+		Name = "Team",
+		Position = UDim2.fromOffset(0, TAB_HEIGHT + GAP),
+		Size = UDim2.new(1, 0, 1, -(TAB_HEIGHT + GAP)),
+		BackgroundTransparency = 1,
+		Parent = window.body,
+	})
+	buildStrip(teamPage)
+	local list = UI.list(teamPage, {
+		Name = "List",
+		Position = UDim2.fromOffset(0, STRIP + 4),
+		Size = UDim2.new(1, 0, 1, -(STRIP + 4)),
+		gap = 10,
+	})
 	local hint = UI.label({
+		Name = "Hint",
+		LayoutOrder = 0,
 		Text = "Hire researchers at the Research Center island, then post them at a zone.",
 		TextColor3 = COLORS.subtext,
 		TextWrapped = true,
-		Size = UDim2.new(1, 0, 0, 34),
-		Parent = window.body,
-	})
-	UI.maxText(hint, 16)
-	glintsLabel = UI.label({
-		Name = "Glints",
-		Text = "",
-		TextColor3 = COLORS.volt,
-		TextWrapped = true,
-		Position = UDim2.fromOffset(0, 38),
 		Size = UDim2.new(1, 0, 0, 22),
-		Parent = window.body,
-	})
-	UI.maxText(glintsLabel, 16)
-
-	local list = UI.make(Instance.new("ScrollingFrame"), {
-		Name = "List",
-		Position = UDim2.fromOffset(0, 66),
-		Size = UDim2.new(1, 0, 1, -66),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollBarThickness = 6,
-		Parent = window.body,
-	})
-	UI.make(Instance.new("UIListLayout"), {
-		Padding = UDim.new(0, 10),
-		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = list,
 	})
-	UI.make(Instance.new("UIPadding"), {
-		PaddingTop = UDim.new(0, 4),
-		PaddingLeft = UDim.new(0, 4),
-		Parent = list,
-	})
+	UI.maxText(hint, 15)
 	for index, def in Config.RESEARCHERS do
 		buildCard(list, index, def)
 	end
+
+	-- LOG: the Storm Log (Lib/StormLogTab)
+	logList = UI.list(window.body, {
+		Name = "Log",
+		Position = UDim2.fromOffset(0, TAB_HEIGHT + GAP),
+		Size = UDim2.new(1, 0, 1, -(TAB_HEIGHT + GAP)),
+		gap = GAP,
+	})
+	StormLogTab.build(logList, ResearchUI.openLog)
+
+	buildPicker()
+	selectTab("team")
 	watchLevels()
 end
 
@@ -596,17 +976,18 @@ function ResearchUI.start()
 	end
 	State.Changed:Connect(render)
 	-- standing in the office and set-up countdowns change without a snapshot;
-	-- stepping onto the Research Center doorstep opens the panel
+	-- stepping onto the Research Center doorstep opens the panel on TEAM
 	local wasInOffice = false
 	while true do
 		task.wait(0.25)
 		local here = inOffice()
 		if here and not wasInOffice and not panel.Visible then
-			ResearchUI.toggle()
+			selectTab("team")
+			ResearchUI.open()
 		end
 		wasInOffice = here
 		if panel.Visible and State.current then
-			render(State.current)
+			renderTeam(State.current)
 		end
 	end
 end
