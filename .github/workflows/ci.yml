@@ -1,9 +1,12 @@
 name: CI
 
+# Runs on pushes to main and to the working branch (the one the Update Game
+# plugin downloads), and on pull requests.
 on:
   push:
-    branches: [main]
+    branches: [main, claude/sweet-planck-ea1ob4]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   lint:
@@ -21,3 +24,51 @@ jobs:
 
       - name: Lint
         run: selene src
+
+  # The harness tests (tools/harness): the real modules in a stand-in
+  # DataModel, run with Lune (installed by rokit, see rokit.toml).
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        uses: CompeyDev/setup-rokit@v0.1.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Harness tests
+        run: |
+          status=0
+          for test in tools/harness/test_*.luau; do
+            case "$test" in
+              *test_layout.luau) args="$RUNNER_TEMP/preview.json" ;;
+              *test_gameplay.luau) args="Game" ;;
+              *) args="" ;;
+            esac
+            echo "== $test"
+            lune run "$test" $args || status=1
+          done
+          exit $status
+
+  # The map checks (tools/check_world.sh Game): build every world, then
+  # walkability, flicker and the top-down renders (Python with Pillow).
+  map:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        uses: CompeyDev/setup-rokit@v0.1.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python packages
+        run: pip install pillow numpy
+
+      - name: Check the worlds
+        run: tools/check_world.sh Game "$RUNNER_TEMP/map"
