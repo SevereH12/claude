@@ -15,6 +15,8 @@
 --   "boost"    give a boost (Config.BOOSTS) to a player in this server
 --   "reset"    start someone's save again from nothing (the panel confirms)
 --   "lookup"   anyone's saved data, read only
+--   "testNotify" send yourself a "daily reward ready" notification now
+--              (live servers only; Systems/Notifications.sendTest)
 --   "testError" a test error on the server (the panel makes one on the
 --              client too), to check error reporting
 -- Every action is written to the AdminLog DataStore (Config.ADMIN.logStore),
@@ -34,6 +36,7 @@ local BoostRules = require(ReplicatedStorage.Shared.Util.Boosts)
 local Ops = require(ReplicatedStorage.Shared.Util.Ops)
 local Boosts = require(script.Parent.Boosts)
 local Errors = require(script.Parent.Errors)
+local Notifications = require(script.Parent.Notifications)
 local PlayerData = require(script.Parent.PlayerData)
 local Sync = require(script.Parent.Sync)
 local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
@@ -462,6 +465,13 @@ local function onRequest(player: Player, action: unknown, args: unknown)
 		Errors.testServerError(player)
 		task.delay(0.5, sendState, player)
 		return reply(player, true, "Test errors made: they show in ERRORS in a moment")
+	elseif action == "testNotify" then
+		logAction(player, "testNotify", player.UserId, player.Name, "")
+		task.spawn(function()
+			local ok, note = Notifications.sendTest(player)
+			reply(player, ok, `Test notification: {note}`)
+		end)
+		return
 	end
 	local handler = ACTIONS[action]
 	if not handler then

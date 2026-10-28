@@ -41,6 +41,7 @@ local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
 local SETTINGS = Config.NOTIFICATIONS
 local URL = "https://apis.roblox.com/cloud/v2/users/%d/notifications"
 local DAY = 86400
+local TEST_EVERY = 60 -- seconds between an admin's TEST NOTIFY presses
 local SERVER_ID = if game.JobId ~= ""
 	then game.JobId
 	else `studio-{HttpService:GenerateGUID(false)}`
@@ -101,9 +102,23 @@ local function setupProblem(kind: string): (Secret?, string?)
 	return apiKey()
 end
 
--- Sends one reminder. True if Roblox took it (or it can never work, so
--- there's no point keeping it).
-local function send(userId: number, kind: string): boolean
+-- What came of one send:
+--   "sent"   Roblox took it
+--   "drop"   it can never work (setup missing, Studio, a 4xx): don't keep it
+--   "retry"  Roblox is busy (429 or 5xx) or the call failed: try again later
+type Outcome = "sent" | "drop" | "retry"
+
+-- Sends one reminder, and says what came of it (and why, for the admin
+-- panel's TEST NOTIFY). The key is only ever passed to RequestAsync as the
+-- Secret it is: never printed, logged or turned into a string.
+local function send(userId: number, kind: string): (Outcome, string)
+	if RunService:IsStudio() then
+		-- secrets from the Creator Dashboard only reach live servers
+		print(
+			`[Notifications] Studio: would send "{kind}" to user {userId} (only live servers send)`
+		)
+		return "drop", "Studio can't send notifications: test it in a live server"
+	end
 	local secret, problem = setupProblem(kind)
 	if not secret then
 		logOnce(
@@ -111,10 +126,7 @@ local function send(userId: number, kind: string): boolean
 			`not sending "{kind}" reminders: {problem}. See README.md, "Leaderboards and notifications"`,
 			true
 		)
-		if RunService:IsStudio() then
-			print(`[Notifications] would send "{kind}" to user {userId} (skipped: setup missing)`)
-		end
-		return true
+		return "drop", `not set up: {problem}`
 	end
 	local ok, response = pcall(function()
 		return HttpService:RequestAsync({
@@ -132,19 +144,21 @@ local function send(userId: number, kind: string): boolean
 			"http",
 			`sending failed: {response}. Is "Allow HTTP Requests" on (Game Settings > Security)?`
 		)
-		return false
+		return "retry", `the request failed: {response}`
 	end
 	if response.Success then
 		print(`[Notifications] sent "{kind}" to user {userId}`)
-	else
-		-- 4xx: the key, the ids or the player (not opted in, one a day
-		-- already); trying again won't help
-		logOnce(
-			`status:{response.StatusCode}`,
-			`Roblox answered {response.StatusCode} {response.StatusMessage}: {response.Body}`
-		)
+		return "sent", `sent "{kind}" to user {userId}`
 	end
-	return true
+	local code = response.StatusCode
+	local answer = `Roblox answered {code} {response.StatusMessage}: {response.Body}`
+	logOnce(`status:{code}`, answer)
+	if code == 429 or code >= 500 then
+		return "retry", answer
+	end
+	-- other 4xx: the key, the ids or the player (not opted in, one a day
+	-- already); trying again won't help
+	return "drop", answer
 end
 
 -- Claims, sends and removes every due item (a batch at a time).
@@ -179,10 +193,15 @@ local function sendDue()
 			continue -- another server has it
 		end
 		local value = item.value
-		if send(value.userId, value.kind) then
+		local outcome = send(value.userId, value.kind)
+		if outcome ~= "retry" then
 			pcall(function()
 				queue:RemoveAsync(key)
 			end)
+		else
+			-- Roblox is busy: the claim runs out and the rest wait for the
+			-- next pass (or another server)
+			break
 		end
 	end
 end
@@ -263,7 +282,24 @@ local function onYes(player: Player)
 		return
 	end
 	profile.notifyYes = true
+	Sync.markDirty(player)
 	print(`[Notifications] {player.Name} said yes to daily reminders`)
+end
+
+-- The admin panel's TEST NOTIFY (Systems/Admin checks it's an admin):
+-- sends a "daily reward ready" to that admin straight away, once a minute
+-- at most. Roblox only delivers it if they've allowed this game's
+-- notifications, and at most one a day.
+local lastTest: { [number]: number } = {}
+function Notifications.sendTest(player: Player): (boolean, string)
+	local now = os.clock()
+	local last = lastTest[player.UserId]
+	if last and now - last < TEST_EVERY then
+		return false, `wait {math.ceil(TEST_EVERY - (now - last))} s before another test`
+	end
+	lastTest[player.UserId] = now
+	local outcome, note = send(player.UserId, "daily")
+	return outcome == "sent", note
 end
 
 function Notifications.init()
