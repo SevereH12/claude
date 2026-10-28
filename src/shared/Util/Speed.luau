@@ -94,7 +94,7 @@ function Speed.walkSpeed(
 	return Formulas.walkSpeed(false, progress.bootTier, owned)
 end
 
--- The note shown on entering a zone: "Storm drag -12 speed: you run 20
+-- The note shown on entering a zone: "Storm drag -12 speed: you run 18
 -- here", or nil when this zone's storm doesn't slow anyone down.
 function Speed.dragText(progress: Progression.Progress, zone: Types.ZoneDef): string?
 	local drag = Speed.drag(zone, progress)

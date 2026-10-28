@@ -920,7 +920,7 @@ return table.freeze({
 	-- Movement: you move faster between zones so travel isn't a chore.
 	-- Boots add their speedBonus inside zones only, and each zone's storm
 	-- drag takes some away (see BOOTS and Util/Speed).
-	WALK_SPEED_IN_ZONE = 16, -- Roblox default; a typical player's speed on entering a zone
+	WALK_SPEED_IN_ZONE = 18, -- a little over the Roblox default (16); a typical player's speed on entering a zone
 	WALK_SPEED_OUTSIDE = 30,
 	-- In-zone speed never goes below min (no boots in a late zone) or above
 	-- max (great boots in an early zone). Keep max below WALK_SPEED_OUTSIDE,
@@ -969,8 +969,8 @@ return table.freeze({
 	-- that rank costs, in Glints of its tier or higher, and each rank makes
 	-- the perk perkBonusPerRank stronger.
 	RESEARCH_PRESTIGE = table.freeze({
-		dataScale = table.freeze({ 1.15, 1.8, 2.85, 3.7, 3.7, 4.5, 4.5 }),
-		glintCost = table.freeze({ 45, 65, 130, 85, 165, 50 }),
+		dataScale = table.freeze({ 0.95, 1.6, 2.9, 4.3, 4.9, 5.45, 5.45 }),
+		glintCost = table.freeze({ 50, 65, 135, 85, 165, 30 }),
 		perkBonusPerRank = 0.10,
 	}),
 

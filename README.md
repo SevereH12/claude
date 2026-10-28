@@ -169,14 +169,15 @@ you back down, so every new zone starts out as a fresh race to the bolts.
   player owns when that zone opens, where "typical" means someone who
   always buys the cheaper of the next bottle and the next boots (the
   order the HUD's goals show). So a typical player walks into every zone
-  at 16, and every pair they buy while there makes them faster again.
+  at 18 (a little over Roblox's default 16; `Config.WALK_SPEED_IN_ZONE`),
+  and every pair they buy while there makes them faster again.
 - Today's drags: Shoreline, Mesa and Aurora Reef 0, Generator Yard 12,
   Tidewire Beach 20, Thunderhead Mesa and Rune Spire 24, Cloudshore 28,
   Ember Mesa 32. The Premium zone drags like your best zone.
 - Your speed in a zone never drops below 10 or goes above 28
   (`Config.ZONE_SPEED`), so leaving a zone always speeds you up.
 - On screen: walking into a zone with drag shows a note ("Storm drag -12
-  speed: you run 16 here"), and the shop's BOOTS rows say how fast each
+  speed: you run 18 here"), and the shop's BOOTS rows say how fast each
   pair runs in your best zone.
 - The AFK Lounge and the movement checks use the same speeds.
 - To tune it: change `speedBonus` in `Config.BOOTS` (the drags follow by
