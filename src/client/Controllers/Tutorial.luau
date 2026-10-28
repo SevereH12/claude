@@ -68,6 +68,7 @@ local beacon: BasePart? = nil
 
 -- the pointer: a glowing outline and a bouncing arrow on a button
 local pointer: Frame
+local pointerCorner: UICorner
 local pointerArrow: TextLabel
 local pointerTarget: GuiObject? = nil
 
@@ -195,24 +196,11 @@ local function pointAt(target: GuiObject?, side: string?)
 		pointer.Parent = card -- out of the way
 		return
 	end
-	-- cover the whole button: UI.button pads its contents
-	local padding = target:FindFirstChildOfClass("UIPadding")
-	if padding then
-		local w = 1 - padding.PaddingLeft.Scale - padding.PaddingRight.Scale
-		local h = 1 - padding.PaddingTop.Scale - padding.PaddingBottom.Scale
-		-- (the title nudge moves the top and bottom padding by offsets)
-		pointer.Position = UDim2.new(
-			-padding.PaddingLeft.Scale / w,
-			-padding.PaddingLeft.Offset,
-			-padding.PaddingTop.Scale / h,
-			-padding.PaddingTop.Offset
-		)
-		pointer.Size = UDim2.fromScale(1 / w, 1 / h)
-	else
-		pointer.Position = UDim2.new()
-		pointer.Size = UDim2.fromScale(1, 1)
-	end
-	pointer.Parent = target
+	-- cover the whole button (UI.overlay undoes its padding), with the same
+	-- rounded corners so the glow hugs its outline
+	local corner = target:FindFirstChildOfClass("UICorner")
+	pointerCorner.CornerRadius = if corner then corner.CornerRadius else UDim.new(0, 14)
+	pointer.Parent = UI.overlay(target)
 	pointer.Visible = true
 	local left = side == "left"
 	pointerArrow.Text = if left then "👉" else "👈"
@@ -410,7 +398,7 @@ local function build()
 		Visible = false,
 		Parent = card,
 	})
-	UI.corner(pointer, UDim.new(0, 14))
+	pointerCorner = UI.corner(pointer, UDim.new(0, 14))
 	local glow = UI.stroke(pointer, 5, COLORS.volt)
 	glow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	TweenService:Create(glow, BOB, { Transparency = 0.6 }):Play()

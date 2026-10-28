@@ -269,7 +269,7 @@ local function addDot(button: GuiObject, color: Color3?): Frame
 		BackgroundColor3 = color or COLORS.red,
 		Visible = if color then false else RewardsUI.isReady(),
 		ZIndex = 5,
-		Parent = button,
+		Parent = UI.overlay(button), -- on the corner, not inside the padding
 	})
 	UI.corner(dot, UDim.new(0.5, 0))
 	UI.stroke(dot, 2)
