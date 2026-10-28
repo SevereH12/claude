@@ -77,12 +77,6 @@ check(level(fx.simpleDistance, true, false, "Full") == "full", "exactly simpleDi
 check(level(fx.drawDistance, true, false, "Full") == "simple", "exactly drawDistance is still drawn")
 check(level(near, true, false, "Nonsense") == "full", "an unknown setting counts as Full")
 
--- shadows: only your own strike, only on Full glow
-check(StrikeFx.castsShadows(true, "Full"), "own strike on Full casts shadows")
-check(not StrikeFx.castsShadows(true, "Soft"), "own strike on Soft casts none")
-check(not StrikeFx.castsShadows(true, "Off"), "own strike with glow Off casts none")
-check(not StrikeFx.castsShadows(false, "Full"), "someone else's strike casts none")
-
 -- the flicker ----------------------------------------------------------------------
 check(StrikeFx.restrikeTime() == fx.dipAt + fx.dipFor, "the restrike comes after the dip")
 check(StrikeFx.brightness(0, false) == 1, "a bolt starts at full")

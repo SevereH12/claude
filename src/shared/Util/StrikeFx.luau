@@ -118,12 +118,6 @@ function StrikeFx.brightness(elapsed: number, calm: boolean): number?
 	return (1 - t) ^ 2 -- eases out: quick at first, then gently to nothing
 end
 
--- Only your own strike's light casts shadows, and only with Lightning glow
--- on Full (shadowed lights are the heaviest part of a strike).
-function StrikeFx.castsShadows(mine: boolean, glow: string): boolean
-	return mine and glow == "Full"
-end
-
 -- Light budget: at most `max` strike lights alive at once. `admit` adds a
 -- new one and hands back the oldest when that goes over (destroy it);
 -- `release` forgets one that ended by itself.

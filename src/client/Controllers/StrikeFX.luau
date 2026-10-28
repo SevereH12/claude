@@ -29,8 +29,9 @@
 -- strikes in full; another world's not at all, and silent; other players'
 -- less the further away they are, and Others' lightning can only lower
 -- that. At most maxLights strike lights shine at once (a new one replaces
--- the oldest), and only your own strike's light casts shadows (Lightning
--- glow on Full).
+-- the oldest). The flash hangs lightHeight studs up and casts no shadows,
+-- so it lights the floor evenly (a shadowed light just above a floor made
+-- of many parts lit it in hard-edged patches that cut off).
 
 local Debris = game:GetService("Debris")
 local Lighting = game:GetService("Lighting")
@@ -429,21 +430,25 @@ local function budgetLight(light: PointLight)
 end
 
 -- Impact: light burst, sparks, shockwave, scorch mark. `simple` (Util/StrikeFx
--- said simple): just the shockwave. The light follows Lightning glow (and
--- casts shadows only for your own strike, on Full), the sparks Rain and
--- particles.
-local function impact(position: Vector3, simple: boolean, mine: boolean)
+-- said simple): just the shockwave. The light follows Lightning glow, the
+-- sparks Rain and particles.
+local function impact(position: Vector3, simple: boolean)
 	local anchor = anchorAt(position + Vector3.new(0, 0.3, 0), 5)
 	local glow = SettingsStore.get("glow")
 
 	if glow ~= "Off" and not simple then
+		local fx = Config.STRIKE_FX
 		local soft = glow == "Soft"
+		local above = UI.make(Instance.new("Attachment"), {
+			Position = Vector3.new(0, fx.lightHeight, 0),
+			Parent = anchor,
+		})
 		local burst = UI.make(Instance.new("PointLight"), {
 			Color = GLOW_COLOR,
-			Brightness = if soft then 6 else 14,
-			Range = if soft then 40 else 60,
-			Shadows = StrikeFx.castsShadows(mine, glow),
-			Parent = anchor,
+			Brightness = if soft then fx.softBrightness else fx.lightBrightness,
+			Range = if soft then fx.softRange else fx.lightRange,
+			Shadows = false,
+			Parent = above,
 		})
 		local fade = TweenInfo.new(LIGHT_FADE, Enum.EasingStyle.Quad)
 		TweenService:Create(burst, fade, { Brightness = 0 }):Play()
@@ -867,7 +872,7 @@ local function onLanded(landed: Types.StrikeLanded)
 				tint
 			)
 		end
-		impact(landed.position, simple, mine)
+		impact(landed.position, simple)
 
 		-- little arcs from the strike (or the orb) into every catcher's bottle
 		local from = orbAt or landed.position + Vector3.new(0, 1, 0)

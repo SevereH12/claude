@@ -156,7 +156,7 @@ function Rewards.init()
 	Net.get("GroupJoined").OnServerEvent:Connect(onGroupJoined)
 	Group.Joined:Connect(Analytics.groupJoined)
 	PlayerData.Loaded:Connect(function(player: Player, profile: Types.Profile)
-		startDay(player, profile, 0)
+		startDay(player, profile)
 	end)
 	PlayerData.Leaving:Connect(function(player: Player, profile: Types.Profile)
 		local session = Sync.rewards[player]

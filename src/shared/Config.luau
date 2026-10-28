@@ -1216,10 +1216,17 @@ return table.freeze({
 	-- one replaces the oldest). A bolt flickers like a real restrike: full,
 	-- down to `dim` brightness for dipFor seconds from dipAt, full again for
 	-- `hold`, then fades over `fade` (Reduce flashing: just a calmFade).
+	-- The strike's flash: a light lightHeight studs above the strike with no
+	-- shadows (Lightning glow Full, or the soft values on Soft).
 	STRIKE_FX = table.freeze({
 		drawDistance = 600,
 		simpleDistance = 250,
 		maxLights = 3,
+		lightHeight = 12,
+		lightBrightness = 5,
+		lightRange = 45,
+		softBrightness = 2.5,
+		softRange = 32,
 		dim = 0.4,
 		dipAt = 0.05,
 		dipFor = 0.07,
