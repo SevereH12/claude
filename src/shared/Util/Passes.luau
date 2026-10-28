@@ -238,7 +238,7 @@ function Passes.fieldData(baseData: number, owned: Owned): number
 end
 
 -- Walk speed between storm zones: 50% faster with Jet Boots. (Speed inside
--- zones never changes: Formulas.walkSpeed.)
+-- zones isn't changed by it: Util/Speed.)
 function Passes.outsideSpeed(baseSpeed: number, owned: Owned): number
 	return if owned.JetBoots then baseSpeed * VALUES.jetBoots else baseSpeed
 end

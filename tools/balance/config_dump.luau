@@ -1,11 +1,14 @@
 --!nocheck
--- Prints the game's Config (zones, bottles, boots, strikes, research) as
+-- Prints the game's Config (zones, bottles, boots, strikes, research, and
+-- Util/Speed's storm drags and typical boots) as
 -- JSON for the balance tools (tools/balance/*.py).
 --   lune run tools/balance/config_dump.luau
 local serde = require("@lune/serde")
 local World = require("../harness/World")
 
-local Config = World.new("src"):require("ReplicatedStorage.Shared.Config")
+local world = World.new("src")
+local Config = world:require("ReplicatedStorage.Shared.Config")
+local Speed = world:require("ReplicatedStorage.Shared.Util.Speed")
 local zones = {}
 for id, zone in Config.ZONES do
 	table.insert(zones, {
@@ -18,11 +21,18 @@ for id, zone in Config.ZONES do
 		depth = zone.depth,
 		requiresBottle = zone.requiresBottle,
 		premium = zone.premium == true,
+		drag = Speed.drag(zone), -- storm drag (Util/Speed)
 	})
 end
 local bottles, boots = {}, {}
 for _, b in Config.BOTTLES do
-	table.insert(bottles, { name = b.name, capacity = b.capacity, price = b.price })
+	-- typicalBoots: the boot tier a typical player owns when they buy it (Util/Speed)
+	table.insert(bottles, {
+		name = b.name,
+		capacity = b.capacity,
+		price = b.price,
+		typicalBoots = Speed.typicalBootTier(#bottles + 1),
+	})
 end
 for _, b in Config.BOOTS do
 	table.insert(boots, { name = b.name, speedBonus = b.speedBonus })
@@ -36,6 +46,7 @@ print(serde.encode("json", {
 	STORM_DURATION = Config.STORM_DURATION,
 	CALM_DURATION = Config.CALM_DURATION,
 	WALK_SPEED_IN_ZONE = Config.WALK_SPEED_IN_ZONE,
+	ZONE_SPEED = Config.ZONE_SPEED,
 	RESEARCH_LEVELS = Config.RESEARCH_LEVELS,
 	RESEARCH_PRESTIGE = Config.RESEARCH_PRESTIGE,
 }))

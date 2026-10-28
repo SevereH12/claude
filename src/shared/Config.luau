@@ -19,19 +19,22 @@ local BOTTLES: { Types.BottleDef } = {
 	{ name = "Storm Core", capacity = 4_000, price = 5_000_000 },
 }
 
--- In-zone walk speed is WALK_SPEED_IN_ZONE + speedBonus. Keep every tier
--- below WALK_SPEED_OUTSIDE: boots only matter inside storm zones, where
--- speed decides who reaches a bolt first.
+-- Boots add speedBonus to your walk speed inside storm zones (never
+-- between zones). Each zone's storm takes some back ("storm drag", worked
+-- out by Util/Speed from these prices and the bottles' prices), so a
+-- typical player walks into every zone at WALK_SPEED_IN_ZONE and every
+-- pair bought there makes them faster again. In-zone speed stays between
+-- ZONE_SPEED.min and ZONE_SPEED.max.
 local BOOTS: { Types.BootsDef } = {
 	{ name = "Rain Boots", speedBonus = 0, price = 0 }, -- everyone starts with these
-	{ name = "Puddle Jumpers", speedBonus = 2, price = 300 },
-	{ name = "Squall Skippers", speedBonus = 3, price = 900 },
-	{ name = "Gale Striders", speedBonus = 4, price = 2_000 },
-	{ name = "Thunder Treads", speedBonus = 6, price = 10_000 },
-	{ name = "Coil Striders", speedBonus = 7, price = 35_000 },
-	{ name = "Arc Runners", speedBonus = 8, price = 150_000 },
-	{ name = "Sky Treads", speedBonus = 9, price = 600_000 },
-	{ name = "Cloud Walkers", speedBonus = 10, price = 3_000_000 },
+	{ name = "Puddle Jumpers", speedBonus = 4, price = 300 },
+	{ name = "Squall Skippers", speedBonus = 8, price = 900 },
+	{ name = "Gale Striders", speedBonus = 12, price = 2_000 },
+	{ name = "Thunder Treads", speedBonus = 16, price = 10_000 },
+	{ name = "Coil Striders", speedBonus = 20, price = 35_000 },
+	{ name = "Arc Runners", speedBonus = 24, price = 150_000 },
+	{ name = "Sky Treads", speedBonus = 28, price = 600_000 },
+	{ name = "Cloud Walkers", speedBonus = 32, price = 3_000_000 },
 }
 
 local RESEARCHERS: { Types.ResearcherDef } = {
@@ -710,9 +713,14 @@ return table.freeze({
 	EVENTS = table.freeze(EVENTS),
 
 	-- Movement: you move faster between zones so travel isn't a chore.
-	-- Boots add their speedBonus inside zones only (see BOOTS).
-	WALK_SPEED_IN_ZONE = 16, -- Roblox default
+	-- Boots add their speedBonus inside zones only, and each zone's storm
+	-- drag takes some away (see BOOTS and Util/Speed).
+	WALK_SPEED_IN_ZONE = 16, -- Roblox default; a typical player's speed on entering a zone
 	WALK_SPEED_OUTSIDE = 30,
+	-- In-zone speed never goes below min (no boots in a late zone) or above
+	-- max (great boots in an early zone). Keep max below WALK_SPEED_OUTSIDE,
+	-- so leaving a zone always speeds you up.
+	ZONE_SPEED = table.freeze({ min = 10, max = 28 }),
 
 	-- Premium zones pay this many times the best other zone the player can
 	-- enter, so they're worth a visit at every stage (Progression.boltValue)

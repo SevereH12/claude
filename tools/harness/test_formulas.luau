@@ -27,10 +27,12 @@ for tier, def in Config.BOOTS do
 		Formulas.walkSpeed(false, tier) == Config.WALK_SPEED_OUTSIDE,
 		`tier {tier}: outside zones walks at WALK_SPEED_OUTSIDE`
 	)
-	-- inside zones boots add their bonus...
+	-- inside zones boots add their bonus (at most ZONE_SPEED.max; each
+	-- zone's storm drag is tested in test_speed.luau)...
 	check(
-		Formulas.walkSpeed(true, tier) == Config.WALK_SPEED_IN_ZONE + def.speedBonus,
-		`tier {tier}: inside zones walks at WALK_SPEED_IN_ZONE + {def.speedBonus}`
+		Formulas.walkSpeed(true, tier)
+			== math.min(Config.WALK_SPEED_IN_ZONE + def.speedBonus, Config.ZONE_SPEED.max),
+		`tier {tier}: inside zones walks at WALK_SPEED_IN_ZONE + {def.speedBonus} (capped)`
 	)
 	-- ...but never reach the between-zones speed
 	check(

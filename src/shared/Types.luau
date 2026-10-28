@@ -380,7 +380,8 @@ export type BottleDef = {
 	price: number,
 }
 
--- speedBonus: added to the walk speed inside storm zones only.
+-- speedBonus: added to the walk speed inside storm zones only (each zone's
+-- storm drag takes some back: Util/Speed).
 export type BootsDef = {
 	name: string,
 	speedBonus: number,

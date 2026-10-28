@@ -154,6 +154,34 @@ playtime, Clear boosts and Pretend group member (Studio only). Stats are
 under **Analytics**: custom events DailyClaimed, PlaytimeGift and
 GroupJoined, and reward Volts in Economy (TimedReward).
 
+## Boots and storm drag
+
+Boots make you run faster inside storm zones, and each zone's storm slows
+you back down, so every new zone starts out as a fresh race to the bolts.
+
+- **Boots**: each pair adds 4 more speed than the last (Puddle Jumpers +4
+  up to Cloud Walkers +32), only inside storm zones. Between zones
+  everyone runs at 30 (45 with Jet Boots), whatever boots they wear.
+- **Storm drag**: every zone's storm takes some speed away. Nobody types
+  it in: `Util/Speed` works it out from the bottle and boot prices, so a
+  new zone gets one by itself. It's the bonus of the boots a typical
+  player owns when that zone opens, where "typical" means someone who
+  always buys the cheaper of the next bottle and the next boots (the
+  order the HUD's goals show). So a typical player walks into every zone
+  at 16, and every pair they buy while there makes them faster again.
+- Today's drags: Shoreline, Mesa and Aurora Reef 0, Generator Yard 12,
+  Tidewire Beach 20, Thunderhead Mesa and Rune Spire 24, Cloudshore 28,
+  Ember Mesa 32. The Premium zone drags like your best zone.
+- Your speed in a zone never drops below 10 or goes above 28
+  (`Config.ZONE_SPEED`), so leaving a zone always speeds you up.
+- On screen: walking into a zone with drag shows a note ("Storm drag -12
+  speed: you run 16 here"), and the shop's BOOTS rows say how fast each
+  pair runs in your best zone.
+- The AFK Lounge and the movement checks use the same speeds.
+- To tune it: change `speedBonus` in `Config.BOOTS` (the drags follow by
+  themselves), or `Config.ZONE_SPEED`. `tools/harness/test_speed.luau`
+  checks the rules and prints every zone's drag and speeds.
+
 ## AFK Lounge
 
 The Night Shift Lounge in Barometer Bay's village (or MENU → 🌀 TELEPORT →
@@ -161,8 +189,9 @@ AFK LOUNGE) pays Volts while you rest. Stand on its rug for 10 seconds and
 you earn **10% of what you'd make grinding your best zone** (15% for
 Roblox Premium members), paid every minute:
 
-- The grinding rate counts your bottle (and Big Bottles), your boots (how
-  many strikes you can reach), your best zone's bolt value, and everything
+- The grinding rate counts your bottle (and Big Bottles), your boots
+  against your best zone's storm drag (how many strikes you can reach),
+  your best zone's bolt value, and everything
   that multiplies a sale: 2x Volts, VIP, Lucky Charges, running boosts,
   the group bonus and a Server Storm. It's worked out again every 15
   seconds, so a boost running out or a new purchase shows straight away.
@@ -676,8 +705,8 @@ lines.
   rules (no Roblox services) both sides use and the harness tests:
   formulas, zones, progression, passes, rewards, quests, the Storm Log,
   Ascension, research, weather and the server goal, settings, social,
-  leaderboards, notifications, admin rules (`Ops`) and movement checks
-  (`AntiCheat`).
+  leaderboards, notifications, admin rules (`Ops`), walk speed and storm
+  drag (`Speed`) and movement checks (`AntiCheat`).
 - `src/server` → ServerScriptService.Server (a Script). It loads every
   system in `Systems/`, calls each one's `init()` and then `start()`.
   - `Systems/`: one module per feature. The core: `PlayerData` (saving),

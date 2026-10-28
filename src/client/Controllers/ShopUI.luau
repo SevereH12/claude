@@ -12,6 +12,8 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Net = require(ReplicatedStorage.Shared.Net)
 local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
+local Progression = require(ReplicatedStorage.Shared.Util.Progression)
+local Speed = require(ReplicatedStorage.Shared.Util.Speed)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Layout = require(script.Parent.Parent.Lib.Layout)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
@@ -357,7 +359,7 @@ function ShopUI.init()
 	local boots = buildTab(
 		2,
 		"BOOTS",
-		"Boots make you faster inside storm zones, so you reach bolts first.",
+		"Boots beat each zone's storm drag, so you reach bolts first.",
 		Net.get("BuyBoots"),
 		function(snapshot)
 			return snapshot.bootTier
@@ -371,6 +373,20 @@ function ShopUI.init()
 			detail = if def.speedBonus > 0
 				then `+{def.speedBonus} speed in storm zones`
 				else "Your starter pair",
+			-- the speed these boots give in the player's best zone, after
+			-- its storm drag (Util/Speed)
+			describe = function(snapshot)
+				local badge = `+{def.speedBonus}`
+				local zone = Progression.bestZone(snapshot)
+				local base = if def.speedBonus > 0
+					then `+{def.speedBonus} speed`
+					else "Starter pair"
+				if not zone then
+					return badge, base
+				end
+				local speed = Speed.withDrag(tier, Speed.drag(zone, snapshot))
+				return badge, `{base}: runs {speed} in {zone.displayName}`
+			end,
 		})
 	end
 

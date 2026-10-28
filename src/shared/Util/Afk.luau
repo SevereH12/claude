@@ -13,8 +13,9 @@
 --   chargeValue their bottle opens, never the Premium zone).
 -- * "Closest catcher wins" zones count as if the player were alone there.
 -- * A strike is reachable when its ring lands within STRIKE_RADIUS plus how
---   far they can run in WARNING_TIME (in-zone speed: boots count, Jet Boots
---   don't, they only help outside zones). Strike centres are picked from
+--   far they can run in WARNING_TIME (their speed in that zone, Util/Speed:
+--   boots and the zone's storm drag count, Jet Boots don't, they only help
+--   outside zones). Strike centres are picked from
 --   the zone inset by STRIKE_RADIUS + 2 (Systems/Strikes), so the chance is
 --   that circle's area over that rectangle's, at most 1.
 -- * Strikes only fall during storms, so the time to fill a bottle stretches
@@ -27,6 +28,7 @@ local Types = require(script.Parent.Parent.Types)
 local Formulas = require(script.Parent.Formulas)
 local Passes = require(script.Parent.Passes)
 local Progression = require(script.Parent.Progression)
+local Speed = require(script.Parent.Speed)
 
 export type Multiplier = { label: string, value: number }
 
@@ -134,7 +136,7 @@ function Afk.rate(
 		* Progression.boltValue(progress, zone)
 		* Passes.sellMultiplier(effects)
 		* (1 + breakdown.luck)
-	local speed = Formulas.walkSpeed(true, progress.bootTier)
+	local speed = Speed.inZone(progress, zone)
 	local reach = Config.STRIKE_RADIUS + speed * Config.WARNING_TIME
 	local inset = 2 * (Config.STRIKE_RADIUS + 2)
 	local area = math.max(zone.width - inset, 1) * math.max(zone.depth - inset, 1)
