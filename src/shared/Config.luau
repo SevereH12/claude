@@ -1215,9 +1215,19 @@ return table.freeze({
 	-- sparks or screen flash). A bolt flickers like a real restrike: full,
 	-- down to `dim` brightness for dipFor seconds from dipAt, full again for
 	-- `hold`, then fades over `fade` (Reduce flashing: just a calmFade).
+	-- Where it lands, a soft glow on the floor (glowRadius studs, brightest
+	-- in the middle at glowStrength, 0 to 1, built from glowLayers discs)
+	-- grows a little and fades over glowTime seconds; smaller and dimmer with
+	-- Lightning glow on Soft, none on Off.
 	STRIKE_FX = table.freeze({
 		drawDistance = 600,
 		simpleDistance = 250,
+		glowRadius = 10,
+		glowStrength = 0.6,
+		softGlowRadius = 7,
+		softGlowStrength = 0.35,
+		glowLayers = 10,
+		glowTime = 0.55,
 		dim = 0.4,
 		dipAt = 0.05,
 		dipFor = 0.07,

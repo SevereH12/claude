@@ -4,8 +4,8 @@
 --
 --   Forecast      -> faint dashed ring (your Forecaster), gone at the public warning
 --   StrikeWarning -> glowing ring + light pillar; inner disc fills until the bolt lands
---   StrikeLanded  -> forked, flickering bolt; sparks and thunder (nothing
---                    is drawn on the floor). Arcs into each
+--   StrikeLanded  -> forked, flickering bolt; a soft glow on the floor,
+--                    sparks, a scorch mark and thunder. Arcs into each
 --                    catcher's bottle, in their bolt colour (Bolt Colours
 --                    pick, else VIP gold). If we caught it: screen flash,
 --                    camera shake, "+5" popup ("x2 ASSAYED" if high grade).
@@ -67,6 +67,7 @@ local FORECAST_DASHES = 24
 local BALLOON_MUTED = Color3.fromRGB(120, 124, 130)
 
 local FADE = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local SLOW_FADE = TweenInfo.new(4, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 local POPUP_RISE = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 type Warning = { anchor: BasePart, pillar: BasePart, orb: BasePart? }
@@ -409,16 +410,82 @@ local function catchSound(): string
 	return `catch_{math.clamp(math.ceil(fill * 5), 1, 5)}`
 end
 
--- Impact: sparks, and a screen flash when it's near you. Nothing is drawn
--- on the floor (no light patch, ring or scorch mark). `simple` (Util/StrikeFx
--- said simple): none of it, just the bolt. The flash follows Lightning
--- glow, the sparks Rain and particles.
-local function impact(position: Vector3, simple: boolean)
+-- The strike's light: a soft pool of glow on the floor. It's see-through
+-- discs stacked from the middle out (so it's brightest in the middle and
+-- fades smoothly to nothing at the edge) on a flat SurfaceGui that ignores
+-- Roblox's lighting, so it looks the same in every zone with no hard edges
+-- (a real light lit the floor in blocky patches). It grows a little as it
+-- fades (Config.STRIKE_FX: glowRadius, glowTime, glowLayers).
+local function groundGlow(position: Vector3, color: Color3, radius: number, strength: number)
+	local fx = Config.STRIKE_FX
+	local plate = effectPart({
+		Name = "StrikeGlow",
+		Size = Vector3.new(radius * 2, 0.05, radius * 2),
+		Position = position + Vector3.new(0, 0.06, 0),
+		Transparency = 1,
+		Parent = fxFolder,
+	})
+	local gui = UI.make(Instance.new("SurfaceGui"), {
+		Face = Enum.NormalId.Top,
+		LightInfluence = 0,
+		Brightness = 2,
+		SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
+		PixelsPerStud = 12,
+		Parent = plate,
+	})
+	local pool = UI.make(Instance.new("Frame"), {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	})
+	local grow = UI.make(Instance.new("UIScale"), { Scale = 0.7, Parent = pool })
+	-- bright at once, then dying away quickly like a real flash
+	local timing = TweenInfo.new(fx.glowTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	TweenService:Create(grow, timing, { Scale = 1 }):Play()
+	-- each layer adds the same little bit, so the middle (under every layer)
+	-- is brightest
+	local each = 1 - (1 - strength) ^ (1 / fx.glowLayers)
+	for layer = 1, fx.glowLayers do
+		local share = layer / fx.glowLayers
+		local disc = UI.make(Instance.new("Frame"), {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(share, share),
+			BackgroundColor3 = color,
+			BackgroundTransparency = 1 - each,
+			BorderSizePixel = 0,
+			ZIndex = fx.glowLayers - layer + 1,
+			Parent = pool,
+		})
+		UI.corner(disc, UDim.new(0.5, 0))
+		TweenService:Create(disc, timing, { BackgroundTransparency = 1 }):Play()
+	end
+	Debris:AddItem(plate, fx.glowTime + 0.1)
+end
+
+-- Impact: the glow on the floor, sparks, a scorch mark, and a screen flash
+-- when it's near you. `simple` (Util/StrikeFx said simple): none of it,
+-- just the bolt. The glow and flash follow Lightning glow, the sparks Rain
+-- and particles. `tint`: a rare bolt's colour.
+local function impact(position: Vector3, simple: boolean, tint: Color3?)
 	if simple then
 		return
 	end
 	local anchor = anchorAt(position + Vector3.new(0, 0.3, 0), 5)
 	local glow = SettingsStore.get("glow")
+
+	if glow ~= "Off" then
+		local fx = Config.STRIKE_FX
+		local soft = glow == "Soft"
+		groundGlow(
+			position,
+			tint or GLOW_COLOR,
+			if soft then fx.softGlowRadius else fx.glowRadius,
+			if soft then fx.softGlowStrength else fx.glowStrength
+		)
+	end
 
 	local sparkOrigin = UI.make(Instance.new("Attachment"), { Parent = anchor })
 	local sparks = UI.make(Instance.new("ParticleEmitter"), {
@@ -438,6 +505,16 @@ local function impact(position: Vector3, simple: boolean)
 		Parent = sparkOrigin,
 	})
 	sparks:Emit(math.round(45 * SettingsStore.get("particleAmount")))
+
+	local scorch = groundRing(anchor, {
+		Radius = 3.5,
+		InnerRadius = 0,
+		Height = 0.1,
+		Color3 = Color3.fromRGB(20, 18, 25),
+		Transparency = 0.35,
+		Parent = anchor,
+	})
+	TweenService:Create(scorch, SLOW_FADE, { Transparency = 1 }):Play()
 
 	-- strikes near you light up the whole screen for a moment
 	local camera = workspace.CurrentCamera
@@ -589,6 +666,14 @@ local function colourblindMarks(
 	})
 end
 
+-- Is the player standing in this zone right now?
+local function inZone(zoneId: string): boolean
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local zone = if root and root:IsA("BasePart") then Zones.at(root.Position) else nil
+	return zone ~= nil and zone.id == zoneId
+end
+
 local function onWarning(warning: Types.StrikeWarning)
 	local timeLeft = warning.landsAt - workspace:GetServerTimeNow()
 	if timeLeft <= 0 then
@@ -675,8 +760,9 @@ local function onWarning(warning: Types.StrikeWarning)
 	})
 	Debris:AddItem(pillar, lifetime)
 
-	-- rare bolts: a bigger, brighter pillar and a name over the ring; a
-	-- Rainbow's colours keep cycling
+	-- rare bolts: a bigger, brighter pillar and a name over the ring (only
+	-- for players in that zone: it shows through walls); a Rainbow's colours
+	-- keep cycling
 	local orb: BasePart? = nil
 	if rare then
 		pillar.Size = Vector3.new(1.4, 120, 1.4)
@@ -696,6 +782,14 @@ local function onWarning(warning: Types.StrikeWarning)
 			Size = UDim2.fromScale(1, 1),
 			Parent = tag,
 		})
+		local zoneId = warning.zoneId
+		tag.Enabled = inZone(zoneId)
+		task.spawn(function()
+			while tag.Parent do
+				task.wait(0.25)
+				tag.Enabled = inZone(zoneId)
+			end
+		end)
 		if rare.key == "Rainbow" then
 			local beat = RunService.Heartbeat:Connect(function()
 				local hue = (os.clock() * 0.6) % 1
@@ -760,10 +854,7 @@ local function isMine(landed: Types.StrikeLanded): boolean
 	then
 		return true
 	end
-	local character = player.Character
-	local root = character and character:FindFirstChild("HumanoidRootPart")
-	local zone = if root and root:IsA("BasePart") then Zones.at(root.Position) else nil
-	return zone ~= nil and zone.id == landed.zoneId
+	return inZone(landed.zoneId)
 end
 
 local function onLanded(landed: Types.StrikeLanded)
@@ -812,7 +903,7 @@ local function onLanded(landed: Types.StrikeLanded)
 				tint
 			)
 		end
-		impact(landed.position, simple)
+		impact(landed.position, simple, tint)
 
 		-- little arcs from the strike (or the orb) into every catcher's bottle
 		local from = orbAt or landed.position + Vector3.new(0, 1, 0)
