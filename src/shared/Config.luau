@@ -1123,8 +1123,8 @@ return table.freeze({
 	-- a server that claims one has it for `claimSeconds`.
 	NOTIFICATIONS = table.freeze({
 		secretName = "StormBottlerNotifyKey",
-		dailyReadyMessageId = "",
-		streakEndingMessageId = "",
+		dailyReadyMessageId = "332b647d-2679-1b4c-a3b1-0865dba8cbd8",
+		streakEndingMessageId = "8b7f8585-ac71-ff4e-b1ed-eb10fc4af721",
 		streakWarnHours = 3,
 		sendEverySeconds = 60,
 		batch = 50,
