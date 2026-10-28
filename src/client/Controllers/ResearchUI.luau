@@ -8,7 +8,8 @@
 --     (opens the post picker) and HIRE / PROMOTE. PROMOTE shows Glint
 --     progress while it's short and needs two taps to confirm. At the
 --     Office, a HIRE short of Volts or a PROMOTE short of Glints stays
---     tappable and offers the pack that covers it (Controllers/TopUpUI).
+--     tappable and opens the purchase window for the pack that covers it
+--     (Controllers/TopUpUI).
 --   * LOG: the Storm Log collection book (Lib/StormLogTab). The tab shows
 --     "(n)" when n rows can be claimed, and ResearchUI.ReadyChanged tells
 --     the menu (the RESEARCH dot).
