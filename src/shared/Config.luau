@@ -1209,6 +1209,24 @@ return table.freeze({
 	-- the strike's thunder comes later the further away it is
 	THUNDER_STUDS_PER_SECOND = 340,
 	THUNDER_MAX_DELAY = 1.5,
+	-- Lightning on each player's screen (Controllers/StrikeFX, Util/StrikeFx).
+	-- Other players' strikes further than drawDistance studs from your camera
+	-- aren't drawn; past simpleDistance they're drawn simple (no branches,
+	-- sparks or light). At most maxLights strike lights shine at once (a new
+	-- one replaces the oldest). A bolt flickers like a real restrike: full,
+	-- down to `dim` brightness for dipFor seconds from dipAt, full again for
+	-- `hold`, then fades over `fade` (Reduce flashing: just a calmFade).
+	STRIKE_FX = table.freeze({
+		drawDistance = 600,
+		simpleDistance = 250,
+		maxLights = 3,
+		dim = 0.4,
+		dipAt = 0.05,
+		dipFor = 0.07,
+		hold = 0.06,
+		fade = 0.3,
+		calmFade = 0.6,
+	}),
 
 	-- Admins (Systems/Admin, Util/Ops): the owner of the group (GROUP_ID),
 	-- anyone in it at this rank or higher, and everyone in Studio play tests.

@@ -15,6 +15,22 @@
 --                    popup when you catch one.
 --   Sold          -> big "+Volts" popup
 --   (ambient)     -> the Power Plant's tesla coil crackles
+--
+-- How a bolt is drawn: one invisible, anchored host part in the StrikeFX
+-- folder with an Attachment at every point of its jagged path, and two
+-- Beams per segment (a thin core and a wide see-through glow) that face the
+-- camera. Neighbouring segments share their attachment, so the bolt has no
+-- gaps where it bends. It flickers like a real restrike: it dims to 40% for
+-- a beat, comes back down a slightly moved path, then fades (Reduce
+-- flashing: just a slow fade). It never vanishes mid-flash. The host part
+-- is destroyed when the fade ends.
+--
+-- How much is drawn (Util/StrikeFx, numbers in Config.STRIKE_FX): your own
+-- strikes in full; another world's not at all, and silent; other players'
+-- less the further away they are, and Others' lightning can only lower
+-- that. At most maxLights strike lights shine at once (a new one replaces
+-- the oldest), and only your own strike's light casts shadows (Lightning
+-- glow on Full).
 
 local Debris = game:GetService("Debris")
 local Lighting = game:GetService("Lighting")
@@ -28,8 +44,10 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Net = require(ReplicatedStorage.Shared.Net)
 local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
+local Portals = require(ReplicatedStorage.Shared.Util.Portals)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Research = require(ReplicatedStorage.Shared.Util.Research)
+local StrikeFx = require(ReplicatedStorage.Shared.Util.StrikeFx)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Weather = require(ReplicatedStorage.Shared.Util.Weather)
 local Layout = require(script.Parent.Parent.Lib.Layout)
@@ -201,107 +219,173 @@ end
 
 -- Bolts ---------------------------------------------------------------------
 
--- Jagged path from a to b: straight line plus sideways jitter that shrinks
--- toward the end.
-local function jaggedPath(a: Vector3, b: Vector3, segments: number, wobble: number): { Vector3 }
-	local points = { a }
-	for i = 1, segments - 1 do
-		local t = i / segments
-		local amount = wobble * (1 - t * 0.7)
-		table.insert(
-			points,
-			a:Lerp(b, t)
-				+ Vector3.new(
-					random:NextNumber(-amount, amount),
-					random:NextNumber(-amount, amount) * 0.3,
-					random:NextNumber(-amount, amount)
-				)
-		)
-	end
-	table.insert(points, b)
-	return points
+-- A bolt on screen: one invisible host part holding an Attachment per path
+-- point, and two Beams per segment (a thin core and a wide see-through
+-- glow). Neighbouring segments share their attachment, so the joins are
+-- seamless. stepBolts dims, restrikes and fades every live bolt each frame,
+-- then destroys its host part.
+local CORE_SEEN = 0 -- the core's transparency at full brightness
+local GLOW_SEEN = 0.72 -- the glow's
+local RESTRIKE_MOVE = 0.35 -- the restrike moves each joint up to this share of the wobble
+
+type BoltPath = { attachments: { Attachment }, points: { Vector3 } }
+type LiveBolt = {
+	host: BasePart,
+	origin: Vector3, -- the host part's position (attachments sit relative to it)
+	cores: { Beam },
+	glows: { Beam },
+	paths: { BoltPath },
+	wobble: number,
+	born: number,
+	calm: boolean, -- Reduce flashing: just a slow fade
+	restruck: boolean,
+	shown: number, -- the brightness last drawn
+}
+local liveBolts: { LiveBolt } = {}
+
+local function beam(
+	a0: Attachment,
+	a1: Attachment,
+	width: number,
+	color: ColorSequence,
+	seen: number,
+	host: BasePart
+): Beam
+	local line = Instance.new("Beam")
+	line.Attachment0 = a0
+	line.Attachment1 = a1
+	line.FaceCamera = true
+	line.Segments = 1 -- straight, so one piece is enough
+	line.Width0 = width
+	line.Width1 = width
+	line.Color = color
+	line.Transparency = NumberSequence.new(seen)
+	line.LightEmission = 1
+	line.LightInfluence = 0
+	line.Parent = host
+	return line
 end
 
--- Draws a glowing line along the points and returns its parts. `tint`
--- colours it (a player's bolt colour); white-blue when nil.
-local function drawPath(points: { Vector3 }, thickness: number, into: { BasePart }, tint: Color3?)
-	local glowColor = tint or GLOW_COLOR
-	local coreColor = if tint then tint:Lerp(CORE_COLOR, 0.5) else CORE_COLOR
+-- Draws a glowing line along the points into the bolt and returns its
+-- attachments. `root`: the attachment it grows from (a branch shares its
+-- bolt's joint). `tint` colours it (a player's bolt colour); white-blue
+-- when nil.
+local function drawPath(
+	live: LiveBolt,
+	points: { Vector3 },
+	thickness: number,
+	tint: Color3?,
+	root: Attachment?
+): { Attachment }
+	local glowColor = ColorSequence.new(tint or GLOW_COLOR)
+	local coreColor = ColorSequence.new(if tint then tint:Lerp(CORE_COLOR, 0.5) else CORE_COLOR)
+	local attachments: { Attachment } = {}
+	for i, point in points do
+		if i == 1 and root then
+			attachments[i] = root
+		else
+			local attachment = Instance.new("Attachment")
+			attachment.Position = point - live.origin
+			attachment.Parent = live.host
+			attachments[i] = attachment
+		end
+	end
 	for i = 1, #points - 1 do
-		local a, b = points[i], points[i + 1]
-		local length = (b - a).Magnitude
-		local cframe = CFrame.lookAt((a + b) / 2, b)
-		table.insert(
-			into,
-			effectPart({
-				Name = "BoltCore",
-				Size = Vector3.new(thickness, thickness, length + thickness),
-				CFrame = cframe,
-				Color = coreColor,
-				Parent = fxFolder,
-			})
-		)
-		table.insert(
-			into,
-			effectPart({
-				Name = "BoltGlow",
-				Size = Vector3.new(thickness * 3.5, thickness * 3.5, length),
-				CFrame = cframe,
-				Color = glowColor,
-				Transparency = 0.72,
-				Parent = fxFolder,
-			})
-		)
+		local a0, a1 = attachments[i], attachments[i + 1]
+		local core = beam(a0, a1, thickness, coreColor, CORE_SEEN, live.host)
+		core.ZOffset = 0.1 -- drawn in front of the glow
+		table.insert(live.cores, core)
+		table.insert(live.glows, beam(a0, a1, thickness * 3.5, glowColor, GLOW_SEEN, live.host))
+	end
+	table.insert(live.paths, { attachments = attachments, points = points })
+	return attachments
+end
+
+-- The restrike comes down a slightly different path: every joint moves a
+-- little (never the ends, so a branch stays on the joint it grows from).
+local function restrike(live: LiveBolt)
+	live.restruck = true
+	for _, path in live.paths do
+		local moved = StrikeFx.restrike(path.points, live.wobble * RESTRIKE_MOVE, random)
+		for i = 2, #moved - 1 do
+			path.attachments[i].Position = moved[i] - live.origin
+		end
 	end
 end
 
--- Flicker on-off-on like real lightning, then fade out (with Reduce
--- flashing, just a slower fade).
-local CALM_FADE = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local function flickerAndFade(parts: { BasePart })
-	if SettingsStore.get("reduceFlashing") then
-		for _, part in parts do
-			TweenService:Create(part, CALM_FADE, { Transparency = 1 }):Play()
-			Debris:AddItem(part, CALM_FADE.Time + 0.05)
-		end
-		return
+-- Draws the bolt at a brightness (1 = full, 0 = gone) through its Beams'
+-- Transparency.
+local function show(live: LiveBolt, brightness: number)
+	live.shown = brightness
+	local core = NumberSequence.new(1 - (1 - CORE_SEEN) * brightness)
+	local glow = NumberSequence.new(1 - (1 - GLOW_SEEN) * brightness)
+	for _, line in live.cores do
+		line.Transparency = core
 	end
-	local original: { [BasePart]: number } = {}
-	for _, part in parts do
-		original[part] = part.Transparency
+	for _, line in live.glows do
+		line.Transparency = glow
 	end
-	local function setVisible(visible: boolean)
-		for _, part in parts do
-			part.Transparency = if visible then original[part] else 1
+end
+
+-- Every frame: each live bolt's flicker and fade (Util/StrikeFx.brightness:
+-- full, a dip to 40% for one beat, the restrike, then a fade; it never
+-- hides completely). A bolt that has faded out is destroyed.
+local function stepBolts()
+	local now = os.clock()
+	for i = #liveBolts, 1, -1 do
+		local live = liveBolts[i]
+		local elapsed = now - live.born
+		local brightness = StrikeFx.brightness(elapsed, live.calm)
+		if brightness == nil then
+			live.host:Destroy()
+			table.remove(liveBolts, i)
+		else
+			if not live.calm and not live.restruck and elapsed >= StrikeFx.restrikeTime() then
+				restrike(live)
+			end
+			if brightness ~= live.shown then
+				show(live, brightness)
+			end
 		end
 	end
-	task.delay(0.05, setVisible, false)
-	task.delay(0.09, setVisible, true)
-	task.delay(0.14, function()
-		for _, part in parts do
-			TweenService:Create(part, FADE, { Transparency = 1 }):Play()
-			Debris:AddItem(part, FADE.Time + 0.05)
-		end
-	end)
 end
 
 local function bolt(from: Vector3, to: Vector3, thickness: number, branches: number, tint: Color3?)
-	local parts: { BasePart } = {}
-	local main = jaggedPath(from, to, BOLT_SEGMENTS, (from - to).Magnitude * 0.06)
-	drawPath(main, thickness, parts, tint)
+	local length = (from - to).Magnitude
+	local live: LiveBolt = {
+		host = effectPart({
+			Name = "Bolt",
+			Size = Vector3.new(0.2, 0.2, 0.2),
+			CFrame = CFrame.new(to),
+			Transparency = 1,
+		}),
+		origin = to,
+		cores = {},
+		glows = {},
+		paths = {},
+		wobble = length * 0.06,
+		born = os.clock(),
+		calm = SettingsStore.get("reduceFlashing") == true,
+		restruck = false,
+		shown = 1,
+	}
+	local main = StrikeFx.jaggedPath(from, to, BOLT_SEGMENTS, live.wobble, random)
+	local joints = drawPath(live, main, thickness, tint)
 	for _ = 1, branches do
 		local startIndex = random:NextInteger(2, math.max(2, #main - 3))
 		local start = main[startIndex]
-		local reach = (from - to).Magnitude * random:NextNumber(0.12, 0.22)
+		local reach = length * random:NextNumber(0.12, 0.22)
 		local finish = start
 			+ Vector3.new(
 				random:NextNumber(-1, 1) * reach,
 				-reach,
 				random:NextNumber(-1, 1) * reach
 			)
-		drawPath(jaggedPath(start, finish, 4, reach * 0.25), thickness * 0.5, parts, tint)
+		local branch = StrikeFx.jaggedPath(start, finish, 4, reach * 0.25, random)
+		drawPath(live, branch, thickness * 0.5, tint, joints[startIndex])
 	end
-	flickerAndFade(parts)
+	live.host.Parent = fxFolder -- in the world once it's all built
+	table.insert(liveBolts, live)
 end
 
 -- The bolt's crack at a point in the world (a whistle and crack for your
@@ -329,10 +413,26 @@ local function catchSound(): string
 	return `catch_{math.clamp(math.ceil(fill * 5), 1, 5)}`
 end
 
--- Impact: light burst, sparks, shockwave, scorch mark. `simple` (someone
--- else's strike on Simple): just the shockwave. The light follows Lightning
--- glow, the sparks Rain and particles.
-local function impact(position: Vector3, simple: boolean)
+-- Strike lights: at most Config.STRIKE_FX.maxLights at once (a new one
+-- replaces the oldest), each gone once it has faded.
+local LIGHT_FADE = 0.6
+local lights: StrikeFx.Budget<PointLight> = StrikeFx.newBudget(Config.STRIKE_FX.maxLights)
+local function budgetLight(light: PointLight)
+	local oldest = StrikeFx.admit(lights, light)
+	if oldest then
+		oldest:Destroy()
+	end
+	light.Destroying:Once(function()
+		StrikeFx.release(lights, light)
+	end)
+	Debris:AddItem(light, LIGHT_FADE + 0.05)
+end
+
+-- Impact: light burst, sparks, shockwave, scorch mark. `simple` (Util/StrikeFx
+-- said simple): just the shockwave. The light follows Lightning glow (and
+-- casts shadows only for your own strike, on Full), the sparks Rain and
+-- particles.
+local function impact(position: Vector3, simple: boolean, mine: boolean)
 	local anchor = anchorAt(position + Vector3.new(0, 0.3, 0), 5)
 	local glow = SettingsStore.get("glow")
 
@@ -342,31 +442,32 @@ local function impact(position: Vector3, simple: boolean)
 			Color = GLOW_COLOR,
 			Brightness = if soft then 6 else 14,
 			Range = if soft then 40 else 60,
-			Shadows = not soft,
+			Shadows = StrikeFx.castsShadows(mine, glow),
 			Parent = anchor,
 		})
-		TweenService:Create(burst, TweenInfo.new(0.6, Enum.EasingStyle.Quad), { Brightness = 0 })
-			:Play()
+		local fade = TweenInfo.new(LIGHT_FADE, Enum.EasingStyle.Quad)
+		TweenService:Create(burst, fade, { Brightness = 0 }):Play()
+		budgetLight(burst)
 	end
 
-	local sparkOrigin = UI.make(Instance.new("Attachment"), { Parent = anchor })
-	local sparks = UI.make(Instance.new("ParticleEmitter"), {
-		Enabled = false,
-		Color = ColorSequence.new(CORE_COLOR, GLOW_COLOR),
-		LightEmission = 1,
-		Size = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 0.5),
-			NumberSequenceKeypoint.new(1, 0),
-		}),
-		Speed = NumberRange.new(25, 50),
-		Lifetime = NumberRange.new(0.3, 0.7),
-		SpreadAngle = Vector2.new(75, 75),
-		EmissionDirection = Enum.NormalId.Top,
-		Acceleration = Vector3.new(0, -70, 0),
-		Drag = 2,
-		Parent = sparkOrigin,
-	})
 	if not simple then
+		local sparkOrigin = UI.make(Instance.new("Attachment"), { Parent = anchor })
+		local sparks = UI.make(Instance.new("ParticleEmitter"), {
+			Enabled = false,
+			Color = ColorSequence.new(CORE_COLOR, GLOW_COLOR),
+			LightEmission = 1,
+			Size = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.5),
+				NumberSequenceKeypoint.new(1, 0),
+			}),
+			Speed = NumberRange.new(25, 50),
+			Lifetime = NumberRange.new(0.3, 0.7),
+			SpreadAngle = Vector2.new(75, 75),
+			EmissionDirection = Enum.NormalId.Top,
+			Acceleration = Vector3.new(0, -70, 0),
+			Drag = 2,
+			Parent = sparkOrigin,
+		})
 		sparks:Emit(math.round(45 * SettingsStore.get("particleAmount")))
 	end
 
@@ -738,12 +839,22 @@ local function onLanded(landed: Types.StrikeLanded)
 		tint = Color3.fromHSV(random:NextNumber(), 0.75, 1)
 	end
 
-	-- someone else's strike (a zone you're not in, nothing to do with you)
-	-- follows Others' lightning: Off, Simple (no branches, sparks or glow)
-	-- or Full
-	local others = if isMine(landed) then "Full" else SettingsStore.get("othersStrikes")
-	if others ~= "Off" then
-		local simple = others == "Simple"
+	-- how much to draw (Util/StrikeFx): your own strikes in full; another
+	-- world's not at all (not even its sound); someone else's (a zone you're
+	-- not in, nothing to do with you) by distance and Others' lightning:
+	-- Off, Simple (no branches, sparks or glow) or Full
+	local mine = isMine(landed)
+	local strikeZone = Config.ZONES[landed.zoneId]
+	local sameWorld = strikeZone == nil or strikeZone.world == Portals.worldOf(player).id
+	local camera = workspace.CurrentCamera
+	local level = StrikeFx.level({
+		distance = if camera then (camera.CFrame.Position - landed.position).Magnitude else 0,
+		sameWorld = sameWorld,
+		mine = mine,
+		setting = SettingsStore.get("othersStrikes"),
+	})
+	if level ~= "none" then
+		local simple = level == "simple"
 		if landed.boltType ~= "Ball" then
 			local sky = landed.position
 				+ Vector3.new(random:NextNumber(-15, 15), BOLT_HEIGHT, random:NextNumber(-15, 15))
@@ -756,7 +867,7 @@ local function onLanded(landed: Types.StrikeLanded)
 				tint
 			)
 		end
-		impact(landed.position, simple)
+		impact(landed.position, simple, mine)
 
 		-- little arcs from the strike (or the orb) into every catcher's bottle
 		local from = orbAt or landed.position + Vector3.new(0, 1, 0)
@@ -767,7 +878,9 @@ local function onLanded(landed: Types.StrikeLanded)
 			end
 		end
 	end
-	playThunderAt(landed.position, landed.ownerId == player.UserId)
+	if mine or sameWorld then
+		playThunderAt(landed.position, landed.ownerId == player.UserId)
+	end
 
 	local caught = table.find(landed.catchers, player.UserId)
 	if caught then
@@ -880,6 +993,7 @@ function StrikeFX.init()
 		Parent = screenGui,
 	})
 
+	RunService.RenderStepped:Connect(stepBolts)
 	Net.get("Forecast").OnClientEvent:Connect(onForecast)
 	Net.get("StrikeWarning").OnClientEvent:Connect(onWarning)
 	Net.get("StrikeLanded").OnClientEvent:Connect(onLanded)

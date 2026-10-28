@@ -216,6 +216,9 @@ local function makeRain(): ParticleEmitter
 	emitter.Color = ColorSequence.new(Color3.fromRGB(190, 210, 240))
 	emitter.Transparency = NumberSequence.new(0.45)
 	emitter.LightEmission = 0.2
+	-- the streaks move with the slab, so running fast (boots) never leaves
+	-- the ground ahead of you dry while new rain catches up
+	emitter.LockedToPart = true
 	emitter.Parent = slab
 
 	RunService.RenderStepped:Connect(function()
