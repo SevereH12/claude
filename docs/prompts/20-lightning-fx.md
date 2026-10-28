@@ -2,7 +2,7 @@
 
 Follow the rules in `docs/prompts/README.md`. **One run.**
 
-- [ ] Smooth bolts, a flicker that doesn't look like a glitch, less work per
+- [x] Smooth bolts, a flicker that doesn't look like a glitch, less work per
   strike, and rain that keeps up
 
 The user said: "the lighting looks choppy in some zones and gets cut off and
