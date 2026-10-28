@@ -199,7 +199,7 @@ function DevCommands.init()
 		UI.pop(questButton)
 		devRemote:FireServer("completeQuest")
 	end)
-	-- +Log entry: the next Storm Log entry counts as found (REWARDS > LOG)
+	-- +Log entry: the next Storm Log entry counts as found (RESEARCH > LOG)
 	local logButton = UI.button({
 		Name = "LogEntry",
 		LayoutOrder = 16,

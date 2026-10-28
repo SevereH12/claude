@@ -188,10 +188,16 @@ Mesa 1, ... Ember Mesa 6). At level 5 you can promote one at the Research
 Office: it costs **Glints** (one for every bolt you catch, of that zone's
 tier; promotion to rank r takes Glints of tier r or higher), and sends the
 researcher back to level 1 a rank higher, with a 10% stronger perk.
-In the Research panel the Glints line sits at the top, each card shows the
-rank as gold stars (the name tags above the models too), and a level-5
-researcher's Hire button becomes **PROMOTE** (tap twice to confirm). Zones
-above a researcher's rank show 🔒 in the post picker.
+The Research panel has two tabs, **TEAM** and **LOG** (the Storm Log).
+TEAM starts with a strip of Glints chips, one per zone tier in that zone's
+colour (a dimmed "?" until you have some; tap one to see where those Glints
+come from and which promotions they pay for). Under it each researcher has
+a compact card: the rank as gold stars (the name tags above the models
+too), level, perk, data bar, and two buttons: **📍 POST** opens one shared
+post picker (Office, then the zones under each world's name; zones above
+the researcher's rank show 🔒 and the rank they need), and HIRE becomes
+**PROMOTE** once hired (it shows Glint progress like "✨ 37/65 Mesa" while
+you're short; tap twice to confirm).
 
 The numbers (`Config.RESEARCH_PRESTIGE`) come from
 `python3 tools/balance/prestige.py`, which works out how much data and how
@@ -372,8 +378,9 @@ saved with the player.
 
 ### Storm Log
 
-The Storm Log is a collection book in the REWARDS panel's **LOG** tab
-(`Util/StormLog`, `Systems/StormLog`, `Lib/StormLogTab`). It has four pages:
+The Storm Log is a collection book in the RESEARCH panel's **LOG** tab
+(`Util/StormLog`, `Systems/StormLog`, `Lib/StormLogTab`). The tab shows
+"(n)" when n rows can be claimed, and the menu's RESEARCH dot lights. It has four pages:
 
 - **Bolts**: every bolt type (normal, Golden, Rainbow, ball lightning) in
   every zone.

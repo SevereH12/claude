@@ -1,5 +1,5 @@
 --!strict
--- The LOG tab of the REWARDS panel (Controllers/RewardsUI builds it with
+-- The LOG tab of the Research panel (Controllers/ResearchUI builds it with
 -- StormLogTab.build and calls StormLogTab.render): the Storm Log, a
 -- collection book (the rules are Util/StormLog).
 --   * a line at the top: the Volts bonus from finished pages
@@ -28,8 +28,8 @@ local BUTTON = 36
 local TILE = Vector2.new(84, 80)
 local TOAST_SECONDS = 6
 
--- What a reward gives this player, as text (RewardsUI's describe, so the
--- LOG tab says the same as the other tabs).
+-- What a reward gives this player, as text (Lib/RewardText.describe, so
+-- the LOG tab says the same as the REWARDS panel).
 export type Describe = (reward: Types.Reward, snapshot: Types.Snapshot) -> (string, number)
 
 type Tile = {

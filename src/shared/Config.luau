@@ -646,7 +646,7 @@ local EVENTS: { Types.EventDef } = {
 	},
 }
 
--- The Storm Log (Util/StormLog, the LOG tab in REWARDS): a collection book
+-- The Storm Log (Util/StormLog, the LOG tab in RESEARCH): a collection book
 -- worked out from the lifetime stat counters. Finishing a row (say every
 -- bolt type in Mesa) pays its page's `rowReward` once; every finished page
 -- adds `pageBonus` to all Volts for good, up to `maxBonus`.

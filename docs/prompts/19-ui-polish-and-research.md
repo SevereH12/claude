@@ -5,7 +5,7 @@ does the first unticked part, then ticks it.
 
 - [x] Part A: off-centre text, black bits at rounded corners, and progress
   bars that don't show (shared helpers, used everywhere)
-- [ ] Part B: the Research panel: TEAM and LOG tabs (the Storm Log moves
+- [x] Part B: the Research panel: TEAM and LOG tabs (the Storm Log moves
   here from Rewards), a Glints display, and compact researcher cards
 
 The user's choices: only fix text that is meant to be centred (left-aligned

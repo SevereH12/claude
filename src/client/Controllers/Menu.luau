@@ -228,8 +228,10 @@ local function canAfford(snapshot: Types.Snapshot): (boolean, boolean)
 	return shop, research
 end
 
+-- RESEARCH's dot also lights when a Storm Log row can be claimed (its LOG tab).
 local function renderBadges(snapshot: Types.Snapshot)
 	local shop, research = canAfford(snapshot)
+	research = research or ResearchUI.isReady()
 	if buyDots.SHOP then
 		buyDots.SHOP.Visible = shop
 	end
@@ -387,6 +389,11 @@ function Menu.start()
 		renderBadges(State.current)
 	end
 	State.Changed:Connect(renderBadges)
+	ResearchUI.ReadyChanged:Connect(function()
+		if State.current then
+			renderBadges(State.current)
+		end
+	end)
 end
 
 return Menu
