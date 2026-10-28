@@ -176,6 +176,15 @@ local function onPromote(player: Player, roleId: unknown)
 	changed(player)
 end
 
+-- These researchers were just moved back to the Office by the server
+-- (Systems/Ascension): no set-up timer, and everyone sees the new post.
+function Research.movedToOffice(player: Player, roleIds: { string })
+	for _, roleId in roleIds do
+		startSetup(player, roleId, "Office")
+	end
+	changed(player)
+end
+
 -- Adds Glints of a zone's tier (Studio TEST and the catch hook).
 function Research.addGlints(player: Player, tier: number, count: number)
 	local profile = PlayerData.get(player)

@@ -11,6 +11,7 @@
 local Config = require(script.Parent.Parent.Config)
 local Types = require(script.Parent.Parent.Types)
 local Format = require(script.Parent.Format)
+local Progression = require(script.Parent.Progression)
 
 -- What the rules read: a server Profile or a client Snapshot both have these.
 export type Progress = { volts: number, bottleTier: number, ascension: number }
@@ -29,6 +30,7 @@ Ascension.RESETS = table.freeze({
 	"Your bottle (back to the Jar)",
 	"Your boots (back to Rain Boots)",
 	"The charges in your bottle and tank",
+	"Researchers in locked zones go to the Office",
 	"You go back to Barometer Bay",
 })
 Ascension.KEEPS = table.freeze({
@@ -82,21 +84,44 @@ function Ascension.canAscend(progress: Progress): (boolean, string?)
 	return true, nil
 end
 
--- Does the Ascension: everything in Config.ASCENSION.resetTo goes back to how
--- a new player starts, and the level goes up by one. Nothing else in the
--- profile is touched (passes, gifts, researchers, Glints, quests, the Log,
--- settings, streaks and stats all stay). Returns the new level, or nil if
--- they can't ascend (and then nothing changes).
-function Ascension.ascend(profile: Types.Profile): number?
-	if not Ascension.canAscend(profile) then
-		return nil
+-- The researchers (role ids, in Config.RESEARCHERS order) posted to a zone
+-- the player couldn't enter after an Ascension (back on the first bottle):
+-- they go back to the Office then, since their perks would be off anyway.
+function Ascension.researchersToMove(profile: Types.Profile, premium: boolean): { string }
+	local after = { bottleTier = RULES.resetTo.bottleTier, bootTier = RULES.resetTo.bootTier }
+	local moving: { string } = {}
+	for _, def in Config.RESEARCHERS do
+		local save = profile.researchers[def.id]
+		local zone = if save then Config.ZONES[save.post] else nil
+		if zone and not Progression.canEnter(after, zone, premium) then
+			table.insert(moving, def.id)
+		end
 	end
+	return moving
+end
+
+-- Does the Ascension: everything in Config.ASCENSION.resetTo goes back to how
+-- a new player starts, the level goes up by one, and researchers in zones
+-- they can't enter any more go back to the Office (researchersToMove;
+-- `premium` is whether the player is a Premium member). Nothing else in the
+-- profile is touched (passes, gifts, researchers' ranks and levels, Glints,
+-- quests, the Log, settings, streaks and stats all stay). Returns the new
+-- level and the researchers moved, or nil if they can't ascend (and then
+-- nothing changes).
+function Ascension.ascend(profile: Types.Profile, premium: boolean?): (number?, { string })
+	if not Ascension.canAscend(profile) then
+		return nil, {}
+	end
+	local moving = Ascension.researchersToMove(profile, premium == true)
 	local data = profile :: any
 	for key, value in RULES.resetTo do
 		data[key] = value
 	end
+	for _, roleId in moving do
+		profile.researchers[roleId].post = "Office"
+	end
 	profile.ascension += 1
-	return profile.ascension
+	return profile.ascension, moving
 end
 
 return Ascension

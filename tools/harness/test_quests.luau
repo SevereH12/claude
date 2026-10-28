@@ -509,6 +509,20 @@ check(ascender.dailyStreak == 4 and ascender.lastDailyDay == 20000, "the reward 
 check(ascender.settings.musicVolume == 0.3, "settings stay")
 check(ascender.stats.lifetime.boltsCaught == 777, "stats stay")
 check(Ascension.ascend(ascender) == nil and ascender.ascension == 1, "can't ascend again straight away")
+-- researchers in zones they can't enter after an Ascension go back to the Office
+local poster = fullProfile()
+poster.researchers = {
+	Forecaster = { post = "Ember", data = 0, level = 2, rank = 5 },
+	StormChaser = { post = "Shoreline", data = 0, level = 1, rank = 0 },
+	Chemist = { post = "Aurora", data = 0, level = 1, rank = 0 },
+}
+local moving = Ascension.researchersToMove(poster, false)
+check(#moving == 2 and moving[1] == "Forecaster" and table.find(moving, "Chemist"), "late and Premium zones move (not Premium)")
+check(#Ascension.researchersToMove(poster, true) == 1, "a Premium member keeps the Premium zone")
+local movedLevel, moved = Ascension.ascend(poster, false)
+check(movedLevel == 1 and #moved == 2, "ascend says who moved")
+check(poster.researchers.Forecaster.post == "Office" and poster.researchers.Forecaster.rank == 5, "moved to the Office, rank kept")
+check(poster.researchers.StormChaser.post == "Shoreline", "a researcher in an open zone stays")
 local notReady = fullProfile()
 notReady.bottleTier = top - 1
 check(Ascension.ascend(notReady) == nil and notReady.volts == 25_000_000, "a refused Ascension changes nothing")
