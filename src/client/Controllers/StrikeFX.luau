@@ -5,7 +5,7 @@
 --   Forecast      -> faint dashed ring (your Forecaster), gone at the public warning
 --   StrikeWarning -> glowing ring + light pillar; inner disc fills until the bolt lands
 --   StrikeLanded  -> forked, flickering bolt; area lights up; sparks,
---                    shockwave, scorch mark, thunder. Arcs into each
+--                    scorch mark, thunder. Arcs into each
 --                    catcher's bottle, in their bolt colour (Bolt Colours
 --                    pick, else VIP gold). If we caught it: screen flash,
 --                    camera shake, "+5" popup ("x2 ASSAYED" if high grade).
@@ -71,7 +71,6 @@ local BALLOON_MUTED = Color3.fromRGB(120, 124, 130)
 
 local FADE = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local SLOW_FADE = TweenInfo.new(4, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-local SHOCKWAVE = TweenInfo.new(0.45, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 local POPUP_RISE = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 type Warning = { anchor: BasePart, pillar: BasePart, orb: BasePart? }
@@ -429,14 +428,17 @@ local function budgetLight(light: PointLight)
 	Debris:AddItem(light, LIGHT_FADE + 0.05)
 end
 
--- Impact: light burst, sparks, shockwave, scorch mark. `simple` (Util/StrikeFx
--- said simple): just the shockwave. The light follows Lightning glow, the
+-- Impact: light burst, sparks, scorch mark. `simple` (Util/StrikeFx said
+-- simple): none of it, just the bolt. The light follows Lightning glow, the
 -- sparks Rain and particles.
 local function impact(position: Vector3, simple: boolean)
+	if simple then
+		return
+	end
 	local anchor = anchorAt(position + Vector3.new(0, 0.3, 0), 5)
 	local glow = SettingsStore.get("glow")
 
-	if glow ~= "Off" and not simple then
+	if glow ~= "Off" then
 		local fx = Config.STRIKE_FX
 		local soft = glow == "Soft"
 		local above = UI.make(Instance.new("Attachment"), {
@@ -455,40 +457,25 @@ local function impact(position: Vector3, simple: boolean)
 		budgetLight(burst)
 	end
 
-	if not simple then
-		local sparkOrigin = UI.make(Instance.new("Attachment"), { Parent = anchor })
-		local sparks = UI.make(Instance.new("ParticleEmitter"), {
-			Enabled = false,
-			Color = ColorSequence.new(CORE_COLOR, GLOW_COLOR),
-			LightEmission = 1,
-			Size = NumberSequence.new({
-				NumberSequenceKeypoint.new(0, 0.5),
-				NumberSequenceKeypoint.new(1, 0),
-			}),
-			Speed = NumberRange.new(25, 50),
-			Lifetime = NumberRange.new(0.3, 0.7),
-			SpreadAngle = Vector2.new(75, 75),
-			EmissionDirection = Enum.NormalId.Top,
-			Acceleration = Vector3.new(0, -70, 0),
-			Drag = 2,
-			Parent = sparkOrigin,
-		})
-		sparks:Emit(math.round(45 * SettingsStore.get("particleAmount")))
-	end
-
-	local shockwave = groundRing(anchor, {
-		Radius = 1,
-		InnerRadius = 0.4,
-		Color3 = GLOW_COLOR,
-		Transparency = 0.1,
-		Parent = anchor,
+	local sparkOrigin = UI.make(Instance.new("Attachment"), { Parent = anchor })
+	local sparks = UI.make(Instance.new("ParticleEmitter"), {
+		Enabled = false,
+		Color = ColorSequence.new(CORE_COLOR, GLOW_COLOR),
+		LightEmission = 1,
+		Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.5),
+			NumberSequenceKeypoint.new(1, 0),
+		}),
+		Speed = NumberRange.new(25, 50),
+		Lifetime = NumberRange.new(0.3, 0.7),
+		SpreadAngle = Vector2.new(75, 75),
+		EmissionDirection = Enum.NormalId.Top,
+		Acceleration = Vector3.new(0, -70, 0),
+		Drag = 2,
+		Parent = sparkOrigin,
 	})
-	TweenService:Create(shockwave, SHOCKWAVE, { Radius = 16, InnerRadius = 15, Transparency = 1 })
-		:Play()
+	sparks:Emit(math.round(45 * SettingsStore.get("particleAmount")))
 
-	if simple then
-		return
-	end
 	local scorch = groundRing(anchor, {
 		Radius = 3.5,
 		InnerRadius = 0,
