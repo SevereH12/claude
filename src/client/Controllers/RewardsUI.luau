@@ -98,8 +98,7 @@ type Grid = { frame: Frame, layout: UIGridLayout, count: number }
 type QuestCard = {
 	frame: Frame,
 	title: TextLabel,
-	fill: Frame,
-	count: TextLabel,
+	bar: UI.Bar,
 	reward: TextLabel,
 	button: TextButton,
 	stroke: UIStroke,
@@ -342,8 +341,11 @@ local function fitCards()
 			height = placeCard(card, button, textHeight)
 		end
 		local rows = math.ceil(grid.count / columns)
-		grid.layout.CellSize = UDim2.new(1 / columns, -GAP, 0, height)
-		grid.frame.Size = UDim2.new(1, -12, 0, rows * height + (rows - 1) * GAP)
+		-- the cells and the gaps between them fill the width (offsets are
+		-- whole pixels: rounded up, so the last cell never wraps)
+		local trim = math.ceil(GAP * (columns - 1) / columns)
+		grid.layout.CellSize = UDim2.new(1 / columns, -trim, 0, height)
+		grid.frame.Size = UDim2.new(1, 0, 0, rows * height + (rows - 1) * GAP)
 	end
 	fit(dayGrid, dayCards, if upright then 4 else 7, if touch then 84 else 60)
 	fit(giftGrid, giftCards, if upright then 2 else 3, if touch then 52 else 44)
@@ -356,54 +358,37 @@ local function buildQuestCard(
 	period: QuestRules.Period,
 	index: number
 ): QuestCard
-	local frame = UI.make(Instance.new("Frame"), {
+	-- (UI.card pads 10 pixels inside, so positions start at its padding)
+	local frame, stroke = UI.card({
 		Name = `Quest{index}`,
 		LayoutOrder = order,
-		BackgroundColor3 = COLORS.panelDark,
-		Size = UDim2.new(1, -12, 0, QUEST_HEIGHT),
+		Size = UDim2.new(1, 0, 0, QUEST_HEIGHT),
 		Parent = parent,
 	})
-	UI.corner(frame, UDim.new(0, 12))
-	local stroke = UI.stroke(frame, 3)
 	local title = UI.label({
 		Title = true,
 		Name = "Title",
 		Text = "",
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(12, 8),
-		Size = UDim2.new(0.7, -12, 0, 24),
+		Position = UDim2.fromOffset(2, -2),
+		Size = UDim2.new(0.7, -6, 0, 24),
 		Parent = frame,
 	})
 	UI.maxText(title, 20)
-	local bar = UI.make(Instance.new("Frame"), {
+	local bar = UI.bar(frame, {
 		Name = "Bar",
-		Position = UDim2.fromOffset(12, 38),
-		Size = UDim2.new(0.7, -12, 0, 20),
-		BackgroundColor3 = COLORS.panelBottom,
-		Parent = frame,
+		Position = UDim2.fromOffset(2, 26),
+		Size = UDim2.new(0.7, -6, 0, 20),
+		color = COLORS.green,
+		text = 14,
 	})
-	UI.corner(bar, UDim.new(0, 8))
-	local fill = UI.make(Instance.new("Frame"), {
-		Name = "Fill",
-		Size = UDim2.fromScale(0, 1),
-		BackgroundColor3 = COLORS.green,
-		Parent = bar,
-	})
-	UI.corner(fill, UDim.new(0, 8))
-	local count = UI.label({
-		Name = "Count",
-		Text = "",
-		Size = UDim2.fromScale(1, 1),
-		Parent = bar,
-	})
-	UI.maxText(count, 14)
 	local reward = UI.label({
 		Name = "Reward",
 		Text = "",
 		TextColor3 = COLORS.subtext,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(12, 62),
-		Size = UDim2.new(0.7, -12, 0, 22),
+		Position = UDim2.fromOffset(2, 50),
+		Size = UDim2.new(0.7, -6, 0, 22),
 		Parent = frame,
 	})
 	UI.maxText(reward, 16)
@@ -411,7 +396,7 @@ local function buildQuestCard(
 		Name = "Action",
 		Text = "",
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -10, 0.5, 0),
+		Position = UDim2.fromScale(1, 0.5),
 		Size = UDim2.new(0.28, 0, 0, BUTTON),
 		BackgroundColor3 = COLORS.green,
 		Parent = frame,
@@ -420,8 +405,7 @@ local function buildQuestCard(
 	local card: QuestCard = {
 		frame = frame,
 		title = title,
-		fill = fill,
-		count = count,
+		bar = bar,
 		reward = reward,
 		button = button,
 		stroke = stroke,
@@ -445,7 +429,7 @@ local function fitQuests()
 	local height = math.max(QUEST_HEIGHT, button + 20)
 	for _, cards in { dailyQuestCards, weeklyQuestCards } do
 		for _, card in cards do
-			card.frame.Size = UDim2.new(1, -12, 0, height)
+			card.frame.Size = UDim2.new(1, 0, 0, height)
 			card.button.Size = UDim2.new(0.28, 0, 0, button)
 		end
 	end
@@ -622,10 +606,9 @@ local function render(): (boolean, boolean, { number })
 			local text = QuestRules.describe(view)
 			local done = view.progress >= view.target
 			card.title.Text = text
-			card.fill.Size =
-				UDim2.fromScale(if view.target > 0 then view.progress / view.target else 1, 1)
-			card.count.Text =
-				`{Format.abbreviate(view.progress)} / {Format.abbreviate(view.target)}`
+			card.bar.setFraction(if view.target > 0 then view.progress / view.target else 1)
+			local count = card.bar.label :: TextLabel
+			count.Text = `{Format.abbreviate(view.progress)} / {Format.abbreviate(view.target)}`
 			local rewardText = describe(QuestRules.reward(view.key, period), snapshot)
 			card.reward.Text = "Reward: " .. (string.gsub(rewardText, "\n", " · "))
 			local canClaimQuest = done and not view.claimed
@@ -720,7 +703,7 @@ local function heading(parent: Instance, order: number, text: string): TextLabel
 		Text = text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Bottom,
-		Size = UDim2.new(1, -12, 0, HEADING),
+		Size = UDim2.new(1, 0, 0, HEADING),
 		Parent = parent,
 	})
 	UI.maxText(label, 24)
@@ -737,6 +720,7 @@ local function grid(parent: Instance, order: number, name: string, count: number
 	})
 	local layout = UI.make(Instance.new("UIGridLayout"), {
 		CellPadding = UDim2.fromOffset(GAP, GAP),
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = frame,
 	})
@@ -809,30 +793,12 @@ function RewardsUI.init()
 	-- each tab is one scrolling column: it all fits on a monitor, and
 	-- scrolls on a phone
 	local function page(name: string): ScrollingFrame
-		local frame = UI.make(Instance.new("ScrollingFrame"), {
+		return UI.list(window.body, {
 			Name = name,
 			Position = UDim2.fromOffset(0, TAB_HEIGHT + 8),
 			Size = UDim2.new(1, 0, 1, -(TAB_HEIGHT + 8)),
-			BackgroundTransparency = 1,
-			BorderSizePixel = 0,
-			CanvasSize = UDim2.new(),
-			AutomaticCanvasSize = Enum.AutomaticSize.Y,
-			ScrollBarThickness = 6,
-			Parent = window.body,
+			gap = GAP,
 		})
-		UI.make(Instance.new("UIListLayout"), {
-			Padding = UDim.new(0, GAP),
-			SortOrder = Enum.SortOrder.LayoutOrder,
-			Parent = frame,
-		})
-		-- room under the last card when scrolled to the bottom
-		UI.make(Instance.new("UIPadding"), {
-			PaddingTop = UDim.new(0, 2),
-			PaddingBottom = UDim.new(0, 12),
-			PaddingLeft = UDim.new(0, 2),
-			Parent = frame,
-		})
-		return frame
 	end
 	list = page("List")
 	questList = page("Quests")
@@ -881,7 +847,7 @@ function RewardsUI.init()
 		LayoutOrder = 10,
 		Text = "",
 		TextColor3 = COLORS.volt,
-		Size = UDim2.new(1, -12, 0, 22),
+		Size = UDim2.new(1, 0, 0, 22),
 		Parent = questList,
 	})
 	UI.maxText(dailyNote, 18)
@@ -894,7 +860,7 @@ function RewardsUI.init()
 		LayoutOrder = 20,
 		Text = "",
 		TextColor3 = COLORS.volt,
-		Size = UDim2.new(1, -12, 0, 22),
+		Size = UDim2.new(1, 0, 0, 22),
 		Parent = questList,
 	})
 	UI.maxText(weeklyNote, 18)
@@ -917,7 +883,7 @@ function RewardsUI.init()
 		LayoutOrder = 3,
 		Text = "",
 		TextColor3 = COLORS.volt,
-		Size = UDim2.new(1, -12, 0, 22),
+		Size = UDim2.new(1, 0, 0, 22),
 		Parent = list,
 	})
 	UI.maxText(nextLabel, 18)
@@ -940,7 +906,7 @@ function RewardsUI.init()
 		Name = "Group",
 		LayoutOrder = 7,
 		BackgroundColor3 = COLORS.panelDark,
-		Size = UDim2.new(1, -12, 0, GROUP_HEIGHT),
+		Size = UDim2.new(1, 0, 0, GROUP_HEIGHT),
 		Parent = list,
 	})
 	UI.corner(groupCard, UDim.new(0, 12))
@@ -976,7 +942,7 @@ function RewardsUI.init()
 		Name = "Invite",
 		LayoutOrder = 9,
 		BackgroundColor3 = COLORS.panelDark,
-		Size = UDim2.new(1, -12, 0, GROUP_HEIGHT),
+		Size = UDim2.new(1, 0, 0, GROUP_HEIGHT),
 		Parent = list,
 	})
 	UI.corner(inviteCard, UDim.new(0, 12))

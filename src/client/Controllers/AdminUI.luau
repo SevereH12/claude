@@ -221,19 +221,14 @@ local function build(root: Frame)
 	UI.maxText(outputTitle, 18)
 	local refresh =
 		button(r8, "Errors", "🔄 ERRORS", COLORS.panelTop, UDim2.fromScale(0.68, 0), 0.32)
-	local scroll = UI.make(Instance.new("ScrollingFrame"), {
+	local scroll = UI.list(body, {
 		Name = "Output",
 		BackgroundColor3 = COLORS.panelDark,
-		BorderSizePixel = 0,
+		BackgroundTransparency = 0,
 		Position = UDim2.fromScale(0, top + ROW + GAP),
 		Size = UDim2.fromScale(1, 1 - (top + ROW + GAP)),
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollBarThickness = 6,
-		Parent = body,
 	})
 	UI.corner(scroll, UDim.new(0, 10))
-	UI.padding(scroll, 8)
 	output = UI.label({
 		Name = "Text",
 		Text = "",
@@ -243,7 +238,7 @@ local function build(root: Frame)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		AutomaticSize = Enum.AutomaticSize.Y,
-		Size = UDim2.new(1, -8, 0, 0),
+		Size = UDim2.new(1, 0, 0, 0),
 		Parent = scroll,
 	})
 

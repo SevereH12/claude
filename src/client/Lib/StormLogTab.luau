@@ -54,7 +54,7 @@ type RowCard = {
 type PageView = {
 	page: StormLogRules.Page,
 	heading: TextLabel,
-	fill: Frame,
+	bar: UI.Bar,
 	count: TextLabel,
 	rows: { RowCard },
 }
@@ -124,26 +124,15 @@ local function buildTile(parent: Instance, order: number, entry: StormLogRules.E
 end
 
 local function buildRow(parent: Instance, order: number, row: StormLogRules.Row): RowCard
-	local frame = UI.make(Instance.new("Frame"), {
+	local frame, stroke = UI.card({
 		Name = row.id,
 		LayoutOrder = order,
-		BackgroundColor3 = COLORS.panelDark,
-		Size = UDim2.new(1, -12, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Parent = parent,
 	})
-	UI.corner(frame, UDim.new(0, 12))
-	local stroke = UI.stroke(frame, 3)
 	UI.make(Instance.new("UIListLayout"), {
 		Padding = UDim.new(0, 4),
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = frame,
-	})
-	UI.make(Instance.new("UIPadding"), {
-		PaddingTop = UDim.new(0, 6),
-		PaddingBottom = UDim.new(0, 10),
-		PaddingLeft = UDim.new(0, 10),
-		PaddingRight = UDim.new(0, 10),
 		Parent = frame,
 	})
 	local header = UI.make(Instance.new("Frame"), {
@@ -240,7 +229,7 @@ function StormLogTab.build(parent: ScrollingFrame, onOpen: () -> ())
 		Text = "",
 		TextColor3 = COLORS.volt,
 		TextWrapped = true,
-		Size = UDim2.new(1, -12, 0, 44),
+		Size = UDim2.new(1, 0, 0, 44),
 		Parent = parent,
 	})
 	UI.maxText(bonusLabel, 18)
@@ -254,38 +243,23 @@ function StormLogTab.build(parent: ScrollingFrame, onOpen: () -> ())
 			Text = `{page.icon} {page.title}`,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextYAlignment = Enum.TextYAlignment.Bottom,
-			Size = UDim2.new(1, -12, 0, HEADING),
+			Size = UDim2.new(1, 0, 0, HEADING),
 			Parent = parent,
 		})
 		UI.maxText(heading, 24)
 		order += 1
-		local bar = UI.make(Instance.new("Frame"), {
+		local bar = UI.bar(parent, {
 			Name = `{page.id}Progress`,
 			LayoutOrder = order,
-			Size = UDim2.new(1, -12, 0, BAR),
-			BackgroundColor3 = COLORS.panelBottom,
-			Parent = parent,
+			Size = UDim2.new(1, 0, 0, BAR),
+			color = COLORS.volt,
+			text = 15,
 		})
-		UI.corner(bar, UDim.new(0, 8))
-		local fill = UI.make(Instance.new("Frame"), {
-			Name = "Fill",
-			Size = UDim2.fromScale(0, 1),
-			BackgroundColor3 = COLORS.volt,
-			Parent = bar,
-		})
-		UI.corner(fill, UDim.new(0, 8))
-		local count = UI.label({
-			Name = "Count",
-			Text = "",
-			Size = UDim2.fromScale(1, 1),
-			Parent = bar,
-		})
-		UI.maxText(count, 15)
 		local view: PageView = {
 			page = page,
 			heading = heading,
-			fill = fill,
-			count = count,
+			bar = bar,
+			count = bar.label :: TextLabel,
 			rows = {},
 		}
 		for _, row in page.rows do
@@ -355,8 +329,8 @@ function StormLogTab.render(snapshot: Types.Snapshot, describe: Describe): numbe
 		if done then
 			pagesDone += 1
 		end
-		view.fill.Size = UDim2.fromScale(if total > 0 then count / total else 1, 1)
-		view.fill.BackgroundColor3 = if done then COLORS.green else COLORS.volt
+		view.bar.setFraction(if total > 0 then count / total else 1)
+		view.bar.fill.BackgroundColor3 = if done then COLORS.green else COLORS.volt
 		view.count.Text = if done
 			then `✓ {count} / {total}  ·  +{math.round(Config.STORM_LOG.pageBonus * 100)}% Volts`
 			else `{count} / {total}`

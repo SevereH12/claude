@@ -40,6 +40,18 @@ UI.COLORS = table.freeze({
 UI.FONT_TITLE = Enum.Font.LuckiestGuy -- big numbers, headings
 UI.FONT_BODY = Enum.Font.BuilderSansExtraBold -- everything else
 
+-- Luckiest Guy draws its capitals high in their box (about 15% of the line
+-- height above the middle), so centred title text and button text is moved
+-- down by this much of its own height. If it still looks high in Studio,
+-- raise it a little; if it looks low, lower it.
+UI.TITLE_NUDGE = 0.12
+
+-- Room left round anything with an outline inside a scrolling list or a
+-- CanvasGroup. Outlines (UIStroke) are drawn outside their frame; a parent
+-- that clips cuts their straight edges but not their rounded corners, which
+-- then show as dark bits. Keeping this much space clear stops that.
+UI.STROKE_ROOM = 6
+
 UI.TWEEN = table.freeze({
 	popOut = TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
 	popBack = TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
@@ -173,6 +185,31 @@ local function textStroke(parent: Instance, thickness: number)
 	})
 end
 
+-- Moves centred title-font text down by TITLE_NUDGE of its height (see
+-- UI.TITLE_NUDGE): the top padding grows and the bottom one shrinks by the
+-- same amount, so the space for the text (and its size) stays the same.
+-- `pad` is the object's padding; its own top and bottom are kept (`base`).
+local function nudgeTitle(object: TextLabel | TextButton, pad: UIPadding)
+	local baseTop, baseBottom = pad.PaddingTop, pad.PaddingBottom
+	local applied = 0
+	local function update()
+		local nudge = if object.TextYAlignment == Enum.TextYAlignment.Center
+			then math.round(UI.TITLE_NUDGE * object.TextBounds.Y)
+			else 0
+		-- only when the rounded value changes: the text keeps its size, so
+		-- this can't set off another change
+		if nudge == applied then
+			return
+		end
+		applied = nudge
+		pad.PaddingTop = UDim.new(baseTop.Scale, baseTop.Offset + nudge)
+		pad.PaddingBottom = UDim.new(baseBottom.Scale, baseBottom.Offset - nudge)
+	end
+	object:GetPropertyChangedSignal("TextBounds"):Connect(update)
+	object:GetPropertyChangedSignal("TextYAlignment"):Connect(update)
+	update()
+end
+
 local function withDefaults(
 	defaults: { [string]: any },
 	props: { [string]: any }
@@ -197,6 +234,12 @@ function UI.label(props: { [string]: any }): TextLabel
 		}, props)
 	)
 	textStroke(label, if isTitle then 3 else 2)
+	if isTitle then
+		nudgeTitle(
+			label,
+			UI.make(Instance.new("UIPadding"), { Name = "TitleNudge", Parent = label })
+		)
+	end
 	return label
 end
 
@@ -231,13 +274,16 @@ function UI.button(props: { [string]: any }): TextButton
 	UI.stroke(button, 3)
 	UI.gradient(button, Color3.new(1, 1, 1), Color3.fromRGB(175, 175, 185))
 	textStroke(button, 2.5)
-	UI.make(Instance.new("UIPadding"), {
+	local pad = UI.make(Instance.new("UIPadding"), {
 		PaddingTop = UDim.new(0.16, 0),
 		PaddingBottom = UDim.new(0.16, 0),
 		PaddingLeft = UDim.new(0.08, 0),
 		PaddingRight = UDim.new(0.08, 0),
 		Parent = button,
 	})
+	if button.Font == UI.FONT_TITLE then
+		nudgeTitle(button, pad)
+	end
 	-- every button is a tap target: at least TAP_MIN points on touch
 	local limit = UI.make(Instance.new("UISizeConstraint"), { Parent = button })
 	tapLimits[limit] = true
@@ -264,6 +310,135 @@ end
 function UI.setEnabled(button: TextButton, enabled: boolean, color: Color3)
 	button.BackgroundColor3 = if enabled then color else UI.COLORS.disabled
 	button.AutoButtonColor = enabled
+end
+
+-- A scrolling list: the one way to make a ScrollingFrame. STROKE_ROOM of
+-- padding on all four sides (so card outlines and their rounded corners
+-- aren't cut), a thin light scrollbar in its own strip (it never draws over
+-- the cards), and a centred column with `props.gap` pixels between items.
+-- Items inside use the full width (UDim2.new(1, 0, ...)). Pass
+-- `layout = false` to add your own layout instead (a grid). Every other
+-- prop goes on the ScrollingFrame.
+function UI.list(parent: Instance, props: { [string]: any }): ScrollingFrame
+	local gap = props.gap or 0
+	local withLayout = props.layout ~= false
+	props.gap = nil
+	props.layout = nil
+	props.Parent = parent
+	local list = UI.make(
+		Instance.new("ScrollingFrame"),
+		withDefaults({
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			CanvasSize = UDim2.new(),
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			ScrollingDirection = Enum.ScrollingDirection.Y,
+			ScrollBarThickness = 6,
+			ScrollBarImageColor3 = UI.COLORS.subtext,
+			ScrollBarImageTransparency = 0.4,
+			VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar,
+		}, props)
+	)
+	UI.padding(list, UI.STROKE_ROOM)
+	if withLayout then
+		UI.make(Instance.new("UIListLayout"), {
+			Padding = UDim.new(0, gap),
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Parent = list,
+		})
+	end
+	return list
+end
+
+-- The one card look: a dark rounded box with an outline and 10 pixels of
+-- padding inside. Full width by default; props go on the frame. Returns the
+-- outline too (a card that's ready glows gold: set its Color and Thickness).
+function UI.card(props: { [string]: any }): (Frame, UIStroke)
+	local card = UI.make(
+		Instance.new("Frame"),
+		withDefaults({
+			BackgroundColor3 = UI.COLORS.panelDark,
+			BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 0, 0),
+		}, props)
+	)
+	UI.corner(card, UDim.new(0, 12))
+	local stroke = UI.stroke(card, 3)
+	UI.padding(card, 10)
+	return card, stroke
+end
+
+export type Bar = {
+	frame: Frame,
+	fill: Frame,
+	label: TextLabel?,
+	setFraction: (fraction: number) -> (),
+}
+
+-- A progress bar: a dark pill track with a thin light outline, and a
+-- rounded fill (`props.color`) that grows from the left. A little fill is
+-- never thinner than the bar is tall (so it stays a round pill), and none
+-- at all hides it. `props.text` (a max text size) adds a centred label on
+-- top, `bar.label`. Other props (Name, Size, Position, LayoutOrder...) go
+-- on the track. Set the amount with `bar.setFraction(0 to 1)`.
+function UI.bar(parent: Instance, props: { [string]: any }): Bar
+	local color = props.color or UI.COLORS.volt
+	local textSize = props.text
+	props.color = nil
+	props.text = nil
+	props.Parent = parent
+	local frame = UI.make(
+		Instance.new("Frame"),
+		withDefaults({
+			Name = "Bar",
+			BackgroundColor3 = UI.COLORS.stroke,
+			BorderSizePixel = 0,
+		}, props)
+	)
+	UI.corner(frame, UDim.new(0.5, 0))
+	UI.stroke(frame, 2, UI.COLORS.panelTop)
+	local fill = UI.make(Instance.new("Frame"), {
+		Name = "Fill",
+		BackgroundColor3 = color,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(0, 1),
+		Visible = false,
+		Parent = frame,
+	})
+	UI.corner(fill, UDim.new(0.5, 0))
+	local label: TextLabel? = nil
+	if typeof(textSize) == "number" then
+		local text = UI.label({
+			Name = "Label",
+			Text = "",
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = fill.ZIndex + 1,
+			Parent = frame,
+		})
+		UI.maxText(text, textSize)
+		label = text
+	end
+	local fraction = 0
+	local function apply()
+		local size = frame.AbsoluteSize
+		-- at least as wide as it is tall (a fraction of the width, so it's
+		-- right at any screen scale)
+		local least = if size.X > 0 then math.min(size.Y / size.X, 1) else 0
+		fill.Visible = fraction > 0
+		fill.Size = UDim2.fromScale(math.max(fraction, least), 1)
+	end
+	frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(apply)
+	local bar: Bar = {
+		frame = frame,
+		fill = fill,
+		label = label,
+		setFraction = function(value: number)
+			fraction = if value ~= value then 0 else math.clamp(value, 0, 1)
+			apply()
+		end,
+	}
+	return bar
 end
 
 -- Quick squash-and-bounce on press or reward.
@@ -472,13 +647,29 @@ function UI.window(
 		Parent = panel,
 	})
 	UI.corner(header, UDim.new(0, 14))
-	UI.gradient(header, Color3.new(1, 1, 1), Color3.fromRGB(170, 170, 185))
+	local headerTop, headerBottom = Color3.new(1, 1, 1), Color3.fromRGB(170, 170, 185)
+	UI.gradient(header, headerTop, headerBottom)
+	-- the header's bottom corners are square (a rounded one leaves dark
+	-- notches under the strip): a filler in the same colour over its lower
+	-- half, behind the title. Its gradient carries on the header's (the
+	-- lower half of the same top-to-bottom shade).
+	local filler = UI.make(Instance.new("Frame"), {
+		Name = "SquareBottom",
+		BackgroundColor3 = color,
+		BorderSizePixel = 0,
+		Position = UDim2.fromScale(0, 0.5),
+		Size = UDim2.fromScale(1, 0.5),
+		ZIndex = header.ZIndex,
+		Parent = header,
+	})
+	UI.gradient(filler, headerTop:Lerp(headerBottom, 0.5), headerBottom)
 	local heading = UI.label({
 		Title = true,
 		Text = title,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = UDim2.new(0, 18, 0.15, 0),
 		Size = UDim2.new(1, -90, 0.7, 0),
+		ZIndex = filler.ZIndex + 1,
 		Parent = header,
 	})
 	UI.maxText(heading, 34)
@@ -489,6 +680,7 @@ function UI.window(
 		Position = UDim2.new(1, -10, 0.5, 0),
 		Size = UDim2.fromOffset(42, 42),
 		BackgroundColor3 = UI.COLORS.red,
+		ZIndex = filler.ZIndex + 1,
 		Parent = header,
 	})
 	close.Activated:Connect(function()
@@ -605,10 +797,17 @@ local function stack(): Frame
 	UI.onLayout(function()
 		UI.place(frame, Layout.hud.toasts)
 	end)
+	-- each toast's group is STROKE_ROOM bigger all round than what shows
+	-- (see buildToast), so the gap and the top are pulled in to match: the
+	-- toasts show where and as far apart as before
 	UI.make(Instance.new("UIListLayout"), {
-		Padding = UDim.new(0, UI.TOAST_GAP),
+		Padding = UDim.new(0, UI.TOAST_GAP - 2 * UI.STROKE_ROOM),
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = frame,
+	})
+	UI.make(Instance.new("UIPadding"), {
+		PaddingTop = UDim.new(0, -UI.STROKE_ROOM),
 		Parent = frame,
 	})
 	toastStack = frame
@@ -631,13 +830,20 @@ end
 local function buildToast(entry: ToastQueue.Entry, action: ToastAction?): CanvasGroup
 	local group = UI.make(Instance.new("CanvasGroup"), {
 		Name = "Toast",
-		Size = UDim2.new(1, 0, 0, UI.TOAST_HEIGHT),
+		Size = UDim2.new(1, 2 * UI.STROKE_ROOM, 0, UI.TOAST_HEIGHT + 2 * UI.STROKE_ROOM),
 		BackgroundTransparency = 1,
 		GroupTransparency = 1,
 		LayoutOrder = entry.id,
 		Parent = stack(),
 	})
-	local panel = UI.panel({ Size = UDim2.fromScale(1, 1), Parent = group })
+	-- the panel sits STROKE_ROOM inside its group, so the group (which clips)
+	-- doesn't cut its outline's corners; the group is that much bigger, so
+	-- the toast looks the same size
+	local panel = UI.panel({
+		Position = UDim2.fromOffset(UI.STROKE_ROOM, UI.STROKE_ROOM),
+		Size = UDim2.new(1, -2 * UI.STROKE_ROOM, 1, -2 * UI.STROKE_ROOM),
+		Parent = group,
+	})
 	local label = UI.label({
 		Name = "Text",
 		Text = entry.text,

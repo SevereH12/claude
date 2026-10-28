@@ -48,6 +48,7 @@ local COLORS = UI.COLORS
 local ROBUX = utf8.char(0xE002) -- Roblox's fonts draw the Robux icon for this
 local CARD_HEIGHT = 168
 local CARD_GAP = 10
+local SWATCH_GAP = 10
 local TAB_HEIGHT = 46
 local TAB_COUNT = 3
 local PINK = Color3.fromRGB(255, 120, 170) -- the GIFT buttons
@@ -112,13 +113,15 @@ end
 local function fitColumns()
 	local one = oneColumn()
 	for _, grid in grids do
+		-- the cells and the gaps between them fill the width (whole pixels,
+		-- rounded so the last one never wraps)
 		grid.CellSize = if one
-			then UDim2.new(1, -8, 0, CARD_HEIGHT)
-			else UDim2.new(0.5, -10, 0, CARD_HEIGHT)
+			then UDim2.new(1, 0, 0, CARD_HEIGHT)
+			else UDim2.new(0.5, -CARD_GAP / 2, 0, CARD_HEIGHT)
 	end
 	pickerGrid.CellSize = if one
-		then UDim2.new(0.5, -10, 0, SWATCH_HEIGHT)
-		else UDim2.new(1 / 3, -10, 0, SWATCH_HEIGHT)
+		then UDim2.new(0.5, -SWATCH_GAP / 2, 0, SWATCH_HEIGHT)
+		else UDim2.new(1 / 3, -math.ceil(SWATCH_GAP * 2 / 3), 0, SWATCH_HEIGHT)
 end
 
 function BoostsUI.open()
@@ -470,25 +473,16 @@ local function buildPicker(body: Frame)
 		Parent = picker,
 	})
 	UI.maxText(hint, 17)
-	local grid = UI.make(Instance.new("ScrollingFrame"), {
+	local grid = UI.list(picker, {
 		Name = "Swatches",
 		Position = UDim2.fromOffset(10, 82),
 		Size = UDim2.new(1, -20, 1, -92),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollBarThickness = 6,
-		Parent = picker,
+		layout = false,
 	})
 	pickerGrid = UI.make(Instance.new("UIGridLayout"), {
-		CellPadding = UDim2.fromOffset(10, 10),
+		CellPadding = UDim2.fromOffset(SWATCH_GAP, SWATCH_GAP),
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = grid,
-	})
-	UI.make(Instance.new("UIPadding"), {
-		PaddingTop = UDim.new(0, 4),
-		PaddingLeft = UDim.new(0, 4),
 		Parent = grid,
 	})
 	local remote = Net.get("SetBoltColour")
@@ -670,29 +664,20 @@ local function buildTab(body: Frame, order: number, title: string): Tab
 		Parent = body,
 	})
 	UI.maxText(button, 22)
-	local grid = UI.make(Instance.new("ScrollingFrame"), {
+	local grid = UI.list(body, {
 		Name = title .. "Grid",
 		Position = UDim2.fromOffset(0, TAB_HEIGHT + 10),
 		Size = UDim2.new(1, 0, 1, -(TAB_HEIGHT + 10)),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollBarThickness = 6,
 		Visible = false,
-		Parent = body,
+		layout = false,
 	})
 	local layout = UI.make(Instance.new("UIGridLayout"), {
 		CellPadding = UDim2.fromOffset(CARD_GAP, CARD_GAP),
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = grid,
 	})
 	table.insert(grids, layout)
-	UI.make(Instance.new("UIPadding"), {
-		PaddingTop = UDim.new(0, 4),
-		PaddingLeft = UDim.new(0, 4),
-		Parent = grid,
-	})
 	local tab = { button = button, grid = grid }
 	button.Activated:Connect(function()
 		UI.pop(button)

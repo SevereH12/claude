@@ -153,7 +153,7 @@ local function buildRow(tab: Tab, tier: number, item: Item)
 	local frame = UI.make(Instance.new("Frame"), {
 		Name = item.name,
 		LayoutOrder = tier,
-		Size = UDim2.new(1, -12, 0, ROW_HEIGHT),
+		Size = UDim2.new(1, 0, 0, ROW_HEIGHT),
 		BackgroundColor3 = COLORS.panelDark,
 		Parent = tab.list,
 	})
@@ -242,27 +242,12 @@ local function buildTab(
 		Parent = body,
 	})
 	UI.maxText(tabButton, 22)
-	local list = UI.make(Instance.new("ScrollingFrame"), {
+	local list = UI.list(body, {
 		Name = title .. "List",
 		Position = UDim2.fromOffset(0, 86),
 		Size = UDim2.new(1, 0, 1, -86),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollBarThickness = 6,
 		Visible = false,
-		Parent = body,
-	})
-	UI.make(Instance.new("UIListLayout"), {
-		Padding = UDim.new(0, 10),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = list,
-	})
-	UI.make(Instance.new("UIPadding"), {
-		PaddingTop = UDim.new(0, 4),
-		PaddingLeft = UDim.new(0, 4),
-		Parent = list,
+		gap = 10,
 	})
 	local tab: Tab = {
 		title = title,
@@ -326,7 +311,7 @@ function ShopUI.init()
 		local frame = UI.make(Instance.new("Frame"), {
 			Name = "Ascend",
 			LayoutOrder = #Config.BOTTLES + 1,
-			Size = UDim2.new(1, -12, 0, ROW_HEIGHT),
+			Size = UDim2.new(1, 0, 0, ROW_HEIGHT),
 			BackgroundColor3 = COLORS.panelDark,
 			Visible = false,
 			Parent = bottles.list,

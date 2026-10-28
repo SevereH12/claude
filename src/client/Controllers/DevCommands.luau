@@ -117,20 +117,10 @@ function DevCommands.init()
 	})
 	UI.maxText(rewards, 16)
 	-- it scrolls: there are more tools than fit under the menu
-	local tools = UI.make(Instance.new("ScrollingFrame"), {
+	local tools = UI.list(screenGui, {
 		Name = "RewardToolList",
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollBarThickness = 6,
 		Visible = false,
-		Parent = screenGui,
-	})
-	UI.make(Instance.new("UIListLayout"), {
-		Padding = UDim.new(0, 8),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = tools,
+		gap = 8,
 	})
 	UI.onLayout(function()
 		UI.place(rewards, row(4))

@@ -33,7 +33,7 @@ type Card = {
 	now: TextLabel,
 	next: TextLabel,
 	status: TextLabel,
-	fill: Frame,
+	bar: UI.Bar,
 	barText: TextLabel,
 	hire: TextButton,
 	promote: TextButton,
@@ -202,8 +202,7 @@ local function render(snapshot: Types.Snapshot)
 				then `Next (Lv {save.level + 1}): {perkText(def, save.level + 1, rank)}`
 				elseif rank < ResearchMath.maxRank() then `Promote for rank {rank + 1}`
 				else "Max level and rank"
-			card.fill.Size =
-				UDim2.fromScale(if nextAt then math.clamp(save.data / nextAt, 0, 1) else 1, 1)
+			card.bar.setFraction(if nextAt then save.data / nextAt else 1)
 			card.barText.Text = if nextAt
 				then `{Format.abbreviate(save.data)} / {Format.abbreviate(nextAt)} data`
 				else `{Format.abbreviate(save.data)} data`
@@ -240,7 +239,7 @@ local function render(snapshot: Types.Snapshot)
 			card.level.Text = "Lv -"
 			card.now.Text = perkText(def, 1, 0)
 			card.next.Text = ""
-			card.fill.Size = UDim2.fromScale(0, 1)
+			card.bar.setFraction(0)
 			card.barText.Text = "Not hired"
 			card.status.Text = if not unlocked
 				then `Hire {previous.name} first`
@@ -276,7 +275,7 @@ local function buildCard(list: Instance, index: number, def: Types.ResearcherDef
 	local frame = UI.make(Instance.new("Frame"), {
 		Name = def.id,
 		LayoutOrder = index,
-		Size = UDim2.new(1, -12, 0, 0),
+		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = COLORS.panelDark,
 		Parent = list,
@@ -358,27 +357,13 @@ local function buildCard(list: Instance, index: number, def: Types.ResearcherDef
 		Size = UDim2.new(1, -72, 0.45, 0),
 	}, 14)
 
-	local bar = row(4, 18)
-	bar.BackgroundTransparency = 0
-	bar.BackgroundColor3 = COLORS.stroke
-	UI.corner(bar, UDim.new(0.5, 0))
-	local clip = UI.make(Instance.new("CanvasGroup"), {
+	local dataBar = UI.bar(row(4, 18), {
+		Name = "DataBar",
 		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
-		Parent = bar,
+		color = COLORS.storm,
+		text = 13,
 	})
-	UI.corner(clip, UDim.new(0.5, 0))
-	local fill = UI.make(Instance.new("Frame"), {
-		Size = UDim2.fromScale(0, 1),
-		BackgroundColor3 = COLORS.storm,
-		BorderSizePixel = 0,
-		Parent = clip,
-	})
-	local barText = text(bar, {
-		Text = "",
-		TextXAlignment = Enum.TextXAlignment.Center,
-		Size = UDim2.fromScale(1, 1),
-	}, 13)
+	local barText = dataBar.label :: TextLabel
 
 	local status = text(row(5, 18), {
 		Text = "",
@@ -490,7 +475,7 @@ local function buildCard(list: Instance, index: number, def: Types.ResearcherDef
 		now = now,
 		next = next,
 		status = status,
-		fill = fill,
+		bar = dataBar,
 		barText = barText,
 		hire = hire,
 		promote = promote,
@@ -563,26 +548,11 @@ function ResearchUI.init()
 	})
 	UI.maxText(glintsLabel, 16)
 
-	local list = UI.make(Instance.new("ScrollingFrame"), {
+	local list = UI.list(window.body, {
 		Name = "List",
 		Position = UDim2.fromOffset(0, 66),
 		Size = UDim2.new(1, 0, 1, -66),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollBarThickness = 6,
-		Parent = window.body,
-	})
-	UI.make(Instance.new("UIListLayout"), {
-		Padding = UDim.new(0, 10),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = list,
-	})
-	UI.make(Instance.new("UIPadding"), {
-		PaddingTop = UDim.new(0, 4),
-		PaddingLeft = UDim.new(0, 4),
-		Parent = list,
+		gap = 10,
 	})
 	for index, def in Config.RESEARCHERS do
 		buildCard(list, index, def)

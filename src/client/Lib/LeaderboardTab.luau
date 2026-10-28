@@ -88,7 +88,7 @@ local function buildRow(parent: Instance, index: number): Row
 		Name = `Rank{index}`,
 		LayoutOrder = 10 + index,
 		BackgroundColor3 = COLORS.panelDark,
-		Size = UDim2.new(1, -12, 0, ROW),
+		Size = UDim2.new(1, 0, 0, ROW),
 		Visible = false,
 		Parent = parent,
 	})
@@ -145,7 +145,7 @@ end
 -- The board buttons are TAP_MIN points tall on touch screens.
 local function fit()
 	local height = LayoutMath.tapMin(Layout.class, Layout.scale, Vector2.new(0, BUTTON)).Y
-	buttonBar.Size = UDim2.new(1, -12, 0, height)
+	buttonBar.Size = UDim2.new(1, 0, 0, height)
 end
 
 function LeaderboardTab.build(parent: ScrollingFrame)
@@ -153,7 +153,7 @@ function LeaderboardTab.build(parent: ScrollingFrame)
 		Name = "Boards",
 		LayoutOrder = 1,
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -12, 0, BUTTON),
+		Size = UDim2.new(1, 0, 0, BUTTON),
 		Parent = parent,
 	})
 	local count = #Config.LEADERBOARDS.boards
@@ -189,7 +189,7 @@ function LeaderboardTab.build(parent: ScrollingFrame)
 		LayoutOrder = 2,
 		Text = "",
 		TextColor3 = COLORS.volt,
-		Size = UDim2.new(1, -12, 0, 30),
+		Size = UDim2.new(1, 0, 0, 30),
 		Parent = parent,
 	})
 	UI.maxText(youLabel, 22)
@@ -198,7 +198,7 @@ function LeaderboardTab.build(parent: ScrollingFrame)
 		LayoutOrder = 3,
 		Text = "",
 		TextColor3 = COLORS.subtext,
-		Size = UDim2.new(1, -12, 0, 20),
+		Size = UDim2.new(1, 0, 0, 20),
 		Parent = parent,
 	})
 	UI.maxText(noteLabel, 16)
