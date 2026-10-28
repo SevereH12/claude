@@ -131,6 +131,16 @@ local function selectTab(tab: Tab)
 	hint.Text = tab.hint
 end
 
+-- Opens the shop on the BOOTS tab (a gameplay tip, Controllers/Hints).
+function ShopUI.openBoots()
+	for _, tab in tabs do
+		if tab.title == "BOOTS" then
+			selectTab(tab)
+		end
+	end
+	ShopUI.open()
+end
+
 -- The tutorial: shows the BOTTLES tab, scrolled to this tier's row, and
 -- returns its Buy button to point at (nil if there's no such row).
 function ShopUI.focusBottle(tier: number): GuiObject?

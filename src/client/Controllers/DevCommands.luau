@@ -11,7 +11,8 @@
 -- Sound board, which plays every sound in order with its name, and the Music
 -- audition, every shortlisted track for 20 s, Complete quest, +Log entry,
 -- Ready to ascend, Restart tutorial, Pretend friends +1, Leaderboard test
--- data (fills REWARDS > TOP with made-up players) and Queue test reminder
+-- data (fills REWARDS > TOP with made-up players), Queue test reminder and
+-- Reset gameplay tips (every tip can show again, the first in a few seconds)
 -- (all Studio only). The server (Systems/DevCommands) checks again. To
 -- remove it: delete this file and Systems/DevCommands.luau, and take
 -- "DevCommand" out of Shared/Remotes.
@@ -29,6 +30,7 @@ local LayoutMath = require(script.Parent.Parent.Lib.LayoutMath)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
 local AfkUI = require(script.Parent.AfkUI)
+local Hints = require(script.Parent.Hints)
 local Music = require(script.Parent.Music)
 
 local DevCommands = {}
@@ -167,6 +169,10 @@ function DevCommands.init()
 		toolButton.Activated:Connect(function()
 			UI.pop(toolButton)
 			devRemote:FireServer(tool.command)
+			if tool.command == "resetHints" then
+				-- and the first one may show a few seconds from now
+				Hints.resetForTest()
+			end
 		end)
 	end
 	-- Server goal +25%: as if you sold a quarter of the goal (four fill it
@@ -261,6 +267,7 @@ function DevCommands.init()
 		{
 			{ text = "🏆 Leaderboard test data", command = "testLeaderboard" },
 			{ text = "🔔 Queue test reminder", command = "testNotify" },
+			{ text = "💡 Reset gameplay tips", command = "resetHints" },
 		}
 	do
 		local toolButton = UI.button({

@@ -827,7 +827,11 @@ local function removeToast(id: number)
 	fade:Play()
 end
 
-local function buildToast(entry: ToastQueue.Entry, action: ToastAction?): CanvasGroup
+local function buildToast(
+	entry: ToastQueue.Entry,
+	action: ToastAction?,
+	wrap: boolean?
+): CanvasGroup
 	local group = UI.make(Instance.new("CanvasGroup"), {
 		Name = "Toast",
 		Size = UDim2.new(1, 2 * UI.STROKE_ROOM, 0, UI.TOAST_HEIGHT + 2 * UI.STROKE_ROOM),
@@ -853,10 +857,16 @@ local function buildToast(entry: ToastQueue.Entry, action: ToastAction?): Canvas
 		Parent = panel,
 	})
 	UI.maxText(label, 22)
+	if wrap then
+		-- a longer line (a gameplay tip): two rows, a little bigger
+		label.TextWrapped = true
+		label.Position = UDim2.fromScale(0.04, 0.06)
+		label.Size = UDim2.fromScale(0.92, 0.88)
+	end
 	if action then
 		-- the whole toast is the button (it's bigger than a button that fits
 		-- in it); the action's name sits on the right
-		label.Size = UDim2.fromScale(0.68, 0.72)
+		label.Size = UDim2.fromScale(0.68, if wrap then 0.88 else 0.72)
 		local hint = UI.label({
 			Title = true,
 			Name = "Action",
@@ -887,8 +897,15 @@ local function buildToast(entry: ToastQueue.Entry, action: ToastAction?): Canvas
 end
 
 -- Shows a message for `seconds` (UI.TOAST_TIME by default), with an
--- optional action (tap the toast to do it).
-function UI.toast(text: string, kind: ToastKind?, seconds: number?, action: ToastAction?)
+-- optional action (tap the toast to do it). `wrap`: the text may take two
+-- rows (gameplay tips).
+function UI.toast(
+	text: string,
+	kind: ToastKind?,
+	seconds: number?,
+	action: ToastAction?,
+	wrap: boolean?
+)
 	-- a blip (a bonk for a warning), unless the event already made its sound
 	if not Sfx.recent(0.15) then
 		Sfx.play(if kind == "warn" then "error" else "toast")
@@ -906,7 +923,7 @@ function UI.toast(text: string, kind: ToastKind?, seconds: number?, action: Toas
 		end
 		UI.pop(frame, 1.06)
 	else
-		toastFrames[entry.id] = buildToast(entry, action)
+		toastFrames[entry.id] = buildToast(entry, action, wrap)
 	end
 	local id, generation = entry.id, entry.generation
 	task.delay(duration, function()
