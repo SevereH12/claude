@@ -9,6 +9,9 @@
 --     (Config.ERRORS.recent), with how many times each happened.
 -- Client errors are rate-limited: Config.ERRORS.perPlayer a minute per
 -- player and perServer a minute for the whole server; the rest are dropped.
+-- So made-up errors can't flood anything: at most Config.ERRORS.maxReported
+-- fingerprints are sent to Analytics per server (the list never grows past
+-- it), and at most maxClientReports of them from players' devices.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ScriptContext = game:GetService("ScriptContext")
@@ -35,6 +38,8 @@ local Errors = {}
 
 local recent: { ErrorEntry } = {} -- newest first
 local reported: { [string]: boolean } = {} -- fingerprints sent to analytics
+local reportedCount = 0 -- keys in `reported` (capped: Config.ERRORS.maxReported)
+local clientReports = 0 -- client fingerprints sent (capped: maxClientReports)
 local serverWindow = Ops.newWindow(SETTINGS.perServer, 60)
 local recording = false
 
@@ -81,8 +86,12 @@ local function record(source: string, scriptName: string, message: string, playe
 			table.remove(recent)
 		end
 		local key = `{source}|{fingerprint}`
-		if not reported[key] then
+		if not reported[key] and Ops.mayReport(source, reportedCount, clientReports) then
 			reported[key] = true
+			reportedCount += 1
+			if source == "client" then
+				clientReports += 1
+			end
 			Analytics.error(fingerprint, source, player)
 		end
 	end)

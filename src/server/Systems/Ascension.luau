@@ -136,6 +136,8 @@ local function confirm(player: Player, profile: Types.Profile, token: string, re
 	show(player, profile)
 	print(`[Ascension] {player.Name} ascended to level {level}`)
 	remote:FireClient(player, "done", level)
+	-- saved straight away (like a purchase), so a server crash can't undo it
+	task.spawn(PlayerData.saveNow, player)
 	task.spawn(Travel.sendHome, player)
 end
 

@@ -985,6 +985,11 @@ return table.freeze({
 		perServer = 300,
 		recent = 20,
 		messageLength = 300, -- characters kept from a message
+		-- spam limits per server: errors remembered as "already sent to
+		-- Analytics" (after that, new ones aren't sent), and new client
+		-- errors sent to Analytics (a cheater can make up messages)
+		maxReported = 500,
+		maxClientReports = 50,
 	}),
 
 	-- Streaming (Lib/MapBuilder): phones only load the map near the player.
