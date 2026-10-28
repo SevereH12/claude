@@ -1,0 +1,8 @@
+std = "lua51"
+
+[lints]
+undefined_variable = "allow"
+global_usage = "allow"
+incorrect_standard_library_use = "allow"
+unused_variable = "warn"
+shadowing = "warn"

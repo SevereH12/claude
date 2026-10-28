@@ -6,6 +6,7 @@
 local Config = require(script.Parent.Parent.Config)
 local Types = require(script.Parent.Parent.Types)
 local Boosts = require(script.Parent.Boosts)
+local Social = require(script.Parent.Social)
 
 export type Owned = { [string]: boolean }
 
@@ -24,9 +25,34 @@ Passes.BOLT_ATTRIBUTE = "BoltColour"
 -- `owned` set, so the group bonus multiplies like a pass.
 Passes.GROUP = "GroupMember"
 
+-- The owner of the private server they're in (Systems/PrivateServer): the
+-- player attribute behind the [Owner] chat tag. Not a perk, just a label.
+Passes.SERVER_OWNER = "PrivateServerOwner"
+
 -- A Server Storm is on in the player's server (Systems/Boosts): the key
 -- that marks it in an `owned` set, so it multiplies sales like a pass.
 Passes.SERVER_STORM = "ServerStorm"
+
+-- A Server Surge is on (the server goal was filled: Systems/ServerGoal).
+-- It stacks with a Server Storm (both on: 2 x 2 = 4x).
+Passes.SERVER_SURGE = "ServerSurge"
+
+-- A scheduled event is on (Config.EVENTS, Util/Weather): EVENT .. its name
+-- marks it in an `owned` set, so it multiplies sales like a pass.
+Passes.EVENT = "Event_"
+
+-- A finished Storm Log page (Util/StormLog): LOG_PAGE .. its id marks it in
+-- an `owned` set, so each one adds Config.STORM_LOG.pageBonus to sales.
+Passes.LOG_PAGE = "LogPage_"
+
+-- The player's Ascension level (Util/Ascension): ASCENSION .. level marks
+-- it in an `owned` set (e.g. Ascension_3), so it multiplies sales like a pass.
+Passes.ASCENSION = "Ascension_"
+
+-- Roblox friends in the player's server (Systems/Friends): FRIENDS .. count
+-- marks it in an `owned` set (e.g. Friends_2), so it multiplies sales like
+-- a pass: +5% each, up to 3 (Util/Social).
+Passes.FRIENDS = "Friends_"
 
 -- The pass with this key, or nil.
 function Passes.def(key: string): Types.PassDef?
@@ -38,8 +64,87 @@ function Passes.def(key: string): Types.PassDef?
 	return nil
 end
 
+-- The Storm Log's extra (0.02 per finished page in `owned`, up to
+-- Config.STORM_LOG.maxBonus): added up, then it multiplies like a pass.
+function Passes.logBonus(owned: Owned): number
+	local log = Config.STORM_LOG
+	local pages = 0
+	for _, page in log.pages do
+		if owned[Passes.LOG_PAGE .. page.id] then
+			pages += 1
+		end
+	end
+	return math.min(pages * log.pageBonus, log.maxBonus)
+end
+
+-- The Ascension level marked in `owned` (the highest, if more than one), or 0.
+function Passes.ascensionLevel(owned: Owned): number
+	local level = 0
+	local prefix = #Passes.ASCENSION
+	for key, on in owned do
+		if on and string.sub(key, 1, prefix) == Passes.ASCENSION then
+			local n = tonumber(string.sub(key, prefix + 1))
+			if n and n > level then
+				level = n
+			end
+		end
+	end
+	return level
+end
+
+-- Ascension's extra: Config.ASCENSION.perLevel (0.5) per level, added up
+-- (level 3 = +1.5, so sales pay 2.5x); then it multiplies like a pass.
+function Passes.ascensionBonus(owned: Owned): number
+	return Passes.ascensionLevel(owned) * Config.ASCENSION.perLevel
+end
+
+-- `owned` plus the mark for this Ascension level (nothing at level 0).
+function Passes.withAscension(owned: Owned, level: number): Owned
+	if level <= 0 then
+		return owned
+	end
+	local set = table.clone(owned)
+	set[Passes.ASCENSION .. level] = true
+	return set
+end
+
+-- The friend count marked in `owned` (the highest, if more than one), or 0.
+function Passes.friendCount(owned: Owned): number
+	local count = 0
+	local prefix = #Passes.FRIENDS
+	for key, on in owned do
+		if on and string.sub(key, 1, prefix) == Passes.FRIENDS then
+			local n = tonumber(string.sub(key, prefix + 1))
+			if n and n > count then
+				count = n
+			end
+		end
+	end
+	return count
+end
+
+-- The friends boost's extra (+0.05 per friend, up to +0.15).
+function Passes.friendsBonus(owned: Owned): number
+	return Social.friendsBonus(Passes.friendCount(owned))
+end
+
+-- `owned` plus the mark for this many friends (nothing for none).
+function Passes.withFriends(owned: Owned, count: number): Owned
+	local counted = Social.countedFriends(count)
+	if counted <= 0 then
+		return owned
+	end
+	local set = table.clone(owned)
+	set[Passes.FRIENDS .. counted] = true
+	return set
+end
+
 -- What a sale pays, times this: 2x Volts (pass or boost), VIP, the group
--- bonus and a Server Storm multiply (2 x 1.1 x 1.1 x 2 = 4.84).
+-- bonus, a Server Storm, a Server Surge and any scheduled event multiply
+-- (2 x 1.1 x 1.1 x 2 = 4.84, x2 more on a Double Volts Weekend), the
+-- Storm Log's finished pages add up to +8% on top, friends in the server
+-- +5% each (up to +15%) on top of that, and Ascension adds +50% per level
+-- on top of that.
 function Passes.sellMultiplier(owned: Owned): number
 	local multiplier = 1
 	if owned.DoubleVolts then
@@ -54,6 +159,17 @@ function Passes.sellMultiplier(owned: Owned): number
 	if owned[Passes.SERVER_STORM] then
 		multiplier *= Config.SERVER_STORM.multiplier
 	end
+	if owned[Passes.SERVER_SURGE] then
+		multiplier *= Config.SERVER_GOAL.multiplier
+	end
+	for _, event in Config.EVENTS do
+		if owned[Passes.EVENT .. event.name] then
+			multiplier *= event.multiplier
+		end
+	end
+	multiplier *= 1 + Passes.logBonus(owned)
+	multiplier *= 1 + Passes.friendsBonus(owned)
+	multiplier *= 1 + Passes.ascensionBonus(owned)
 	return multiplier
 end
 

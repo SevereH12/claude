@@ -19,6 +19,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 local RewardRules = require(ReplicatedStorage.Shared.Util.Rewards)
+local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local Store = require(ReplicatedStorage.Shared.Util.Store)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Analytics = require(script.Parent.Analytics)
@@ -31,6 +32,10 @@ local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
 
 local Rewards = {}
 
+-- Fires after a daily reward is claimed (Systems/Notifications asks about
+-- reminders after the first one).
+Rewards.DailyClaimed = Signal.new() :: Signal.Signal<Player, Types.Profile>
+
 local rewardedRemote: RemoteEvent
 
 -- Today's UTC day number for this player (Studio's "Next day" adds days).
@@ -39,8 +44,9 @@ local function today(player: Player): number
 	return RewardRules.today(os.time()) + (if session then session.dayOffset else 0)
 end
 
--- `sku` names it in the economy stats ("Daily 3", "Gift 10 min").
-local function give(player: Player, profile: Types.Profile, reward: Types.Reward, sku: string)
+-- Pays a reward (Systems/Quests uses it too). `sku` names it in the
+-- economy stats ("Daily 3", "Gift 10 min").
+function Rewards.give(player: Player, profile: Types.Profile, reward: Types.Reward, sku: string)
 	local resolved = RewardRules.resolve(reward, Passes.owned(player))
 	local volts = Store.volts(resolved.charges, profile)
 	profile.volts += volts
@@ -73,9 +79,12 @@ local function onClaimDaily(player: Player)
 		return
 	end
 	profile.dailyStreak = streak
+	profile.loginRun = RewardRules.loginRun(profile.lastDailyDay, day, profile.loginRun)
+	profile.bestLoginRun = math.max(profile.bestLoginRun, profile.loginRun)
 	profile.lastDailyDay = day
-	give(player, profile, Config.DAILY_REWARDS[streak], `Daily {streak}`)
+	Rewards.give(player, profile, Config.DAILY_REWARDS[streak], `Daily {streak}`)
 	Analytics.dailyClaimed(player, streak)
+	Rewards.DailyClaimed:Fire(player, profile)
 end
 
 local function onClaimGift(player: Player, index: unknown)
@@ -101,7 +110,7 @@ local function onClaimGift(player: Player, index: unknown)
 		return
 	end
 	session.claimed[index] = true
-	give(player, profile, gift.reward, `Gift {gift.minutes} min`)
+	Rewards.give(player, profile, gift.reward, `Gift {gift.minutes} min`)
 	Analytics.giftClaimed(player, gift.minutes)
 end
 

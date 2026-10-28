@@ -26,6 +26,99 @@ export type Profile = {
 	giftCredits: { [string]: { string } }, -- gifts paid for but not sent yet: product key -> purchase ids
 	glints: { number }, -- Glints per zone tier: glints[tier + 1] (Util/Research)
 	settings: { [string]: any }, -- the SETTINGS panel: Util/Settings values (Systems/Settings)
+	stats: StatsSave, -- stat counters (Util/Stats, Systems/Stats)
+	quests: QuestsSave, -- daily and weekly quests (Util/Quests, Systems/Quests)
+	logClaimed: { [string]: boolean }, -- Storm Log rows whose reward was claimed, by row id (Util/StormLog)
+	ascension: number, -- Ascension level: times the player has ascended (Util/Ascension), 0 = never
+	tutorialStep: number, -- the new-player tutorial's step (Util/Tutorial): 1-4, 0 = done or skipped
+	loginRun: number, -- days in a row the daily reward was claimed (keeps counting past day 7), 0 = never
+	bestLoginRun: number, -- the longest loginRun ever (the "Longest streak" leaderboard)
+	notifyAsked: boolean, -- asked "Remind me when my daily reward is ready?" (asked once, ever)
+}
+
+-- A leaderboard row (Systems/Leaderboards): rank 1 is the top.
+export type LeaderboardEntry = { userId: number, name: string, value: number }
+
+-- Server -> client (the Leaderboards remote): every board's top rows by
+-- board key (Config.LEADERBOARDS.boards), and this player's own values.
+-- `test`: Studio test data is showing.
+export type LeaderboardView = {
+	boards: { [string]: { LeaderboardEntry } },
+	mine: { [string]: number },
+	test: boolean,
+}
+
+-- A Storm Log page (Config.STORM_LOG.pages): its id, heading, icon, and
+-- what finishing one of its rows pays (once per row).
+export type StormLogPageDef = {
+	id: string,
+	title: string,
+	icon: string,
+	rowReward: Reward,
+}
+
+-- What the client sees of the Storm Log (Util/StormLog.view): the ids of
+-- the entries found and of the rows already claimed.
+export type LogView = {
+	found: { string },
+	claimed: { string },
+}
+
+-- Stat counters (Util/Stats): key -> count, three times over. `day` is the
+-- UTC day `today` counts, `week` the Monday-to-Sunday week `thisWeek` counts.
+export type StatsSave = {
+	lifetime: { [string]: number },
+	today: { [string]: number },
+	thisWeek: { [string]: number },
+	day: number,
+	week: number,
+}
+
+-- A quest template (Config.QUESTS.templates). `daily` / `weekly`: the
+-- amount at bottle tier 1 (nil = never picked for that period); `perTier`
+-- adds that fraction of it for every bottle tier above 1. For "Volts" the
+-- amounts are minutes of the player's grinding rate (Util/Afk).
+export type QuestKind = "Catch" | "CatchZone" | "Sell" | "Golden" | "Volts" | "Play" | "Promote"
+export type QuestTemplate = {
+	key: QuestKind,
+	daily: number?,
+	weekly: number?,
+	perTier: number?,
+	reward: Reward, -- a daily quest's reward (a weekly one pays Config.QUESTS.weeklyReward)
+}
+
+-- A picked quest: its template, the zone (CatchZone), how much it takes,
+-- the counter's value when it was picked (progress counts from there) and
+-- whether its reward was claimed.
+export type QuestSave = {
+	key: string,
+	zone: string?,
+	target: number,
+	base: number,
+	claimed: boolean,
+}
+
+export type QuestsSave = {
+	day: number, -- the UTC day `daily` was picked for
+	week: number, -- the week `weekly` was picked for (Util/Stats.weekOf)
+	daily: { QuestSave },
+	weekly: { QuestSave },
+	rerollDay: number, -- the UTC day the free reroll was last used
+}
+
+-- What the client sees of a quest (Util/Quests.view).
+export type QuestView = {
+	key: string,
+	zone: string?,
+	target: number,
+	progress: number,
+	claimed: boolean,
+}
+
+export type QuestsView = {
+	daily: { QuestView },
+	weekly: { QuestView },
+	rerollReady: boolean, -- today's free reroll is still there
 }
 
 -- A hired researcher. post is "Office" or a zone id.
@@ -60,6 +153,11 @@ export type Snapshot = {
 	giftCredits: { [string]: number }, -- gift products paid for but not sent yet
 	afk: AfkState?, -- in the AFK Lounge (Systems/Afk), nil when not
 	glints: { number }, -- Glints per zone tier (glints[tier + 1])
+	quests: QuestsView, -- today's and this week's quests with their progress
+	log: LogView, -- the Storm Log: entries found and rows claimed
+	ascension: number, -- Ascension level (Util/Ascension)
+	tutorialStep: number, -- the tutorial's step (Util/Tutorial), 0 = not showing
+	friends: number, -- Roblox friends in this server that count for the friends boost (0 to Config.FRIENDS.max)
 }
 
 -- The player's AFK Lounge state, sent in the snapshot (Systems/Afk). The
@@ -162,6 +260,34 @@ export type StormPhase = "Storm" | "Calm"
 export type StormState = {
 	phase: StormPhase,
 	endsAt: number,
+	supercell: boolean?, -- this storm is a Supercell (Config.SUPERCELL)
+	supercellAt: number?, -- a Supercell starts at this time (sent in the last 30 s before it)
+}
+
+-- A rare bolt (Config.BOLT_TYPES); "Normal" is every other bolt.
+export type BoltType = "Normal" | "Golden" | "Rainbow" | "Ball"
+
+-- key: the BoltType; chance: the odds per strike (0.02 = 2%); multiplier:
+-- what it multiplies the catch's value by; label: its popup ("GOLDEN");
+-- boostMinutes: a random timed boost for every catcher (Rainbow).
+export type BoltTypeDef = {
+	key: BoltType,
+	chance: number,
+	multiplier: number,
+	label: string,
+	color: Color3,
+	boostMinutes: number?,
+}
+
+-- A scheduled event (Config.EVENTS) multiplies every sale while it's on.
+-- startUtc/endUtc: a Unix time (a one-off event) or "Sat 00:00" style
+-- weekday and UTC time (it repeats every week). The end minute is included.
+export type EventDef = {
+	name: string,
+	startUtc: number | string,
+	endUtc: number | string,
+	multiplier: number,
+	banner: string,
 }
 
 -- "Shared": everyone inside the circle catches it.
@@ -261,6 +387,11 @@ export type StrikeWarning = {
 	radius: number,
 	landsAt: number, -- workspace:GetServerTimeNow() time
 	ownerId: number?, -- Storm Chaser balloon bolt: only this UserId can catch it
+	boltType: BoltType?, -- a rare bolt (nil = Normal)
+	-- Ball lightning: the orb drifts in a straight line from `position` to
+	-- orbTo (both on the ground) for orbSeconds, starting at landsAt
+	orbTo: Vector3?,
+	orbSeconds: number?,
 }
 
 -- Server -> one client (a Forecaster's owner): the next strike's ring, early.
@@ -287,6 +418,8 @@ export type StrikeLanded = {
 	tanked: { number }, -- full players whose charge went into their Chemist's tank
 	lucky: { number }, -- Lucky Charges catchers whose roll doubled the charge
 	ownerId: number?, -- Storm Chaser balloon bolt: only this UserId could catch it
+	boltType: BoltType?, -- a rare bolt (nil = Normal); `values` include its multiplier
+	boost: string?, -- Rainbow: the boost key (Config.BOOSTS) every catcher got
 }
 
 return nil

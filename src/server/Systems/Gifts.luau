@@ -54,11 +54,13 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local GiftRules = require(ReplicatedStorage.Shared.Util.Gifts)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Store = require(ReplicatedStorage.Shared.Util.Store)
+local StatRules = require(ReplicatedStorage.Shared.Util.Stats)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Analytics = require(script.Parent.Analytics)
 local Boosts = require(script.Parent.Boosts)
 local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
+local Stats = require(script.Parent.Stats)
 local Sync = require(script.Parent.Sync)
 local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
 
@@ -346,6 +348,7 @@ local function sent(giver: Player, toId: number, toName: string, productKey: str
 		announcement:FireAllClients("giftSent", giver.DisplayName)
 	end
 	Analytics.gift(giver, "GiftSent", productKey)
+	Stats.add(giver, StatRules.GIFTS_SENT, 1)
 end
 
 local function onFindPlayer(player: Player, username: unknown)
@@ -499,6 +502,18 @@ function Gifts.processReceipt(
 		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
 	return Enum.ProductPurchaseDecision.NotProcessedYet
+end
+
+-- A reward from the game (Systems/Invites: an invite's reward) for anyone,
+-- online here, in another server or offline: it goes in their inbox like a
+-- gift (each `entry.id` only ever arrives once) and is delivered now if
+-- they're playing, or on their next join. False if it couldn't be written.
+function Gifts.sendReward(toId: number, entry: Types.GiftEntry): boolean
+	if not addToInbox(toId, entry) then
+		return false
+	end
+	announce(toId)
+	return true
 end
 
 -- Studio TEST tool: a gift from "Test Gifter" to yourself, through your own

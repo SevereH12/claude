@@ -9,6 +9,10 @@
 --                    catcher's bottle, in their bolt colour (Bolt Colours
 --                    pick, else VIP gold). If we caught it: screen flash,
 --                    camera shake, "+5" popup ("x2 ASSAYED" if high grade).
+--                    Rare bolts (Config.BOLT_TYPES): a gold ring (Golden),
+--                    a colour-cycling ring (Rainbow) or a drifting orb
+--                    (Ball lightning), a coloured bolt and a "GOLDEN x10!"
+--                    popup when you catch one.
 --   Sold          -> big "+Volts" popup
 --   (ambient)     -> the Power Plant's tesla coil crackles
 
@@ -27,9 +31,12 @@ local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Research = require(ReplicatedStorage.Shared.Util.Research)
 local Types = require(ReplicatedStorage.Shared.Types)
+local Weather = require(ReplicatedStorage.Shared.Util.Weather)
 local Layout = require(script.Parent.Parent.Lib.Layout)
+local SettingsStore = require(script.Parent.Parent.Lib.SettingsStore)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
+local ZoneColours = require(script.Parent.Parent.Lib.ZoneColours)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
 local State = require(script.Parent.State)
 
@@ -48,7 +55,7 @@ local SLOW_FADE = TweenInfo.new(4, Enum.EasingStyle.Quad, Enum.EasingDirection.I
 local SHOCKWAVE = TweenInfo.new(0.45, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 local POPUP_RISE = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
-type Warning = { anchor: BasePart, pillar: BasePart }
+type Warning = { anchor: BasePart, pillar: BasePart, orb: BasePart? }
 
 local warnings: { [number]: Warning } = {}
 local forecasts: { [number]: { BasePart } } = {}
@@ -110,6 +117,9 @@ local POPUP_WIDTH = 520
 local POPUP_RISE_BY = 64
 
 local function popup(text: string, gold: boolean, y: number, size: number?)
+	if not SettingsStore.get("showPopups") then
+		return -- SETTINGS > Accessibility & HUD
+	end
 	local area = Layout.area
 	local height = (size or 0.08) * 720
 	local slot: Popup = { y = y * area.Y, size = height }
@@ -157,11 +167,18 @@ local function popup(text: string, gold: boolean, y: number, size: number?)
 end
 
 local function screenFlash(amount: number)
+	if SettingsStore.get("reduceFlashing") then
+		return
+	end
 	flashFrame.BackgroundTransparency = 1 - amount
 	TweenService:Create(flashFrame, FADE, { BackgroundTransparency = 1 }):Play()
 end
 
-local function cameraShake(duration: number, intensity: number)
+local function cameraShake(duration: number, baseIntensity: number)
+	local intensity = baseIntensity * SettingsStore.get("cameraShake")
+	if intensity <= 0 then
+		return
+	end
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	if not humanoid then
@@ -238,8 +255,17 @@ local function drawPath(points: { Vector3 }, thickness: number, into: { BasePart
 	end
 end
 
--- Flicker on-off-on like real lightning, then fade out.
+-- Flicker on-off-on like real lightning, then fade out (with Reduce
+-- flashing, just a slower fade).
+local CALM_FADE = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local function flickerAndFade(parts: { BasePart })
+	if SettingsStore.get("reduceFlashing") then
+		for _, part in parts do
+			TweenService:Create(part, CALM_FADE, { Transparency = 1 }):Play()
+			Debris:AddItem(part, CALM_FADE.Time + 0.05)
+		end
+		return
+	end
 	local original: { [BasePart]: number } = {}
 	for _, part in parts do
 		original[part] = part.Transparency
@@ -303,18 +329,25 @@ local function catchSound(): string
 	return `catch_{math.clamp(math.ceil(fill * 5), 1, 5)}`
 end
 
--- Impact: light burst, sparks, shockwave, scorch mark.
-local function impact(position: Vector3)
+-- Impact: light burst, sparks, shockwave, scorch mark. `simple` (someone
+-- else's strike on Simple): just the shockwave. The light follows Lightning
+-- glow, the sparks Rain and particles.
+local function impact(position: Vector3, simple: boolean)
 	local anchor = anchorAt(position + Vector3.new(0, 0.3, 0), 5)
+	local glow = SettingsStore.get("glow")
 
-	local burst = UI.make(Instance.new("PointLight"), {
-		Color = GLOW_COLOR,
-		Brightness = 14,
-		Range = 60,
-		Shadows = true,
-		Parent = anchor,
-	})
-	TweenService:Create(burst, TweenInfo.new(0.6, Enum.EasingStyle.Quad), { Brightness = 0 }):Play()
+	if glow ~= "Off" and not simple then
+		local soft = glow == "Soft"
+		local burst = UI.make(Instance.new("PointLight"), {
+			Color = GLOW_COLOR,
+			Brightness = if soft then 6 else 14,
+			Range = if soft then 40 else 60,
+			Shadows = not soft,
+			Parent = anchor,
+		})
+		TweenService:Create(burst, TweenInfo.new(0.6, Enum.EasingStyle.Quad), { Brightness = 0 })
+			:Play()
+	end
 
 	local sparkOrigin = UI.make(Instance.new("Attachment"), { Parent = anchor })
 	local sparks = UI.make(Instance.new("ParticleEmitter"), {
@@ -333,7 +366,9 @@ local function impact(position: Vector3)
 		Drag = 2,
 		Parent = sparkOrigin,
 	})
-	sparks:Emit(45)
+	if not simple then
+		sparks:Emit(math.round(45 * SettingsStore.get("particleAmount")))
+	end
 
 	local shockwave = groundRing(anchor, {
 		Radius = 1,
@@ -345,6 +380,9 @@ local function impact(position: Vector3)
 	TweenService:Create(shockwave, SHOCKWAVE, { Radius = 16, InnerRadius = 15, Transparency = 1 })
 		:Play()
 
+	if simple then
+		return
+	end
 	local scorch = groundRing(anchor, {
 		Radius = 3.5,
 		InnerRadius = 0,
@@ -358,8 +396,9 @@ local function impact(position: Vector3)
 	-- strikes near you light up the whole screen for a moment
 	local camera = workspace.CurrentCamera
 	local distance = if camera then (camera.CFrame.Position - position).Magnitude else math.huge
-	if distance < FLASH_DISTANCE then
-		local strength = 1 - distance / FLASH_DISTANCE
+	local flashes = glow ~= "Off" and not SettingsStore.get("reduceFlashing")
+	if distance < FLASH_DISTANCE and flashes then
+		local strength = (1 - distance / FLASH_DISTANCE) * (if glow == "Soft" then 0.5 else 1)
 		strikeFlash.Brightness = 0.45 * strength
 		strikeFlash.TintColor = Color3.fromRGB(215, 230, 255)
 		TweenService:Create(strikeFlash, TweenInfo.new(0.35), { Brightness = 0 }):Play()
@@ -461,17 +500,66 @@ local function clearForecast(id: number)
 	end
 end
 
+-- Colourblind rings: a dashed outline outside the ring and a ⚡ in the
+-- middle, so a ring reads by shape as well as colour.
+local CB_DASHES = 12
+local function colourblindMarks(
+	anchor: BasePart,
+	position: Vector3,
+	radius: number,
+	color: Color3,
+	lifetime: number
+)
+	local outer = radius + 1.2
+	for index = 0, CB_DASHES - 1 do
+		local angle = (index / CB_DASHES) * math.pi * 2
+		local offset = Vector3.new(math.cos(angle), 0, math.sin(angle)) * outer
+		local dash = effectPart({
+			Name = "AssistDash",
+			Size = Vector3.new(0.6, 0.25, outer * math.pi / CB_DASHES),
+			CFrame = CFrame.lookAt(
+				position + offset + Vector3.new(0, 0.45, 0),
+				position + Vector3.new(0, 0.45, 0)
+			) * CFrame.Angles(0, math.rad(90), 0),
+			Color = Color3.new(1, 1, 1),
+			Transparency = 0.1,
+			Parent = anchor,
+		})
+		Debris:AddItem(dash, lifetime)
+	end
+	local icon = UI.make(Instance.new("BillboardGui"), {
+		Name = "AssistIcon",
+		Size = UDim2.fromScale(4, 4),
+		StudsOffset = Vector3.new(0, 2.5, 0),
+		AlwaysOnTop = true,
+		Parent = anchor,
+	})
+	UI.label({
+		Title = true,
+		Text = "⚡",
+		TextColor3 = color,
+		Size = UDim2.fromScale(1, 1),
+		Parent = icon,
+	})
+end
+
 local function onWarning(warning: Types.StrikeWarning)
 	local timeLeft = warning.landsAt - workspace:GetServerTimeNow()
 	if timeLeft <= 0 then
 		return
 	end
 	local zone = Config.ZONES[warning.zoneId]
-	local color = if zone then zone.color else UI.COLORS.volt
+	local color = ZoneColours.of(zone, UI.COLORS.volt)
 	if warning.ownerId and warning.ownerId ~= player.UserId then
 		color = BALLOON_MUTED -- someone else's balloon bolt
 	end
-	local lifetime = timeLeft + 2 -- safety net if the landed event never arrives
+	local rare = Weather.boltDef(warning.boltType)
+	if rare then
+		color = rare.color
+	end
+	local orbSeconds = warning.orbSeconds or 0
+	-- safety net if the landed event never arrives
+	local lifetime = timeLeft + orbSeconds + 2
 	clearForecast(warning.id)
 	-- the charge-up hum lasts WARNING_TIME: join it part way if we're late
 	local someoneElses = warning.ownerId ~= nil and warning.ownerId ~= player.UserId
@@ -500,12 +588,22 @@ local function onWarning(warning: Types.StrikeWarning)
 	TweenService
 		:Create(fill, TweenInfo.new(timeLeft, Enum.EasingStyle.Linear), { Radius = warning.radius })
 		:Play()
-	-- pulse the ring faster and faster
+	-- pulse the ring (slower and softer with Reduce flashing: it always shows)
+	local calm = SettingsStore.get("reduceFlashing")
 	TweenService:Create(
 		ring,
-		TweenInfo.new(0.25, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-		{ Transparency = 0.5 }
+		TweenInfo.new(
+			if calm then 0.8 else 0.25,
+			Enum.EasingStyle.Sine,
+			Enum.EasingDirection.InOut,
+			-1,
+			true
+		),
+		{ Transparency = if calm then 0.3 else 0.5 }
 	):Play()
+	if ZoneColours.assist() then
+		colourblindMarks(anchor, warning.position, warning.radius, color, lifetime)
+	end
 
 	-- your Rod Tech's reach: a faint outer ring around the warning
 	local rodTech, rodRank = activeLevel("RodTech")
@@ -531,30 +629,145 @@ local function onWarning(warning: Types.StrikeWarning)
 	})
 	Debris:AddItem(pillar, lifetime)
 
-	warnings[warning.id] = { anchor = anchor, pillar = pillar }
+	-- rare bolts: a bigger, brighter pillar and a name over the ring; a
+	-- Rainbow's colours keep cycling
+	local orb: BasePart? = nil
+	if rare then
+		pillar.Size = Vector3.new(1.4, 120, 1.4)
+		pillar.Position = warning.position + Vector3.new(0, 60, 0)
+		pillar.Transparency = 0.55
+		local tag = UI.make(Instance.new("BillboardGui"), {
+			Name = "RareTag",
+			Size = UDim2.fromOffset(220, 44),
+			StudsOffset = Vector3.new(0, 7, 0),
+			AlwaysOnTop = true,
+			Parent = anchor,
+		})
+		UI.label({
+			Title = true,
+			Text = `{rare.label}!`,
+			TextColor3 = rare.color,
+			Size = UDim2.fromScale(1, 1),
+			Parent = tag,
+		})
+		if rare.key == "Rainbow" then
+			local beat = RunService.Heartbeat:Connect(function()
+				local hue = (os.clock() * 0.6) % 1
+				local rainbow = Color3.fromHSV(hue, 0.75, 1)
+				ring.Color3 = rainbow
+				fill.Color3 = rainbow
+				pillar.Color = rainbow
+			end)
+			anchor.Destroying:Once(function()
+				beat:Disconnect()
+			end)
+		end
+	end
+	-- Ball lightning: an orb that drifts from the ring to orbTo
+	local orbTo = warning.orbTo
+	if warning.boltType == "Ball" and orbTo and orbSeconds > 0 then
+		local ball = Config.BALL_LIGHTNING
+		local lift = Vector3.new(0, ball.height, 0)
+		local part = effectPart({
+			Name = "BallLightning",
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.new(3, 3, 3),
+			Position = warning.position + lift,
+			Color = color,
+			Transparency = 0.1,
+			Parent = fxFolder,
+		})
+		if SettingsStore.get("glow") ~= "Off" then
+			UI.make(Instance.new("PointLight"), {
+				Color = color,
+				Brightness = 4,
+				Range = 18,
+				Parent = part,
+			})
+		end
+		Debris:AddItem(part, lifetime)
+		local from = warning.position
+		local beat = RunService.Heartbeat:Connect(function()
+			local t =
+				math.clamp((workspace:GetServerTimeNow() - warning.landsAt) / orbSeconds, 0, 1)
+			local bob = Vector3.new(0, math.sin(os.clock() * 6) * 0.4, 0)
+			part.Position = from:Lerp(orbTo, t) + lift + bob
+		end)
+		part.Destroying:Once(function()
+			beat:Disconnect()
+		end)
+		orb = part
+	end
+
+	warnings[warning.id] = { anchor = anchor, pillar = pillar, orb = orb }
+end
+
+-- Does this strike concern you: you caught it (or were full, or it went to
+-- your tank), it's your balloon bolt, or it landed in the zone you're in?
+local function isMine(landed: Types.StrikeLanded): boolean
+	local me = player.UserId
+	if
+		table.find(landed.catchers, me)
+		or table.find(landed.full, me)
+		or table.find(landed.tanked, me)
+		or landed.ownerId == me
+	then
+		return true
+	end
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local zone = if root and root:IsA("BasePart") then Zones.at(root.Position) else nil
+	return zone ~= nil and zone.id == landed.zoneId
 end
 
 local function onLanded(landed: Types.StrikeLanded)
 	local warning = warnings[landed.id]
+	local orbAt: Vector3? = nil
 	if warning then
 		warnings[landed.id] = nil
 		warning.anchor:Destroy()
 		warning.pillar:Destroy()
-	end
-
-	local sky = landed.position
-		+ Vector3.new(random:NextNumber(-15, 15), BOLT_HEIGHT, random:NextNumber(-15, 15))
-	bolt(sky, landed.position, 0.5, 2)
-	impact(landed.position)
-	playThunderAt(landed.position, landed.ownerId == player.UserId)
-
-	-- little arcs from the strike into every catcher's bottle
-	for _, userId in landed.catchers do
-		local target = bottlePosition(userId)
-		if target then
-			bolt(landed.position + Vector3.new(0, 1, 0), target, 0.18, 0, arcColour(userId))
+		if warning.orb then
+			orbAt = warning.orb.Position
+			warning.orb:Destroy()
 		end
 	end
+	local rare = Weather.boltDef(landed.boltType)
+	local tint = if rare then rare.color else nil
+	if landed.boltType == "Rainbow" then
+		tint = Color3.fromHSV(random:NextNumber(), 0.75, 1)
+	end
+
+	-- someone else's strike (a zone you're not in, nothing to do with you)
+	-- follows Others' lightning: Off, Simple (no branches, sparks or glow)
+	-- or Full
+	local others = if isMine(landed) then "Full" else SettingsStore.get("othersStrikes")
+	if others ~= "Off" then
+		local simple = others == "Simple"
+		if landed.boltType ~= "Ball" then
+			local sky = landed.position
+				+ Vector3.new(random:NextNumber(-15, 15), BOLT_HEIGHT, random:NextNumber(-15, 15))
+			-- a rare bolt is thicker, with more branches, in its colour
+			bolt(
+				sky,
+				landed.position,
+				if rare then 0.9 else 0.5,
+				if simple then 0 elseif rare then 4 else 2,
+				tint
+			)
+		end
+		impact(landed.position, simple)
+
+		-- little arcs from the strike (or the orb) into every catcher's bottle
+		local from = orbAt or landed.position + Vector3.new(0, 1, 0)
+		for _, userId in landed.catchers do
+			local target = bottlePosition(userId)
+			if target then
+				bolt(from, target, 0.18, 0, arcColour(userId) or tint)
+			end
+		end
+	end
+	playThunderAt(landed.position, landed.ownerId == player.UserId)
 
 	local caught = table.find(landed.catchers, player.UserId)
 	if caught then
@@ -562,6 +775,17 @@ local function onLanded(landed: Types.StrikeLanded)
 		cameraShake(0.3, 0.7)
 		popup(`+{Format.abbreviate(landed.values[caught] or landed.value)} ⚡`, true, 0.42)
 		Sfx.play(catchSound())
+		-- a rare bolt: "GOLDEN x10!" (and the Rainbow's boost)
+		if rare then
+			Sfx.play("jackpot")
+			popup(`{rare.label} x{rare.multiplier}!`, true, 0.3, 0.09)
+			screenFlash(0.4)
+			cameraShake(0.35, 0.8)
+			local boost = if landed.boost then BoostRules.def(landed.boost) else nil
+			if boost and rare.boostMinutes then
+				popup(`+{rare.boostMinutes} min {boost.icon} {boost.name}`, true, 0.58, 0.05)
+			end
+		end
 		-- the Analyst's assay and Lucky Charges each double it
 		local assayed = table.find(landed.assayed, player.UserId) ~= nil
 		local lucky = table.find(landed.lucky, player.UserId) ~= nil
@@ -600,6 +824,12 @@ local function onSold(earned: number, count: number)
 	local ends = workspace:GetAttribute(BoostRules.STORM_ENDS)
 	if BoostRules.stormLeft(ends, workspace:GetServerTimeNow()) > 0 then
 		popup(`x{Config.SERVER_STORM.multiplier} SERVER STORM`, true, y, 0.045)
+		y += 0.05
+	end
+	-- a scheduled event (Double Volts Weekend)
+	for _, active in Weather.liveEvents() do
+		popup(`x{active.event.multiplier} {string.upper(active.event.name)}`, true, y, 0.045)
+		y += 0.05
 	end
 	screenFlash(0.25)
 	cameraShake(0.2, 0.35)

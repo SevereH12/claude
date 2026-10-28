@@ -25,6 +25,11 @@ for name, controller in loaded do
 		local ok, err = pcall(controller.init)
 		if not ok then
 			warn(`[StormBottler] {name}.init failed: {err}`)
+			-- tell the server too (Controllers/ErrorReport), if it's set up
+			local reporter = loaded.ErrorReport
+			if reporter and typeof(reporter.report) == "function" then
+				pcall(reporter.report, name, `{name}.init failed: {err}`)
+			end
 		end
 	end
 end

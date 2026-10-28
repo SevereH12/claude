@@ -12,11 +12,17 @@
 -- saved: it belongs to this server. Everyone can read it from workspace
 -- attributes (Util/Boosts.STORM_ENDS and STORM_BY), and the Announcement
 -- remote tells everyone when someone starts or adds to one.
+--
+-- The Server Surge is the same kind of timer with no buyer: filling the
+-- server goal (Systems/ServerGoal) starts one, Config.SERVER_GOAL
+-- .surgeMinutes of 2x Volts for everyone, stacking with a Server Storm.
+-- Its end time is the workspace attribute Util/Boosts.SURGE_ENDS.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BoostRules = require(ReplicatedStorage.Shared.Util.Boosts)
+local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local Types = require(ReplicatedStorage.Shared.Types)
@@ -29,6 +35,7 @@ local Boosts = {}
 
 local announcement: RemoteEvent
 local stormEnds: number? = nil -- os.clock() when the Server Storm ends
+local surgeEnds: number? = nil -- os.clock() when the Server Surge ends
 
 -- Fires when one of a player's boosts runs out.
 Boosts.Ended = Signal.new() :: Signal.Signal<Player, string>
@@ -92,6 +99,31 @@ function Boosts.endStorm()
 	workspace:SetAttribute(BoostRules.STORM_BY, nil)
 end
 
+-- Is a Server Surge on in this server?
+function Boosts.surgeOn(): boolean
+	return surgeEnds ~= nil and os.clock() < surgeEnds
+end
+
+-- Starts a Server Surge (the server goal was filled), or adds
+-- SERVER_GOAL.surgeMinutes to the one on, and tells everyone (`top`: the
+-- round's biggest contributor, or ""). Returns its seconds left.
+function Boosts.startSurge(top: string): number
+	local now = os.clock()
+	local left = (if surgeEnds and Boosts.surgeOn() then surgeEnds - now else 0)
+		+ Config.SERVER_GOAL.surgeMinutes * 60
+	surgeEnds = now + left
+	workspace:SetAttribute(BoostRules.SURGE_ENDS, workspace:GetServerTimeNow() + left)
+	announcement:FireAllClients("surge", top, left)
+	print(`[Boosts] the server goal was reached: a Server Surge, {math.round(left / 60)} min left`)
+	return left
+end
+
+-- Ends the Server Surge now (its timer, and the Studio TEST tool).
+function Boosts.endSurge()
+	surgeEnds = nil
+	workspace:SetAttribute(BoostRules.SURGE_ENDS, nil)
+end
+
 -- Studio TEST tool: ends every boost now.
 function Boosts.clear(player: Player)
 	local profile = PlayerData.get(player)
@@ -114,6 +146,9 @@ function Boosts.start()
 		last = now
 		if stormEnds and now >= stormEnds then
 			Boosts.endStorm()
+		end
+		if surgeEnds and now >= surgeEnds then
+			Boosts.endSurge()
 		end
 		for _, player in Players:GetPlayers() do
 			local profile = PlayerData.get(player)

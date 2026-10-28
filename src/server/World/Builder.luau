@@ -327,6 +327,35 @@ local function buildWorld(
 	return #zones
 end
 
+-- With streaming on, a phone only loads the map near the player. These
+-- invisible boxes are needed everywhere (the client finds sell areas,
+-- offices, portals and the AFK Lounge by them), so each goes in a
+-- Persistent model of its own, right where it was: it always stays loaded.
+-- (Zone volumes, camps and gates are Persistent containers already.)
+local KEEP_LOADED = { Kit.SELL_TAG, Kit.OFFICE_TAG, Kit.PORTAL_TAG, Kit.AFK_TAG }
+
+local function insidePersistent(instance: Instance): boolean
+	local node = instance.Parent
+	while node do
+		if node:IsA("Model") and node.ModelStreamingMode == Enum.ModelStreamingMode.Persistent then
+			return true
+		end
+		node = node.Parent
+	end
+	return false
+end
+
+local function keepLoaded(map: Folder)
+	for _, tag in KEEP_LOADED do
+		for _, tagged in taggedIn(map, tag) do
+			local parent = tagged.Parent
+			if tagged:IsA("BasePart") and parent and not insidePersistent(tagged) then
+				tagged.Parent = persistentModel(tagged.Name, parent)
+			end
+		end
+	end
+end
+
 -- Every world with the portals its hub needs: to the next world (locked
 -- until you own its bottle) and back to the previous one.
 local function gamePlans(): { Plan }
@@ -421,6 +450,7 @@ function Builder.build(previewStyle: string?): Folder
 			)
 		end
 	end
+	keepLoaded(map)
 	return map
 end
 

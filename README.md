@@ -219,7 +219,7 @@ with its name.
   `Config.MUSIC[<world id>].Calm / .Storm`, shuffled, crossfading over
   `Config.MUSIC_FADE` seconds when the weather or world changes, and dipping
   for big moments (`MUSIC_DUCK`). The tracks are Roblox's licensed partner
-  music (APMOfficial, DistrokidOfficial only). `python3
+  music (APMOfficial, DistrokidOfficial only), instrumental only: the search keeps a track only when its listing says it has no vocals. `python3
   tools/audio/music_search.py` searches the Creator Store for each slot and
   writes `docs/audio/music-shortlist.md`; TEST > 🎁 REWARDS > **🎵 Music
   audition** (Studio) plays every candidate for 20 s so you can pick.
@@ -260,8 +260,370 @@ server only stores what `Settings.sanitize` lets through.
   refused, and taking another action's key swaps them. The key chips on
   buttons show the player's own keys.
 - **Sound**: Master, Music, Effects, Ambience and UI volumes, and Mute all.
+- **Graphics**: a Quality preset (Low, Medium, High; changing any one
+  setting makes it Custom) for rain and particles, lightning glow, shadows,
+  bloom and colour, far decorations, other players' lightning and
+  researchers; plus Field of view. A new player starts on the preset that
+  suits their device (phone Low, tablet Medium, PC and console High; one
+  lower when their Roblox graphics level is 3 or less). A game can't change
+  the player's own Roblox graphics level.
+- **Accessibility & HUD**: Reduce flashing, Camera shake, Colourblind rings
+  (dashed rings with a ⚡ and a high-contrast zone colour set), Text size,
+  and switches for pop-ups, name tags, pass offers, chat announcements and
+  gift reminders. Before their first storm every player is asked once
+  whether to reduce flashing. Warning rings always show.
 - Code reads settings with `Lib/SettingsStore` (`get`, `set`, `watch`,
   `Changed`), so changes apply at once.
+
+## Storm surprises
+
+Storms aren't all the same. The server decides everything here; players'
+screens only draw it. The maths is in `src/shared/Util/Weather.luau`
+(tested by `tools/harness/test_weather.luau`), and the numbers are in
+`Config.BOLT_TYPES`, `Config.BALL_LIGHTNING`, `Config.SUPERCELL` and
+`Config.EVENTS`.
+
+- **Rare bolts**: each strike has a 2% chance to be **Golden** (worth x10),
+  0.4% to be **Rainbow** (x25, plus 5 minutes of a random boost for the
+  catcher and a chat line for the whole server) and 1% to be **Ball
+  lightning** (x5): an orb that drifts across the zone for 8 seconds, and
+  the first player with room in their bottle who touches it catches it.
+  The ring shows the type (gold, rainbow colours, or the orb) before the
+  bolt lands, so players can race for it. Luck and the assay still double
+  on top, and a rare bolt fills the same bottle space as a normal one.
+- **Supercells**: about once an hour (45 to 75 minutes apart) a storm turns
+  into a 3-minute Supercell: twice the strikes, golden bolts 5x as likely,
+  a darker purple sky and a banner. The storm timer counts down for 30
+  seconds before it starts, so players can get into a zone.
+- **Scheduled events**: `Config.EVENTS` lists events with a start, an end
+  and a sale multiplier. **Double Volts Weekend** runs every Saturday 00:00
+  to Sunday 23:59 UTC and doubles every sale (AFK and Remote Sell too). A
+  chip under the goal card shows the event and its time left. To add an
+  event, add a line: a weekly one uses times like `"Sat 00:00"`, a one-off
+  uses Unix times.
+- **Testing in Studio**: the TEST panel's REWARDS list has **Force golden
+  bolt** (drops one where you stand, in a zone), **Supercell in 30 s** and
+  **Pretend event** (turns Double Volts Weekend on).
+
+### Server goal and Server Surge
+
+Everyone in a server fills one meter together (`Systems/ServerGoal`, the
+numbers in `Config.SERVER_GOAL`).
+
+- **Filling it**: every Volt sold in the server counts, at a station or
+  with Remote Sell. The AFK Lounge doesn't count.
+- **How big it is**: each player's grinding rate (what the AFK screen
+  works out for their best zone) added up, times 15 minutes. So a full
+  server of late-game players and two new players both take about 15
+  minutes. It's worked out again when someone joins or leaves, and it
+  never drops below what's already filled plus 10%, so it can't get stuck.
+- **Server Surge**: a full meter starts 10 minutes of 2x Volts for
+  everyone, with a banner and a chat line. It stacks with a Server Storm
+  (both on: 4x). The meter then empties and the next goal is 1.5x bigger;
+  every hour the size goes back to normal.
+- **On screen**: a slim meter under the goal card ("⚡ Server goal 62%", or
+  the Surge's time left). Tap it to see this round's top 3 helpers.
+- **Testing in Studio**: the TEST panel's REWARDS list has **Server goal
+  +25%** (four taps start a Surge); **Clear boosts** ends a Surge too.
+
+## Quests and stat counters
+
+The game counts what each player does (`Util/Stats`, `Systems/Stats`):
+bolts caught (overall, by bolt type, by zone and by type in each zone),
+sales, full bottles sold, bottles filled, Volts earned (from sales and the
+AFK Lounge), minutes played, researcher promotions and gifts sent. Each
+counter is kept three times: for good, for today (a new UTC day starts it
+again) and for this week (Monday 00:00 UTC starts it again). They're
+saved with the player.
+
+- **Quests**: every day each player gets 3 daily quests and every week 1
+  weekly quest, picked from the templates in `Config.QUESTS` (catch bolts,
+  catch bolts in one of your best zones, sell full bottles, catch a golden
+  bolt, earn Volts, play for a while, promote a researcher). The pick comes
+  from your user id and the date, so you get the same quests all day.
+- **Size**: amounts grow with your bottle. "Earn Volts" is minutes of your
+  grinding rate in your best zone, so it takes about as long early or late.
+- **Rewards**: like the daily streak (Volts from your best zone, or timed
+  boosts). The weekly quest pays about five daily ones.
+- **Reroll**: one free reroll a day swaps any unfinished quest.
+- **On screen**: REWARDS has a QUESTS tab: each quest has a progress bar,
+  its reward and a CLAIM (or REROLL) button. A toast pops up when a quest
+  hits 100%, and the menu's dot lights up while one is ready to claim.
+- **Testing in Studio**: the TEST panel's REWARDS list has **Complete
+  quest** (your first unfinished quest counts as done) and **Next day**
+  (new daily quests).
+
+### Storm Log
+
+The Storm Log is a collection book in the REWARDS panel's **LOG** tab
+(`Util/StormLog`, `Systems/StormLog`, `Lib/StormLogTab`). It has four pages:
+
+- **Bolts**: every bolt type (normal, Golden, Rainbow, ball lightning) in
+  every zone.
+- **Places**: every world and every zone you've been in.
+- **Team**: every researcher at every rank (hiring them is the first).
+- **Weather**: being in game for a Supercell and for each scheduled event.
+
+It's all worked out from the stat counters (new counters remember the
+zones and worlds you've visited and the Supercells and events you've
+seen), so the only thing saved is which rewards you've claimed.
+
+- **Rows**: finishing a row (say every bolt type in Mesa) gives a one-time
+  reward (Volts or a boost) with its CLAIM button.
+- **Pages**: each finished page gives **+2% Volts for good** on every sale
+  (and in the AFK Lounge), up to +8% for all four. The numbers are in
+  `Config.STORM_LOG`.
+- **On screen**: each page has a progress bar; found entries show their
+  icon and missing ones a grey "?" (tap one to see how to find it). New
+  entries and finished rows pop up a toast, and the menu's dot lights up
+  while a row's reward is waiting.
+- **Testing in Studio**: the TEST panel's **+Log entry** button marks the
+  next missing entry as found (Team entries need a real hire or promotion).
+
+## Ascension
+
+Ascension is the game's rebirth (`Util/Ascension`, `Systems/Ascension`,
+`Controllers/AscensionUI`). Once you own the top bottle (the Storm Core),
+an **ASCEND** row shows at the bottom of the Shop's BOTTLES list.
+
+- **What it costs**: you need `baseCost x (level + 1)` Volts: 10M for the
+  first, 20M for the second, and so on (`Config.ASCENSION`).
+- **What resets**: your Volts, bottle, boots, the charges in your bottle
+  and the Chemist's tank. You're moved back to Barometer Bay's spawn.
+- **What stays**: passes, gifts, boosts, researchers (ranks and levels),
+  Glints, quests, the Storm Log, settings, reward streaks and stats.
+- **The reward**: **+50% Volts for good per level, added up** (level 3 =
+  +150%, so every sale pays 2.5x). It multiplies with passes, events, the
+  Server Surge and the Log, and the AFK Lounge and quests follow by
+  themselves. The level is saved as `ascension` in the profile.
+- **Safety**: pressing ASCEND asks the server, which checks the rules and
+  sends a one-use token that runs out after 30 seconds. The confirm screen
+  lists exactly what resets and what stays; only pressing ASCEND there (with
+  that token) does it.
+- **On screen**: purple stars over your head ("★★ ASCENDED", everyone sees
+  them) and in the player list, and a big celebration when you ascend.
+- **Testing in Studio**: the TEST panel's REWARDS list has **Ready to
+  ascend**, which gives you the top bottle and enough Volts.
+
+## Tutorial, friends and invites
+
+**New-player tutorial** (`Util/Tutorial`, `Systems/Tutorial`,
+`Controllers/Tutorial`). A first-time player sees a small card at the top
+of the screen with one line at a time:
+
+1. Walk to Shoreline (a glowing path and a light beam show the way).
+2. Catch 3 bolts. If it's calm, the card explains the storm timer and
+   points at it.
+3. When the bottle is full, a path leads to the sell pad.
+4. Open the MENU, the SHOP, and buy the Vial (a glowing outline and a
+   pointing hand show each button in turn).
+5. "You're a Storm Bottler!" and a reward of 50 charges (paid in Volts,
+   like every reward: 250 Volts on Shoreline).
+
+- **Skipping**: SKIP asks "Skip the tutorial?" first (YES / NO).
+- **Saving**: the step is saved (`tutorialStep` in the profile), so it
+  carries on after a rejoin. Anyone who owns a Vial or better (or has
+  ascended) never sees it.
+- **Testing in Studio**: the TEST panel's REWARDS list has **Restart
+  tutorial** (starts it again from step 1).
+
+**Friends boost** (`Systems/Friends`): +5% Volts for each Roblox friend
+in your server, up to 3 (+15%). The server checks friendships when
+someone joins and forgets them when they leave. A green chip on the HUD
+says "👥 +10% friends". It counts everywhere a sale does (Remote Sell, the
+AFK Lounge). Studio test: **Pretend friends +1** in the TEST panel.
+
+**Invites** (`Systems/Invites`, the **INVITE** button in REWARDS): opens
+Roblox's own invite window. When a friend who has **never played before**
+joins from your invite, they get a welcome gift of 100 charges and you get
+a 2x Volts Boost in your gift inbox (so you get it even if you're offline).
+Limits: 5 rewarded invites a day per inviter, and only for Roblox accounts
+at least 3 days old. Numbers are in `Config.TUTORIAL`, `Config.FRIENDS`
+and `Config.INVITES`. Studio can't send real invites: look for
+`[Invites]` lines in the output on a live server.
+
+## Leaderboards and notifications
+
+**Leaderboards** (`Util/Leaderboards`, `Systems/Leaderboards`). Four
+boards: **All-time Volts**, **Bolts caught**, **Ascension** and **Longest
+streak** (the most days in a row you claimed the daily reward; it keeps
+counting past day 7). Each is saved in its own OrderedDataStore
+(`StormBottler_LB_volts` and so on).
+
+- **Saving scores**: every 5 minutes (only scores that changed) and when
+  you leave.
+- **Reading them**: every server reads the top 50 every 2 minutes, so a new
+  score can take a few minutes to show.
+- **Seeing them**: REWARDS > **TOP**. A button per board, then "You: #7"
+  (or "not in the top 50" with your own score), then the top 50 with
+  avatars. Your own row glows gold.
+- **The board at the spawn**: a "TOP VOLTS" sign beside world 1's spawn
+  shows the top 10 all-time Volts.
+- **Testing in Studio**: the TEST panel's REWARDS list has **Leaderboard
+  test data** (fills every board with made-up players, with you at #7;
+  tap again to go back). Real boards need Game Settings > Security >
+  Enable Studio Access to API Services.
+
+**Phone notifications** (`Util/Notifications`, `Systems/Notifications`).
+After a player claims a daily reward for the first time, a message asks
+"Remind me when my daily reward is ready?". YES opens Roblox's own
+notifications prompt. It's only ever asked once. When someone who was
+asked leaves, two reminders wait in a MemoryStore queue: **daily reward
+ready** (at midnight UTC, if they claimed today) and **streak ends soon**
+(3 hours before their streak would break). Any running server sends due
+reminders each minute, and each is sent only once. Coming back cancels
+them. Roblox delivers at most one a day per game, only to players 13 and
+over who said yes.
+
+**Setup you need to do once** (until then nothing is sent, and the output
+says `[Notifications] not sending ...`):
+
+1. **Notification strings**: on the Creator Dashboard
+   (create.roblox.com/dashboard/creations), open the game, then
+   **Engagement > Notifications > Create a Notification String**. Make two,
+   for example "Your daily reward is ready! ⚡" and "Your login streak ends
+   soon. Come back to keep it!" (99 characters at most). For each one, use
+   the **...** button > **Copy Asset ID** and paste the ids into
+   `src/shared/Config.luau`: `NOTIFICATIONS.dailyReadyMessageId` and
+   `NOTIFICATIONS.streakEndingMessageId`.
+2. **API key**: Creator Dashboard > **Open Cloud > API Keys > Create API
+   Key**. Add the **user-notification** API system with the
+   **user.user-notification:write** permission for this experience. Copy
+   the key.
+3. **Secret**: on the game's page on the Creator Dashboard, **Secrets >
+   Create Secret**. Name: `StormBottlerNotifyKey`, secret: the key, domain:
+   `apis.roblox.com`.
+4. **HTTP**: in Studio, **File > Experience Settings > Security > Allow
+   HTTP Requests** on.
+
+The game must have at least 100 visits before Roblox sends any. Studio
+can't send real notifications: the TEST panel's **Queue test reminder**
+puts one in the queue for you, due now, and the output shows it being
+claimed and sent (or why it wasn't).
+
+## Admin panel, error reports and streaming
+
+**Admin panel** (`Systems/Admin`, `Controllers/AdminUI`, `Util/Ops`).
+Admins are the owner of the Super Studio group, anyone in it at rank 200
+or higher (`Config.ADMIN_RANK`), and everyone in a Studio play test.
+Admins see an **🛡 ADMIN** button under the MENU button. In the panel:
+
+- type a **username** (or a user id) at the top, and a **reason** under it
+- **KICK** (players in this server), **BAN** for the length on the button
+  beside it (1 hour, 1 day, 7 days, 30 days or forever; tap it to change)
+  and **UNBAN**. Bans use Roblox's own ban system, so they work in every
+  server and don't work in Studio.
+- **GIVE VOLTS** (the amount box) and **GIVE BOOST** (tap the boost and the
+  length to change them), for players in this server
+- **RESET PROFILE**: tap it, then tap again within 4 seconds to confirm.
+  Their save starts again from nothing (if they're in the server they're
+  sent out first; it refuses while they're playing in another server).
+- **LOOK UP**: that player's saved data, read only, in the box at the bottom
+- **TEST ERROR** makes a test error on the server and on your device, and
+  **ERRORS** shows this server's 20 most recent errors.
+
+The server checks every request (only the button is on the client), and
+every action is saved in the `AdminLog` DataStore: one entry per action
+(who, what, when, the target), one key per day (`day_2026-10-25`). The
+Studio-only TEST buttons are still there, under the ADMIN button.
+
+**Error reports** (`Systems/Errors`, `Controllers/ErrorReport`). Every
+script error, on the server and on players' devices, is grouped by a short
+fingerprint (the script's name and the first line of the message, with
+numbers and player names taken out). The first time a fingerprint shows up
+in a server it's sent to the Creator Dashboard as the custom event
+**Error** (field 1 = the fingerprint, field 2 = `server` or `client`).
+Devices send at most 5 errors a minute, and a server takes at most 300 a
+minute.
+
+**Streaming** (`Lib/MapBuilder`). The map turns on
+**Workspace.StreamingEnabled**, so phones only load the world near the
+player (at least 128 studs round you, up to 512 when there's memory;
+`Config.STREAMING`). Update Game sets it when it rebuilds the map. If the
+map is marked as hand-edited (so it isn't rebuilt), turn it on yourself:
+click **Workspace** in the Explorer, then tick **StreamingEnabled** in
+Properties. What the game needs everywhere stays loaded (Persistent
+models): zone volumes, camps, gates, sell areas, the research office,
+portals and the AFK Lounge. Before a trip to another world the server
+loads the arrival spot first.
+
+## Data deletion requests
+
+Players can ask Roblox to erase their data ("right to erasure"). Roblox
+then tells you which user id to erase, and gives you a deadline:
+
+- **Getting told**: on the Creator Dashboard, open **Webhooks** (under
+  your profile menu) and add one with the **Right To Erasure Request**
+  trigger, pointing at a URL that reaches you (a Discord webhook works).
+  Without a webhook, Roblox sends the request as a notice in your Roblox
+  messages, so keep an eye on those.
+- **Erasing**: run the script (or ask Claude to run it) before the
+  deadline. First the dry run, which only reads and lists what it would
+  change:
+
+  ```
+  python3 tools/ops/erase_user.py <userId> --dry-run
+  python3 tools/ops/erase_user.py <userId>
+  ```
+
+  It deletes that user's save (`StormBottler_PlayerData`, key
+  `player_<id>`), gift inbox and gift receipts (`StormBottler_Gifts`),
+  invite count (`StormBottler_Invites`), leaderboard scores (the four
+  `StormBottler_LB_<board>` stores) and phone reminders (the
+  `StormBottler_Notifications` MemoryStore). Where their name or id sits
+  in someone else's data (gifts they sent, someone's invite list, the
+  `AdminLog`), it blanks just that part and keeps the rest. It prints
+  every key it deletes or cleans.
+- **Keeping it complete**: if the game's code ever opens a store the
+  script doesn't know, the script refuses to run until it's added.
+  `python3 tools/ops/erase_user.py --check` checks just that, and
+  `python3 tools/ops/test_erase_user.py` tests the erase against a fake
+  Roblox (nothing goes online).
+- It uses the same Open Cloud API key as `tools/store/` (`$ROBLOX_API_KEY`,
+  or the one the network adds). The key needs DataStores, Ordered
+  DataStores and MemoryStore access for the game. Roblox keeps bans
+  itself; this game stores nothing else about players.
+
+## Store page art
+
+`python3 tools/store/make_store_art.py tools/store/art` draws the game
+page art into `tools/store/art/`:
+
+- `icon.png` (512×512): the game icon, a glowing bottle of lightning with
+  the STORM BOTTLER name
+- `thumb_1_storm.png`, `thumb_2_worlds.png`, `thumb_3_loop.png`
+  (1920×1080): Barometer Bay in a storm, the three worlds, and "catch,
+  sell, upgrade"
+
+Roblox's Open Cloud can't change a game's own icon or thumbnails (its
+thumbnail calls only take translated images), so upload them by hand on
+create.roblox.com (Creator Dashboard):
+
+1. **Icon**: click the game under **Creations**. In the left menu go to
+   **Configurations** > **Places**, click the start place (the one with a
+   star), then **Icon** in its left menu. Set the type to **Image**, click
+   **Change**, choose `icon.png`, then **Save Changes**.
+2. **Thumbnails**: back on the game's page, click **Thumbnails** in the
+   left menu and open the **Experience Detail Page** tab. Upload
+   `thumb_1_storm.png`, `thumb_2_worlds.png` and `thumb_3_loop.png`, put
+   the storm one first, remove Roblox's default picture, and save. (The
+   **Home Page** tab can use the same images.)
+3. Roblox checks new images first, so they can take a few minutes to show.
+
+## Private servers
+
+Private servers are **on**, at **100 Robux a month** (set with Open Cloud:
+`PATCH /cloud/v2/universes/10772352394`, `privateServerPriceRobux`).
+Players buy one from the **Servers** tab on the game page. Roblox only
+offers private servers in a **public** game, so they show up once the game
+is public. To check, change the price or turn them off: create.roblox.com
+> **Creations** > the game > **Audience** > **Access Settings** >
+**Allow private servers** (and **Requires Robux** with the price), then
+**Save Changes**.
+
+In a private server its owner gets a small green **[Owner]** chat tag
+(`Systems/PrivateServer`, `Controllers/VipChat`). Everything else works the
+same as in a public server.
 
 ## Code layout
 
@@ -280,3 +642,4 @@ server only stores what `Settings.sanitize` lets through.
 
 - Format: `stylua src`
 - Lint: `selene src`
+- Data deletion script: `python3 tools/ops/test_erase_user.py` (offline)

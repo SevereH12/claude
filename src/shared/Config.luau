@@ -550,6 +550,35 @@ local PLAYTIME_GIFTS: { Types.PlaytimeGift } = {
 	{ minutes = 60, reward = { charges = 400 } },
 }
 
+-- Daily and weekly quests (Util/Quests picks them, Systems/Quests pays
+-- them). Each day a player gets `daily` quests and each week `weekly`,
+-- picked from these templates by their userId and the date, so they're the
+-- same all day. Amounts are for bottle tier 1; `perTier` adds that fraction
+-- for each tier above (bigger bottles, bigger quests). "Volts" amounts are
+-- minutes of the player's grinding rate in their best zone (Util/Afk), so
+-- that quest takes the same time early or late. Rewards pay like the daily
+-- streak (`charges` = bolts from the best zone, Util/Store.volts).
+local QUEST_TEMPLATES: { Types.QuestTemplate } = {
+	{ key = "Catch", daily = 120, weekly = 900, perTier = 0.15, reward = { charges = 150 } },
+	{ key = "CatchZone", daily = 70, weekly = 500, perTier = 0.15, reward = { charges = 150 } },
+	{
+		key = "Sell",
+		daily = 4,
+		weekly = 30,
+		reward = { boosts = { { key = "DoubleVolts", minutes = 10 } } },
+	},
+	{
+		key = "Golden",
+		daily = 1,
+		weekly = 8,
+		reward = { boosts = { { key = "Lucky", minutes = 10 } } },
+	},
+	{ key = "Volts", daily = 15, weekly = 120, reward = { charges = 200 } },
+	{ key = "Play", daily = 20, weekly = 150, reward = { charges = 150 } },
+	-- weekly only, and only for players who have hired a researcher
+	{ key = "Promote", weekly = 1, reward = { charges = 200 } },
+}
+
 -- Gifting passes (Systems/Gifts): nobody can buy a game pass for someone
 -- else, so each pass has a "Gift: <pass>" Developer Product at the same
 -- price (product key "Gift" .. pass key). Buying one unlocks the pass's
@@ -576,6 +605,68 @@ local GIFT_ICONS: { [string]: number } = {
 	GiftJetBoots = 138738735787414,
 }
 
+-- Rare bolts (Util/Weather picks one per strike; Systems/Strikes pays it).
+-- `chance` is per strike; `multiplier` multiplies that catch's value (luck
+-- and the assay still stack on top; the bottle space stays the same).
+local BOLT_TYPES: { Types.BoltTypeDef } = {
+	{
+		key = "Golden",
+		chance = 0.02,
+		multiplier = 10,
+		label = "GOLDEN",
+		color = Color3.fromRGB(255, 200, 40),
+	},
+	{
+		key = "Rainbow",
+		chance = 0.004,
+		multiplier = 25,
+		label = "RAINBOW",
+		color = Color3.fromRGB(255, 120, 220),
+		boostMinutes = 5, -- plus this long of a random timed boost (Config.BOOSTS)
+	},
+	{
+		key = "Ball",
+		chance = 0.01,
+		multiplier = 5,
+		label = "BALL LIGHTNING",
+		color = Color3.fromRGB(150, 230, 255),
+	},
+}
+
+-- Scheduled events (Util/Weather): every sale pays `multiplier` times more
+-- while one is on. A "Sat 00:00" style time repeats every week (UTC); a
+-- number is a one-off Unix time.
+local EVENTS: { Types.EventDef } = {
+	{
+		name = "Double Volts Weekend",
+		startUtc = "Sat 00:00",
+		endUtc = "Sun 23:59",
+		multiplier = 2,
+		banner = "2x Volts on every sale, all weekend!",
+	},
+}
+
+-- The Storm Log (Util/StormLog, the LOG tab in REWARDS): a collection book
+-- worked out from the lifetime stat counters. Finishing a row (say every
+-- bolt type in Mesa) pays its page's `rowReward` once; every finished page
+-- adds `pageBonus` to all Volts for good, up to `maxBonus`.
+local STORM_LOG_PAGES: { Types.StormLogPageDef } = {
+	{ id = "Bolts", title = "BOLTS", icon = "⚡", rowReward = { charges = 250 } },
+	{
+		id = "Places",
+		title = "PLACES",
+		icon = "🗺",
+		rowReward = { boosts = { { key = "DoubleVolts", minutes = 15 } } },
+	},
+	{ id = "Team", title = "TEAM", icon = "🔬", rowReward = { charges = 400 } },
+	{
+		id = "Weather",
+		title = "WEATHER",
+		icon = "🌀",
+		rowReward = { charges = 300, boosts = { { key = "Lucky", minutes = 20 } } },
+	},
+}
+
 return table.freeze({
 	-- Saving
 	AUTOSAVE_INTERVAL = 60, -- seconds between autosaves per player
@@ -593,6 +684,30 @@ return table.freeze({
 	BALLOON_MIN_DISTANCE = 12, -- studs from the owner; Storm Chaser bolts land this near
 	BALLOON_MAX_DISTANCE = 20,
 	STRIKE_INTERVAL_JITTER = 0.3, -- +/-30% randomness on strike timing
+	BOLT_TYPES = table.freeze(BOLT_TYPES),
+	-- Ball lightning: an orb that drifts across the zone for `seconds`; the
+	-- first player (with room) within `touchRadius` studs of it catches it.
+	-- The server checks every `checkEvery` seconds.
+	BALL_LIGHTNING = table.freeze({
+		seconds = 8,
+		checkEvery = 0.2,
+		touchRadius = 5,
+		height = 3, -- studs above the ground the orb floats
+		minTravel = 24, -- studs; the shortest drift
+	}),
+	-- Supercell (Systems/StormCycle): about every intervalMinutes (give or
+	-- take jitterMinutes) a storm turns into a Supercell for `minutes`, with
+	-- strikeMultiplier times the strikes and goldenMultiplier times the
+	-- golden chance. A countdown shows warningSeconds before it starts.
+	SUPERCELL = table.freeze({
+		intervalMinutes = 60,
+		jitterMinutes = 15,
+		minutes = 3,
+		warningSeconds = 30,
+		strikeMultiplier = 2,
+		goldenMultiplier = 5,
+	}),
+	EVENTS = table.freeze(EVENTS),
 
 	-- Movement: you move faster between zones so travel isn't a chore.
 	-- Boots add their speedBonus inside zones only (see BOOTS).
@@ -649,11 +764,125 @@ return table.freeze({
 		maxMinutes = 60,
 		multiplier = 2,
 	}),
+	-- The server goal (Systems/ServerGoal, the maths in Util/Weather): every
+	-- Volt sold in this server (Remote Sell too, not the AFK Lounge) fills
+	-- one meter. Its size is every present player's grinding rate (Util/Afk)
+	-- added up, times `minutes`, so any server takes about that long. Filling
+	-- it starts a Server Surge: `multiplier` x Volts for everyone for
+	-- `surgeMinutes` (on top of any Server Storm). Each goal after that is
+	-- `growth` times bigger, back to normal every `resetMinutes`. The goal never drops below what's filled plus `stuckMargin`,
+	-- and is at least `minGoal` Volts. Tapping the meter shows the top
+	-- `topCount` contributors.
+	SERVER_GOAL = table.freeze({
+		minutes = 15,
+		surgeMinutes = 10,
+		multiplier = 2,
+		growth = 1.5,
+		resetMinutes = 60,
+		stuckMargin = 0.1,
+		minGoal = 1000,
+		topCount = 3,
+	}),
 	DAILY_REWARDS = table.freeze(DAILY_REWARDS),
 	PLAYTIME_GIFTS = table.freeze(PLAYTIME_GIFTS),
+	QUESTS = table.freeze({
+		daily = 3, -- daily quests per player
+		weekly = 1, -- weekly quests per player
+		zoneChoices = 3, -- a "catch in a zone" quest names one of their best this many zones
+		templates = table.freeze(QUEST_TEMPLATES),
+		-- the weekly quest pays about five daily quests
+		weeklyReward = { charges = 750, boosts = { { key = "DoubleVolts", minutes = 30 } } },
+	}),
+	STORM_LOG = table.freeze({
+		pageBonus = 0.02, -- +2% Volts per finished page
+		maxBonus = 0.08, -- never more than +8%
+		pages = table.freeze(STORM_LOG_PAGES),
+	}),
+	-- Ascension (Util/Ascension, Systems/Ascension): own the top bottle and
+	-- have baseCost x (level + 1) Volts to start again from the beginning,
+	-- for +perLevel Volts on every sale for good (added up: level 3 = +150%).
+	ASCENSION = table.freeze({
+		baseCost = 10_000_000,
+		perLevel = 0.5,
+		confirmSeconds = 30, -- the confirm screen's token runs out after this
+		-- what goes back to how a new player starts
+		resetTo = table.freeze({
+			volts = 0,
+			bottleTier = 1,
+			bootTier = 1,
+			chargeCount = 0,
+			chargeValue = 0,
+			tankCount = 0,
+			tankValue = 0,
+		}),
+	}),
 	-- a boost reward for a pass the player owns pays Volts instead: this many
 	-- charges per minute of boost (about a minute of catching)
 	REWARD_SWAP_CHARGES = 10,
+
+	-- The new-player tutorial (Util/Tutorial, Systems/Tutorial): walk to
+	-- `zone`, catch `catches` bolts, fill the bottle and sell it, then buy
+	-- the next bottle. Finishing pays `rewardCharges` charges (in Volts, like
+	-- every reward: Util/Store.volts).
+	TUTORIAL = table.freeze({
+		zone = "Shoreline",
+		catches = 3,
+		rewardCharges = 50,
+	}),
+	-- Friends boost (Systems/Friends, Util/Passes): +perFriend Volts on every
+	-- sale for each Roblox friend in your server, counting up to `max`.
+	FRIENDS = table.freeze({
+		perFriend = 0.05,
+		max = 3,
+	}),
+	-- Invites (Systems/Invites, Util/Social): a brand-new player who joins
+	-- from someone's invite gets `welcomeCharges` charges; the inviter gets a
+	-- `inviterReward` (a BOOST_PRODUCTS key) in their gift inbox, at most
+	-- `dailyCap` times a UTC day, and only when the new player's Roblox
+	-- account is at least `minAccountAgeDays` old.
+	INVITES = table.freeze({
+		welcomeCharges = 100,
+		inviterReward = "DoubleVoltsBoost",
+		dailyCap = 5,
+		minAccountAgeDays = 3,
+	}),
+	-- Leaderboards (Systems/Leaderboards, Util/Leaderboards): one
+	-- OrderedDataStore per board. Each player's values are written every
+	-- `writeEverySeconds` (only if they changed) and when they leave; every
+	-- server reads the top `top` every `readEverySeconds`. The board at
+	-- world 1's spawn shows the first board's top `boardRows`.
+	LEADERBOARDS = table.freeze({
+		writeEverySeconds = 5 * 60,
+		readEverySeconds = 2 * 60,
+		top = 50,
+		boardRows = 10,
+		storePrefix = "StormBottler_LB_",
+		boards = table.freeze({
+			table.freeze({ key = "volts", title = "All-time Volts", icon = "⚡" }),
+			table.freeze({ key = "bolts", title = "Bolts caught", icon = "🌩️" }),
+			table.freeze({ key = "ascension", title = "Ascension", icon = "🌟" }),
+			table.freeze({ key = "streak", title = "Longest streak", icon = "📅" }),
+		}),
+	}),
+	-- Phone notifications (Systems/Notifications, Util/Notifications):
+	-- Roblox experience notifications, sent through Open Cloud. They need
+	-- setup on the Creator Dashboard (see README.md, "Leaderboards and
+	-- notifications"): an API key saved as the secret `secretName`, and two
+	-- notification strings whose asset ids go in `dailyReadyMessageId` and
+	-- `streakEndingMessageId`. Until then nothing is sent (the log says so
+	-- once). "Streak ends soon" goes `streakWarnHours` before the streak
+	-- would break. Due items wait in the MemoryStore sorted map `mapName`;
+	-- a server that claims one has it for `claimSeconds`.
+	NOTIFICATIONS = table.freeze({
+		secretName = "StormBottlerNotifyKey",
+		dailyReadyMessageId = "",
+		streakEndingMessageId = "",
+		streakWarnHours = 3,
+		sendEverySeconds = 60,
+		batch = 50,
+		claimSeconds = 5 * 60,
+		mapName = "StormBottler_Notifications",
+	}),
 
 	-- The group that owns the game (Systems/Group): members get GROUP_BONUS
 	-- more Volts on every sale. To use another group, change GROUP_ID (and
@@ -662,6 +891,7 @@ return table.freeze({
 	GROUP_NAME = "Super Studio",
 	GROUP_BONUS = 0.10,
 	GROUP_COLOR = Color3.fromRGB(80, 200, 255), -- the [Member] chat tag
+	OWNER_COLOR = Color3.fromRGB(120, 230, 140), -- the [Owner] chat tag (private servers)
 
 	-- The AFK Lounge (Systems/Afk, Util/Afk): standing in it pays this
 	-- fraction of the player's best grinding rate (passes, boosts, the group
@@ -694,25 +924,26 @@ return table.freeze({
 	SOUND_MIX = table.freeze({ Music = 0.32, Ambience = 0.55, SFX = 1, UI = 0.7 }),
 	-- Background music per world and weather: Roblox's licensed partner
 	-- tracks (APMOfficial, DistrokidOfficial; tools/audio/music_search.py,
-	-- docs/audio/music-shortlist.md). Each list plays shuffled (Controllers/Music).
+	-- docs/audio/music-shortlist.md). Instrumental only: no lyrics. Each list
+	-- plays shuffled (Controllers/Music).
 	MUSIC = table.freeze({
 		Bay = table.freeze({
-			-- Playful Pixel Adventure; Seaside View; Ambient Adventure Trail
-			Calm = { 94734731611772, 136150243866984, 129196538853609 },
-			-- Driving Shadows (Electronic Music 2025); Electro Chase; Upbeat Synthpop
-			Storm = { 125777738272639, 1836021063, 71868660197528 },
+			-- Cheerful Classroom Celebration Instrumental; Seaside Reflections; Magical Adventure (Light Vs)
+			Calm = { 133196125967338, 88298878796645, 1838661059 },
+			-- Night Run; Roller coaster?; Funk Drift
+			Storm = { 9044545570, 92504170192114, 129146412554158 },
 		}),
 		Voltcliff = table.freeze({
-			-- Steampunk Clockworks; Time Traveller; Clockwork Symphony
-			Calm = { 97805011981124, 9039372102, 116123343811105 },
-			-- Ecos de Titán (Industrial & Electronic Rock); Refresh; Dubstep Action Gaming Music – Heavy Drops & Energy
-			Storm = { 70881491117119, 79863038732814, 136266951088751 },
+			-- Follow The Footprints - Underscore; Time in Gears; Heavenly Clockwork
+			Calm = { 9047610291, 9039374146, 1842365805 },
+			-- Alarm Glock NO DRM KT; Macho Manhunt; Loco Motive NO ORCH
+			Storm = { 122770769791748, 131880535514102, 101746788451393 },
 		}),
 		Stormspire = table.freeze({
-			-- Dreamy midnight flight; Dreamy Flights; Floating Islands
-			Calm = { 95537109377454, 82631091427646, 111480456898998 },
-			-- Phantom Nova (Underscore Version); 21st Centurion A; Aeon Driver (Underscore Version)
-			Storm = { 116315815173589, 1847492487, 117596024497708 },
+			-- Watching the Garden Grow (a); Pizzicato Spritz (a); The Whimsical Waltz (c)
+			Calm = { 9046598930, 9046599262, 9046601476 },
+			-- Phantom Nova (Underscore Version); Aeon Driver (Underscore Version); The Great Dynasties (Underscore Version)
+			Storm = { 116315815173589, 117596024497708, 135102649170289 },
 		}),
 	}),
 	MUSIC_FADE = 3, -- seconds to crossfade on a weather or world change
@@ -730,4 +961,37 @@ return table.freeze({
 	-- the strike's thunder comes later the further away it is
 	THUNDER_STUDS_PER_SECOND = 340,
 	THUNDER_MAX_DELAY = 1.5,
+
+	-- Admins (Systems/Admin, Util/Ops): the owner of the group (GROUP_ID),
+	-- anyone in it at this rank or higher, and everyone in Studio play tests.
+	ADMIN_RANK = 200,
+	ADMIN = table.freeze({
+		logStore = "AdminLog", -- DataStore: one key per UTC day, "day_2026-10-25"
+		logPerDay = 1000, -- entries kept per day (the oldest go first)
+		reasonLength = 200, -- characters in a kick or ban reason
+		maxVolts = 1e12, -- the most Volts one "give" can add
+		-- ban lengths the panel offers, in seconds (-1 = forever)
+		banSeconds = { 3600, 86400, 7 * 86400, 30 * 86400, -1 },
+		boostMinutes = { 15, 30, 60 }, -- boost lengths the panel offers
+		rankRecheckSeconds = 300, -- how long a rank check is trusted
+	}),
+
+	-- Error reporting (Systems/Errors, Util/Ops): client errors come in
+	-- through the ClientError remote, at most `perPlayer` a minute per player
+	-- and `perServer` a minute for the whole server. The admin panel shows the
+	-- last `recent` errors.
+	ERRORS = table.freeze({
+		perPlayer = 5,
+		perServer = 300,
+		recent = 20,
+		messageLength = 300, -- characters kept from a message
+	}),
+
+	-- Streaming (Lib/MapBuilder): phones only load the map near the player.
+	-- minRadius is always loaded round you; targetRadius is how far it tries
+	-- to load when there's memory to spare (studs).
+	STREAMING = table.freeze({
+		minRadius = 128,
+		targetRadius = 512,
+	}),
 })

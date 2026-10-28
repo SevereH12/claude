@@ -21,6 +21,10 @@ COLORS = {
     "boosts": (255, 120, 170),
     "goal": (100, 160, 255),
     "serverStorm": (130, 70, 230),
+    "event": (230, 170, 30),
+    "serverGoal": (90, 220, 255),
+    "friends": (120, 230, 160),
+    "tutorial": (255, 255, 255),
     "bar": (70, 90, 230),
     "menu": (44, 52, 92),
     "card": (120, 130, 170),
@@ -34,6 +38,10 @@ LABELS = {
     "boosts": "BOOSTS",
     "goal": "GOAL",
     "serverStorm": "SERVER STORM",
+    "event": "EVENT",
+    "serverGoal": "SERVER GOAL",
+    "friends": "FRIENDS",
+    "tutorial": "tutorial card",
     "bar": "BOTTLE",
     "menu": "MENU",
     "card": "menu card (open)",
@@ -74,15 +82,15 @@ def main():
                 [(ox + x * s) * k, (oy + y * s) * k, (ox + (x + w) * s) * k, (oy + (y + h) * s) * k],
                 outline=(235, 75, 75),
             )
-        order = ["card", "banner", "toasts", "test", "volts", "storm", "boosts", "goal", "serverStorm", "bar", "menu"]
+        order = ["card", "banner", "toasts", "test", "volts", "storm", "boosts", "goal", "serverStorm", "event", "serverGoal", "friends", "bar", "menu", "tutorial"]
         for key in order:
             x, y, w, h = d["hud"][key]
             box = [(ox + x * s) * k, (oy + y * s) * k, (ox + (x + w) * s) * k, (oy + (y + h) * s) * k]
-            if key in ("card", "banner", "toasts", "test"):
+            if key in ("card", "banner", "toasts", "test", "tutorial"):
                 dr.rectangle(box, outline=COLORS[key])
             else:
                 dr.rounded_rectangle(box, radius=4, fill=COLORS[key], outline=(6, 8, 18))
-            dr.text((box[0] + 3, box[1] + 2), LABELS[key], fill=(0, 0, 0) if key not in ("card", "banner", "toasts", "test", "menu", "bar", "serverStorm") else (255, 255, 255))
+            dr.text((box[0] + 3, box[1] + 2), LABELS[key], fill=(0, 0, 0) if key not in ("card", "banner", "toasts", "test", "tutorial", "menu", "bar", "serverStorm") else (255, 255, 255))
         dr.text((4, TILE_H + 8), f"{d['name']}  ({d['class']}, UI scale {s:.2f})", fill=(255, 255, 255))
         tiles.append(img)
 

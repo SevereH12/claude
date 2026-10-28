@@ -19,6 +19,7 @@ local Zones = require(ReplicatedStorage.Shared.Util.Zones)
 local Layout = require(script.Parent.Parent.Lib.Layout)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
+local ZoneColours = require(script.Parent.Parent.Lib.ZoneColours)
 local State = require(script.Parent.State)
 
 local SHOW_TIME = 2.2
@@ -146,7 +147,7 @@ function ZoneBanner.start()
 						ZoneBanner.show(
 							string.upper(zone.displayName),
 							`{zone.tagline} · each bolt fills {size}`,
-							zone.color
+							ZoneColours.of(zone, zone.color)
 						)
 					end
 				elseif current then

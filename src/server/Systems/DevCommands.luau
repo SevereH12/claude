@@ -1,6 +1,6 @@
 --!strict
--- TEMPORARY test tool: the client's TEST buttons (Controllers/DevCommands)
--- send DevCommand: "volts" sets that player's Volts, "premium" turns
+-- TEMPORARY Studio-only test tool: the client's TEST buttons
+-- (Controllers/DevCommands) send DevCommand: "premium" turns
 -- Pretend Premium on or off, "pass" pretends to own a Game Pass, and
 -- "nextDay", "playtime" and "clearBoosts" test rewards (a day later, +5
 -- minutes of play, no boosts and no Server Storm), "group" pretends to be a
@@ -8,64 +8,57 @@
 -- true, a 2x Volts Boost) in your own inbox, and "serverStorm" starts a
 -- Server Storm as if you bought one, "researchData" gives every
 -- researcher 500 field data and "glints" 100 Glints of the tier of the zone
--- you're in (or your best zone). The repo and client code are public, so this
--- is the lock: it only obeys in Studio play tests or, in a live server, the
--- user who owns the place; everything but "volts" is Studio only. To remove it:
--- delete this file and Controllers/DevCommands.luau, and take "DevCommand"
--- out of Shared/Remotes.
+-- you're in (or your best zone), "goldenBolt" drops a golden bolt where you
+-- stand, "supercell" starts a Supercell in 30 s and "event" (true/false)
+-- pretends the first scheduled event is on, and "serverGoal" fills a
+-- quarter of the server goal as if you sold it, and "completeQuest" counts
+-- your first unfinished quest as done, and "logEntry" finds the next
+-- Storm Log entry a counter can find, and "readyAscend" gives you the top
+-- bottle and enough Volts to ascend, "restartTutorial" starts the
+-- new-player tutorial again from step 1 and "friends" adds a pretend
+-- friend in the server (0 to 3, then 0 again), "testLeaderboard" fills
+-- the leaderboards with made-up players (you at #7) or goes back to the
+-- real ones, and "testNotify" queues a daily reminder for you, due now
+-- (the log shows it being claimed and sent, or why it can't be). The repo
+-- and client code are public, so this is the lock: it only obeys in Studio
+-- play tests. Tools for a live game (giving Volts and the rest) are in the
+-- admin panel (Systems/Admin). To remove it: delete this file and
+-- Controllers/DevCommands.luau, and take "DevCommand" out of Shared/Remotes.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local ServerScriptService = game:GetService("ServerScriptService")
 
+local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
+local Weather = require(ReplicatedStorage.Shared.Util.Weather)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
+local Ascension = require(script.Parent.Ascension)
+local Friends = require(script.Parent.Friends)
 local Boosts = require(script.Parent.Boosts)
 local Gifts = require(script.Parent.Gifts)
 local Group = require(script.Parent.Group)
+local Leaderboards = require(script.Parent.Leaderboards)
+local Notifications = require(script.Parent.Notifications)
 local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
+local Quests = require(script.Parent.Quests)
 local Research = require(script.Parent.Research)
 local Rewards = require(script.Parent.Rewards)
+local Stats = require(script.Parent.Stats)
+local StormLog = require(script.Parent.StormLog)
+local ServerGoal = require(script.Parent.ServerGoal)
+local StormCycle = require(script.Parent.StormCycle)
+local Strikes = require(script.Parent.Strikes)
 local Sync = require(script.Parent.Sync)
+local Tutorial = require(script.Parent.Tutorial)
 local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
 
-local INFINITE_VOLTS = 1e12
 local PLAYTIME_STEP = 5 * 60 -- seconds "+5 min playtime" adds
 
 local DevCommands = {}
-
-local function isOwner(player: Player): boolean
-	if RunService:IsStudio() then
-		return true
-	end
-	-- a group-owned place has a group id here, so only Studio works there
-	return game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId
-end
-
-local function setVolts(player: Player, amount: unknown)
-	local volts = INFINITE_VOLTS
-	if amount ~= nil then
-		if
-			typeof(amount) ~= "number"
-			or amount ~= amount
-			or amount < 0
-			or amount > INFINITE_VOLTS
-		then
-			return
-		end
-		volts = math.floor(amount)
-	end
-	local profile = PlayerData.get(player)
-	if not profile then
-		return
-	end
-	profile.volts = volts
-	Sync.markDirty(player)
-	print(`[DevCommands] {player.Name} set Volts to {volts}`)
-end
 
 -- Lets a tester without Premium try the Premium zone. Progression also
 -- ignores the attribute outside Studio.
@@ -88,19 +81,16 @@ local function setPretendPass(player: Player, key: unknown, on: unknown)
 end
 
 local function onCommand(player: Player, name: unknown, value: unknown, extra: unknown)
-	if not RateLimit.allow(player, "DevCommand", 2, 4) or not isOwner(player) then
+	if not RateLimit.allow(player, "DevCommand", 2, 4) or not RunService:IsStudio() then
 		return
 	end
-	if name == "volts" then
-		setVolts(player, value)
-	elseif name == "premium" then
+	if name == "premium" then
 		setPretendPremium(player, value)
 	elseif name == "pass" then
 		setPretendPass(player, value, extra)
-	elseif not RunService:IsStudio() then
-		return
 	elseif name == "nextDay" then
 		Rewards.nextDay(player)
+		Stats.refresh(player) -- a new quest day too
 		print(`[DevCommands] {player.Name}: a day later`)
 	elseif name == "playtime" then
 		Rewards.addPlaytime(player, PLAYTIME_STEP)
@@ -108,6 +98,7 @@ local function onCommand(player: Player, name: unknown, value: unknown, extra: u
 	elseif name == "clearBoosts" then
 		Boosts.clear(player)
 		Boosts.endStorm()
+		Boosts.endSurge()
 		print(`[DevCommands] {player.Name}: boosts cleared`)
 	elseif name == "testGift" then
 		Gifts.testGift(player, value == true)
@@ -126,6 +117,52 @@ local function onCommand(player: Player, name: unknown, value: unknown, extra: u
 		local tier = if zone then ResearchMath.zoneTier(zone) else 0
 		Research.addGlints(player, tier, 100)
 		print(`[DevCommands] {player.Name}: +100 tier {tier} Glints`)
+	elseif name == "goldenBolt" then
+		local ok = Strikes.forceAt(player, "Golden")
+		print(
+			`[DevCommands] {player.Name}: golden bolt {if ok
+				then "coming"
+				else "needs you in a zone"}`
+		)
+	elseif name == "supercell" then
+		StormCycle.supercellIn(Config.SUPERCELL.warningSeconds)
+		print(`[DevCommands] {player.Name}: Supercell in {Config.SUPERCELL.warningSeconds}s`)
+	elseif name == "serverGoal" then
+		ServerGoal.testFill(player, 0.25)
+		print(`[DevCommands] {player.Name}: +25% server goal`)
+	elseif name == "completeQuest" then
+		local ok = Quests.testComplete(player)
+		print(
+			`[DevCommands] {player.Name}: {if ok
+				then "a quest is done"
+				else "no quest left to finish"}`
+		)
+	elseif name == "logEntry" then
+		local entry = StormLog.testEntry(player)
+		print(
+			`[DevCommands] {player.Name}: {if entry
+				then `Storm Log entry {entry} found`
+				else "no Storm Log entry left to find"}`
+		)
+	elseif name == "readyAscend" then
+		Ascension.testReady(player)
+		print(`[DevCommands] {player.Name}: ready to ascend (SHOP > BOTTLES > ASCEND)`)
+	elseif name == "restartTutorial" then
+		Tutorial.restart(player)
+		print(`[DevCommands] {player.Name}: the tutorial starts again from step 1`)
+	elseif name == "friends" then
+		local n = Friends.cyclePretend(player)
+		print(`[DevCommands] {player.Name}: {n} pretend friends in the server`)
+	elseif name == "testLeaderboard" then
+		local on = Leaderboards.toggleTest(player)
+		print(`[DevCommands] {player.Name}: leaderboard test data {if on then "on" else "off"}`)
+	elseif name == "testNotify" then
+		Notifications.testQueue(player)
+		print(`[DevCommands] {player.Name}: a test daily reminder is queued, due now`)
+	elseif name == "event" and typeof(value) == "boolean" then
+		workspace:SetAttribute(Weather.PRETEND_EVENT, value)
+		Sync.markDirty(player)
+		print(`[DevCommands] {player.Name}: pretend event {if value then "on" else "off"}`)
 	elseif name == "group" and typeof(value) == "boolean" then
 		Group.setPretend(player, value)
 		print(`[DevCommands] {player.Name} Pretend group member {if value then "on" else "off"}`)

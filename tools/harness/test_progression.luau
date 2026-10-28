@@ -56,7 +56,10 @@ check(not Progression.isPremium(NotPremium, false, false), "a non-member isn't")
 check(Progression.isPremium(NotPremium, true, true), "Pretend Premium works in Studio")
 check(not Progression.isPremium(NotPremium, true, false), "Pretend Premium is ignored live")
 check(Progression.canEnter(progress(1), aurora, true), "a member can enter Aurora with a Jar")
-check(not Progression.canEnter(progress(5), aurora, false), "a non-member can't, whatever the bottle")
+check(
+	not Progression.canEnter(progress(5), aurora, false),
+	"a non-member can't, whatever the bottle"
+)
 check(Progression.canEnter(progress(5), shoreline, false), "non-members still enter free zones")
 local premiumReason = Progression.lockReason(progress(1), aurora, false)
 check(
@@ -68,7 +71,10 @@ check(
 	"and shows the Premium icon"
 )
 check(Progression.lockReason(progress(1), aurora, true) == nil, "no lock reason for a member")
-check(Progression.lockReason(progress(1), mesa, true) == "Needs a Flask", "Premium doesn't open Mesa")
+check(
+	Progression.lockReason(progress(1), mesa, true) == "Needs a Flask",
+	"Premium doesn't open Mesa"
+)
 check(Progression.requirement(aurora) == premiumReason, "Aurora's gate sign matches")
 local multiplier = Config.PREMIUM_VALUE_MULTIPLIER
 check(
@@ -79,7 +85,10 @@ check(
 	Progression.boltValue(progress(3), aurora) == math.round(mesa.chargeValue * multiplier),
 	"with a Flask, Aurora pays 1.5x Mesa"
 )
-check(Progression.boltValue(progress(3), mesa) == mesa.chargeValue, "other zones pay their own value")
+check(
+	Progression.boltValue(progress(3), mesa) == mesa.chargeValue,
+	"other zones pay their own value"
+)
 for tier = 1, #Config.BOTTLES do
 	for _, goal in Progression.nextGoals(progress(tier)) do
 		check(goal.title ~= aurora.displayName, "Aurora is never a Volts goal")
@@ -120,14 +129,23 @@ end
 local second = Config.WORLDS[2]
 if second then
 	local need = second.requiresBottle
-	check(Progression.canEnterWorld(progress(1), Config.WORLDS[1]), "everyone can be in the first world")
-	check(not Progression.canEnterWorld(progress(need - 1), second), "the bottle before can't travel on")
+	check(
+		Progression.canEnterWorld(progress(1), Config.WORLDS[1]),
+		"everyone can be in the first world"
+	)
+	check(
+		not Progression.canEnterWorld(progress(need - 1), second),
+		"the bottle before can't travel on"
+	)
 	check(Progression.canEnterWorld(progress(need), second), "its bottle opens the next world")
 	check(
 		Progression.worldLockReason(progress(1), second) == Progression.worldRequirement(second),
 		"a locked portal says what it needs"
 	)
-	check(Progression.worldLockReason(progress(need), second) == nil, "an open portal has no lock reason")
+	check(
+		Progression.worldLockReason(progress(need), second) == nil,
+		"an open portal has no lock reason"
+	)
 	local firstWorldTop = 0
 	for _, zone in Config.ZONES do
 		if zone.world == Config.WORLDS[1].id and not zone.premium then
@@ -148,7 +166,10 @@ if second then
 	for tier = firstWorldTop + 1, need do
 		cost += Config.BOTTLES[tier].price
 	end
-	check(worldGoal ~= nil and worldGoal.price == cost, "and it costs the bottles up to the world's")
+	check(
+		worldGoal ~= nil and worldGoal.price == cost,
+		"and it costs the bottles up to the world's"
+	)
 end
 
 local top = Progression.nextGoals(progress(#Config.BOTTLES, #Config.BOOTS))

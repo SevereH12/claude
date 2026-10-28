@@ -35,6 +35,7 @@ local Store = require(ReplicatedStorage.Shared.Util.Store)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Celebrate = require(script.Parent.Parent.Lib.Celebrate)
 local Layout = require(script.Parent.Parent.Lib.Layout)
+local SettingsStore = require(script.Parent.Parent.Lib.SettingsStore)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
 local BoostsUI = require(script.Parent.BoostsUI)
@@ -150,8 +151,11 @@ local function mark(key: string)
 	storeEvent:FireServer("offerShown", key)
 end
 
+-- (never with SETTINGS > Accessibility & HUD > Pass offers off)
 local function allowed(key: string): boolean
-	return not card.Visible and Store.canOffer(offerState, key, os.clock(), uiOpen(), owns(key))
+	return SettingsStore.get("showOffers")
+		and not card.Visible
+		and Store.canOffer(offerState, key, os.clock(), uiOpen(), owns(key))
 end
 
 -- Offers a pass if the rules allow it now: SEE opens the store at it.

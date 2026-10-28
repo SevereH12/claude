@@ -1,10 +1,13 @@
 --!strict
 -- Shop popup with two tabs, BOTTLES and BOOTS. One row per tier; only the
 -- next tier can be bought. Pressing Buy just asks the server, which checks
--- the price itself.
+-- the price itself. Once you own the top bottle, an ASCEND row shows under
+-- the bottles (Util/Ascension): its button asks the server, which opens the
+-- confirm screen (Controllers/AscensionUI).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local AscensionRules = require(ReplicatedStorage.Shared.Util.Ascension)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Net = require(ReplicatedStorage.Shared.Net)
@@ -13,6 +16,7 @@ local Types = require(ReplicatedStorage.Shared.Types)
 local Layout = require(script.Parent.Parent.Lib.Layout)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
+local AscensionUI = require(script.Parent.AscensionUI)
 local State = require(script.Parent.State)
 
 local COLORS = UI.COLORS
@@ -52,6 +56,9 @@ local body: Frame -- under the window's header (UI.window)
 local hint: TextLabel
 local tabs: { Tab } = {}
 local current: Tab? = nil
+local PURPLE = Color3.fromRGB(170, 110, 255)
+type AscendRow = { frame: Frame, title: TextLabel, detail: TextLabel, button: TextButton }
+local ascendRow: AscendRow? = nil
 
 function ShopUI.open()
 	UI.openPanel(panel)
@@ -61,7 +68,33 @@ function ShopUI.toggle()
 	UI.togglePanel(panel)
 end
 
+function ShopUI.isOpen(): boolean
+	return panel ~= nil and panel.Visible
+end
+
+-- The ASCEND row: shown once the top bottle is owned, its button lit when
+-- the player has the Volts too (the server checks again).
+local function renderAscend(snapshot: Types.Snapshot)
+	local row = ascendRow
+	if not row then
+		return
+	end
+	row.frame.Visible = snapshot.bottleTier >= AscensionRules.topTier()
+	local level = snapshot.ascension
+	local stars = AscensionRules.stars(level)
+	row.title.Text = if level > 0 then `ASCEND  {stars}` else "ASCEND"
+	local cost = AscensionRules.cost(level)
+	row.detail.Text =
+		`Start again for {AscensionRules.bonusText(level + 1)} Volts for good · {Format.abbreviate(
+			cost
+		)} ⚡`
+	local ready = AscensionRules.canAscend(snapshot)
+	row.button.Text = if ready then "🌟 ASCEND" else `{Format.abbreviate(cost)} ⚡`
+	UI.setEnabled(row.button, ready, PURPLE)
+end
+
 local function render(snapshot: Types.Snapshot)
+	renderAscend(snapshot)
 	for _, tab in tabs do
 		local owned = tab.ownedTier(snapshot)
 		for _, row in tab.rows do
@@ -94,6 +127,26 @@ local function selectTab(tab: Tab)
 		other.button.BackgroundColor3 = if other == tab then COLORS.volt else COLORS.panelDark
 	end
 	hint.Text = tab.hint
+end
+
+-- The tutorial: shows the BOTTLES tab, scrolled to this tier's row, and
+-- returns its Buy button to point at (nil if there's no such row).
+function ShopUI.focusBottle(tier: number): GuiObject?
+	local bottles = tabs[1]
+	if not bottles then
+		return nil
+	end
+	if current ~= bottles then
+		selectTab(bottles)
+	end
+	for _, row in bottles.rows do
+		if row.tier == tier then
+			-- rows are ROW_HEIGHT tall with 10 between them, in tier order
+			bottles.list.CanvasPosition = Vector2.new(0, (tier - 1) * (ROW_HEIGHT + 10))
+			return row.button
+		end
+	end
+	return nil
 end
 
 local function buildRow(tab: Tab, tier: number, item: Item)
@@ -266,6 +319,54 @@ function ShopUI.init()
 				return tostring(capacity), `Holds {capacity} charges`
 			end,
 		})
+	end
+
+	-- the ASCEND row, last in the bottles list
+	do
+		local frame = UI.make(Instance.new("Frame"), {
+			Name = "Ascend",
+			LayoutOrder = #Config.BOTTLES + 1,
+			Size = UDim2.new(1, -12, 0, ROW_HEIGHT),
+			BackgroundColor3 = COLORS.panelDark,
+			Visible = false,
+			Parent = bottles.list,
+		})
+		UI.corner(frame, UDim.new(0.2, 0))
+		UI.stroke(frame, 3, PURPLE)
+		local title = UI.label({
+			Title = true,
+			Text = "ASCEND",
+			TextColor3 = PURPLE,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Position = UDim2.fromScale(0.04, 0.12),
+			Size = UDim2.fromScale(0.6, 0.42),
+			Parent = frame,
+		})
+		UI.maxText(title, 28)
+		local detail = UI.label({
+			Text = "",
+			TextColor3 = COLORS.subtext,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Position = UDim2.fromScale(0.04, 0.56),
+			Size = UDim2.fromScale(0.63, 0.3),
+			Parent = frame,
+		})
+		UI.maxText(detail, 18)
+		local button = UI.button({
+			Name = "AscendButton",
+			Text = "🌟 ASCEND",
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.fromScale(0.97, 0.5),
+			Size = UDim2.fromScale(0.29, 0.66),
+			BackgroundColor3 = PURPLE,
+			Parent = frame,
+		})
+		UI.maxText(button, 24)
+		button.Activated:Connect(function()
+			UI.pop(button)
+			AscensionUI.ask()
+		end)
+		ascendRow = { frame = frame, title = title, detail = detail, button = button }
 	end
 
 	local boots = buildTab(

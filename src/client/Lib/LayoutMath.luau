@@ -14,7 +14,8 @@
 --
 -- The HUD sits on the screen's edges: Volts, the storm timer and the
 -- running boosts' chips top left,
--- the next goal top right (a Server Storm's chip under it), the bottle bar bottom centre (top centre on
+-- the next goal top right (a Server Storm's chip, an event's chip, the
+-- slim server goal meter under it), the friends chip under the boosts, the bottle bar bottom centre (top centre on
 -- touch, clear of the thumbstick and jump button; on a phone held upright
 -- under the top row, beside MENU), MENU on the left edge. Toasts and the zone banner
 -- go in the middle of the top, under whatever sits there. Pieces use the
@@ -45,11 +46,15 @@ export type Hud = {
 	boosts: Rect, -- timed boost chips: a row under the storm timer (a column beside Volts on a sideways phone or tablet)
 	goal: Rect,
 	serverStorm: Rect, -- a Server Storm's chip (buyer and time left), under the goal
+	event: Rect, -- a scheduled event's chip (name and time left), under that
+	serverGoal: Rect, -- the server goal meter (tap: top contributors), under the event's chip
+	friends: Rect, -- the friends boost's chip ("👥 +10% friends"), under the boosts' chips
 	bar: Rect,
 	menu: Rect,
 	card: Rect, -- the menu's tile card, beside the menu button (offers use it too)
 	toasts: Rect,
 	banner: Rect,
+	tutorial: Rect, -- the tutorial's step card, in the middle of the top (the toasts go under it while it shows)
 	test: Rect, -- the owner's TEST buttons (two rows), under the menu
 }
 
@@ -83,6 +88,7 @@ LayoutMath.HUD = table.freeze({
 	menuSize = 84,
 	boostHeight = 28, -- one boost chip
 	boostWidth = 78, -- one chip in the sideways column
+	serverGoalHeight = 24, -- the slim server goal meter
 	cardWidth = 398, -- three tiles of 118 + gaps of 10 + padding 12 each side
 	cardHeight = 214, -- two rows of 90 + gap 10 + padding 12 each side
 	toastWidth = 380,
@@ -90,6 +96,8 @@ LayoutMath.HUD = table.freeze({
 	toastRows = 2,
 	bannerWidth = 560,
 	bannerHeight = 100,
+	tutorialWidth = 440,
+	tutorialHeight = 64,
 	testWidth = 150,
 	testHeight = 50,
 })
@@ -111,10 +119,31 @@ function LayoutMath.classify(viewport: Vector2, input: Input): DeviceClass
 	return "Desktop"
 end
 
--- The UIScale every ScreenGui gets.
-function LayoutMath.scale(class: DeviceClass, viewport: Vector2): number
+-- SETTINGS > Accessibility & HUD > Text size: 0 Normal, 1 Large, 2 Extra
+-- large. Each step nudges the UI scale up (TEXT_BOOST) and raises the
+-- smallest text (TEXT_MIN_POINTS).
+LayoutMath.TEXT_LEVELS = { Normal = 0, Large = 1, ["Extra large"] = 2 } :: { [string]: number }
+LayoutMath.TEXT_BOOST = { [0] = 1, [1] = 1.1, [2] = 1.2 } :: { [number]: number }
+LayoutMath.TEXT_MIN_POINTS = { [1] = 16, [2] = 18 } :: { [number]: number }
+-- the bigger layout never shrinks the design area below this share of the
+-- device's design size (the HUD is laid out for that). Phones have no room
+-- to spare: there Text size only raises the smallest text.
+LayoutMath.MIN_DESIGN_SHARE = {
+	Phone = 1,
+	Tablet = 0.82,
+	Desktop = 0.82,
+	Console = 0.82,
+} :: { [DeviceClass]: number }
+
+-- The UIScale every ScreenGui gets (`textLevel`: the Text size setting).
+function LayoutMath.scale(class: DeviceClass, viewport: Vector2, textLevel: number?): number
 	local short = math.min(viewport.X, viewport.Y)
-	return math.clamp(short / LayoutMath.DESIGN_SHORT[class], 0.4, 4)
+	local base = short / LayoutMath.DESIGN_SHORT[class]
+	local boosted = math.min(
+		base * (LayoutMath.TEXT_BOOST[textLevel or 0] or 1),
+		short / (LayoutMath.DESIGN_SHORT[class] * LayoutMath.MIN_DESIGN_SHARE[class])
+	)
+	return math.clamp(math.max(base, boosted), 0.4, 4)
 end
 
 function LayoutMath.isTouch(class: DeviceClass): boolean
@@ -122,8 +151,15 @@ function LayoutMath.isTouch(class: DeviceClass): boolean
 end
 
 -- Smallest text size for TextScaled labels, in design pixels, so it's
--- PHONE_MIN_TEXT real points on a phone.
-function LayoutMath.minTextSize(class: DeviceClass, scale: number): number
+-- PHONE_MIN_TEXT real points on a phone, and with a bigger Text size
+-- setting TEXT_MIN_POINTS everywhere.
+function LayoutMath.minTextSize(class: DeviceClass, scale: number, textLevel: number?): number
+	local points = LayoutMath.TEXT_MIN_POINTS[textLevel or 0]
+	if points then
+		return math.ceil(
+			math.max(points, if class == "Phone" then LayoutMath.PHONE_MIN_TEXT else 0) / scale
+		)
+	end
 	return if class == "Phone" then math.ceil(LayoutMath.PHONE_MIN_TEXT / scale) else 1
 end
 
@@ -171,7 +207,10 @@ end
 -- Where every HUD piece goes on a safe area of `area` design pixels.
 -- `topbar`: Roblox's top row (design pixels); pieces use its free middle
 -- and only drop below it where its buttons are.
-function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?): Hud
+-- `tutorial`: the tutorial's step card is showing (Controllers/Tutorial):
+-- it takes the toasts' place and they move down under it; the zone banner
+-- covers the card while it shows.
+function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?, tutorial: boolean?): Hud
 	local H = LayoutMath.HUD
 	local M, G = LayoutMath.MARGIN, LayoutMath.GAP
 	local W, T = area.X, area.Y
@@ -206,9 +245,22 @@ function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?): Hud
 	local goalX = W - M - H.goalWidth
 	local goal = rect(goalX, topFor(goalX, H.goalWidth), H.goalWidth, H.goalHeight)
 	local serverStorm = rect(goalX, goal.y + goal.h + G, H.goalWidth, H.boostHeight)
+	-- the friends chip: under the boosts' row (a sideways phone or tablet,
+	-- short of height on the left, has it under the server goal meter)
+	local sideways = touch and not upright
+	local friends = rect(M, boosts.y + boosts.h + G, H.statWidth, H.boostHeight)
 	local leftBottom = math.max(storm.y + storm.h, boosts.y + boosts.h)
 	local leftRight = math.max(volts.x + volts.w, boosts.x + boosts.w)
-	local rightBottom = serverStorm.y + serverStorm.h
+	if not sideways then
+		leftBottom = math.max(leftBottom, friends.y + friends.h)
+	end
+	local event = rect(goalX, serverStorm.y + serverStorm.h + G, H.goalWidth, H.boostHeight)
+	local serverGoal = rect(goalX, event.y + event.h + G / 2, H.goalWidth, H.serverGoalHeight)
+	local rightBottom = serverGoal.y + serverGoal.h
+	if sideways then
+		friends = rect(goalX, rightBottom + G / 2, H.goalWidth, H.boostHeight)
+		rightBottom = friends.y + friends.h
+	end
 
 	-- the bottle bar, and on a phone or tablet held upright MENU beside it
 	local bar
@@ -246,14 +298,31 @@ function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?): Hud
 		then menu.y + menu.h + G
 		elseif touch then bar.y + bar.h + G
 		else topFor(toastX, toastWidth)
+	-- the tutorial's step card first (while it shows, the toasts go under it)
+	local tutorialWidth = math.min(H.tutorialWidth, W - 2 * M)
+	local tutorialX = (W - tutorialWidth) / 2
+	local tutorialRect = rect(
+		tutorialX,
+		belowCorners(tutorialX, tutorialWidth, centerTop),
+		tutorialWidth,
+		H.tutorialHeight
+	)
+	if tutorial then
+		centerTop = tutorialRect.y + tutorialRect.h + G
+	end
 	local toastHeight = H.toastRows * (H.toastHeight + 6)
 	local toasts =
 		rect(toastX, belowCorners(toastX, toastWidth, centerTop), toastWidth, toastHeight)
 	local bannerWidth = math.min(H.bannerWidth, W - 2 * M)
 	local bannerX = (W - bannerWidth) / 2
+	-- while the tutorial shows, the (brief) banner covers its card instead
 	local banner = rect(
 		bannerX,
-		belowCorners(bannerX, bannerWidth, toasts.y + toasts.h + G),
+		belowCorners(
+			bannerX,
+			bannerWidth,
+			if tutorial then tutorialRect.y else toasts.y + toasts.h + G
+		),
 		bannerWidth,
 		H.bannerHeight
 	)
@@ -292,11 +361,15 @@ function LayoutMath.hud(class: DeviceClass, area: Vector2, topbar: Topbar?): Hud
 		boosts = boosts,
 		goal = goal,
 		serverStorm = serverStorm,
+		event = event,
+		serverGoal = serverGoal,
+		friends = friends,
 		bar = bar,
 		menu = button,
 		card = card,
 		toasts = toasts,
 		banner = banner,
+		tutorial = tutorialRect,
 		test = test,
 	}
 end

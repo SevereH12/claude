@@ -7,11 +7,15 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Net = require(ReplicatedStorage.Shared.Net)
+local AscensionRules = require(ReplicatedStorage.Shared.Util.Ascension)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local GiftRules = require(ReplicatedStorage.Shared.Util.Gifts)
 local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
+local QuestRules = require(ReplicatedStorage.Shared.Util.Quests)
+local RewardRules = require(ReplicatedStorage.Shared.Util.Rewards)
+local StormLogRules = require(ReplicatedStorage.Shared.Util.StormLog)
 local PlayerData = require(script.Parent.PlayerData)
 
 local FLUSH_INTERVAL = 0.1
@@ -35,6 +39,10 @@ Sync.rewards = {} :: { [Player]: Types.RewardSession }
 -- Owned by Systems/Afk: per player in the AFK Lounge, its state.
 Sync.afk = {} :: { [Player]: Types.AfkState }
 
+-- Owned by Systems/Friends: per player, how many of their Roblox friends
+-- are in this server (Studio's pretend friends included).
+Sync.friends = {} :: { [Player]: number }
+
 local NO_STORE: Types.StoreSession = table.freeze({ boostEarned = 0, missedDouble = 0 })
 
 function Sync.markDirty(player: Player)
@@ -56,6 +64,8 @@ local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapsho
 	local passes = Sync.passes[player] or {}
 	local effects = PassRules.withBoosts(passes, profile.boosts)
 	local rewards = Sync.rewards[player]
+	local dayOffset = if rewards then rewards.dayOffset else 0
+	local today = RewardRules.today(os.time()) + dayOffset
 	return {
 		volts = profile.volts,
 		totalVolts = profile.totalVolts,
@@ -76,7 +86,7 @@ local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapsho
 		daily = {
 			streak = profile.dailyStreak,
 			lastDay = profile.lastDailyDay,
-			dayOffset = if rewards then rewards.dayOffset else 0,
+			dayOffset = dayOffset,
 		},
 		gifts = {
 			startedAt = if rewards then rewards.startedAt else workspace:GetServerTimeNow(),
@@ -86,6 +96,14 @@ local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapsho
 		giftCredits = GiftRules.creditCounts(profile.giftCredits),
 		afk = Sync.afk[player],
 		glints = profile.glints,
+		quests = QuestRules.view(profile.quests, profile.stats, today),
+		log = StormLogRules.view(
+			StormLogRules.found(profile.stats.lifetime, profile.researchers),
+			profile.logClaimed
+		),
+		ascension = profile.ascension,
+		tutorialStep = profile.tutorialStep,
+		friends = Sync.friends[player] or 0,
 	}
 end
 
@@ -95,6 +113,10 @@ local function setupLeaderstats(player: Player)
 	local volts = Instance.new("NumberValue")
 	volts.Name = "Volts"
 	volts.Parent = leaderstats
+	-- Ascension stars in the player list (Systems/Ascension)
+	local ascension = Instance.new("StringValue")
+	ascension.Name = "Ascension"
+	ascension.Parent = leaderstats
 	leaderstats.Parent = player
 end
 
@@ -103,6 +125,11 @@ local function updateLeaderstats(player: Player, profile: Types.Profile)
 	local volts = leaderstats and leaderstats:FindFirstChild("Volts")
 	if volts and volts:IsA("NumberValue") then
 		volts.Value = profile.volts
+	end
+	local ascension = leaderstats and leaderstats:FindFirstChild("Ascension")
+	if ascension and ascension:IsA("StringValue") then
+		local stars = AscensionRules.stars(profile.ascension)
+		ascension.Value = if stars == "" then "-" else stars
 	end
 end
 

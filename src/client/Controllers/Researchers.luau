@@ -20,6 +20,7 @@ local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local ResearchSites = require(ReplicatedStorage.Shared.Util.ResearchSites)
 local Types = require(ReplicatedStorage.Shared.Types)
 local ResearcherModels = require(script.Parent.Parent.Lib.ResearcherModels)
+local SettingsStore = require(script.Parent.Parent.Lib.SettingsStore)
 local State = require(script.Parent.State)
 local Storm = require(script.Parent.Storm)
 
@@ -170,6 +171,7 @@ local function makeTag(model: Model, text: string): TextLabel
 	gui.Size = UDim2.fromOffset(240, 26)
 	gui.StudsOffset = Vector3.new(0, 3.2, 0)
 	gui.MaxDistance = 70
+	gui.Enabled = SettingsStore.get("showNameTags") -- SETTINGS > Accessibility & HUD
 	local head = model:FindFirstChild("Head")
 	if head then
 		gui.Adornee = head
@@ -325,13 +327,26 @@ local function layout()
 	dirty = false
 
 	-- a saved post that isn't in the world falls back to the office
+	local function siteOf(entry: Entry): string
+		return if entry.post ~= "Office" and not Config.ZONES[entry.post]
+			then "Office"
+			else entry.post
+	end
+	-- other players' researchers follow SETTINGS > Graphics: Hidden, only at
+	-- sites where yours work, or All
+	local others = SettingsStore.get("othersResearchers")
+	local mySites: { [string]: boolean } = {}
+	for _, entry in entries[localPlayer] or {} do
+		mySites[siteOf(entry)] = true
+	end
 	local bySite: { [string]: { Row } } = {}
 	local wanted: { [string]: boolean } = {}
 	for player, mine in entries do
+		local own = player == localPlayer
 		for roleId, entry in mine do
-			local site = entry.post
-			if site ~= "Office" and not Config.ZONES[site] then
-				site = "Office"
+			local site = siteOf(entry)
+			if not own and (others == "Hidden" or (others == "My sites" and not mySites[site])) then
+				continue
 			end
 			local list = bySite[site]
 			if not list then
@@ -340,7 +355,7 @@ local function layout()
 			end
 			table.insert(list, {
 				userId = player.UserId,
-				own = player == localPlayer,
+				own = own,
 				roleId = roleId,
 				level = entry.level,
 				rank = entry.rank,
@@ -624,6 +639,18 @@ function Researchers.start()
 	Net.get("StrikeWarning").OnClientEvent:Connect(onWarning)
 	Net.get("StrikeLanded").OnClientEvent:Connect(onLanded)
 	RunService.Heartbeat:Connect(update)
+	SettingsStore.Changed:Connect(function(key: string, value: any)
+		if key == "othersResearchers" then
+			dirty = true
+		elseif key == "showNameTags" then
+			for _, rig in rigs do
+				local gui = rig.tag and rig.tag:FindFirstAncestorOfClass("BillboardGui")
+				if gui then
+					gui.Enabled = value == true
+				end
+			end
+		end
+	end)
 end
 
 return Researchers

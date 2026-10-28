@@ -120,7 +120,12 @@ local member = { [Passes.GROUP] = true }
 check(near(Passes.sellMultiplier(member), 1.1), "a group member gets +10% Volts")
 check(Config.GROUP_ID == 7889739 and Config.GROUP_BONUS == 0.10, "Super Studio, +10%")
 check(
-	near(Passes.sellMultiplier(Passes.withBoosts({ [Passes.GROUP] = true, VIP = true }, { DoubleVolts = 60 })), 2.42),
+	near(
+		Passes.sellMultiplier(
+			Passes.withBoosts({ [Passes.GROUP] = true, VIP = true }, { DoubleVolts = 60 })
+		),
+		2.42
+	),
 	"a member with VIP and a 2x boost: 2 x 1.1 x 1.1"
 )
 check(
@@ -130,8 +135,10 @@ check(
 for value = 0, 2000 do
 	check(Passes.sale(value, member) == (value * 11) // 10, `a member's sale of {value}`)
 	check(
-		Passes.sale(value, Passes.withBoosts({ [Passes.GROUP] = true, VIP = true }, { DoubleVolts = 60 }))
-			== (value * 242) // 100,
+		Passes.sale(
+			value,
+			Passes.withBoosts({ [Passes.GROUP] = true, VIP = true }, { DoubleVolts = 60 })
+		) == (value * 242) // 100,
 		`a member with VIP and a 2x boost selling {value}`
 	)
 end

@@ -4,6 +4,13 @@
 -- For each strike: pick a random spot in the zone, warn every client (they
 -- draw the circle), wait WARNING_TIME, then check every player's position
 -- on the server. Clients never say "I caught it"; nothing to fake.
+--
+-- Rare bolts (Config.BOLT_TYPES, Util/Weather): the type is picked when the
+-- strike spawns and goes out in the warning, so a gold ring shows first.
+-- It multiplies that catch's value. Ball lightning is an orb that drifts
+-- across the zone for 8 s; the server checks every 0.2 s and the first
+-- player with room who touches it catches it. A Supercell
+-- (Systems/StormCycle) doubles the strikes and makes Golden 5x likelier.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -14,13 +21,17 @@ local Net = require(ReplicatedStorage.Shared.Net)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
+local Weather = require(ReplicatedStorage.Shared.Util.Weather)
 local Analytics = require(script.Parent.Analytics)
+local Boosts = require(script.Parent.Boosts)
 local Passes = require(script.Parent.Passes)
 local Research = require(script.Parent.Research)
+local Stats = require(script.Parent.Stats)
 local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local PlayerData = require(script.Parent.PlayerData)
 local StormCycle = require(script.Parent.StormCycle)
 local Sync = require(script.Parent.Sync)
+local Tutorial = require(script.Parent.Tutorial)
 
 -- HumanoidRootPart sits about this far above the ground the player stands on
 local ROOT_HEIGHT = 3
@@ -32,6 +43,7 @@ local balloonInFlight: { [number]: boolean } = {} -- owner UserId -> has a bolt 
 local warningRemote: RemoteEvent
 local landedRemote: RemoteEvent
 local forecastRemote: RemoteEvent
+local announcementRemote: RemoteEvent
 
 local Strikes = {}
 
@@ -108,7 +120,18 @@ local function distanceInside(root: BasePart, position: Vector3, radius: number)
 	return if distance <= radius then distance else nil
 end
 
-local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, ownerId: number?)
+-- `boltType` multiplies the value; `only` (ball lightning's catcher) is the
+-- one player who can catch it.
+local function resolve(
+	zone: Types.ZoneDef,
+	id: number,
+	position: Vector3,
+	ownerId: number?,
+	boltType: Types.BoltType?,
+	only: Player?
+)
+	local typeMultiplier = Weather.boltMultiplier(boltType)
+	local typeDef = Weather.boltDef(boltType)
 	local catchers: { number } = {}
 	local values: { number } = {}
 	local full: { number } = {}
@@ -121,7 +144,7 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, owner
 	local candidates: { { player: Player, profile: Types.Profile, distance: number, toTank: boolean, room: number } } =
 		{}
 	for _, player in Players:GetPlayers() do
-		if ownerId and player.UserId ~= ownerId then
+		if (ownerId and player.UserId ~= ownerId) or (only and player ~= only) then
 			continue
 		end
 		local root = catchingRoot(player)
@@ -176,6 +199,8 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, owner
 			Progression.boltValue(candidate.profile, zone),
 			candidate.room
 		)
+		-- a rare bolt multiplies it; the bottle space stays the same
+		value *= typeMultiplier
 		local base = value
 		local assayLevel, assayRank = Research.active(candidate.player, "Analyst")
 		if assayLevel and random:NextNumber() < ResearchMath.assayChance(assayLevel, assayRank) then
@@ -200,6 +225,28 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, owner
 		end
 		Sync.markDirty(candidate.player)
 		Analytics.caught(candidate.player)
+		Tutorial.caught(candidate.player)
+		Stats.caught(
+			candidate.player,
+			boltType,
+			zone.id,
+			not candidate.toTank and units >= candidate.room
+		)
+	end
+
+	-- Rainbow: every catcher gets the same random timed boost, and the
+	-- whole server hears about it in the chat
+	local boost: string? = nil
+	if typeDef and typeDef.boostMinutes and #candidates > 0 then
+		local pick = Config.BOOSTS[random:NextInteger(1, #Config.BOOSTS)]
+		boost = pick.key
+		for index, candidate in candidates do
+			if zone.mode == "Single" and index > 1 then
+				break
+			end
+			Boosts.grant(candidate.player, pick.key, typeDef.boostMinutes * 60, true)
+			announcementRemote:FireAllClients("rainbow", candidate.player.DisplayName, pick.name)
+		end
 	end
 
 	local landed: Types.StrikeLanded = {
@@ -214,6 +261,8 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, owner
 		tanked = tanked,
 		lucky = lucky,
 		ownerId = ownerId,
+		boltType = boltType,
+		boost = boost,
 	}
 	if ownerId then
 		balloonInFlight[ownerId] = nil
@@ -224,7 +273,82 @@ local function resolve(zone: Types.ZoneDef, id: number, position: Vector3, owner
 	Research.onStrikeLanded(zone.id, watchers)
 end
 
-local function publicWarning(zone: Types.ZoneDef, id: number, position: Vector3, ownerId: number?)
+-- Is anyone with room in their bottle (or tank) touching the orb? Returns
+-- the closest such player, or nil.
+local function orbToucher(zone: Types.ZoneDef, orbGround: Vector3): Player?
+	local best: Player? = nil
+	local bestDistance = math.huge
+	for _, player in Players:GetPlayers() do
+		local root = catchingRoot(player)
+		local profile = PlayerData.get(player)
+		if not root or not profile then
+			continue
+		end
+		if not Progression.canEnter(profile, zone, Progression.playerIsPremium(player)) then
+			continue
+		end
+		local distance = distanceInside(root, orbGround, Config.BALL_LIGHTNING.touchRadius)
+		if not distance or distance >= bestDistance then
+			continue
+		end
+		local chemist, chemistRank = Research.active(player, "Chemist")
+		local tankRoom = if chemist
+			then ResearchMath.tankCapacity(chemist, chemistRank) - profile.tankCount
+			else 0
+		if
+			not Formulas.isFull(profile.chargeCount, Passes.capacity(player, profile))
+			or tankRoom > 0
+		then
+			best, bestDistance = player, distance
+		end
+	end
+	return best
+end
+
+-- Ball lightning: the orb drifts from `from` to `to` (ground points) for
+-- BALL_LIGHTNING.seconds; every checkEvery seconds the server looks for a
+-- player touching it. It lands (StrikeLanded) where it's caught, or fizzles
+-- at the end of its path.
+local function runOrb(zone: Types.ZoneDef, id: number, from: Vector3, to: Vector3)
+	local ball = Config.BALL_LIGHTNING
+	local startedAt = os.clock()
+	while true do
+		local t = math.min((os.clock() - startedAt) / ball.seconds, 1)
+		local ground = from:Lerp(to, t)
+		local toucher = orbToucher(zone, ground)
+		if toucher then
+			resolve(zone, id, ground, nil, "Ball", toucher)
+			return
+		end
+		if t >= 1 then
+			landedRemote:FireAllClients({
+				id = id,
+				zoneId = zone.id,
+				position = to,
+				value = zone.chargeValue,
+				catchers = {},
+				values = {},
+				full = {},
+				assayed = {},
+				tanked = {},
+				lucky = {},
+				boltType = "Ball",
+			} :: Types.StrikeLanded)
+			return
+		end
+		task.wait(ball.checkEvery)
+	end
+end
+
+local function publicWarning(
+	zone: Types.ZoneDef,
+	id: number,
+	position: Vector3,
+	ownerId: number?,
+	boltType: Types.BoltType?,
+	orbTo: Vector3?
+)
+	local isOrb = boltType == "Ball" and orbTo ~= nil
 	local warning: Types.StrikeWarning = {
 		id = id,
 		zoneId = zone.id,
@@ -232,9 +356,28 @@ local function publicWarning(zone: Types.ZoneDef, id: number, position: Vector3,
 		radius = Config.STRIKE_RADIUS,
 		landsAt = workspace:GetServerTimeNow() + Config.WARNING_TIME,
 		ownerId = ownerId,
+		boltType = if boltType == "Normal" then nil else boltType,
+		orbTo = if isOrb then orbTo else nil,
+		orbSeconds = if isOrb then Config.BALL_LIGHTNING.seconds else nil,
 	}
 	warningRemote:FireAllClients(warning)
-	task.delay(Config.WARNING_TIME, resolve, zone, id, position, ownerId)
+	if isOrb and orbTo then
+		task.delay(Config.WARNING_TIME, runOrb, zone, id, position, orbTo)
+	else
+		task.delay(Config.WARNING_TIME, resolve, zone, id, position, ownerId, warning.boltType)
+	end
+end
+
+-- Where ball lightning drifts to: another ground point in the zone at least
+-- minTravel studs away (nil if none turned up in a few tries).
+local function orbEnd(zonePart: BasePart, from: Vector3): Vector3?
+	for _ = 1, 6 do
+		local to = randomGroundPoint(zonePart)
+		if to and (to - from).Magnitude >= Config.BALL_LIGHTNING.minTravel then
+			return to
+		end
+	end
+	return nil
 end
 
 -- The position is picked now. The public warning goes out FORECAST_MAX_LEAD
@@ -246,6 +389,11 @@ local function spawnStrike(zone: Types.ZoneDef, zonePart: BasePart)
 	end
 	nextStrikeId += 1
 	local id = nextStrikeId
+	local boltType = Weather.pickBoltType(random:NextNumber(), StormCycle.isSupercell())
+	local orbTo = if boltType == "Ball" then orbEnd(zonePart, position) else nil
+	if boltType == "Ball" and not orbTo then
+		boltType = "Normal" -- no room for the orb to drift
+	end
 
 	local warnsAt = workspace:GetServerTimeNow() + Config.FORECAST_MAX_LEAD
 	local forecast: Types.Forecast = {
@@ -268,7 +416,7 @@ local function spawnStrike(zone: Types.ZoneDef, zonePart: BasePart)
 			end)
 		end
 	end
-	task.delay(Config.FORECAST_MAX_LEAD, publicWarning, zone, id, position)
+	task.delay(Config.FORECAST_MAX_LEAD, publicWarning, zone, id, position, nil, boltType, orbTo)
 end
 
 -- Storm Chaser's weather balloon: a bolt 12 to 20 studs from the player that
@@ -303,6 +451,26 @@ function Strikes.spawnFor(player: Player): boolean
 	return true
 end
 
+-- TEST panel (Studio): a public bolt of this type right where the player
+-- stands, storm or not. False if they aren't in a zone.
+function Strikes.forceAt(player: Player, boltType: Types.BoltType): boolean
+	local root = catchingRoot(player)
+	local zone = if root then Zones.at(root.Position) else nil
+	local zonePart = if zone then Zones.part(zone.id) else nil
+	if not root or not zone or not zonePart then
+		return false
+	end
+	local position = randomGroundPoint(zonePart, root.Position, 0, 0.5)
+		or randomGroundPoint(zonePart)
+	if not position then
+		return false
+	end
+	nextStrikeId += 1
+	local orbTo = if boltType == "Ball" then orbEnd(zonePart, position) else nil
+	publicWarning(zone, nextStrikeId, position, nil, boltType, orbTo)
+	return true
+end
+
 local function runZone(zone: Types.ZoneDef)
 	local zonePart = Zones.part(zone.id)
 	if not zonePart then
@@ -313,7 +481,8 @@ local function runZone(zone: Types.ZoneDef)
 		if StormCycle.isStorming() then
 			spawnStrike(zone, zonePart)
 			local jitter = 1 + (random:NextNumber() * 2 - 1) * Config.STRIKE_INTERVAL_JITTER
-			task.wait(zone.strikeInterval * jitter)
+			local pace = if StormCycle.isSupercell() then Config.SUPERCELL.strikeMultiplier else 1
+			task.wait(zone.strikeInterval * jitter / pace)
 		else
 			task.wait(0.5)
 		end
@@ -324,6 +493,7 @@ function Strikes.init()
 	warningRemote = Net.get("StrikeWarning")
 	landedRemote = Net.get("StrikeLanded")
 	forecastRemote = Net.get("Forecast")
+	announcementRemote = Net.get("Announcement")
 	Players.PlayerRemoving:Connect(function(player)
 		balloonInFlight[player.UserId] = nil
 	end)

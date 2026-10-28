@@ -31,6 +31,8 @@ export type Def = {
 }
 
 Settings.SECTIONS = { "Controls", "Sound", "Graphics", "Accessibility & HUD" }
+local HIDDEN = "Hidden" -- remembered values no tab shows (kept by "Reset all")
+Settings.HIDDEN = HIDDEN
 
 -- The actions you can bind, in the Controls tab's order, with today's keys.
 -- Close is fixed on Esc and B (controller).
@@ -222,6 +224,167 @@ add({
 	hint = "No sound at all",
 })
 
+-- Graphics: a preset sets the first seven; changing one makes it Custom.
+add({
+	key = "graphicsPreset",
+	kind = "choice",
+	default = "High",
+	choices = { "Low", "Medium", "High", "Custom" },
+	section = "Graphics",
+	label = "Quality",
+	hint = "Sets everything below at once",
+})
+add({
+	key = "particleAmount",
+	kind = "slider",
+	default = 1,
+	min = 0.1,
+	max = 1,
+	step = 0.05,
+	section = "Graphics",
+	label = "Rain and particles",
+	hint = "How many raindrops and sparks",
+})
+add({
+	key = "glow",
+	kind = "choice",
+	default = "Full",
+	choices = { "Off", "Soft", "Full" },
+	section = "Graphics",
+	label = "Lightning glow",
+	hint = "The light and flash when a bolt lands",
+})
+add({
+	key = "shadows",
+	kind = "bool",
+	default = true,
+	section = "Graphics",
+	label = "Shadows",
+	hint = "Off runs faster",
+})
+add({
+	key = "bloomAmount",
+	kind = "slider",
+	default = 1,
+	min = 0,
+	max = 1,
+	step = 0.05,
+	section = "Graphics",
+	label = "Bloom and colour",
+	hint = "Glow on bright things and the storm's colour",
+})
+add({
+	key = "decorDistance",
+	kind = "choice",
+	default = "All",
+	choices = { "Near", "Far", "All" },
+	section = "Graphics",
+	label = "Far decorations",
+	hint = "Near hides them past 250 studs, Far past 500",
+})
+add({
+	key = "othersStrikes",
+	kind = "choice",
+	default = "Full",
+	choices = { "Off", "Simple", "Full" },
+	section = "Graphics",
+	label = "Others' lightning",
+	hint = "Bolts in zones you're not in (rings always show)",
+})
+add({
+	key = "othersResearchers",
+	kind = "choice",
+	default = "All",
+	choices = { "Hidden", "My sites", "All" },
+	section = "Graphics",
+	label = "Others' researchers",
+	hint = "My sites: only where yours work",
+})
+add({
+	key = "fieldOfView",
+	kind = "slider",
+	default = 70,
+	min = 60,
+	max = 90,
+	step = 1,
+	section = "Graphics",
+	label = "Field of view",
+	hint = "How wide the camera sees (not part of Quality)",
+})
+
+-- Accessibility & HUD
+add({
+	key = "reduceFlashing",
+	kind = "bool",
+	default = false,
+	section = "Accessibility & HUD",
+	label = "Reduce flashing",
+	hint = "No screen flash, bolts fade, calmer rings",
+})
+add({
+	key = "cameraShake",
+	kind = "slider",
+	default = 1,
+	min = 0,
+	max = 1,
+	step = 0.05,
+	section = "Accessibility & HUD",
+	label = "Camera shake",
+	hint = "When you catch a bolt or sell",
+})
+add({
+	key = "colourblind",
+	kind = "choice",
+	default = "Off",
+	choices = { "Off", "Red-green", "Blue-yellow" },
+	section = "Accessibility & HUD",
+	label = "Colourblind rings",
+	hint = "Dashed rings with a ⚡ and clearer colours",
+})
+add({
+	key = "textSize",
+	kind = "choice",
+	default = "Normal",
+	choices = { "Normal", "Large", "Extra large" },
+	section = "Accessibility & HUD",
+	label = "Text size",
+	hint = "Bigger text and a slightly bigger screen layout",
+})
+local function show(key: string, label: string, hint: string)
+	add({
+		key = key,
+		kind = "bool",
+		default = true,
+		section = "Accessibility & HUD",
+		label = label,
+		hint = hint,
+	})
+end
+show("showPopups", "Catch and sell pop-ups", "The +Volts numbers")
+show("showNameTags", "Researcher name tags", "The names above your researchers")
+show("showOffers", "Pass offers", "Suggestions to buy a Game Pass")
+show("showAnnouncements", "Chat announcements", "Gifts and Server Storms in the chat")
+show("showGiftReminders", "Gift reminders", "When a playtime gift is ready")
+
+-- Remembered, not shown: the device's starting Quality was set, and the
+-- flashing question was answered.
+add({
+	key = "graphicsSet",
+	kind = "bool",
+	default = false,
+	section = HIDDEN,
+	label = "",
+	hint = "",
+})
+add({
+	key = "flashAsked",
+	kind = "bool",
+	default = false,
+	section = HIDDEN,
+	label = "",
+	hint = "",
+})
+
 Settings.DEFS = DEFS
 
 local byKey: { [string]: Def } = {}
@@ -361,6 +524,91 @@ function Settings.actionFor(values: Values, device: Device, name: string): strin
 		end
 	end
 	return nil
+end
+
+-- Graphics presets ----------------------------------------------------------------
+Settings.PRESET_KEYS = {
+	"particleAmount",
+	"glow",
+	"shadows",
+	"bloomAmount",
+	"decorDistance",
+	"othersStrikes",
+	"othersResearchers",
+}
+Settings.PRESETS = {
+	Low = {
+		particleAmount = 0.25,
+		glow = "Off",
+		shadows = false,
+		bloomAmount = 0,
+		decorDistance = "Near",
+		othersStrikes = "Off",
+		othersResearchers = "Hidden",
+	},
+	Medium = {
+		particleAmount = 0.6,
+		glow = "Soft",
+		shadows = true,
+		bloomAmount = 0.5,
+		decorDistance = "Far",
+		othersStrikes = "Simple",
+		othersResearchers = "My sites",
+	},
+	High = {
+		particleAmount = 1,
+		glow = "Full",
+		shadows = true,
+		bloomAmount = 1,
+		decorDistance = "All",
+		othersStrikes = "Full",
+		othersResearchers = "All",
+	},
+} :: { [string]: Values }
+
+local isPresetKey: { [string]: boolean } = {}
+for _, key in Settings.PRESET_KEYS do
+	isPresetKey[key] = true
+end
+
+-- Sets one setting the way the panel does: choosing a Quality fills in its
+-- settings; changing one of them makes the Quality Custom.
+function Settings.change(values: Values, key: string, value: any): Values
+	local def = byKey[key]
+	if not def then
+		return values
+	end
+	local out = table.clone(values)
+	out[key] = Settings.clean(def, value)
+	if key == "graphicsPreset" then
+		local preset = Settings.PRESETS[out[key]]
+		if preset then
+			for name, presetValue in preset do
+				out[name] = presetValue
+			end
+		end
+	elseif isPresetKey[key] and out[key] ~= values[key] then
+		out.graphicsPreset = "Custom"
+	end
+	return out
+end
+
+local STEPS = { "Low", "Medium", "High" }
+
+-- The starting Quality for a device (Layout's class: Phone, Tablet, Desktop
+-- or Console), one step lower when the player's own Roblox graphics level is
+-- set to 1 to 3 (`robloxLevel`: 0 = automatic).
+function Settings.devicePreset(class: string, robloxLevel: number): string
+	local index = if class == "Phone" then 1 elseif class == "Tablet" then 2 else 3
+	if robloxLevel >= 1 and robloxLevel <= 3 then
+		index = math.max(1, index - 1)
+	end
+	return STEPS[index]
+end
+
+-- Studs past which decorations hide (math.huge: never).
+function Settings.decorRange(choice: string): number
+	return if choice == "Near" then 250 elseif choice == "Far" then 500 else math.huge
 end
 
 return Settings

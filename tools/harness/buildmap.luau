@@ -222,7 +222,9 @@ for index, w in worlds do
 		end
 		return out
 	end
-	local path = if index == 1 then outPath else string.gsub(outPath, "%.json$", "") .. "_" .. w.id .. ".json"
+	local path = if index == 1
+		then outPath
+		else string.gsub(outPath, "%.json$", "") .. "_" .. w.id .. ".json"
 	local worldParts = mine(parts, "cframe")
 	fs.writeFile(
 		path,

@@ -7,7 +7,7 @@ then ticks it:
 
 - [x] Part A: the settings system, the SETTINGS menu tile, Controls
   (rebinding) and Sound
-- [ ] Part B: Graphics (presets set by device), Accessibility & HUD, and
+- [x] Part B: Graphics (presets set by device), Accessibility & HUD, and
   the one-time flashing question
 
 ## What Roblox allows

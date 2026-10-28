@@ -3,8 +3,8 @@
 Follow the rules in `docs/prompts/README.md`. **Run it twice**; each run
 does the first unticked part, then ticks it.
 
-- [ ] Part A: rare bolt types, Supercell storms and scheduled events
-- [ ] Part B: the server goal meter and Server Surge
+- [x] Part A: rare bolt types, Supercell storms and scheduled events
+- [x] Part B: the server goal meter and Server Surge
 
 Everything is decided by the server. Clients only draw it.
 

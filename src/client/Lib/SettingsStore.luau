@@ -18,6 +18,7 @@ local SettingsStore = {}
 
 SettingsStore.Changed = Signal.new() :: Signal.Signal<string, any>
 SettingsStore.loaded = false -- the saved settings have arrived
+SettingsStore.Loaded = Signal.new() :: Signal.Signal<()> -- fires when they do
 
 local values: Rules.Values = Rules.defaults()
 local saveToken = 0
@@ -59,19 +60,18 @@ local function replace(newValues: Rules.Values, save: boolean)
 	end
 end
 
--- Sets one setting (checked against the schema) and saves it soon.
+-- Sets one setting (checked against the schema) and saves it soon. A
+-- Quality preset fills in its graphics settings; changing one of those makes
+-- the Quality Custom (Util/Settings.change).
 function SettingsStore.set(key: string, value: any)
-	local def = Rules.def(key)
-	if not def then
+	if not Rules.def(key) then
 		return
 	end
-	local clean = Rules.clean(def, value)
-	if values[key] == clean then
+	local changed = Rules.change(values, key, value)
+	if changed[key] == values[key] and changed.graphicsPreset == values.graphicsPreset then
 		return
 	end
-	values[key] = clean
-	SettingsStore.Changed:Fire(key, clean)
-	scheduleSave()
+	replace(changed, true)
 end
 
 -- Sets several at once (a key swap, a reset) and saves them soon.
@@ -94,6 +94,7 @@ task.spawn(function()
 	Net.get("Settings").OnClientEvent:Connect(function(saved: unknown)
 		SettingsStore.loaded = true
 		replace(saved :: any, false)
+		SettingsStore.Loaded:Fire()
 	end)
 end)
 

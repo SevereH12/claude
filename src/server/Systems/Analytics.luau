@@ -26,6 +26,8 @@
 --     CustomField01 = the product key ("GiftVIP", "LuckyBoost"), and
 --     "ServerStorm" (the storm's minutes left after the purchase). Robux
 --     purchases are counted by Roblox, so only Volts are economy events.
+--   Custom event "Error" (Systems/Errors): CustomField01 = the error's
+--     fingerprint, 02 = "server" or "client"; once per fingerprint per server.
 
 local AnalyticsService = game:GetService("AnalyticsService")
 local HttpService = game:GetService("HttpService")
@@ -293,6 +295,37 @@ function Analytics.offer(player: Player, eventName: string, key: string)
 	end)
 end
 
+-- "Error" (Systems/Errors): a new error fingerprint, CustomField01 = the
+-- fingerprint, 02 = "server" or "client". Roblox ties every event to a
+-- player, so a server error uses whoever is in the server (or waits for
+-- the next player to join).
+local pendingErrors: { { fingerprint: string, source: string } } = {}
+local function sendError(player: Player, fingerprint: string, source: string)
+	send("Error", function()
+		AnalyticsService:LogCustomEvent(player, "Error", 1, {
+			[Enum.AnalyticsCustomFieldKeys.CustomField01.Name] = fingerprint,
+			[Enum.AnalyticsCustomFieldKeys.CustomField02.Name] = source,
+		})
+	end)
+end
+
+function Analytics.error(fingerprint: string, source: string, player: Player?)
+	local who = player or Players:GetPlayers()[1]
+	if who then
+		sendError(who, fingerprint, source)
+	elseif #pendingErrors < 50 then
+		table.insert(pendingErrors, { fingerprint = fingerprint, source = source })
+	end
+end
+
+local function sendPendingErrors(player: Player)
+	local waiting = pendingErrors
+	pendingErrors = {}
+	for _, entry in waiting do
+		sendError(player, entry.fingerprint, entry.source)
+	end
+end
+
 function Analytics.trialStarted(player: Player)
 	send("TrialStarted", function()
 		AnalyticsService:LogCustomEvent(player, "TrialStarted", 1)
@@ -417,6 +450,7 @@ end
 function Analytics.init()
 	PlayerData.Loaded:Connect(onLoaded)
 	Players.PlayerRemoving:Connect(onRemoving)
+	Players.PlayerAdded:Connect(sendPendingErrors)
 end
 
 return Analytics

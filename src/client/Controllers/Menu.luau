@@ -95,11 +95,21 @@ local cardScale: UIScale
 local tileScales: { UIScale } = {}
 local dots: { GuiObject } = {} -- "a reward is ready" dots: the MENU button's and the REWARDS tile's
 local buyDots: { [string]: GuiObject } = {} -- "you can afford the next one": SHOP's and RESEARCH's
+local tiles: { [string]: TextButton } = {} -- by item name (the tutorial points at SHOP)
 local isOpen = false
 local token = 0
 
 function Menu.isOpen(): boolean
 	return isOpen
+end
+
+-- The MENU button and a tile ("SHOP"), for the tutorial to point at.
+function Menu.button(): GuiObject?
+	return menuButton
+end
+
+function Menu.tile(name: string): GuiObject?
+	return tiles[name]
 end
 
 local function setIcon(open: boolean)
@@ -256,6 +266,7 @@ local function buildTile(index: number, item: Item)
 	end
 	local scale = UI.make(Instance.new("UIScale"), { Scale = 0, Parent = tile })
 	table.insert(tileScales, scale)
+	tiles[item.name] = tile
 	local glyph = UI.label({
 		Title = true,
 		Text = item.icon,

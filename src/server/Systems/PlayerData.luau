@@ -14,13 +14,16 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local QuestRules = require(ReplicatedStorage.Shared.Util.Quests)
 local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
 local SettingsRules = require(ReplicatedStorage.Shared.Util.Settings)
 local Signal = require(ReplicatedStorage.Shared.Util.Signal)
+local StatRules = require(ReplicatedStorage.Shared.Util.Stats)
+local TutorialRules = require(ReplicatedStorage.Shared.Util.Tutorial)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local STORE_NAME = "StormBottler_PlayerData"
-local CURRENT_VERSION = 12
+local CURRENT_VERSION = 17
 -- A lock older than this belongs to a server that crashed; it may be taken.
 local LOCK_STALE_SECONDS = Config.AUTOSAVE_INTERVAL * 3
 local LOCKED_RETRIES = 5
@@ -39,6 +42,8 @@ type Session = {
 	player: Player,
 	profile: Types.Profile,
 	canSave: boolean, -- false for a temporary Studio profile
+	isNew: boolean, -- there was no saved profile before this visit (Systems/Invites)
+	wipe: boolean?, -- an admin reset it: every save from now writes a new profile
 }
 
 local DEFAULT_PROFILE: Types.Profile = {
@@ -64,6 +69,14 @@ local DEFAULT_PROFILE: Types.Profile = {
 	giftCredits = {},
 	glints = {},
 	settings = SettingsRules.defaults(),
+	stats = StatRules.new(),
+	quests = QuestRules.new(),
+	logClaimed = {},
+	ascension = 0,
+	tutorialStep = TutorialRules.WALK, -- a new player starts the tutorial
+	loginRun = 0,
+	bestLoginRun = 0,
+	notifyAsked = false,
 }
 
 -- MIGRATIONS[n] turns a version-n profile into version n+1. When the profile
@@ -149,6 +162,49 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 		data.settings = SettingsRules.sanitize(data.settings)
 		return data
 	end,
+	-- stat counters and quests (prompt 16): counting starts now, except
+	-- lifetime Volts earned, which is what they've earned so far; quests
+	-- are picked when the profile loads
+	[12] = function(data: any): any
+		data.stats = StatRules.new()
+		if typeof(data.totalVolts) == "number" and data.totalVolts > 0 then
+			data.stats.lifetime[StatRules.VOLTS_EARNED] = data.totalVolts
+		end
+		data.quests = QuestRules.new()
+		return data
+	end,
+	-- the Storm Log (prompt 16 part B): it's worked out from the stat
+	-- counters, so only claimed row rewards are new (none yet)
+	[13] = function(data: any): any
+		data.logClaimed = {}
+		return data
+	end,
+	-- Ascension (prompt 16 part C): nobody has ascended yet
+	[14] = function(data: any): any
+		data.ascension = 0
+		return data
+	end,
+	-- the new-player tutorial (prompt 17): anyone who has owned a Vial or
+	-- better (or ascended) never sees it; a saved player still on the Jar
+	-- starts it from step 1
+	[15] = function(data: any): any
+		local tier = if typeof(data.bottleTier) == "number" then data.bottleTier else 1
+		local level = if typeof(data.ascension) == "number" then data.ascension else 0
+		data.tutorialStep = if TutorialRules.isOldPlayer({ bottleTier = tier, ascension = level })
+			then TutorialRules.DONE
+			else TutorialRules.WALK
+		return data
+	end,
+	-- leaderboards and notifications (prompt 17 part B): the login run
+	-- starts from the streak day they're on (the best guess we have), and
+	-- nobody has been asked about notifications yet
+	[16] = function(data: any): any
+		local streak = if typeof(data.dailyStreak) == "number" then data.dailyStreak else 0
+		data.loginRun = streak
+		data.bestLoginRun = streak
+		data.notifyAsked = false
+		return data
+	end,
 }
 
 local storeOk, storeResult = pcall(function()
@@ -163,6 +219,10 @@ local PlayerData = {}
 
 -- Fires once a player's profile is ready to use.
 PlayerData.Loaded = Signal.new() :: Signal.Signal<Player, Types.Profile>
+
+-- Fires when a player leaves, just before their profile's last save
+-- (PlayerData.get no longer finds it after this).
+PlayerData.Leaving = Signal.new() :: Signal.Signal<Player, Types.Profile>
 
 local function deepCopy<T>(value: T): T
 	if typeof(value) ~= "table" then
@@ -245,14 +305,15 @@ local function claim(
 	dataStore: DataStore,
 	player: Player,
 	sessionId: string
-): (ClaimResult, Types.Profile?)
+): (ClaimResult, Types.Profile?, boolean)
 	local outcome: ClaimResult = "error"
 	local profile: Types.Profile? = nil
+	local isNew = false
 
 	local ok = withRetry(3, function()
 		dataStore:UpdateAsync(keyFor(player), function(old: any): any
 			-- this function can run more than once; reset results every time
-			outcome, profile = "error", nil
+			outcome, profile, isNew = "error", nil, false
 			if old ~= nil and typeof(old) ~= "table" then
 				return nil -- unknown format: refuse rather than overwrite
 			end
@@ -260,6 +321,7 @@ local function claim(
 				outcome = "locked"
 				return nil
 			end
+			isNew = not (old and typeof(old.data) == "table")
 			local data = if old and typeof(old.data) == "table"
 				then migrate(old.data)
 				else deepCopy(DEFAULT_PROFILE)
@@ -270,9 +332,9 @@ local function claim(
 	end)
 
 	if not ok then
-		return "error", nil
+		return "error", nil, false
 	end
-	return outcome, profile
+	return outcome, profile, isNew
 end
 
 -- Writes the profile. release = true also clears the lock (player left).
@@ -282,7 +344,7 @@ local function save(session: Session, release: boolean): boolean
 	if not session.canSave or not dataStore then
 		return false
 	end
-	local data = deepCopy(session.profile)
+	local data = deepCopy(if session.wipe then DEFAULT_PROFILE else session.profile)
 	local player = session.player
 	local wrote = false
 
@@ -336,6 +398,7 @@ local function useTemporaryProfile(player: Player)
 		player = player,
 		profile = deepCopy(DEFAULT_PROFILE),
 		canSave = false,
+		isNew = true,
 	}
 	sessions[player] = session
 	PlayerData.Loaded:Fire(player, session.profile)
@@ -354,10 +417,12 @@ local function onPlayerAdded(player: Player)
 
 	local sessionId = HttpService:GenerateGUID(false)
 	local profile: Types.Profile? = nil
+	local isNew = false
 	for attempt = 1, LOCKED_RETRIES do
-		local result, loaded = claim(dataStore, player, sessionId)
+		local result, loaded, fresh = claim(dataStore, player, sessionId)
 		if result == "ok" then
 			profile = loaded
+			isNew = fresh
 			break
 		elseif result == "error" then
 			if RunService:IsStudio() then
@@ -382,7 +447,8 @@ local function onPlayerAdded(player: Player)
 		return
 	end
 
-	local session: Session = { id = sessionId, player = player, profile = profile, canSave = true }
+	local session: Session =
+		{ id = sessionId, player = player, profile = profile, canSave = true, isNew = isNew }
 
 	-- left while we were loading: hand the lock straight back
 	if player.Parent == nil then
@@ -401,6 +467,7 @@ local function onPlayerRemoving(player: Player)
 		return
 	end
 	sessions[player] = nil
+	PlayerData.Leaving:Fire(player, session.profile)
 	release(session)
 end
 
@@ -419,6 +486,13 @@ end
 function PlayerData.get(player: Player): Types.Profile?
 	local session = sessions[player]
 	return if session then session.profile else nil
+end
+
+-- True if the player had no saved profile before this visit (a brand-new
+-- player; a temporary Studio profile counts as new).
+function PlayerData.isNew(player: Player): boolean
+	local session = sessions[player]
+	return session ~= nil and session.isNew
 end
 
 -- Someone's saved profile, read only: for a player who may not be in this
@@ -448,6 +522,52 @@ end
 function PlayerData.saveNow(player: Player): boolean
 	local session = sessions[player]
 	return session ~= nil and save(session, false)
+end
+
+-- Admin reset (Systems/Admin) of a player in this server: their profile is
+-- saved as a brand-new one now and when they leave (the admin system then
+-- kicks them, so nothing in this session uses the old profile again).
+-- True if it was written (a temporary Studio profile never saves).
+function PlayerData.reset(player: Player): boolean
+	local session = sessions[player]
+	if not session then
+		return false
+	end
+	session.wipe = true
+	return save(session, false)
+end
+
+-- Admin reset of a player who isn't in this server. Refuses (false, why)
+-- while another server holds their save, so it can't fight a live session.
+function PlayerData.resetSaved(userId: number): (boolean, string)
+	local dataStore = store
+	if not dataStore then
+		return false, "DataStores aren't available here"
+	end
+	local outcome = "error"
+	local ok = withRetry(2, function()
+		dataStore:UpdateAsync(keyForId(userId), function(old: any): any
+			outcome = "error"
+			if old ~= nil and typeof(old) ~= "table" then
+				return nil
+			end
+			if old and heldByOther(old.lock, "") then
+				outcome = "locked"
+				return nil
+			end
+			outcome = "ok"
+			local record: Record = { data = deepCopy(DEFAULT_PROFILE), lock = nil }
+			return record
+		end)
+	end)
+	if not ok then
+		return false, "couldn't write the save"
+	elseif outcome == "locked" then
+		return false, "they're playing in another server right now"
+	elseif outcome ~= "ok" then
+		return false, "their save is in an unknown format"
+	end
+	return true, "reset"
 end
 
 function PlayerData.start()

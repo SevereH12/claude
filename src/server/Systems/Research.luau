@@ -21,9 +21,11 @@ local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local ResearchSites = require(ReplicatedStorage.Shared.Util.ResearchSites)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
+local StatRules = require(ReplicatedStorage.Shared.Util.Stats)
 local Analytics = require(script.Parent.Analytics)
 local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
+local Stats = require(script.Parent.Stats)
 local StormCycle = require(script.Parent.StormCycle)
 local Sync = require(script.Parent.Sync)
 local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
@@ -170,6 +172,7 @@ local function onPromote(player: Player, roleId: unknown)
 	save.level = 1
 	save.data = 0
 	print(`[Research] {player.Name} promoted {roleId} to rank {save.rank}`)
+	Stats.add(player, StatRules.PROMOTIONS, 1)
 	changed(player)
 end
 
