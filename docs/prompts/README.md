@@ -85,6 +85,10 @@ and stops if it isn't. To run one, say: "Do `docs/prompts/<file>`".
     didn't). Part B: the Research panel gets TEAM and LOG tabs (the Storm
     Log moves there from Rewards), a Glints display in zone colours, and
     compact researcher cards with one POST picker.
+20. `20-lightning-fx.md`: one run. Lightning bolts drawn smoothly (Beams,
+    no gaps), a flicker that doesn't look like a glitch, less work per
+    strike (far strikes and other worlds' strikes skipped, fewer shadowed
+    lights), and rain that keeps up at boot speed.
 
 Researchers (all five parts done) live in `researchers/`.
 
