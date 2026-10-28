@@ -203,5 +203,241 @@
       ],
       "description": "Start a Server Storm: 2x Volts for everyone in your server for 15 minutes, with your name on it!"
     }
+  ],
+  "glintPacks": [
+    {
+      "key": "Tier1Glints25",
+      "tier": 1,
+      "glints": 25,
+      "name": "25 Mesa Glints",
+      "price": 49,
+      "color": [
+        255,
+        120,
+        60
+      ],
+      "description": "25 Mesa Glints for promoting your researchers at the Research Office (they pay for promotions up to rank 1)."
+    },
+    {
+      "key": "Tier1Glints75",
+      "tier": 1,
+      "glints": 75,
+      "name": "75 Mesa Glints",
+      "price": 129,
+      "color": [
+        255,
+        120,
+        60
+      ],
+      "description": "75 Mesa Glints for promoting your researchers at the Research Office (they pay for promotions up to rank 1)."
+    },
+    {
+      "key": "Tier1Glints200",
+      "tier": 1,
+      "glints": 200,
+      "name": "200 Mesa Glints",
+      "price": 299,
+      "color": [
+        255,
+        120,
+        60
+      ],
+      "description": "200 Mesa Glints for promoting your researchers at the Research Office (they pay for promotions up to rank 1)."
+    },
+    {
+      "key": "Tier2Glints25",
+      "tier": 2,
+      "glints": 25,
+      "name": "25 Generator Yard Glints",
+      "price": 49,
+      "color": [
+        70,
+        160,
+        255
+      ],
+      "description": "25 Generator Yard Glints for promoting your researchers at the Research Office (they pay for promotions up to rank 2)."
+    },
+    {
+      "key": "Tier2Glints75",
+      "tier": 2,
+      "glints": 75,
+      "name": "75 Generator Yard Glints",
+      "price": 129,
+      "color": [
+        70,
+        160,
+        255
+      ],
+      "description": "75 Generator Yard Glints for promoting your researchers at the Research Office (they pay for promotions up to rank 2)."
+    },
+    {
+      "key": "Tier2Glints200",
+      "tier": 2,
+      "glints": 200,
+      "name": "200 Generator Yard Glints",
+      "price": 299,
+      "color": [
+        70,
+        160,
+        255
+      ],
+      "description": "200 Generator Yard Glints for promoting your researchers at the Research Office (they pay for promotions up to rank 2)."
+    },
+    {
+      "key": "Tier3Glints25",
+      "tier": 3,
+      "glints": 25,
+      "name": "25 Tidewire Beach Glints",
+      "price": 49,
+      "color": [
+        80,
+        230,
+        150
+      ],
+      "description": "25 Tidewire Beach Glints for promoting your researchers at the Research Office (they pay for promotions up to rank 3)."
+    },
+    {
+      "key": "Tier3Glints75",
+      "tier": 3,
+      "glints": 75,
+      "name": "75 Tidewire Beach Glints",
+      "price": 129,
+      "color": [
+        80,
+        230,
+        150
+      ],
+      "description": "75 Tidewire Beach Glints for promoting your researchers at the Research Office (they pay for promotions up to rank 3)."
+    },
+    {
+      "key": "Tier3Glints200",
+      "tier": 3,
+      "glints": 200,
+      "name": "200 Tidewire Beach Glints",
+      "price": 299,
+      "color": [
+        80,
+        230,
+        150
+      ],
+      "description": "200 Tidewire Beach Glints for promoting your researchers at the Research Office (they pay for promotions up to rank 3)."
+    },
+    {
+      "key": "Tier4Glints25",
+      "tier": 4,
+      "glints": 25,
+      "name": "25 Rune Spire Glints",
+      "price": 49,
+      "color": [
+        150,
+        110,
+        255
+      ],
+      "description": "25 Rune Spire Glints for promoting your researchers at the Research Office (they pay for promotions up to rank 4)."
+    },
+    {
+      "key": "Tier4Glints75",
+      "tier": 4,
+      "glints": 75,
+      "name": "75 Rune Spire Glints",
+      "price": 129,
+      "color": [
+        150,
+        110,
+        255
+      ],
+      "description": "75 Rune Spire Glints for promoting your researchers at the Research Office (they pay for promotions up to rank 4)."
+    },
+    {
+      "key": "Tier4Glints200",
+      "tier": 4,
+      "glints": 200,
+      "name": "200 Rune Spire Glints",
+      "price": 299,
+      "color": [
+        150,
+        110,
+        255
+      ],
+      "description": "200 Rune Spire Glints for promoting your researchers at the Research Office (they pay for promotions up to rank 4)."
+    },
+    {
+      "key": "Tier5Glints25",
+      "tier": 5,
+      "glints": 25,
+      "name": "25 Cloudshore Glints",
+      "price": 49,
+      "color": [
+        255,
+        205,
+        70
+      ],
+      "description": "25 Cloudshore Glints for promoting your researchers at the Research Office (they pay for promotions up to rank 5)."
+    },
+    {
+      "key": "Tier5Glints75",
+      "tier": 5,
+      "glints": 75,
+      "name": "75 Cloudshore Glints",
+      "price": 129,
+      "color": [
+        255,
+        205,
+        70
+      ],
+      "description": "75 Cloudshore Glints for promoting your researchers at the Research Office (they pay for promotions up to rank 5)."
+    },
+    {
+      "key": "Tier5Glints200",
+      "tier": 5,
+      "glints": 200,
+      "name": "200 Cloudshore Glints",
+      "price": 299,
+      "color": [
+        255,
+        205,
+        70
+      ],
+      "description": "200 Cloudshore Glints for promoting your researchers at the Research Office (they pay for promotions up to rank 5)."
+    },
+    {
+      "key": "Tier6Glints25",
+      "tier": 6,
+      "glints": 25,
+      "name": "25 Ember Mesa Glints",
+      "price": 49,
+      "color": [
+        255,
+        130,
+        50
+      ],
+      "description": "25 Ember Mesa Glints for promoting your researchers at the Research Office (they pay for promotions up to rank 6)."
+    },
+    {
+      "key": "Tier6Glints75",
+      "tier": 6,
+      "glints": 75,
+      "name": "75 Ember Mesa Glints",
+      "price": 129,
+      "color": [
+        255,
+        130,
+        50
+      ],
+      "description": "75 Ember Mesa Glints for promoting your researchers at the Research Office (they pay for promotions up to rank 6)."
+    },
+    {
+      "key": "Tier6Glints200",
+      "tier": 6,
+      "glints": 200,
+      "name": "200 Ember Mesa Glints",
+      "price": 299,
+      "color": [
+        255,
+        130,
+        50
+      ],
+      "description": "200 Ember Mesa Glints for promoting your researchers at the Research Office (they pay for promotions up to rank 6)."
+    }
   ]
 }

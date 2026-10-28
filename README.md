@@ -123,6 +123,16 @@ progress. To add or change a pack:
    **Analytics** (Funnels: Store; Custom events: OfferShown, OfferTapped,
    TrialStarted, TrialEnded).
 
+The GLINTS tab sells the Glint packs in `Config.GLINT_PACKS`: 25, 75 and
+200 Glints (49, 129 and 299 Robux) for every zone tier researcher
+promotions use, named after the tier's first zone ("75 Mesa Glints").
+`Systems/Receipts` pays each purchase once, through `Research.addGlints`.
+The 18 products were made on sale by `create_store.py` (their ids and
+icons are in `store_ids.json` and `GLINT_PACK_IDS` in Config). A new zone
+tier needs three new products (add them to `store_items.json`, run
+`make_icons.py` and `create_store.py`) and a new `GLINT_PACK_IDS` entry;
+`test_store.luau` fails until every tier has its three.
+
 ## Rewards
 
 The REWARDS panel (MENU → 🎁 REWARDS; a red dot means something is ready):

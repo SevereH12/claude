@@ -1,11 +1,13 @@
 --!strict
--- The store's pure rules (tools/harness/test_offers.luau tests them): what
--- a Volts pack gives, what to do with a purchase receipt, and when an offer
--- may show. No Roblox services.
+-- The store's pure rules (tools/harness/test_offers.luau and test_store.luau
+-- test them): what a Volts pack gives, Glint packs' names and products,
+-- what to do with a purchase receipt, and when an offer may show. No Roblox
+-- services.
 
 local Config = require(script.Parent.Parent.Config)
 local Types = require(script.Parent.Parent.Types)
 local Progression = require(script.Parent.Progression)
+local Research = require(script.Parent.Research)
 
 local STORE = Config.STORE
 
@@ -28,6 +30,39 @@ end
 -- The Volts a pack gives this player.
 function Store.packVolts(pack: Types.VoltPackDef, progress: Progression.Progress): number
 	return Store.volts(pack.charges, progress)
+end
+
+-- The name of a tier's Glints, after its first zone: "Mesa".
+function Store.tierName(tier: number): string
+	local zone = Research.tierZone(tier)
+	return if zone then zone.displayName else `Tier {tier}`
+end
+
+-- A Glint pack's name: "75 Mesa Glints".
+function Store.glintPackName(pack: Types.GlintPackDef): string
+	return `{pack.glints} {Store.tierName(pack.tier)} Glints`
+end
+
+-- The Glint pack sold as this Developer Product, if any.
+function Store.glintPackById(productId: number): Types.GlintPackDef?
+	for _, pack in Config.GLINT_PACKS do
+		if pack.productId ~= 0 and pack.productId == productId then
+			return pack
+		end
+	end
+	return nil
+end
+
+-- The highest zone tier this progress has reached: the top tier of the
+-- non-premium zones its bottle opens.
+function Store.reachedTier(progress: Progression.Progress): number
+	local reached = 0
+	for _, zone in Config.ZONES do
+		if not zone.premium and progress.bottleTier >= zone.requiresBottle then
+			reached = math.max(reached, Research.zoneTier(zone))
+		end
+	end
+	return reached
 end
 
 -- Roughly how long catching a pack's Volts takes, as "about 20 minutes" or

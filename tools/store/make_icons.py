@@ -244,6 +244,38 @@ def server_storm(d, c):
     text(d, "ALL", 0.5, 0.86, 0.12, VOLT)
 
 
+def shade(c, k):
+    # k > 0 mixes toward white, k < 0 toward black
+    return tuple(int(v + (255 - v) * k) if k > 0 else int(v * (1 + k)) for v in c)
+
+
+def glint_pack(count):
+    # a Glint gem (like the Research panel's chips) in the zone's colour,
+    # with the count under it; bigger packs get a second and third gem
+    def gem(d, c, cx, cy, s):
+        top, mid, bottom = cy - 0.30 * s, cy - 0.10 * s, cy + 0.36 * s
+        left, right = cx - 0.32 * s, cx + 0.32 * s
+        outline = [(cx - 0.18 * s, top), (cx + 0.18 * s, top), (right, mid), (cx, bottom), (left, mid)]
+        poly(d, outline, c)
+        poly(d, [(cx - 0.18 * s, top), (cx + 0.18 * s, top), (cx + 0.10 * s, mid), (cx - 0.10 * s, mid)],
+             shade(c, 0.45), width=int(W * 0.6))
+        poly(d, [(left, mid), (cx - 0.10 * s, mid), (cx, bottom)], shade(c, 0.2), width=int(W * 0.6))
+        poly(d, [(right, mid), (cx + 0.10 * s, mid), (cx, bottom)], shade(c, -0.25), width=int(W * 0.6))
+
+    if count >= 200:
+        gems = [(0.27, 0.48, 0.40), (0.73, 0.48, 0.40), (0.5, 0.40, 0.48)]
+    elif count >= 75:
+        gems = [(0.34, 0.45, 0.46), (0.66, 0.45, 0.46)]
+    else:
+        gems = [(0.5, 0.44, 0.62)]
+
+    def f(d, c):
+        for cx, cy, s in gems:
+            gem(d, c, cx, cy, s)
+        text(d, str(count), 0.5, 0.80, 0.20, WHITE)
+    return f
+
+
 DRAW = {
     "DoubleVolts": double_volts,
     "RemoteSell": remote_sell,
@@ -273,7 +305,8 @@ def main():
         for item in items[group]:
             color = tuple(item["color"])
             img, d = background(color)
-            DRAW[item.get("pass", item["key"])](d, color)
+            draw = glint_pack(item["glints"]) if "glints" in item else DRAW[item.get("pass", item["key"])]
+            draw(d, color)
             if "pass" in item:
                 gift_badge(d)
             img.resize((OUT, OUT), Image.LANCZOS).save(os.path.join(out, f"{item['key']}.png"))

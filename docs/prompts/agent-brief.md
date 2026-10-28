@@ -48,8 +48,8 @@ Studio" checks and list them in your report instead.
   `DEFAULT_PROFILE` (and a test for the migration).
 - Every client->server remote is rate-limited and validated
   (`Systems/Shop.luau` is the pattern). Server owns all state.
-- All 8 passes and 17 products are **on sale** (since 2026-10-28, the
-  user's call). Don't change their prices or sale state, or the game page,
+- All 8 passes and 35 products (the 18 Glint packs of prompt 22 included)
+  are **on sale** (since 2026-10-28, the user's call). Don't change their prices or sale state, or the game page,
   without asking.
 - Settings go through `Util/Settings` and `Lib/SettingsStore`; sounds
   through `Lib/Sfx` (no new sound uploads); UI through `Lib/UI` and

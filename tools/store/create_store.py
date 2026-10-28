@@ -1,7 +1,9 @@
 """Creates the game passes and Volts packs from store_items.json through
 Roblox Open Cloud, skipping any that already exist (matched by name), and
-writes their ids to store_ids.json. Everything is created OFF SALE: turn
-items on sale once the game code for them is live.
+writes their ids to store_ids.json. New items are created OFF SALE (turn
+them on sale once the game code for them is live), except the groups in
+items.CREATE_ON_SALE (the Glint packs), which are created on sale. Items
+that already exist are left exactly as they are.
    python3 tools/store/create_store.py <universeId> <iconDir>
 The API key is sent as the x-api-key header from $ROBLOX_API_KEY, or added
 by the network proxy when that variable isn't set."""
@@ -9,7 +11,7 @@ import json, os, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 API = "https://apis.roblox.com"
-from items import GROUP_KIND, load
+from items import CREATE_ON_SALE, GROUP_KIND, load
 
 KINDS = {
     "pass": ("game-passes/v1/universes/{u}/game-passes", "gamePasses", "gamePassId"),
@@ -33,7 +35,7 @@ def existing(path, listKey, idKey):
     while True:
         page = curl([f"{API}/{path}/creator?pageSize=50" + (f"&pageToken={token}" if token else "")])
         for item in page.get(listKey) or []:
-            found[item["name"]] = item.get(idKey) or item.get("id")
+            found[item["name"]] = (item.get(idKey) or item.get("id"), item.get("iconImageAssetId"))
         token = page.get("nextPageToken")
         if not token:
             return found
@@ -55,17 +57,23 @@ def main():
         ids.setdefault(group, {})
         for item in items[group]:
             if item["name"] in have:
-                ids[group][item["key"]] = have[item["name"]]
-                print(f"exists   {item['name']}: {have[item['name']]}")
+                item_id, image = have[item["name"]]
+                ids[group][item["key"]] = item_id
+                if image and item["key"] not in ids.setdefault("icons", {}):
+                    ids["icons"][item["key"]] = image  # the icon it was created with
+                print(f"exists   {item['name']}: {item_id}")
                 continue
             form = ["-F", f"name={item['name']}", "-F", f"description={item['description']}",
-                    "-F", f"price={item['price']}", "-F", "isForSale=false",
+                    "-F", f"price={item['price']}",
+                    "-F", f"isForSale={'true' if group in CREATE_ON_SALE else 'false'}",
                     "-F", "isRegionalPricingEnabled=true"]
             icon = os.path.join(icons, f"{item['key']}.png")
             if os.path.exists(icon):
                 form += ["-F", f"imageFile=@{icon};type=image/png"]
             made = curl(["-X", "POST", f"{API}/{path}", *form])
             ids[group][item["key"]] = made[idKey]
+            if made.get("iconImageAssetId"):
+                ids.setdefault("icons", {})[item["key"]] = made["iconImageAssetId"]
             print(f"created  {item['name']}: {made[idKey]}")
     with open(path_file, "w") as f:
         json.dump(ids, f, indent=2)
