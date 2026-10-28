@@ -12,8 +12,7 @@
 --   * The board at world 1's spawn (tagged Leaderboards.BOARD_TAG, built by
 --     World/Kit.leaderboard) shows the first board's top 10.
 -- Studio without API access can't read or write them (the log says so
--- once); the TEST panel's "Leaderboard test data" fills the boards with
--- made-up players instead (Leaderboards.toggleTest).
+-- once).
 
 local CollectionService = game:GetService("CollectionService")
 local DataStoreService = game:GetService("DataStoreService")
@@ -40,7 +39,6 @@ type Written = { values: { [string]: number }, at: { [string]: number } }
 local remote: RemoteEvent
 local stores: { [string]: OrderedDataStore } = {}
 local cache: { [string]: { Types.LeaderboardEntry } } = {}
-local testMode = false
 -- per player: what was last written, and when (os.clock())
 local written: { [Player]: Written } = {}
 -- per player: their values when they left (the profile is gone by then)
@@ -228,7 +226,6 @@ local function sendTo(player: Player)
 	local view: Types.LeaderboardView = {
 		boards = cache,
 		mine = LeaderboardRules.values(profile),
-		test = testMode,
 	}
 	remote:FireClient(player, view)
 end
@@ -241,9 +238,6 @@ local function sendAll()
 end
 
 local function refresh()
-	if testMode then
-		return
-	end
 	for _, board in SETTINGS.boards do
 		local entries = readBoard(board.key)
 		if entries then
@@ -251,20 +245,6 @@ local function refresh()
 		end
 	end
 	sendAll()
-end
-
--- Studio TEST: shows made-up boards (with you at #7 on most of them), or
--- goes back to the real ones. Returns whether test data is now showing.
-function Leaderboards.toggleTest(player: Player): boolean
-	testMode = not testMode
-	if testMode then
-		cache = LeaderboardRules.testBoards(player.UserId, player.DisplayName)
-		sendAll()
-	else
-		cache = {}
-		task.spawn(refresh)
-	end
-	return testMode
 end
 
 function Leaderboards.init()

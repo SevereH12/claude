@@ -4,25 +4,19 @@
 -- shuffled with no repeats until the list is used up. A phase or world
 -- change crossfades over Config.MUSIC_FADE seconds. Everything plays in the
 -- Music SoundGroup, so the SETTINGS slider and Sfx's ducking apply.
---
--- Music.audition (Studio TEST panel) plays every shortlisted track for 20 s
--- with its name, so the user can pick which to keep.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
-local MusicShortlist = require(ReplicatedStorage.Shared.MusicShortlist)
 local Portals = require(ReplicatedStorage.Shared.Util.Portals)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
-local UI = require(script.Parent.Parent.Lib.UI)
 local Storm = require(script.Parent.Storm)
 
 local player = Players.LocalPlayer
 local LOAD_TIMEOUT = 10 -- seconds: a track that won't load is skipped
-local AUDITION_SECONDS = 20
 
 local Music = {}
 
@@ -32,7 +26,6 @@ local playlist = "" -- "<world>:<phase>" now playing
 local bags: { [string]: { number } } = {} -- what's left of each shuffled list
 local lastPlayed: { [string]: number } = {}
 local token = 0 -- bumps on every track change, so an old track's end is ignored
-local auditioning = false
 local random = Random.new()
 
 local function list(key: string): { number }
@@ -116,54 +109,10 @@ local function wanted(): string
 end
 
 local function update()
-	if auditioning then
-		return
-	end
 	local key = wanted()
 	if key ~= playlist then
 		play(key, Config.MUSIC_FADE)
 	end
-end
-
--- Studio: every shortlisted track for 20 s with its name. Calling it again
--- stops it.
-function Music.audition()
-	if auditioning then
-		auditioning = false
-		UI.toast("Music audition stopped", "info", 2)
-		playlist = ""
-		update()
-		return
-	end
-	auditioning = true
-	token += 1
-	local mine = token
-	task.spawn(function()
-		for index, track in MusicShortlist do
-			if not auditioning or token ~= mine then
-				return
-			end
-			fade(decks[active], 0, 0.5, true)
-			active = 3 - active
-			local deck = decks[active]
-			deck:Stop()
-			deck.SoundId = `rbxassetid://{track.id}`
-			deck.TimePosition = 0
-			deck.Volume = 1
-			deck:Play()
-			UI.toast(
-				`🎵 {index}/{#MusicShortlist} {track.slot}: {track.title} ({track.id})`,
-				"info",
-				AUDITION_SECONDS
-			)
-			task.wait(AUDITION_SECONDS)
-		end
-		if token == mine then
-			auditioning = false
-			playlist = ""
-			update()
-		end
-	end)
 end
 
 function Music.init()
@@ -175,7 +124,7 @@ function Music.init()
 		deck.Parent = game:GetService("SoundService")
 		deck.Ended:Connect(function()
 			-- the track finished: the next one of the same list
-			if not auditioning and decks[active] == deck then
+			if decks[active] == deck then
 				play(playlist, 1)
 			end
 		end)

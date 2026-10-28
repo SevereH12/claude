@@ -17,10 +17,6 @@ local WEEKDAYS: { [string]: number } =
 
 local Weather = {}
 
--- Workspace attribute (Studio only, the TEST panel): pretend the first
--- event in Config.EVENTS is on.
-Weather.PRETEND_EVENT = "PretendEvent"
-
 -- Workspace attributes everyone can read (Systems/ServerGoal sets them):
 -- the Volts in the server goal's meter, its size, and this round's top
 -- contributors (Weather.encodeTop).
@@ -144,19 +140,12 @@ function Weather.eventWindow(event: Types.EventDef, now: number): (boolean, numb
 end
 
 -- Every event on at `now` (Config.EVENTS unless a list is given), with
--- seconds left. `pretend` turns the first one on (the TEST panel).
-function Weather.activeEvents(
-	now: number,
-	events: { Types.EventDef }?,
-	pretend: boolean?
-): { ActiveEvent }
+-- seconds left.
+function Weather.activeEvents(now: number, events: { Types.EventDef }?): { ActiveEvent }
 	local list = events or Config.EVENTS
 	local active: { ActiveEvent } = {}
-	for index, event in list do
+	for _, event in list do
 		local on, left = Weather.eventWindow(event, now)
-		if not on and pretend and index == 1 then
-			on, left = true, 3600
-		end
 		if on then
 			table.insert(active, { event = event, left = left })
 		end
@@ -166,8 +155,8 @@ end
 
 -- `owned` (an Util/Passes set) plus a mark for each event on at `now`, so
 -- Passes.sellMultiplier multiplies by it.
-function Weather.withEvents(owned: Passes.Owned, now: number, pretend: boolean?): Passes.Owned
-	local active = Weather.activeEvents(now, nil, pretend)
+function Weather.withEvents(owned: Passes.Owned, now: number): Passes.Owned
+	local active = Weather.activeEvents(now)
 	if #active == 0 then
 		return owned
 	end
@@ -178,12 +167,10 @@ function Weather.withEvents(owned: Passes.Owned, now: number, pretend: boolean?)
 	return set
 end
 
--- The events on right now, by the server clock (with the Studio pretend
--- switch). Not pure: it reads the workspace, so the harness never calls it.
+-- The events on right now, by the server clock. Not pure: it reads the
+-- server clock, so the harness never calls it.
 function Weather.liveEvents(): { ActiveEvent }
-	local pretend = game:GetService("RunService"):IsStudio()
-		and workspace:GetAttribute(Weather.PRETEND_EVENT) == true
-	return Weather.activeEvents(math.floor(workspace:GetServerTimeNow()), nil, pretend)
+	return Weather.activeEvents(math.floor(workspace:GetServerTimeNow()))
 end
 
 -- Time left as a short text: "1d 4h", "3h 12m", "12:05".

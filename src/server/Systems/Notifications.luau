@@ -266,20 +266,6 @@ local function onYes(player: Player)
 	print(`[Notifications] {player.Name} said yes to daily reminders`)
 end
 
--- Studio TEST: queues a "daily" reminder for this player, due now; the
--- next send (within a minute) claims it and sends it, or logs why not.
-function Notifications.testQueue(player: Player)
-	local now = os.time()
-	local item: NotifyRules.Item = {
-		key = NotifyRules.key(now, player.UserId, "daily"),
-		userId = player.UserId,
-		kind = "daily",
-		due = now,
-	}
-	queueItem(item)
-	task.spawn(sendDue)
-end
-
 function Notifications.init()
 	optInRemote = Net.get("NotifyOptIn")
 	optInRemote.OnServerEvent:Connect(onYes)

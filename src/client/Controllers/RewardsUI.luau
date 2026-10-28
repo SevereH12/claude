@@ -504,7 +504,7 @@ local function render(): (boolean, boolean, { number })
 
 	-- the streak: the day to claim, or the day claimed today
 	local daily = snapshot.daily
-	local today = RewardRules.today(now) + daily.dayOffset
+	local today = RewardRules.today(now)
 	local canClaim, nextDay = RewardRules.daily(daily.lastDay, today, daily.streak)
 	local current = if canClaim then nextDay else daily.streak
 	for day, card in dayCards do

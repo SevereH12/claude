@@ -88,7 +88,7 @@ local function setTitle(player: Player)
 		made.Parent = head
 		title = made
 	end
-	assert(title)
+	assert(title, "the Ascension title was just made")
 	local vip = player:GetAttribute(PassRules.ATTRIBUTE .. "VIP") == true
 	title.StudsOffsetWorldSpace = Vector3.new(0, TITLE_HEIGHT + (if vip then ABOVE_VIP else 0), 0)
 	local label = title:FindFirstChild("Text")
@@ -176,18 +176,6 @@ local function onAscend(player: Player, token: unknown)
 	else
 		confirm(player, profile, token :: string, remote)
 	end
-end
-
--- Studio TEST "Ready to ascend" (Systems/DevCommands only calls it in
--- Studio): the top bottle and exactly enough Volts for the next level.
-function Ascension.testReady(player: Player)
-	local profile = PlayerData.get(player)
-	if not profile then
-		return
-	end
-	profile.bottleTier = AscensionRules.topTier()
-	profile.volts = math.max(profile.volts, AscensionRules.cost(profile.ascension))
-	Sync.markDirty(player)
 end
 
 local function onPlayerAdded(player: Player)

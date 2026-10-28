@@ -51,10 +51,8 @@ check(Progression.requirement(mesa) == "Needs a Flask", "Mesa's gate sign says i
 local aurora = Config.ZONES.Aurora
 local Premium, NotPremium = roblox.Enum.MembershipType.Premium, roblox.Enum.MembershipType.None
 check(aurora ~= nil and aurora.premium == true, "Aurora is a premium zone")
-check(Progression.isPremium(Premium, false, false), "a member is Premium")
-check(not Progression.isPremium(NotPremium, false, false), "a non-member isn't")
-check(Progression.isPremium(NotPremium, true, true), "Pretend Premium works in Studio")
-check(not Progression.isPremium(NotPremium, true, false), "Pretend Premium is ignored live")
+check(Progression.isPremium(Premium), "a member is Premium")
+check(not Progression.isPremium(NotPremium), "a non-member isn't")
 check(Progression.canEnter(progress(1), aurora, true), "a member can enter Aurora with a Jar")
 check(
 	not Progression.canEnter(progress(5), aurora, false),

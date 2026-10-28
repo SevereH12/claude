@@ -162,7 +162,6 @@ check(
 	"activeEvents lists what's on"
 )
 check(#Weather.activeEvents(SATURDAY - 10) == 0, "nothing on on a Friday")
-check(#Weather.activeEvents(SATURDAY - 10, nil, true) >= 1, "pretend turns the first event on")
 
 -- The sale multiplier with an event on ---------------------------------------
 

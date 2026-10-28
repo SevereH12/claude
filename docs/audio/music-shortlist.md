@@ -2,8 +2,8 @@
 
 Licensed tracks from Roblox's partner catalogues (APMOfficial and
 DistrokidOfficial), found by `tools/audio/music_search.py`. The top 3 of
-each slot are in `Config.MUSIC`. Listen to them in Studio with TEST >
-REWARDS > **Music audition**, then say which to keep.
+each slot are in `Config.MUSIC`. Listen to each on its Creator Store page
+(create.roblox.com/store/asset/<id>), then say which to keep.
 
 Instrumental only (no lyrics): a track is kept only when its listing
 says it's instrumental (the reason is in the last column) and never

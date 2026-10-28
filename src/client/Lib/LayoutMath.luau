@@ -55,7 +55,7 @@ export type Hud = {
 	toasts: Rect,
 	banner: Rect,
 	tutorial: Rect, -- the tutorial's step card, in the middle of the top (the toasts go under it while it shows)
-	test: Rect, -- the owner's TEST buttons (two rows), under the menu
+	test: Rect, -- the ADMIN button's spot (two rows), under the menu
 }
 
 local LayoutMath = {}

@@ -37,11 +37,9 @@
 -- receiver's server ("Alex gifted VIP to Sam"), "giftSent" in the giver's
 -- when the receiver is elsewhere. Stats: GiftSent and GiftReceived
 -- (Analytics). Studio: without API access the inbox lives in memory for the
--- session, and the TEST panel's "Send test gift to me" and "Send test boost
--- gift" (Gifts.testGift) put a gift in your own inbox.
+-- session.
 
 local DataStoreService = game:GetService("DataStoreService")
-local HttpService = game:GetService("HttpService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local MessagingService = game:GetService("MessagingService")
 local Players = game:GetService("Players")
@@ -514,31 +512,6 @@ function Gifts.sendReward(toId: number, entry: Types.GiftEntry): boolean
 	end
 	announce(toId)
 	return true
-end
-
--- Studio TEST tool: a gift from "Test Gifter" to yourself, through your own
--- inbox: the first pass you don't have, or (`boost`) a 2x Volts Boost.
-function Gifts.testGift(player: Player, boost: boolean?)
-	local key: string? = nil
-	if boost then
-		key = Config.BOOST_PRODUCTS[1].key
-	else
-		for _, pass in Config.PASSES do
-			if not Passes.owns(player, pass.key) then
-				key = GiftRules.productKey(pass.key)
-				break
-			end
-		end
-	end
-	if not key then
-		news:FireClient(player, "refused", "You already have every pass")
-		return
-	end
-	local entry = entryFor(player, `test-{HttpService:GenerateGUID(false)}`, key)
-	entry.fromName = "Test Gifter"
-	if addToInbox(player.UserId, entry) then
-		task.spawn(deliver, player, false)
-	end
 end
 
 function Gifts.init()

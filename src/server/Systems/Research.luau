@@ -185,7 +185,7 @@ function Research.movedToOffice(player: Player, roleIds: { string })
 	changed(player)
 end
 
--- Adds Glints of a zone's tier (Studio TEST and the catch hook).
+-- Adds Glints of a zone's tier (the catch hook).
 function Research.addGlints(player: Player, tier: number, count: number)
 	local profile = PlayerData.get(player)
 	if not profile then
@@ -196,19 +196,6 @@ function Research.addGlints(player: Player, tier: number, count: number)
 	end
 	profile.glints[tier + 1] += count
 	Sync.markDirty(player)
-end
-
--- Studio TEST: field data for every researcher (levels follow).
-function Research.addData(player: Player, amount: number)
-	local profile = PlayerData.get(player)
-	if not profile then
-		return
-	end
-	for _, save in profile.researchers do
-		save.data += amount
-		save.level = math.max(save.level, ResearchMath.levelFor(save.data, save.rank))
-	end
-	changed(player)
 end
 
 local function onLoaded(player: Player, profile: Types.Profile)

@@ -4,8 +4,6 @@
 -- the tiers it reads. The server enforces it (Strikes, Movement, Research);
 -- the client only uses it for barriers and the HUD.
 
-local RunService = game:GetService("RunService")
-
 local Config = require(script.Parent.Parent.Config)
 local Types = require(script.Parent.Parent.Types)
 local Formulas = require(script.Parent.Formulas)
@@ -25,30 +23,19 @@ local Progression = {}
 
 -- Roblox's Premium icon: a glyph Roblox's fonts draw in any text.
 Progression.PREMIUM_ICON = utf8.char(0xE001)
--- Player attribute the Studio-only "Pretend Premium" test toggle sets
--- (Systems/DevCommands). Ignored outside Studio.
-Progression.PRETEND_PREMIUM = "PretendPremium"
 
 local PREMIUM_ONLY = `{Progression.PREMIUM_ICON} Premium members only`
 
--- Premium for zone entry: a real member, or in a Studio play test only, a
--- tester with Pretend Premium on. Pure, so tests can cover every case.
-function Progression.isPremium(
-	membership: Enum.MembershipType,
-	pretend: boolean,
-	inStudio: boolean
-): boolean
-	return membership == Enum.MembershipType.Premium or (inStudio and pretend)
+-- Premium for zone entry: a Roblox Premium member. Pure, so tests can
+-- cover it.
+function Progression.isPremium(membership: Enum.MembershipType): boolean
+	return membership == Enum.MembershipType.Premium
 end
 
 -- The same for a live player. The server's answer is the one that counts;
 -- it sends it to the client as snapshot.premium.
 function Progression.playerIsPremium(player: Player): boolean
-	return Progression.isPremium(
-		player.MembershipType,
-		player:GetAttribute(Progression.PRETEND_PREMIUM) == true,
-		RunService:IsStudio()
-	)
+	return Progression.isPremium(player.MembershipType)
 end
 
 local function withArticle(name: string): string

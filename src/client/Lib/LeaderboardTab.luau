@@ -60,9 +60,8 @@ local function render()
 	youLabel.Text = if view
 		then LeaderboardRules.youText(entries, player.UserId, selected, mine)
 		else "Loading the leaderboards..."
-	noteLabel.Text = if view and view.test
-		then "TEST DATA (Studio)"
-		elseif #entries == 0 and view then "No scores yet: be the first!"
+	noteLabel.Text = if #entries == 0 and view
+		then "No scores yet: be the first!"
 		else "Updates every few minutes"
 	for index, row in rows do
 		local entry = entries[index]

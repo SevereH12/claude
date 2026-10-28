@@ -10,13 +10,11 @@
 -- and 30s, asking for the player's group list. Never the client's word alone.
 --
 -- Everyone can see it: the GroupMember player attribute (the [Member] chat
--- tag, the panel's group card). Studio testing: "Pretend group member"
--- (Systems/DevCommands) counts in Studio only, like Pretend Premium.
+-- tag, the panel's group card).
 
 local GroupService = game:GetService("GroupService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
@@ -28,13 +26,11 @@ local RETRIES = { 10, 30 } -- seconds before each re-check of a "no" after joini
 local Group = {}
 
 Group.ATTRIBUTE = PassRules.GROUP
-Group.PRETEND = "PretendGroup" -- the Studio toggle is on
 
 -- Fires when a player becomes a member during their visit (they joined).
 Group.Joined = Signal.new() :: Signal.Signal<Player>
 
 local members: { [Player]: boolean } = {}
-local pretend: { [Player]: boolean } = {}
 local checking: { [Player]: boolean } = {}
 
 -- Does Roblox say they're in the group? nil if it couldn't tell.
@@ -66,19 +62,19 @@ local function inGroupFresh(player: Player): boolean?
 	return false
 end
 
--- Members (or Studio testers pretending) get the attribute; the snapshot is
+-- Members get the attribute; the snapshot is
 -- resent so sales and the panel catch up.
 local function refresh(player: Player)
 	if not player.Parent then
 		return
 	end
-	local member = members[player] == true or (RunService:IsStudio() and pretend[player] == true)
+	local member = members[player] == true
 	player:SetAttribute(Group.ATTRIBUTE, if member then true else nil)
 	Sync.markDirty(player)
 end
 
 function Group.isMember(player: Player): boolean
-	return members[player] == true or (RunService:IsStudio() and pretend[player] == true)
+	return members[player] == true
 end
 
 -- After the client says they joined: check again, and again after 10s and
@@ -110,16 +106,6 @@ function Group.recheck(player: Player)
 	end)
 end
 
--- Studio TEST toggle: pretend to be a member (or not). Ignored outside Studio.
-function Group.setPretend(player: Player, on: boolean)
-	if not RunService:IsStudio() then
-		return
-	end
-	pretend[player] = if on then true else nil
-	player:SetAttribute(Group.PRETEND, if on then true else nil)
-	refresh(player)
-end
-
 local function onPlayerAdded(player: Player)
 	if inGroup(player) then
 		members[player] = true
@@ -131,7 +117,6 @@ function Group.init()
 	Players.PlayerAdded:Connect(onPlayerAdded)
 	Players.PlayerRemoving:Connect(function(player)
 		members[player] = nil
-		pretend[player] = nil
 		checking[player] = nil
 	end)
 	for _, player in Players:GetPlayers() do

@@ -39,10 +39,9 @@ Rewards.DailyClaimed = Signal.new() :: Signal.Signal<Player, Types.Profile>
 
 local rewardedRemote: RemoteEvent
 
--- Today's UTC day number for this player (Studio's "Next day" adds days).
-local function today(player: Player): number
-	local session = Sync.rewards[player]
-	return RewardRules.today(os.time()) + (if session then session.dayOffset else 0)
+-- Today's UTC day number.
+local function today(): number
+	return RewardRules.today(os.time())
 end
 
 -- Pays a reward (Systems/Quests uses it too). `sku` names it in the
@@ -74,7 +73,7 @@ local function onClaimDaily(player: Player)
 	if not profile then
 		return
 	end
-	local day = today(player)
+	local day = today()
 	local canClaim, streak = RewardRules.daily(profile.lastDailyDay, day, profile.dailyStreak)
 	if not canClaim then
 		return
@@ -95,13 +94,12 @@ end
 
 -- Starts today's gifts from the profile (on join, and when a new UTC day
 -- starts while playing). The session's claimed list is the profile's own.
-local function startDay(player: Player, profile: Types.Profile, dayOffset: number)
-	local day = RewardRules.today(os.time()) + dayOffset
+local function startDay(player: Player, profile: Types.Profile)
+	local day = today()
 	profile.playtime = RewardRules.playtimeToday(profile.playtime, day)
 	Sync.rewards[player] = {
 		startedAt = workspace:GetServerTimeNow() - profile.playtime.seconds,
 		claimed = profile.playtime.claimed,
-		dayOffset = dayOffset,
 		day = day,
 	}
 	Sync.markDirty(player)
@@ -131,8 +129,8 @@ local function onClaimGift(player: Player, index: unknown)
 	if not profile or not session then
 		return
 	end
-	if today(player) ~= session.day then
-		startDay(player, profile, session.dayOffset) -- a new UTC day: new gifts
+	if today() ~= session.day then
+		startDay(player, profile) -- a new UTC day: new gifts
 		return
 	end
 	local gift = Config.PLAYTIME_GIFTS[index]
@@ -143,23 +141,6 @@ local function onClaimGift(player: Player, index: unknown)
 	savePlaytime(profile, session)
 	Rewards.give(player, profile, gift.reward, `Gift {gift.minutes} min`)
 	Analytics.giftClaimed(player, gift.minutes)
-end
-
--- Studio TEST tools (Systems/DevCommands only calls these in Studio).
-function Rewards.nextDay(player: Player)
-	local session = Sync.rewards[player]
-	if session then
-		session.dayOffset += 1
-		Sync.markDirty(player)
-	end
-end
-
-function Rewards.addPlaytime(player: Player, seconds: number)
-	local session = Sync.rewards[player]
-	if session then
-		session.startedAt -= seconds
-		Sync.markDirty(player)
-	end
 end
 
 local function onGroupJoined(player: Player)
@@ -192,8 +173,8 @@ function Rewards.start()
 		task.wait(30)
 		for player, session in Sync.rewards do
 			local profile = PlayerData.get(player)
-			if profile and today(player) ~= session.day then
-				startDay(player, profile, session.dayOffset)
+			if profile and today() ~= session.day then
+				startDay(player, profile)
 			end
 		end
 	end

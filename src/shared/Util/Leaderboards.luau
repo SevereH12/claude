@@ -123,37 +123,4 @@ function Leaderboards.youText(
 	return `You: not in the top {Config.LEADERBOARDS.top} · {value}`
 end
 
--- Pretend boards for the Studio TEST button: `top` made-up players per
--- board with falling scores, and `you` (userId, name) placed at rank 7 on
--- the first board and missing from the second (to show both "You:" lines).
-function Leaderboards.testBoards(
-	youId: number,
-	youName: string
-): { [string]: { Types.LeaderboardEntry } }
-	local boards: { [string]: { Types.LeaderboardEntry } } = {}
-	for index, board in Config.LEADERBOARDS.boards do
-		local entries: { Types.LeaderboardEntry } = {}
-		for rank = 1, Config.LEADERBOARDS.top do
-			local top = if board.key == "volts"
-				then 5e9
-				elseif board.key == "bolts" then 250000
-				elseif board.key == "ascension" then 60
-				else 120
-			local value = math.max(1, math.floor(top / rank ^ 0.8))
-			local entry: Types.LeaderboardEntry = {
-				-- low user ids are real accounts, so their avatars load
-				userId = rank,
-				name = string.format("TestBottler%02d", rank),
-				value = value,
-			}
-			if rank == 7 and index ~= 2 then
-				entry = { userId = youId, name = youName, value = value }
-			end
-			table.insert(entries, entry)
-		end
-		boards[board.key] = entries
-	end
-	return boards
-end
-
 return Leaderboards

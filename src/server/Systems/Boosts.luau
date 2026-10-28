@@ -92,7 +92,7 @@ function Boosts.startStorm(buyer: Player): number
 	return left
 end
 
--- Ends the Server Storm now (its timer, and the Studio TEST tool).
+-- Ends the Server Storm now (when its timer runs out).
 function Boosts.endStorm()
 	stormEnds = nil
 	workspace:SetAttribute(BoostRules.STORM_ENDS, nil)
@@ -118,19 +118,10 @@ function Boosts.startSurge(top: string): number
 	return left
 end
 
--- Ends the Server Surge now (its timer, and the Studio TEST tool).
+-- Ends the Server Surge now (when its timer runs out).
 function Boosts.endSurge()
 	surgeEnds = nil
 	workspace:SetAttribute(BoostRules.SURGE_ENDS, nil)
-end
-
--- Studio TEST tool: ends every boost now.
-function Boosts.clear(player: Player)
-	local profile = PlayerData.get(player)
-	if profile then
-		table.clear(profile.boosts)
-		Sync.markDirty(player)
-	end
 end
 
 function Boosts.init()

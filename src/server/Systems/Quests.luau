@@ -72,16 +72,6 @@ local function onReroll(player: Player, rawPeriod: unknown, rawIndex: unknown)
 	end
 end
 
--- Studio TEST "complete quest" (Systems/DevCommands only calls it in Studio).
-function Quests.testComplete(player: Player): boolean
-	local profile = Stats.refresh(player)
-	if not profile or not QuestRules.testComplete(profile.quests, profile.stats) then
-		return false
-	end
-	Sync.markDirty(player)
-	return true
-end
-
 function Quests.init()
 	Net.get("ClaimQuest").OnServerEvent:Connect(onClaim)
 	Net.get("RerollQuest").OnServerEvent:Connect(onReroll)

@@ -13,7 +13,6 @@ local StormLogRules = require(ReplicatedStorage.Shared.Util.StormLog)
 local Types = require(ReplicatedStorage.Shared.Types)
 local PlayerData = require(script.Parent.PlayerData)
 local Rewards = require(script.Parent.Rewards)
-local Stats = require(script.Parent.Stats)
 local Sync = require(script.Parent.Sync)
 local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
 
@@ -43,22 +42,6 @@ local function onClaim(player: Player, rowId: unknown)
 	Rewards.give(player, profile, reward, `Log {rowId}`)
 	Sync.markDirty(player)
 	print(`[StormLog] {player.Name} claimed row {rowId}`)
-end
-
--- Studio TEST "+Log entry" (Systems/DevCommands only calls it in Studio):
--- finds the next entry a counter can find and adds 1 to that counter.
--- Returns the entry's name, or nil when there's none left.
-function StormLog.testEntry(player: Player): string?
-	local profile = PlayerData.get(player)
-	if not profile then
-		return nil
-	end
-	local entry, key = StormLogRules.nextTestEntry(foundFor(profile))
-	if not entry or not key then
-		return nil
-	end
-	Stats.add(player, key, 1)
-	return entry.id
 end
 
 function StormLog.init()
