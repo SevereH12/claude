@@ -89,6 +89,10 @@ and stops if it isn't. To run one, say: "Do `docs/prompts/<file>`".
     no gaps), a flicker that doesn't look like a glitch, less work per
     strike (far strikes and other worlds' strikes skipped, fewer shadowed
     lights), and rain that keeps up at boot speed.
+21. `21-goals-research-ascension.md`: one run. The goal card on the HUD
+    also tracks hiring and promoting researchers and the next Ascension,
+    shows the goal closest to done (so it never disappears), and opens the
+    Shop or Research when tapped.
 
 Researchers (all five parts done) live in `researchers/`.
 
