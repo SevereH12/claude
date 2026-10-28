@@ -365,6 +365,7 @@ show("showNameTags", "Researcher name tags", "The names above your researchers")
 show("showOffers", "Pass offers", "Suggestions to buy a Game Pass")
 show("showAnnouncements", "Chat announcements", "Gifts and Server Storms in the chat")
 show("showGiftReminders", "Gift reminders", "When a playtime gift is ready")
+show("showTips", "Gameplay tips", "Short one-time hints about parts of the game")
 
 -- Remembered, not shown: the device's starting Quality was set, and the
 -- flashing question was answered.

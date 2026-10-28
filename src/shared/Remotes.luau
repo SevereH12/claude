@@ -8,7 +8,8 @@
 -- Client -> server: BuyBottle, BuyBoots, HireResearcher, PostResearcher, DevCommand, Teleport,
 -- RemoteSell, SetBoltColour, StartTrial, StoreEvent, ClaimDaily, ClaimGift,
 -- GroupJoined, FindPlayer, PrepareGift, SendCredit, CancelGift, AfkRejoin,
--- PromoteResearcher, SaveSettings, ClaimQuest, RerollQuest, ClaimLogRow
+-- PromoteResearcher, SaveSettings, ClaimQuest, RerollQuest, ClaimLogRow,
+-- HintSeen (a gameplay tip was shown: Systems/Hints)
 -- Both ways: Ascend (asks, then confirms with the server's token; the server
 -- answers with the confirm screen's details or the new level), Tutorial
 -- (the client asks to "skip"; the server says "finished"), Admin (the admin
@@ -57,6 +58,7 @@ export type RemoteName =
 	| "NotifyOptIn"
 	| "Admin"
 	| "ClientError"
+	| "HintSeen"
 
 local NAMES: { RemoteName } = {
 	"StateSnapshot",
@@ -99,6 +101,7 @@ local NAMES: { RemoteName } = {
 	"NotifyOptIn",
 	"Admin",
 	"ClientError",
+	"HintSeen",
 }
 
 return table.freeze(NAMES)

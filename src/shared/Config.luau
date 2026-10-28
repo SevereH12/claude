@@ -670,6 +670,211 @@ local STORM_LOG_PAGES: { Types.StormLogPageDef } = {
 	},
 }
 
+-- Gameplay tips (Util/Hints, Systems/Hints, Controllers/Hints): after the
+-- new-player tutorial, small one-time hints (a short toast and a gentle glow
+-- on the right button) show each part of the game when it becomes useful.
+-- Each shows once ever (saved as profile.hintsSeen). Rules for when one may
+-- show: the tutorial is done, it's on in SETTINGS ("Gameplay tips"), no
+-- panel or menu is open, the player isn't catching in a storm or AFK, at
+-- least `firstDelay` seconds after joining (or finishing the tutorial) and
+-- `gapSeconds` after the last hint. Then the first hint in this list whose
+-- trigger is true (and that wasn't seen) shows.
+--
+-- Each hint:
+--   id      saved in the profile: never rename one (a new id shows again)
+--   when    its trigger, a condition name from Util/Hints.CONDITIONS
+--   minutes (optional) and only after this many minutes in this visit
+--   text    what it says (keep it short: it's a two-line toast).
+--           {groupBonus}, {friendBonus} and {friendMax} are filled in.
+--   open    (optional) tapping it opens: shop, shopBoots, research,
+--           researchLog, rewards, quests, top, boosts, teleport, settings,
+--           sell (Controllers/Hints)
+--   glow    (optional) what glows while it shows: a menu tile ("SHOP",
+--           "RESEARCH", "TELEPORT", "BOOSTS", "REWARDS", "SETTINGS"; the
+--           MENU button glows until the menu is open) or a HUD piece
+--           ("RemoteSell", "ServerGoal")
+local HINTS: { Types.HintDef } = {
+	-- things that are happening right now come first
+	{
+		id = "remoteSell",
+		when = "remoteSellFull",
+		text = "Your bottle's full: Remote Sell sells it from anywhere!",
+		open = "sell",
+		glow = "RemoteSell",
+	},
+	{
+		id = "ascend",
+		when = "canAscend",
+		text = "You can Ascend! Start again for +50% Volts for good.",
+		open = "shop",
+		glow = "SHOP",
+	},
+	{
+		id = "portal",
+		when = "worldOpen",
+		text = "A portal at the hub is open: a whole new world awaits!",
+		open = "teleport",
+		glow = "TELEPORT",
+	},
+	{
+		id = "newZone",
+		when = "zoneOpen",
+		text = "A new zone is open past its gate. Bigger zones pay more per bolt!",
+		open = "teleport",
+		glow = "TELEPORT",
+	},
+	{
+		id = "rareBolt",
+		when = "sawRareBolt",
+		text = "Gold, rainbow and orb bolts pay up to 25x. Race to their rings!",
+	},
+	{
+		id = "supercell",
+		when = "sawSupercell",
+		text = "Supercells come about once an hour: double strikes, more gold bolts.",
+	},
+	{
+		id = "event",
+		when = "eventOn",
+		text = "An event is on: every sale pays more. Its chip is under the goal.",
+	},
+	-- progress
+	{
+		id = "boots",
+		when = "bootsAffordable",
+		text = "Boots make you faster in storms, and each zone's storm drag slows you.",
+		open = "shopBoots",
+		glow = "SHOP",
+	},
+	{
+		id = "hireResearcher",
+		when = "canHire",
+		text = "Researchers help you catch. Hire one at the Research Center.",
+		open = "research",
+		glow = "RESEARCH",
+	},
+	{
+		id = "postResearcher",
+		when = "unposted",
+		text = "Post a researcher in a zone (📍 POST) to gather data there.",
+		open = "research",
+		glow = "RESEARCH",
+	},
+	{
+		id = "glints",
+		when = "hasGlints",
+		text = "Every bolt you catch gives Glints: see them at the top of RESEARCH.",
+		open = "research",
+		glow = "RESEARCH",
+	},
+	{
+		id = "promote",
+		when = "researcherLevel5",
+		text = "A level 5 researcher can be promoted with Glints: a rank up!",
+		open = "research",
+		glow = "RESEARCH",
+	},
+	{
+		id = "stormLog",
+		when = "logStarted",
+		text = "The Storm Log (RESEARCH › LOG) collects every bolt, place and storm.",
+		open = "researchLog",
+		glow = "RESEARCH",
+	},
+	-- rewards and the rest, as the visit goes on
+	{
+		id = "dailyStreak",
+		when = "claimedDaily",
+		text = "Come back tomorrow: the daily reward grows for 7 days in a row.",
+		open = "rewards",
+		glow = "REWARDS",
+	},
+	{
+		id = "playtimeGifts",
+		when = "always",
+		minutes = 3,
+		text = "Free gifts unlock as you play each day. They wait in REWARDS.",
+		open = "rewards",
+		glow = "REWARDS",
+	},
+	{
+		id = "serverGoal",
+		when = "hasSold",
+		minutes = 4,
+		text = "Every sale fills the server goal. A full one starts a 2x Surge!",
+		glow = "ServerGoal",
+	},
+	{
+		id = "quests",
+		when = "always",
+		minutes = 6,
+		text = "Quests pay extra, and one free reroll a day swaps one you don't like.",
+		open = "quests",
+		glow = "REWARDS",
+	},
+	{
+		id = "friendsBoost",
+		when = "hasFriends",
+		text = "Friends in your server give +{friendBonus}% Volts each (up to {friendMax}).",
+	},
+	{
+		id = "boosts",
+		when = "hasSold",
+		minutes = 9,
+		text = "Boosts give 2x Volts, luck or bigger bottles for a while.",
+		open = "boosts",
+		glow = "BOOSTS",
+	},
+	{
+		id = "teleport",
+		when = "zoneOpen",
+		minutes = 11,
+		text = "TELEPORT jumps you to any zone or world you've unlocked.",
+		open = "teleport",
+		glow = "TELEPORT",
+	},
+	{
+		id = "afkLounge",
+		when = "always",
+		minutes = 14,
+		text = "Stepping away? The AFK Lounge pays Volts while you rest.",
+		open = "teleport",
+		glow = "TELEPORT",
+	},
+	{
+		id = "leaderboards",
+		when = "always",
+		minutes = 18,
+		text = "See where you rank on the leaderboards: REWARDS › TOP.",
+		open = "top",
+		glow = "REWARDS",
+	},
+	{
+		id = "group",
+		when = "notGroupMember",
+		minutes = 22,
+		text = "Group members get +{groupBonus}% Volts on every sale. Join in REWARDS.",
+		open = "rewards",
+		glow = "REWARDS",
+	},
+	{
+		id = "invite",
+		when = "always",
+		minutes = 26,
+		text = "Invite a friend (REWARDS › INVITE): you both get a reward.",
+		open = "rewards",
+		glow = "REWARDS",
+	},
+	{
+		id = "settings",
+		when = "always",
+		minutes = 30,
+		text = "Keys, sound, graphics and text size are all in ⚙️ SETTINGS.",
+		open = "settings",
+		glow = "SETTINGS",
+	},
+}
+
 return table.freeze({
 	-- Saving
 	AUTOSAVE_INTERVAL = 60, -- seconds between autosaves per player
@@ -859,6 +1064,15 @@ return table.freeze({
 		zone = "Shoreline",
 		catches = 3,
 		rewardCharges = 50,
+	}),
+	-- Gameplay tips after the tutorial (the list and its rules: HINTS above)
+	HINTS = table.freeze({
+		gapSeconds = 90, -- at least this long between two hints
+		firstDelay = 60, -- none this soon after joining or finishing the tutorial
+		showSeconds = 8, -- how long the toast stays
+		glowSeconds = 20, -- how long its button glows
+		quietAfterCatch = 10, -- none this soon after a catch
+		list = table.freeze(HINTS),
 	}),
 	-- Friends boost (Systems/Friends, Util/Passes): +perFriend Volts on every
 	-- sale for each Roblox friend in your server, counting up to `max`.

@@ -37,6 +37,7 @@ export type Profile = {
 	notifyYes: boolean, -- tapped YES on that question (reminders are only queued then)
 	playtime: PlaytimeSave, -- today's playtime gifts (Util/Rewards.playtimeToday)
 	invitedBy: number, -- who invited this new player, until the inviter is paid (Systems/Invites); 0 = nobody
+	hintsSeen: { [string]: boolean }, -- gameplay tips already shown, by hint id (Util/Hints)
 }
 
 -- Playtime gifts count playtime per UTC day, across visits: the day, the
@@ -165,6 +166,18 @@ export type Snapshot = {
 	ascension: number, -- Ascension level (Util/Ascension)
 	tutorialStep: number, -- the tutorial's step (Util/Tutorial), 0 = not showing
 	friends: number, -- Roblox friends in this server that count for the friends boost (0 to Config.FRIENDS.max)
+	hintsSeen: { [string]: boolean }, -- gameplay tips already shown (Util/Hints)
+}
+
+-- A gameplay tip (Config.HINTS list; the rules: Util/Hints). See Config
+-- for what each field means.
+export type HintDef = {
+	id: string,
+	when: string,
+	minutes: number?,
+	text: string,
+	open: string?,
+	glow: string?,
 }
 
 -- The player's AFK Lounge state, sent in the snapshot (Systems/Afk). The

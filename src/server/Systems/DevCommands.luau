@@ -15,7 +15,8 @@
 -- your first unfinished quest as done, and "logEntry" finds the next
 -- Storm Log entry a counter can find, and "readyAscend" gives you the top
 -- bottle and enough Volts to ascend, "restartTutorial" starts the
--- new-player tutorial again from step 1 and "friends" adds a pretend
+-- new-player tutorial again from step 1, "resetHints" lets every gameplay
+-- tip show again, and "friends" adds a pretend
 -- friend in the server (0 to 3, then 0 again), "testLeaderboard" fills
 -- the leaderboards with made-up players (you at #7) or goes back to the
 -- real ones, and "testNotify" queues a daily reminder for you, due now
@@ -40,6 +41,7 @@ local Friends = require(script.Parent.Friends)
 local Boosts = require(script.Parent.Boosts)
 local Gifts = require(script.Parent.Gifts)
 local Group = require(script.Parent.Group)
+local Hints = require(script.Parent.Hints)
 local Leaderboards = require(script.Parent.Leaderboards)
 local Notifications = require(script.Parent.Notifications)
 local Passes = require(script.Parent.Passes)
@@ -150,6 +152,9 @@ local function onCommand(player: Player, name: unknown, value: unknown, extra: u
 	elseif name == "restartTutorial" then
 		Tutorial.restart(player)
 		print(`[DevCommands] {player.Name}: the tutorial starts again from step 1`)
+	elseif name == "resetHints" then
+		Hints.reset(player)
+		print(`[DevCommands] {player.Name}: every gameplay tip can show again`)
 	elseif name == "friends" then
 		local n = Friends.cyclePretend(player)
 		print(`[DevCommands] {player.Name}: {n} pretend friends in the server`)

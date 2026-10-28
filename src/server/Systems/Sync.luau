@@ -108,6 +108,7 @@ local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapsho
 		ascension = profile.ascension,
 		tutorialStep = profile.tutorialStep,
 		friends = Sync.friends[player] or 0,
+		hintsSeen = profile.hintsSeen,
 	}
 end
 
