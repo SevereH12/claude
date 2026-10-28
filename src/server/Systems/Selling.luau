@@ -20,6 +20,7 @@ local Types = require(ReplicatedStorage.Shared.Types)
 local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
 local Volumes = require(ReplicatedStorage.Shared.Util.Volumes)
 local Analytics = require(script.Parent.Analytics)
+local AntiCheat = require(script.Parent.AntiCheat)
 local Map = require(script.Parent.Map)
 local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
@@ -109,6 +110,9 @@ local function sellAtStation(player: Player)
 	local root = livingRoot(player)
 	if not root or not Selling.isAtStation(root.Position) then
 		return
+	end
+	if AntiCheat.isSuspect(player) then
+		return -- just made an impossible move: sells once that's over
 	end
 	lastSell[player] = now
 	Selling.payOut(player, profile)

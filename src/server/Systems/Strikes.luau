@@ -3,7 +3,8 @@
 --
 -- For each strike: pick a random spot in the zone, warn every client (they
 -- draw the circle), wait WARNING_TIME, then check every player's position
--- on the server. Clients never say "I caught it"; nothing to fake.
+-- on the server. Clients never say "I caught it"; nothing to fake. A player
+-- who just made an impossible move (Systems/AntiCheat) catches nothing.
 --
 -- Rare bolts (Config.BOLT_TYPES, Util/Weather): the type is picked when the
 -- strike spawns and goes out in the warning, so a gold ring shows first.
@@ -23,6 +24,7 @@ local Types = require(ReplicatedStorage.Shared.Types)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
 local Weather = require(ReplicatedStorage.Shared.Util.Weather)
 local Analytics = require(script.Parent.Analytics)
+local AntiCheat = require(script.Parent.AntiCheat)
 local Boosts = require(script.Parent.Boosts)
 local Passes = require(script.Parent.Passes)
 local Research = require(script.Parent.Research)
@@ -145,6 +147,10 @@ local function resolve(
 		{}
 	for _, player in Players:GetPlayers() do
 		if (ownerId and player.UserId ~= ownerId) or (only and player ~= only) then
+			continue
+		end
+		-- just made an impossible move (a teleport onto the ring?): no catch
+		if AntiCheat.isSuspect(player) then
 			continue
 		end
 		local root = catchingRoot(player)
@@ -281,7 +287,7 @@ local function orbToucher(zone: Types.ZoneDef, orbGround: Vector3): Player?
 	for _, player in Players:GetPlayers() do
 		local root = catchingRoot(player)
 		local profile = PlayerData.get(player)
-		if not root or not profile then
+		if not root or not profile or AntiCheat.isSuspect(player) then
 			continue
 		end
 		if not Progression.canEnter(profile, zone, Progression.playerIsPremium(player)) then

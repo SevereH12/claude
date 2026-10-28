@@ -14,6 +14,7 @@ local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local StatRules = require(ReplicatedStorage.Shared.Util.Stats)
 local Zones = require(ReplicatedStorage.Shared.Util.Zones)
 local Analytics = require(script.Parent.Analytics)
+local AntiCheat = require(script.Parent.AntiCheat)
 local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
 local Stats = require(script.Parent.Stats)
@@ -46,6 +47,7 @@ local function update(player: Player)
 				* CFrame.new(0, 1 - part.Size.Y / 2, -part.Size.Z / 2 - GATE_STEP_OUT)
 			local position = outside.Position + Vector3.new(0, 3.5, 0)
 			local body = character :: Model
+			AntiCheat.allowMove(player)
 			body:PivotTo(CFrame.lookAt(position, position + part.CFrame.LookVector))
 		end
 		zone = nil

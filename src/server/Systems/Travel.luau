@@ -22,6 +22,7 @@ local Net = require(ReplicatedStorage.Shared.Net)
 local Portals = require(ReplicatedStorage.Shared.Util.Portals)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Afk = require(script.Parent.Afk)
+local AntiCheat = require(script.Parent.AntiCheat)
 local PlayerData = require(script.Parent.PlayerData)
 local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
 
@@ -65,6 +66,7 @@ local function sendTo(player: Player, worldId: string)
 	pcall(player.RequestStreamAroundAsync, player, arrival.Position)
 	local character = player.Character
 	if character then
+		AntiCheat.allowMove(player)
 		character:PivotTo(arrival)
 	end
 end

@@ -43,6 +43,7 @@ local Volumes = require(ReplicatedStorage.Shared.Util.Volumes)
 local StatRules = require(ReplicatedStorage.Shared.Util.Stats)
 local Weather = require(ReplicatedStorage.Shared.Util.Weather)
 local Analytics = require(script.Parent.Analytics)
+local AntiCheat = require(script.Parent.AntiCheat)
 local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
 local ServerGoal = require(script.Parent.ServerGoal)
@@ -269,6 +270,7 @@ function Afk.sendToLounge(player: Player): boolean
 	end
 	player:SetAttribute(Portals.WORLD_ATTRIBUTE, Config.WORLDS[1].id)
 	pcall(player.RequestStreamAroundAsync, player, arrival.Position)
+	AntiCheat.allowMove(player)
 	character:PivotTo(arrival)
 	return true
 end

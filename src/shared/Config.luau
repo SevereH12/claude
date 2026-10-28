@@ -725,6 +725,25 @@ return table.freeze({
 	-- portal has its own short cooldown in Systems/Travel)
 	TELEPORT_COOLDOWN = 10,
 
+	-- Movement checks (Util/AntiCheat, Systems/AntiCheat): the server looks
+	-- at every player's position every `checkEvery` seconds. Moving further
+	-- across the ground than walk speed x time x `slack` + `extraStuds`,
+	-- measured over the last `windowSeconds`, is impossible: for
+	-- `suspectSeconds` that player can't catch, touch ball lightning or
+	-- sell at a station. Nobody is kicked (lag can look like a teleport).
+	-- Moves the server makes (portals, teleports, the AFK Lounge, respawns,
+	-- the zone lock) aren't checked for `graceSeconds`. After `logAfter`
+	-- impossible moves a player shows in the admin panel's list.
+	ANTI_CHEAT = table.freeze({
+		checkEvery = 0.2,
+		windowSeconds = 1,
+		slack = 1.5,
+		extraStuds = 6,
+		suspectSeconds = 5,
+		graceSeconds = 3,
+		logAfter = 3,
+	}),
+
 	-- Researchers (Storm Society)
 	RESEARCH_LEVELS = table.freeze({ 0, 40, 150, 400, 1000 }), -- field data needed for level 1..5
 	RESEARCH_SETUP_TIME = 8, -- seconds a newly posted researcher needs before the perk works

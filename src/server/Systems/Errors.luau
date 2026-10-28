@@ -21,13 +21,14 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Ops = require(ReplicatedStorage.Shared.Util.Ops)
 local Analytics = require(script.Parent.Analytics)
+local AntiCheat = require(script.Parent.AntiCheat)
 local RateLimit = require(ServerScriptService.Server.Lib.RateLimit)
 
 local SETTINGS = Config.ERRORS
 
 export type ErrorEntry = {
 	fingerprint: string,
-	source: string, -- "server" or "client"
+	source: string, -- "server", "client", or "cheat" (Systems/AntiCheat)
 	message: string, -- the first line, cut to Config.ERRORS.messageLength
 	who: string, -- the player whose device it happened on ("" for the server)
 	time: number, -- os.time() of the latest one
@@ -86,7 +87,11 @@ local function record(source: string, scriptName: string, message: string, playe
 			table.remove(recent)
 		end
 		local key = `{source}|{fingerprint}`
-		if not reported[key] and Ops.mayReport(source, reportedCount, clientReports) then
+		if
+			source ~= "cheat" -- the admin panel only: it isn't an error
+			and not reported[key]
+			and Ops.mayReport(source, reportedCount, clientReports)
+		then
 			reported[key] = true
 			reportedCount += 1
 			if source == "client" then
@@ -138,6 +143,10 @@ end
 function Errors.init()
 	ScriptContext.Error:Connect(onServerError)
 	Net.get("ClientError").OnServerEvent:Connect(onClientError)
+	-- repeat impossible moves (Systems/AntiCheat) go in the panel's list too
+	AntiCheat.Logged:Connect(function(player: Player, text: string)
+		record("cheat", "AntiCheat", text, player)
+	end)
 end
 
 return Errors
