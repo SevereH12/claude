@@ -93,6 +93,10 @@ and stops if it isn't. To run one, say: "Do `docs/prompts/<file>`".
     also tracks hiring and promoting researchers and the next Ascension,
     shows the goal closest to done (so it never disappears), and opens the
     Shop or Research when tapped.
+22. `22-topups-and-glint-packs.md`: **run it twice.** Part A: Glint packs
+    (25, 75 and 200 Glints for every zone tier, on sale) in the store. Part
+    B: buy buttons stay tappable, and when you're short they offer the
+    cheapest Volts or Glint pack that covers the difference.
 
 Researchers (all five parts done) live in `researchers/`.
 
