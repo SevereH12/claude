@@ -369,6 +369,10 @@ The Storm Log is a collection book in the REWARDS panel's **LOG** tab
 - **Team**: every researcher at every rank (hiring them is the first).
 - **Weather**: being in game for a Supercell and for each scheduled event.
 
+The Roblox Premium zone (Aurora Reef) is a **bonus**: its Bolts row and
+its Places entry are shown, but the pages (and the Barometer Bay row) can
+be finished without it, so everyone can reach the full +8%.
+
 It's all worked out from the stat counters (new counters remember the
 zones and worlds you've visited and the Supercells and events you've
 seen), so the only thing saved is which rewards you've claimed.

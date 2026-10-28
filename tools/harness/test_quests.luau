@@ -398,7 +398,27 @@ lifetime[Stats.SUPERCELLS_SEEN] = 1
 found = StormLog.found(lifetime, researchers)
 check(found["Weather:Supercell"], "a Supercell seen is found")
 
--- a whole page, and the bonus
+-- a whole page, and the bonus: Premium zones are bonuses, not needed
+local aurora = StormLog.row("Bolts:Aurora")
+check(aurora and aurora.bonus, "the Premium zone's Bolts row is a bonus")
+for _, row in pageIds.Bolts.rows do
+	if not row.bonus then
+		for _, entry in row.entries do
+			lifetime[entry.stats[1]] = 1
+		end
+	end
+end
+found = StormLog.found(lifetime, researchers)
+check(StormLog.pageDone(pageIds.Bolts, found), "the Bolts page finishes without the Premium zone")
+check(not StormLog.rowDone(aurora, found), "but the bonus row itself needs its own bolts")
+local bayRow = StormLog.row("Places:Bay")
+local auroraEntryNeeded = false
+for _, entry in bayRow.entries do
+	if entry.id == "Places:zone:Aurora" then
+		auroraEntryNeeded = not entry.bonus
+	end
+end
+check(not auroraEntryNeeded, "visiting the Premium zone isn't needed for its world's row")
 for _, row in pageIds.Bolts.rows do
 	for _, entry in row.entries do
 		lifetime[entry.stats[1]] = 1
