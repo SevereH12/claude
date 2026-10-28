@@ -149,7 +149,7 @@ end
 -- Every goal the player could work on now (in no particular order).
 function Goals.list(progress: Progress): { Goal }
 	local goals: { Goal } = {}
-	for _, shop in Progression.shopGoals(progress) do
+	for _, shop in Progression.nextGoals(progress) do
 		local goal: Goal = {
 			kind = shop.kind,
 			title = shop.title,
