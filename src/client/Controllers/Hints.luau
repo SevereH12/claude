@@ -240,15 +240,6 @@ local function update()
 	end
 end
 
--- The TEST panel's "Reset gameplay tips": forget this visit's tips too,
--- and let the first one show a few seconds from now.
-function Hints.resetForTest()
-	table.clear(shown)
-	lastShown = -math.huge
-	quietUntil = os.clock() + 5
-	joinedAt = os.clock() - 60 * 60 -- as if they'd played an hour (time-based tips too)
-end
-
 function Hints.init()
 	seenRemote = Net.get("HintSeen")
 end

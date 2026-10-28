@@ -44,7 +44,7 @@ Sync.rewards = {} :: { [Player]: Types.RewardSession }
 Sync.afk = {} :: { [Player]: Types.AfkState }
 
 -- Owned by Systems/Friends: per player, how many of their Roblox friends
--- are in this server (Studio's pretend friends included).
+-- are in this server.
 Sync.friends = {} :: { [Player]: number }
 
 local NO_STORE: Types.StoreSession = table.freeze({ boostEarned = 0, missedDouble = 0 })
@@ -68,8 +68,7 @@ local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapsho
 	local passes = Sync.passes[player] or {}
 	local effects = PassRules.withBoosts(passes, profile.boosts)
 	local rewards = Sync.rewards[player]
-	local dayOffset = if rewards then rewards.dayOffset else 0
-	local today = RewardRules.today(os.time()) + dayOffset
+	local today = RewardRules.today(os.time())
 	return {
 		volts = profile.volts,
 		totalVolts = profile.totalVolts,
@@ -90,7 +89,6 @@ local function toSnapshot(player: Player, profile: Types.Profile): Types.Snapsho
 		daily = {
 			streak = profile.dailyStreak,
 			lastDay = profile.lastDailyDay,
-			dayOffset = dayOffset,
 		},
 		gifts = {
 			startedAt = if rewards then rewards.startedAt else workspace:GetServerTimeNow(),

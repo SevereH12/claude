@@ -5,7 +5,7 @@
 -- Server -> client: StateSnapshot, StormState, StrikeWarning, StrikeLanded, Sold, Forecast,
 -- Purchased, Rewarded, GiftNews, Announcement, Settings, Leaderboards (the TOP
 -- tab's boards), NotifyOptIn (ask about daily reminders)
--- Client -> server: BuyBottle, BuyBoots, HireResearcher, PostResearcher, DevCommand, Teleport,
+-- Client -> server: BuyBottle, BuyBoots, HireResearcher, PostResearcher, Teleport,
 -- RemoteSell, SetBoltColour, StartTrial, StoreEvent, ClaimDaily, ClaimGift,
 -- GroupJoined, FindPlayer, PrepareGift, SendCredit, CancelGift, AfkRejoin,
 -- PromoteResearcher, SaveSettings, ClaimQuest, RerollQuest, ClaimLogRow,
@@ -28,7 +28,6 @@ export type RemoteName =
 	| "BuyBoots"
 	| "HireResearcher"
 	| "PostResearcher"
-	| "DevCommand"
 	| "Teleport"
 	| "RemoteSell"
 	| "SetBoltColour"
@@ -71,7 +70,6 @@ local NAMES: { RemoteName } = {
 	"BuyBoots",
 	"HireResearcher",
 	"PostResearcher",
-	"DevCommand",
 	"Teleport",
 	"RemoteSell",
 	"SetBoltColour",

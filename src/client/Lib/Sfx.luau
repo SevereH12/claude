@@ -225,16 +225,6 @@ function Sfx.recent(seconds: number): boolean
 	return os.clock() - lastAny < seconds
 end
 
--- Every sound's name, sorted (the TEST panel's Sound board).
-function Sfx.names(): { string }
-	local names = {}
-	for name in SoundBank do
-		table.insert(names, name)
-	end
-	table.sort(names)
-	return names
-end
-
 function Sfx.length(name: string): number
 	local entry = SoundBank[name]
 	return if entry then entry.length else 0

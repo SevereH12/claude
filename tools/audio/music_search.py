@@ -8,8 +8,6 @@ game may use) with the Creator Store search API, and writes the shortlist:
 - docs/audio/music-shortlist.md: 6 candidates per slot (id, title, artist,
   length, the query that found it)
 - tools/audio/music.json: the same, as data
-- src/shared/MusicShortlist.luau: every candidate, for the Studio audition
-  (TEST > REWARDS > Music audition)
 
 The game plays Config.MUSIC: put the picks there (the top 3 per slot to
 start with, printed at the end)."""
@@ -168,8 +166,8 @@ def main():
         f.write("# Music shortlist\n\n")
         f.write("Licensed tracks from Roblox's partner catalogues (APMOfficial and\n"
                 "DistrokidOfficial), found by `tools/audio/music_search.py`. The top 3 of\n"
-                "each slot are in `Config.MUSIC`. Listen to them in Studio with TEST >\n"
-                "REWARDS > **Music audition**, then say which to keep.\n\n"
+                "each slot are in `Config.MUSIC`. Listen to each on its Creator Store page\n"
+                "(create.roblox.com/store/asset/<id>), then say which to keep.\n\n"
                 "Instrumental only (no lyrics): a track is kept only when its listing\n"
                 "says it's instrumental (the reason is in the last column) and never\n"
                 "mentions a voice. Listings can be wrong, so listen before keeping one.\n")
@@ -182,22 +180,7 @@ def main():
                 m, s = divmod(int(t["seconds"]), 60)
                 pick = " (in Config)" if i <= CONFIG_PICKS else ""
                 f.write(f"| {i}{pick} | {t['id']} | {t['title']} | {t['artist']} ({t['creator']}) | {m}:{s:02d} | \"{t['query']}\" | {t['instrumental']} |\n")
-    lines = []
-    for slot, tracks in result.items():
-        for t in tracks:
-            title = t["title"].replace("\\", "").replace('"', "'")
-            lines.append(f'\t{{ slot = "{slot}", id = {t["id"]}, title = "{title}" }},')
-    with open(os.path.join(ROOT, "src", "shared", "MusicShortlist.luau"), "w") as f:
-        f.write(
-            "--!strict\n"
-            "-- Every music candidate tools/audio/music_search.py found (see\n"
-            "-- docs/audio/music-shortlist.md), for the Studio Music audition. The game\n"
-            "-- itself plays Config.MUSIC. Generated: don't edit by hand.\n\n"
-            "export type Track = { slot: string, id: number, title: string }\n\n"
-            "local MusicShortlist: { Track } = {\n" + "\n".join(lines) + "\n}\n\n"
-            "return table.freeze(MusicShortlist)\n"
-        )
-    print("wrote docs/audio/music-shortlist.md, tools/audio/music.json, src/shared/MusicShortlist.luau", file=sys.stderr)
+    print("wrote docs/audio/music-shortlist.md and tools/audio/music.json", file=sys.stderr)
     print("\nConfig.MUSIC picks (the top 3 per slot):")
     for slot, tracks in result.items():
         print(f"  {slot}: " + ", ".join(f"{t['id']} ({t['title']})" for t in tracks[:CONFIG_PICKS]))

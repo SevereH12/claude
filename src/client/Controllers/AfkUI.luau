@@ -15,7 +15,6 @@
 -- VirtualUser. If that errors (logged once), or the idle time reaches
 -- Config.AFK.idleRejoinMinutes, it asks the server for the backup
 -- (AfkRejoin: a move to a fresh server, back in the lounge; Systems/Afk).
--- AfkUI.simulateIdle runs the same handler (the Studio TEST button).
 
 local CollectionService = game:GetService("CollectionService")
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -212,16 +211,6 @@ function AfkUI.onIdle(idleSeconds: number)
 		print("[AfkUI] asking the server to move us to a fresh server (AfkRejoin)")
 		Net.get("AfkRejoin"):FireServer()
 	end
-end
-
--- Studio TEST: as if Roblox reported idleRejoinMinutes without input.
-function AfkUI.simulateIdle()
-	local snapshot = State.current
-	if not (snapshot and snapshot.afk and snapshot.afk.active) then
-		UI.toast("Stand in the AFK Lounge until AFK starts, then try again", "info")
-		return
-	end
-	AfkUI.onIdle(Config.AFK.idleRejoinMinutes * 60)
 end
 
 function AfkUI.init()

@@ -7,8 +7,7 @@
 -- counters (Systems/Movement, Systems/StormCycle call them).
 -- Counters and quests start a new day together: Stats.refresh rolls both
 -- over (and picks new quests) whenever the UTC day or week has changed. A
--- day is the same one the login streak uses, so Studio's TEST "Next day"
--- starts a new quest day too.
+-- day is the same one the login streak uses.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -25,10 +24,9 @@ local PLAYTIME_STEP = 60 -- seconds between playtime minutes
 
 local Stats = {}
 
--- Today's UTC day number for this player (Studio's "Next day" adds days).
-function Stats.today(player: Player): number
-	local session = Sync.rewards[player]
-	return RewardRules.today(os.time()) + (if session then session.dayOffset else 0)
+-- Today's UTC day number for this player.
+function Stats.today(_player: Player): number
+	return RewardRules.today(os.time())
 end
 
 -- Starts a new day (or week) of counters and quests if it's time. Returns

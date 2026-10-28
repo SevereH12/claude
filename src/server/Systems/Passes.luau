@@ -14,10 +14,6 @@
 -- Everyone can see what a player owns: player attributes Pass_<key> = true.
 -- The owner also gets the set in their snapshot (Sync).
 --
--- Studio testing: the TEST panel's "Pretend owns <pass>" toggles
--- (Systems/DevCommands) count as owning the pass, in Studio only, like
--- Pretend Premium.
---
 -- Pass effects also come from timed boosts (Systems/Boosts: rewards, the
 -- free trial, bought and gifted boosts): capacity, payout and luck below
 -- apply owned passes plus running boosts, so every place that uses them
@@ -29,7 +25,6 @@
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Formulas = require(ReplicatedStorage.Shared.Util.Formulas)
@@ -49,14 +44,12 @@ local RECHECK_DELAY = 2 -- seconds before re-checking a "not purchased"
 local Passes = {}
 
 Passes.ATTRIBUTE = PassRules.ATTRIBUTE -- .. key: true when the player owns it
-Passes.PRETEND = "PretendPass_" -- .. key: the Studio toggle is on
 
 -- Fires when a player buys a pass in game (not for passes they already
--- owned when they joined, or Studio toggles).
+-- owned when they joined).
 Passes.Purchased = Signal.new() :: Signal.Signal<Player, Types.PassDef>
 
 local bought: { [Player]: PassRules.Owned } = {} -- real ownership
-local pretend: { [Player]: PassRules.Owned } = {} -- Studio toggles
 
 local function byId(id: number): Types.PassDef?
 	for _, pass in Config.PASSES do
@@ -98,11 +91,6 @@ function Passes.refresh(player: Player)
 	local profile = PlayerData.get(player)
 	for key in if profile then profile.giftedPasses else {} do
 		set[key] = true
-	end
-	if RunService:IsStudio() then
-		for key in pretend[player] or {} do
-			set[key] = true
-		end
 	end
 	Sync.passes[player] = set -- both, read by owned() and sent in the snapshot
 	for _, pass in Config.PASSES do
@@ -238,18 +226,6 @@ function Passes.luckChance(player: Player): number
 	return PassRules.luckChance(effects(player))
 end
 
--- Studio TEST toggle: pretend to own (or not) a pass. Ignored outside Studio.
-function Passes.setPretend(player: Player, key: string, on: boolean)
-	if not RunService:IsStudio() or not PassRules.def(key) then
-		return
-	end
-	local set = pretend[player] or {}
-	pretend[player] = set
-	set[key] = if on then true else nil
-	player:SetAttribute(Passes.PRETEND .. key, if on then true else nil)
-	Passes.refresh(player)
-end
-
 function Passes.init()
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(onPurchaseFinished)
 	-- gifted passes come with the profile
@@ -257,7 +233,6 @@ function Passes.init()
 	Players.PlayerAdded:Connect(onPlayerAdded)
 	Players.PlayerRemoving:Connect(function(player)
 		bought[player] = nil
-		pretend[player] = nil
 	end)
 	for _, player in Players:GetPlayers() do
 		task.spawn(onPlayerAdded, player)

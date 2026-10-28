@@ -180,10 +180,6 @@ check(
 	Leaderboards.youText(entries, 9, "streak", 3) == `You: not in the top {Config.LEADERBOARDS.top} · 3 days`,
 	"not in the top 50, with your own value"
 )
-local test = Leaderboards.testBoards(99, "Me")
-check(#test.volts == Config.LEADERBOARDS.top and Leaderboards.rankOf(test.volts, 99) == 7, "test data puts you at #7")
-check(Leaderboards.rankOf(test.bolts, 99) == nil, "and off one board")
-check(test.volts[1].value >= test.volts[2].value and test.volts[2].value >= test.volts[50].value, "test boards fall")
 
 -- the login run (the longest streak board)
 check(Rewards.loginRun(0, 100, 0) == 1, "a first claim starts the run")

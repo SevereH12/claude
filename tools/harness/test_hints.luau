@@ -115,7 +115,7 @@ local function snapshot(over)
 		researchers = {},
 		glints = {},
 		log = { found = {}, claimed = {} },
-		daily = { streak = 0, lastDay = 0, dayOffset = 0 },
+		daily = { streak = 0, lastDay = 0 },
 		chargeCount = 0,
 		capacity = 10,
 		passes = {},
@@ -177,7 +177,7 @@ check(
 	"3 Log entries: the Storm Log tip"
 )
 check(
-	pick({ daily = { streak = 1, lastDay = 1, dayOffset = 0 } }) == "dailyStreak",
+	pick({ daily = { streak = 1, lastDay = 1 } }) == "dailyStreak",
 	"a claimed daily: the streak tip"
 )
 check(pick(nil, { minutes = 2.9 }) == nil, "time tips wait for their minute")
@@ -229,7 +229,7 @@ local everything = {
 	researchers = { Forecaster = { level = 5, data = 0, post = "Office", rank = 0 } },
 	glints = { 5 },
 	log = { found = { "a", "b", "c" }, claimed = {} },
-	daily = { streak = 2, lastDay = 1, dayOffset = 0 },
+	daily = { streak = 2, lastDay = 1 },
 	chargeCount = 10,
 	passes = { RemoteSell = true },
 	friends = 2,

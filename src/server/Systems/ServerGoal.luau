@@ -128,11 +128,6 @@ function ServerGoal.setAway(player: Player, isAway: boolean)
 	ServerGoal.recompute()
 end
 
--- Studio TEST tool: adds a share of the goal as if `player` sold it.
-function ServerGoal.testFill(player: Player, share: number)
-	ServerGoal.add(player, math.max(math.ceil(size * share), 1))
-end
-
 function ServerGoal.init()
 	PlayerData.Loaded:Connect(function()
 		ServerGoal.recompute()

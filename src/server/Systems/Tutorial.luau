@@ -12,7 +12,6 @@
 --
 -- The Tutorial remote, client -> server: "skip" (after the client asked
 -- "Skip the tutorial?"): rate-limited, and only a string is accepted.
--- Studio's TEST panel restarts it (Tutorial.restart, Systems/DevCommands).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -89,19 +88,6 @@ end
 
 function Tutorial.boughtBottle(player: Player)
 	handle(player, "bottle")
-end
-
--- Studio TEST button: back to step 1 (whatever bottle they have: step 4
--- then asks for the next one).
-function Tutorial.restart(player: Player)
-	local profile = PlayerData.get(player)
-	if not profile then
-		return
-	end
-	local progress = TutorialRules.restart()
-	profile.tutorialStep = progress.step
-	caught[player] = progress.caught
-	Sync.markDirty(player)
 end
 
 local function onRemote(player: Player, action: unknown)

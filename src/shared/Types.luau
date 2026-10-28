@@ -49,11 +49,9 @@ export type LeaderboardEntry = { userId: number, name: string, value: number }
 
 -- Server -> client (the Leaderboards remote): every board's top rows by
 -- board key (Config.LEADERBOARDS.boards), and this player's own values.
--- `test`: Studio test data is showing.
 export type LeaderboardView = {
 	boards: { [string]: { LeaderboardEntry } },
 	mine: { [string]: number },
-	test: boolean,
 }
 
 -- A Storm Log page (Config.STORM_LOG.pages): its id, heading, icon, and
@@ -155,7 +153,7 @@ export type Snapshot = {
 	trialUsed: boolean, -- the free 2x Volts trial has been used
 	store: StoreSession,
 	boosts: { [string]: number }, -- active boost key -> workspace:GetServerTimeNow() when it runs out
-	daily: { streak: number, lastDay: number, dayOffset: number }, -- the login streak (Util/Rewards.daily)
+	daily: { streak: number, lastDay: number }, -- the login streak (Util/Rewards.daily)
 	gifts: { startedAt: number, claimed: { boolean } }, -- playtime gifts: session start (server time)
 	gifted: { [string]: boolean }, -- passes owned because someone gifted them
 	giftCredits: { [string]: number }, -- gift products paid for but not sent yet
@@ -208,13 +206,11 @@ export type StoreSession = {
 	missedDouble: number, -- extra Volts 2x Volts would have paid this session
 }
 
--- This session's playtime gifts and the Studio "Next day" offset
--- (Systems/Rewards).
+-- This session's playtime gifts (Systems/Rewards).
 export type RewardSession = {
 	startedAt: number, -- workspace:GetServerTimeNow() when today's playtime began (now minus the seconds played today)
-	day: number, -- the UTC day (with dayOffset) these gifts are for
+	day: number, -- the UTC day these gifts are for
 	claimed: { boolean }, -- per Config.PLAYTIME_GIFTS entry
-	dayOffset: number, -- Studio only: days added to today
 }
 
 -- A timed boost (Config.BOOSTS): switches a Game Pass's effect on for a while.

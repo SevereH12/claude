@@ -457,26 +457,6 @@ function Strikes.spawnFor(player: Player): boolean
 	return true
 end
 
--- TEST panel (Studio): a public bolt of this type right where the player
--- stands, storm or not. False if they aren't in a zone.
-function Strikes.forceAt(player: Player, boltType: Types.BoltType): boolean
-	local root = catchingRoot(player)
-	local zone = if root then Zones.at(root.Position) else nil
-	local zonePart = if zone then Zones.part(zone.id) else nil
-	if not root or not zone or not zonePart then
-		return false
-	end
-	local position = randomGroundPoint(zonePart, root.Position, 0, 0.5)
-		or randomGroundPoint(zonePart)
-	if not position then
-		return false
-	end
-	nextStrikeId += 1
-	local orbTo = if boltType == "Ball" then orbEnd(zonePart, position) else nil
-	publicWarning(zone, nextStrikeId, position, nil, boltType, orbTo)
-	return true
-end
-
 local function runZone(zone: Types.ZoneDef)
 	local zonePart = Zones.part(zone.id)
 	if not zonePart then

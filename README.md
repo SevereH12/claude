@@ -100,9 +100,8 @@ To add or change a pass:
 2. Copy the pass's asset id into its `id` in `Config.PASSES`. A pass with
    `id = 0` shows COMING SOON. The store shows the price Roblox reports;
    `price` in Config is only shown until that loads.
-3. Test in Studio with the TEST panel's **PASSES** toggles ("Pretend owns"):
-   they only work in Studio. Pressing BUY in Studio opens a purchase window
-   that says it's a test purchase, so no Robux are spent.
+3. Test in Studio by pressing BUY: Studio opens a purchase window that says
+   it's a test purchase, so no Robux are spent.
 4. See sales under **Monetization** → **Passes** → **Analytics**.
 
 The VOLTS tab sells the Volts packs in `Config.VOLT_PACKS` (Developer
@@ -150,9 +149,7 @@ The REWARDS panel (MENU → 🎁 REWARDS; a red dot means something is ready):
 - Short reminders (toasts with OPEN): the daily reward when you join, each
   gift when it's ready, and the group once a visit after your first sale.
 
-Test in Studio with the TEST panel's **🎁 REWARDS** tools: Next day, +5 min
-playtime, Clear boosts and Pretend group member (Studio only). Stats are
-under **Analytics**: custom events DailyClaimed, PlaytimeGift and
+Stats are under **Analytics**: custom events DailyClaimed, PlaytimeGift and
 GroupJoined, and reward Volts in Economy (TimedReward).
 
 ## Boots and storm drag
@@ -206,10 +203,8 @@ Roblox Premium members), paid every minute:
   (0.15). Stats: custom events AfkMinutes and AfkRejoin, and AFK Volts in
   Economy (Gameplay, AFK).
 
-Test in Studio: stand in the lounge, then try the TEST panel's pretend
-passes and Pretend Premium (the rate changes within 15 seconds) and
-**🎁 REWARDS → 💤 Simulate idle 17 min** (teleports don't work in Studio,
-so the backup only logs its attempt in the Output).
+Test in Studio: stand in the lounge (teleports don't work in Studio, so the
+server-hop backup only logs its attempt in the Output).
 
 ## Researcher ranks
 
@@ -234,8 +229,7 @@ The numbers (`Config.RESEARCH_PRESTIGE`) come from
 `python3 tools/balance/prestige.py`, which works out how much data and how
 many Glints make the whole team ready about halfway through each new zone,
 and checks Config is within 10%. Run it again whenever zones, bottles or
-strike settings change. Studio TEST tools: **+500 research data** and
-**+100 Glints (this tier)** under 🎁 REWARDS.
+strike settings change.
 
 ## Sound effects
 
@@ -261,8 +255,6 @@ panels and toasts get their sounds in `Lib/UI`; everything else plays its
 sound where it happens. Every sound goes through a SoundGroup (Music,
 Ambience, SFX, UI): `Config.SOUND_MIX` sets their volumes, and the Sound tab
 of the players' ⚙️ SETTINGS panel scales them.
-In Studio, TEST > 🎁 REWARDS > **🔊 Sound board** plays every sound in turn
-with its name.
 
 ### Music and ambience
 
@@ -272,8 +264,8 @@ with its name.
   for big moments (`MUSIC_DUCK`). The tracks are Roblox's licensed partner
   music (APMOfficial, DistrokidOfficial only), instrumental only: the search keeps a track only when its listing says it has no vocals. `python3
   tools/audio/music_search.py` searches the Creator Store for each slot and
-  writes `docs/audio/music-shortlist.md`; TEST > 🎁 REWARDS > **🎵 Music
-  audition** (Studio) plays every candidate for 20 s so you can pick.
+  writes `docs/audio/music-shortlist.md` (listen to each on its Creator
+  Store page to pick).
 - **Ambience** (`Controllers/Ambience`): wind and waves when calm; rain,
   gusts and distant rumbles in a storm; a hum at every sell station.
   Volumes in `Config.AMBIENCE`.
@@ -352,9 +344,6 @@ screens only draw it. The maths is in `src/shared/Util/Weather.luau`
   chip under the goal card shows the event and its time left. To add an
   event, add a line: a weekly one uses times like `"Sat 00:00"`, a one-off
   uses Unix times.
-- **Testing in Studio**: the TEST panel's REWARDS list has **Force golden
-  bolt** (drops one where you stand, in a zone), **Supercell in 30 s** and
-  **Pretend event** (turns Double Volts Weekend on).
 
 ### Server goal and Server Surge
 
@@ -377,8 +366,6 @@ numbers in `Config.SERVER_GOAL`).
   every hour the size goes back to normal.
 - **On screen**: a slim meter under the goal card ("⚡ Server goal 62%", or
   the Surge's time left). Tap it to see this round's top 3 helpers.
-- **Testing in Studio**: the TEST panel's REWARDS list has **Server goal
-  +25%** (four taps start a Surge); **Clear boosts** ends a Surge too.
 
 ## Quests and stat counters
 
@@ -403,9 +390,6 @@ saved with the player.
 - **On screen**: REWARDS has a QUESTS tab: each quest has a progress bar,
   its reward and a CLAIM (or REROLL) button. A toast pops up when a quest
   hits 100%, and the menu's dot lights up while one is ready to claim.
-- **Testing in Studio**: the TEST panel's REWARDS list has **Complete
-  quest** (your first unfinished quest counts as done) and **Next day**
-  (new daily quests).
 
 ### Storm Log
 
@@ -436,8 +420,6 @@ seen), so the only thing saved is which rewards you've claimed.
   icon and missing ones a grey "?" (tap one to see how to find it). New
   entries and finished rows pop up a toast, and the menu's dot lights up
   while a row's reward is waiting.
-- **Testing in Studio**: the TEST panel's **+Log entry** button marks the
-  next missing entry as found (Team entries need a real hire or promotion).
 
 ## Ascension
 
@@ -461,8 +443,6 @@ an **ASCEND** row shows at the bottom of the Shop's BOTTLES list.
   that token) does it.
 - **On screen**: purple stars over your head ("★★ ASCENDED", everyone sees
   them) and in the player list, and a big celebration when you ascend.
-- **Testing in Studio**: the TEST panel's REWARDS list has **Ready to
-  ascend**, which gives you the top bottle and enough Volts.
 
 ## Tutorial, friends and invites
 
@@ -483,8 +463,6 @@ of the screen with one line at a time:
 - **Saving**: the step is saved (`tutorialStep` in the profile), so it
   carries on after a rejoin. Anyone who owns a Vial or better (or has
   ascended) never sees it.
-- **Testing in Studio**: the TEST panel's REWARDS list has **Restart
-  tutorial** (starts it again from step 1).
 
 **Gameplay tips** (`Config.HINTS`, `Util/Hints`, `Systems/Hints`,
 `Controllers/Hints`). After the tutorial, the rest of the game is shown a
@@ -518,16 +496,14 @@ opens that panel. Each tip shows **once ever**.
   reward, been in two zones, ...).
 - **Turning them off**: ⚙️ SETTINGS → Accessibility & HUD → **Gameplay
   tips**.
-- **Testing in Studio**: TEST → 🎁 REWARDS → **💡 Reset gameplay tips**
-  (every tip can show again; the first a few seconds later, and the
-  time-based ones straight away). `tools/harness/test_hints.luau` checks
-  the triggers, the order, the timing and the once-only rule.
+- **Tests**: `tools/harness/test_hints.luau` checks the triggers, the
+  order, the timing and the once-only rule.
 
 **Friends boost** (`Systems/Friends`): +5% Volts for each Roblox friend
 in your server, up to 3 (+15%). The server checks friendships when
 someone joins and forgets them when they leave. A green chip on the HUD
 says "👥 +10% friends". It counts everywhere a sale does (Remote Sell, the
-AFK Lounge). Studio test: **Pretend friends +1** in the TEST panel.
+AFK Lounge).
 
 **Invites** (`Systems/Invites`, the **INVITE** button in REWARDS): opens
 Roblox's own invite window. When a friend who has **never played before**
@@ -556,9 +532,7 @@ counting past day 7). Each is saved in its own OrderedDataStore
   avatars. Your own row glows gold.
 - **The board at the spawn**: a "TOP VOLTS" sign beside world 1's spawn
   shows the top 10 all-time Volts.
-- **Testing in Studio**: the TEST panel's REWARDS list has **Leaderboard
-  test data** (fills every board with made-up players, with you at #7;
-  tap again to go back). Real boards need Game Settings > Security >
+- **Testing in Studio**: the boards need Game Settings > Security >
   Enable Studio Access to API Services.
 
 **Phone notifications** (`Util/Notifications`, `Systems/Notifications`).
@@ -594,9 +568,7 @@ says `[Notifications] not sending ...`):
    HTTP Requests** on.
 
 The game must have at least 100 visits before Roblox sends any. Studio
-can't send real notifications: the TEST panel's **Queue test reminder**
-puts one in the queue for you, due now, and the output shows it being
-claimed and sent (or why it wasn't).
+can't send real notifications.
 
 ## Admin panel, error reports and streaming
 
@@ -621,8 +593,7 @@ Admins see an **🛡 ADMIN** button under the MENU button. In the panel:
 
 The server checks every request (only the button is on the client), and
 every action is saved in the `AdminLog` DataStore: one entry per action
-(who, what, when, the target), one key per day (`day_2026-10-25`). The
-Studio-only TEST buttons are still there, under the ADMIN button.
+(who, what, when, the target), one key per day (`day_2026-10-25`).
 
 **Error reports** (`Systems/Errors`, `Controllers/ErrorReport`). Every
 script error, on the server and on players' devices, is grouped by a short
@@ -756,7 +727,7 @@ lines.
     `PassPerks`, `Store`, `Receipts`, `RemoteSell`, `Gifts`, `Friends`,
     `Invites`, `Group`, `Leaderboards`, `Notifications`, `Settings`,
     `Stats`, `Tutorial`, `Hints`, `Analytics`, `Admin`, `Errors`,
-    `PrivateServer` and the Studio-only `DevCommands`.
+    and `PrivateServer`.
   - `Lib/`: `MapBuilder` (builds the map) and `RateLimit`.
   - `World/`: the map framework and its three style packs (WeatherLab,
     StormPunk, SkyIsles). The ground is built from parts (`World/Blocks`),
@@ -765,7 +736,7 @@ lines.
   - `Controllers/`: `State` (the latest snapshot), the HUD and menu, one
     controller per panel (shop, research, rewards, boosts, gifts,
     settings, teleport, AFK, Ascension, admin), the storm and strike
-    effects, music and sound, the tutorial and the Studio TEST panel.
+    effects, music and sound, and the tutorial.
   - `Lib/`: UI helpers (`UI`, `Layout`, `LayoutMath`), sounds (`Sfx`),
     settings, toasts and the Log and leaderboard tabs.
 - `plugin/` → the Studio updater plugin (not part of the game).

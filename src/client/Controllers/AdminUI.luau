@@ -372,7 +372,7 @@ function AdminUI.init()
 	remote.OnClientEvent:Connect(onMessage)
 
 	-- the ADMIN button: the first row under the MENU button
-	-- (LayoutMath.hud.test; the Studio TEST buttons are the rows under it)
+	-- (LayoutMath.hud.test)
 	local open = UI.button({
 		Name = "AdminButton",
 		Text = "🛡 ADMIN",

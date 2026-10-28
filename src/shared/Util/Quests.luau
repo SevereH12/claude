@@ -327,22 +327,6 @@ function Quests.reward(key: string, period: Period): Types.Reward
 	return if template then template.reward else {}
 end
 
--- Studio TEST "complete quest": the first unfinished, unclaimed quest
--- counts as done (its starting point moves back by its target). Returns
--- true if there was one.
-function Quests.testComplete(save: Types.QuestsSave, stats: Types.StatsSave): boolean
-	for _, period: Period in { "daily", "weekly" } :: { Period } do
-		local set = Quests.setFor(stats, period)
-		for _, quest in list(save, period) do
-			if not quest.claimed and not Quests.isComplete(quest, set) then
-				quest.base = Stats.get(set, Quests.statKey(quest)) - quest.target
-				return true
-			end
-		end
-	end
-	return false
-end
-
 -- What the client is sent: each quest with its progress.
 function Quests.view(save: Types.QuestsSave, stats: Types.StatsSave, day: number): Types.QuestsView
 	local function viewList(period: Period): { Types.QuestView }

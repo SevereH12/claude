@@ -178,18 +178,6 @@ local function onAscend(player: Player, token: unknown)
 	end
 end
 
--- Studio TEST "Ready to ascend" (Systems/DevCommands only calls it in
--- Studio): the top bottle and exactly enough Volts for the next level.
-function Ascension.testReady(player: Player)
-	local profile = PlayerData.get(player)
-	if not profile then
-		return
-	end
-	profile.bottleTier = AscensionRules.topTier()
-	profile.volts = math.max(profile.volts, AscensionRules.cost(profile.ascension))
-	Sync.markDirty(player)
-end
-
 local function onPlayerAdded(player: Player)
 	player.CharacterAdded:Connect(function(character)
 		character:WaitForChild("Head", 5)

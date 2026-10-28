@@ -74,7 +74,7 @@ export type SnapshotLike = {
 	researchers: { [string]: Types.ResearcherSave },
 	glints: { number },
 	log: Types.LogView,
-	daily: { streak: number, lastDay: number, dayOffset: number },
+	daily: { streak: number, lastDay: number },
 	chargeCount: number,
 	capacity: number,
 	passes: { [string]: boolean },

@@ -270,19 +270,33 @@ check(
 	"a finished quest can't be rerolled"
 )
 
--- the Studio "complete quest" tool and the view -------------------------------------
+-- the view, with quests finished by hand ----------------------------------------------
+-- The first unfinished, unclaimed quest counts as done (its starting point
+-- moves back by its target). True if there was one.
+local function finishOne(save, stats): boolean
+	for _, period in { "daily", "weekly" } do
+		local set = Quests.setFor(stats, period)
+		for _, quest in save[period] do
+			if not quest.claimed and not Quests.isComplete(quest, set) then
+				quest.base = Stats.get(set, Quests.statKey(quest)) - quest.target
+				return true
+			end
+		end
+	end
+	return false
+end
 local fresh = Quests.new()
 local freshStats = Stats.new()
 Quests.refresh(fresh, freshStats, 42, monday, early, false)
-check(Quests.testComplete(fresh, freshStats), "complete quest finishes one")
+check(finishOne(fresh, freshStats), "finishing one")
 local view = Quests.view(fresh, freshStats, monday)
 check(view.daily[1].progress == view.daily[1].target, "the first daily quest shows done")
 check(view.daily[2].progress == 0 and not view.daily[2].claimed, "the others don't")
 check(view.rerollReady, "a fresh day has its reroll")
 for _ = 1, 10 do
-	Quests.testComplete(fresh, freshStats)
+	finishOne(fresh, freshStats)
 end
-check(not Quests.testComplete(fresh, freshStats), "nothing left to complete")
+check(not finishOne(fresh, freshStats), "nothing left to complete")
 check(Quests.isComplete(fresh.weekly[1], freshStats.thisWeek), "the weekly one too")
 check(
 	Quests.reward(fresh.weekly[1].key, "weekly").charges == Config.QUESTS.weeklyReward.charges,
@@ -460,8 +474,18 @@ for id in backFound do
 	same = same and found[id] == true
 end
 check(same and backClaimed["Bolts:Mesa"], "the view carries what's found and claimed")
-local entry, key = StormLog.nextTestEntry(found)
-check(entry ~= nil and key ~= nil and not found[entry.id], "the test tool picks a missing entry")
+-- the first entry not found yet that a counter can find, and its counter
+local entry, key
+for _, page in StormLog.pages() do
+	for _, row in page.rows do
+		for _, candidate in row.entries do
+			if not entry and not found[candidate.id] and candidate.stats and candidate.stats[1] then
+				entry, key = candidate, candidate.stats[1]
+			end
+		end
+	end
+end
+check(entry ~= nil and key ~= nil, "there's a missing entry a counter can find")
 lifetime[key] = 1
 check(StormLog.found(lifetime, researchers)[entry.id], "and its counter finds it")
 

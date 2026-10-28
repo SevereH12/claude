@@ -5,7 +5,6 @@
 -- with the tip's id; this saves the id in profile.hintsSeen, so it never
 -- shows again (on any server or device). That's all the client can do:
 -- mark a known tip as seen, rate-limited.
--- Studio's TEST panel resets them (Hints.reset, Systems/DevCommands).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -34,16 +33,6 @@ local function onSeen(player: Player, id: unknown)
 		return
 	end
 	profile.hintsSeen[def.id] = true
-	Sync.markDirty(player)
-end
-
--- Studio TEST button: every tip can show again.
-function Hints.reset(player: Player)
-	local profile = PlayerData.get(player)
-	if not profile then
-		return
-	end
-	profile.hintsSeen = {}
 	Sync.markDirty(player)
 end
 

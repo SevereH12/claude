@@ -96,7 +96,7 @@ function Tutorial.skip(_progress: Progress): Progress
 	return { step = Tutorial.DONE, caught = 0 }
 end
 
--- The Studio TEST button: from the start again.
+-- The start: step 1, nothing caught yet.
 function Tutorial.restart(): Progress
 	return { step = Tutorial.WALK, caught = 0 }
 end

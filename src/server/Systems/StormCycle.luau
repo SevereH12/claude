@@ -90,11 +90,6 @@ local function runSupercell()
 	waitPhase()
 end
 
--- TEST panel (Studio): the next Supercell starts in `seconds`.
-function StormCycle.supercellIn(seconds: number)
-	supercellAt = now() + seconds
-end
-
 function StormCycle.init()
 	remote = Net.get("StormState")
 	-- players joining mid-cycle get the current phase straight away

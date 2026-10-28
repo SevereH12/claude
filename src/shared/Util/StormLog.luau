@@ -454,21 +454,4 @@ function StormLog.fromView(view: Types.LogView?): (Found, { [string]: boolean })
 	return found, claimed
 end
 
--- Studio TEST "+Log entry": the first entry not found yet that a counter
--- can find (Team entries need a real hire or promotion), and the counter
--- to add 1 to. nil when there's none left.
-function StormLog.nextTestEntry(found: Found): (Entry?, string?)
-	for _, page in StormLog.pages() do
-		for _, row in page.rows do
-			for _, entry in row.entries do
-				local stats = entry.stats
-				if not found[entry.id] and stats and stats[1] then
-					return entry, stats[1]
-				end
-			end
-		end
-	end
-	return nil, nil
-end
-
 return StormLog
