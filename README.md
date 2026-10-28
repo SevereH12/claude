@@ -5,22 +5,34 @@ Plant for Volts, and buy bigger bottles.
 
 ## Features
 
-- **Storm cycle**: 90s storms, 20s calm (first storm 8s after the server
-  starts). The sky darkens, clouds roll in and it rains during storms.
-- **Zones** with glowing force-field borders and entrance arches:
-  - **Shoreline** (yellow): everyone in the circle catches. 5 Volts per charge.
-  - **Mesa** (orange, up the ramp): only the closest player catches. 20 Volts per charge.
-- **Strikes**: a ring and light pillar appear 1.5s before each bolt. Stand in
-  the ring to catch a charge. The bottle is always in your hand.
-- **Speed**: normal speed inside zones, fast everywhere else.
-- **Selling**: step on the glowing SELL pad at the Power Plant.
-- **Bottles**: Jar (5) → Flask (15) → Battery Pack (40) → Storm Cell (100).
-- **Saving**: Volts, bottle tier and held charges save (retries, session
-  locking, autosave every 60s, save on leave and shutdown).
-- **HUD**: Volts, storm timer, bottle fill bar, server city meter (placeholder).
+- **Storms**: 90 s storms and 20 s of calm. During a storm, lightning
+  strikes the storm zones: a ring appears 1.5 s before each bolt, and
+  standing in it catches the charge. Rare bolts (Golden, Rainbow, ball
+  lightning), Supercells and Server Storms make some storms special.
+- **Three worlds**, joined by portals: **Barometer Bay** (Shoreline,
+  Mesa, and Aurora Reef for Roblox Premium members), **Voltcliff Works**
+  (Generator Yard, Tidewire Beach, Thunderhead Mesa) and **Stormspire
+  Isles** (Rune Spire, Cloudshore, Ember Mesa). In "Shared" zones everyone
+  in the ring catches; in the Mesas only the closest player does.
+- **Selling**: stand at a Power Plant sell station (or use the Remote
+  Sell pass) and your charges become Volts.
+- **Progress**: 9 bottles (Jar to Storm Core) and 9 pairs of boots, a
+  Research Office with 5 researchers to hire, post and promote, and
+  **Ascension** (start again for +50% Volts per level).
+- **Rewards**: a 7-day login streak, playtime gifts every day, daily and
+  weekly quests, the Storm Log collection book, an AFK Lounge, a server
+  goal that starts a 2x Server Surge, friends and invite rewards, and
+  leaderboards.
+- **Store** (everything off sale until the owner turns it on): 8 Game
+  Passes, Volts packs, boosts and gifting.
+- **Settings**, sound and music, a new-player tutorial, phone
+  notifications, an admin panel, error reports and server-side movement
+  checks.
+- **Saving**: every player's profile saves with retries and session
+  locking, every 60 s, when they leave and when the server shuts down.
 
 Every number (timings, values, prices, radius, walk speeds) is in
-`src/shared/Config.luau`.
+`src/shared/Config.luau`. The sections below explain each part.
 
 ## Getting it into Roblox Studio
 
@@ -635,21 +647,65 @@ In a private server its owner gets a small green **[Owner]** chat tag
 (`Systems/PrivateServer`, `Controllers/VipChat`). Everything else works the
 same as in a public server.
 
+## Movement checks (anti-cheat)
+
+The client moves its own character, so a cheat script could teleport onto
+lightning rings or run faster. `Systems/AntiCheat` (rules in
+`Util/AntiCheat`, numbers in `Config.ANTI_CHEAT`) looks at every player's
+position 5 times a second. If someone moved further across the ground than
+their walk speed allows (×1.5, plus 6 studs, over about a second), they
+can't catch bolts, touch ball lightning or sell at a station for 5
+seconds. Jet Boots, boots, jumping and falling are allowed for, and so is
+every move the server makes (portals, the Teleport panel, the AFK Lounge,
+Ascension's trip home, the zone lock, respawning). Nobody is kicked: lag
+can look like a teleport. Someone caught 3 or more times shows in the
+admin panel's list as `[cheat]`, and the output prints `[AntiCheat]`
+lines.
+
 ## Code layout
 
-- `src/shared` → ReplicatedStorage.Shared: Config, Types, Remotes, Net, formulas, zone geometry
-- `plugin/` → the Studio updater plugin (not part of the game)
-- `src/server` → ServerScriptService.Server
-  - `Systems/`: PlayerData (saving), Map, StormCycle, Strikes, Bottles, Movement, Selling, Shop, Sync
-  - `Lib/`: MapBuilder, RateLimit
-  - `World/`: the map framework and its three style packs (WeatherLab is live).
-    The ground is built from parts (`World/Blocks`), not Roblox Terrain.
-- `src/client` → StarterPlayerScripts.Client
-  - `Controllers/`: State, Storm, StrikeFX, HUD, ShopUI, ZoneBanner
-  - `Lib/`: UI helpers
+- `src/shared` → ReplicatedStorage.Shared: `Config` (every number),
+  `Types`, `Remotes` (every remote's name), `Net`, and `Util/`: the pure
+  rules (no Roblox services) both sides use and the harness tests:
+  formulas, zones, progression, passes, rewards, quests, the Storm Log,
+  Ascension, research, weather and the server goal, settings, social,
+  leaderboards, notifications, admin rules (`Ops`) and movement checks
+  (`AntiCheat`).
+- `src/server` → ServerScriptService.Server (a Script). It loads every
+  system in `Systems/`, calls each one's `init()` and then `start()`.
+  - `Systems/`: one module per feature. The core: `PlayerData` (saving),
+    `Sync` (sends each player their state), `StormCycle`, `Strikes`,
+    `Selling`, `Shop`, `Bottles`, `Boots`, `Movement`, `Travel`,
+    `AntiCheat`, `Map`. Then `Research`, `Rewards`, `Quests`,
+    `StormLog`, `Ascension`, `Afk`, `ServerGoal`, `Boosts`, `Passes`,
+    `PassPerks`, `Store`, `Receipts`, `RemoteSell`, `Gifts`, `Friends`,
+    `Invites`, `Group`, `Leaderboards`, `Notifications`, `Settings`,
+    `Stats`, `Tutorial`, `Analytics`, `Admin`, `Errors`,
+    `PrivateServer` and the Studio-only `DevCommands`.
+  - `Lib/`: `MapBuilder` (builds the map) and `RateLimit`.
+  - `World/`: the map framework and its three style packs (WeatherLab,
+    StormPunk, SkyIsles). The ground is built from parts (`World/Blocks`),
+    not Roblox Terrain.
+- `src/client` → StarterPlayerScripts.Client (a LocalScript)
+  - `Controllers/`: `State` (the latest snapshot), the HUD and menu, one
+    controller per panel (shop, research, rewards, boosts, gifts,
+    settings, teleport, AFK, Ascension, admin), the storm and strike
+    effects, music and sound, the tutorial and the Studio TEST panel.
+  - `Lib/`: UI helpers (`UI`, `Layout`, `LayoutMath`), sounds (`Sfx`),
+    settings, toasts and the Log and leaderboard tabs.
+- `plugin/` → the Studio updater plugin (not part of the game).
+- `tools/` → the test harness (`tools/harness`, run with Lune), map
+  checks and renders, and store, audio and ops scripts.
 
 ## Checks
 
 - Format: `stylua src`
 - Lint: `selene src`
+- Game rules: `lune run tools/harness/test_<name>.luau` for each test in
+  `tools/harness/` (`test_gameplay.luau Game`, and `test_layout.luau`
+  takes an output path)
+- The map: `tools/check_world.sh Game <outdir>`
 - Data deletion script: `python3 tools/ops/test_erase_user.py` (offline)
+
+GitHub runs the format, lint, harness and map checks on every push to
+`main` and to the working branch (`.github/workflows/ci.yml`).
