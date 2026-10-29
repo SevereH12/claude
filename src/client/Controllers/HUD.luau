@@ -58,6 +58,7 @@ local State = require(script.Parent.State)
 local Storm = require(script.Parent.Storm)
 
 local COLORS = UI.COLORS
+local GLINT_COLOR = Color3.fromRGB(190, 120, 255) -- the goal bar while it counts Glints
 local FULL_PULSE = TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
 local SURGE_COLOR = Color3.fromRGB(90, 220, 255) -- the server goal meter's fill
 local SELL_WIDTH = 104 -- design pixels the SELL button takes from the bar's slot
@@ -732,10 +733,13 @@ local function renderGoal(snapshot: Types.Snapshot)
 	goalDetail.Text = goal.detail
 	local fraction = Goals.fraction(goal)
 	TweenService:Create(goalFill, UI.TWEEN.fast, { Size = UDim2.fromScale(fraction, 1) }):Play()
+	-- a promotion's bar counts Glints, in the Glint colour
+	local glints = goal.unit == "glints"
+	goalFill.BackgroundColor3 = if glints then GLINT_COLOR else COLORS.volt
 	local amount = `{Format.abbreviate(goal.current)} / {Format.abbreviate(goal.target)}`
 	goalAmount.Text = if goal.ready
 		then `READY! {goal.readyText}`
-		elseif goal.unit == "glints" then `{amount} ✨ {goal.zone or ""}`
+		elseif glints then `✨ {amount} {goal.zone or ""} Glints`
 		else `{amount} ⚡`
 end
 
