@@ -953,7 +953,7 @@ local function onLanded(landed: Types.StrikeLanded)
 		local zone = Config.ZONES[landed.zoneId]
 		local snapshot = State.current
 		local units = if zone and snapshot then Progression.chargeSize(snapshot, zone) else 1
-		popup(`+{units} → TANK`, true, 0.42, 0.06)
+		popup(`+{units} to TANK`, true, 0.42, 0.06)
 		Sfx.play("tank_glug")
 	elseif table.find(landed.full, player.UserId) then
 		UI.toastEvery("bottleFull", UI.FULL_REMINDER, UI.FULL_MESSAGE, "warn")

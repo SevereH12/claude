@@ -169,7 +169,7 @@ local function buildLoungeRow(list: Instance, index: number)
 		local refusal =
 			Portals.loungeRefusal(snapshot.afk ~= nil, workspace:GetServerTimeNow(), readyAt())
 		if refusal then
-			UI.toast(`⏱ {refusal}`, "info")
+			UI.toast(`⏱️ {refusal}`, "info")
 			return
 		end
 		UI.pop(button)
@@ -194,7 +194,7 @@ local function buildRow(list: Instance, index: number, world: Types.WorldDef)
 		if refusal and Progression.worldLockReason(snapshot, world) then
 			UI.toast(`🔒 {world.displayName}: {refusal}`, "warn")
 		elseif refusal then
-			UI.toast(`⏱ {refusal}`, "info")
+			UI.toast(`⏱️ {refusal}`, "info")
 		else
 			UI.pop(button)
 			remote:FireServer(world.id)

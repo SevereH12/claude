@@ -216,7 +216,7 @@ local function teamRows(): { Row }
 			table.insert(entries, {
 				id = `Team:{def.id}:{rank}`,
 				label = `Rank {rank}`,
-				icon = string.rep("★", math.min(rank, 3)),
+				icon = string.rep("⭐", math.min(rank, 3)),
 				hint = `Promote {def.name} to rank {rank}`,
 				role = def.id,
 				rank = rank,

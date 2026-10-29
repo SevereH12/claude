@@ -13,6 +13,9 @@ local Passes = require(script.Parent.Passes)
 local PlayerData = require(script.Parent.PlayerData)
 
 local BOTTLE_NAME = "Bottle"
+local HOLD_WELD = "HoldWeld"
+local MAX_GRIP_GAP = 10 -- studs from the hand: any further and it came loose
+local UPRIGHT = CFrame.Angles(0, 0, math.rad(90)) -- cylinders run along X
 local EMPTY_COLOR = Color3.fromRGB(110, 185, 255)
 local FULL_COLOR = Color3.fromRGB(255, 210, 70)
 local GLASS_COLOR = Color3.fromRGB(190, 230, 255)
@@ -107,11 +110,36 @@ local function makeBottle(): Model
 	return model
 end
 
-local function attach(character: Model)
-	local hand = character:WaitForChild("RightHand", 5) or character:FindFirstChild("Right Arm")
-	if not hand or not hand:IsA("BasePart") or character:FindFirstChild(BOTTLE_NAME) then
-		return
+-- The hand the bottle hangs from: RightHand (R15) or Right Arm (R6).
+local function handOf(character: Model): BasePart?
+	local hand = character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm")
+	return if hand and hand:IsA("BasePart") then hand else nil
+end
+
+local function removeBottles(character: Model)
+	for _, child in character:GetChildren() do
+		if child.Name == BOTTLE_NAME then
+			child:Destroy()
+		end
 	end
+end
+
+-- Still in the hand: welded to this very hand part, and next to it.
+local function isHeld(bottle: Instance, hand: BasePart): boolean
+	local body = bottle:FindFirstChild("Body")
+	local weld = body and body:FindFirstChild(HOLD_WELD)
+	if not body or not body:IsA("BasePart") or not weld or not weld:IsA("Weld") then
+		return false
+	end
+	return weld.Part0 == hand
+		and weld.Part1 == body
+		and weld.Enabled
+		and (body.Position - hand.Position).Magnitude <= MAX_GRIP_GAP
+end
+
+-- Puts a new bottle in the hand (and removes any old one).
+local function hold(character: Model, hand: BasePart)
+	removeBottles(character)
 	local bottle = makeBottle()
 	local body = bottle.PrimaryPart :: BasePart
 
@@ -120,13 +148,57 @@ local function attach(character: Model)
 	local gripPosition = if grip and grip:IsA("Attachment")
 		then grip.Position
 		else Vector3.new(0, -hand.Size.Y / 2, 0)
+	local offset = CFrame.new(gripPosition - Vector3.new(0, 0.9, 0)) * UPRIGHT
+	-- start it in the hand, not at the world origin: a client that hasn't
+	-- joined the weld yet then still draws it in the right place
+	bottle:PivotTo(hand.CFrame * offset)
 	local weld = Instance.new("Weld")
+	weld.Name = HOLD_WELD
 	weld.Part0 = hand
 	weld.Part1 = body
-	weld.C0 = CFrame.new(gripPosition - Vector3.new(0, 0.9, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	weld.C0 = offset
 	weld.Parent = body
 
 	bottle.Parent = character
+end
+
+local function attach(character: Model)
+	character:WaitForChild("RightHand", 5)
+	local hand = handOf(character)
+	if hand and not character:FindFirstChild(BOTTLE_NAME) then
+		hold(character, hand)
+	end
+end
+
+-- Keeps the bottle in the hand. The hand part can be replaced after the
+-- bottle was welded to it (when the avatar's body parts are applied), which
+-- leaves the bottle welded to a part that's gone: it then drifts on its
+-- own, away from the player. A dead character's joints break, so its bottle
+-- goes too. A loose or doubled bottle is replaced by one in the hand.
+local function keepHeld(player: Player)
+	local character = player.Character
+	if not character then
+		return
+	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local hand = handOf(character)
+	local bottle = character:FindFirstChild(BOTTLE_NAME)
+	if not humanoid or humanoid.Health <= 0 or not hand then
+		if bottle then
+			removeBottles(character)
+		end
+		return
+	end
+	if not bottle or not isHeld(bottle, hand) then
+		hold(character, hand)
+		return
+	end
+	-- a second bottle (two attaches at once) would hang loose
+	for _, child in character:GetChildren() do
+		if child.Name == BOTTLE_NAME and child ~= bottle then
+			child:Destroy()
+		end
+	end
 end
 
 -- Glow to match how full the bottle is, in the player's colours.
@@ -191,6 +263,7 @@ function Bottles.start()
 	end
 	while true do
 		for _, player in Players:GetPlayers() do
+			keepHeld(player)
 			updateFill(player)
 		end
 		task.wait(0.25)

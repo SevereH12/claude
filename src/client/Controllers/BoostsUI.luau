@@ -371,10 +371,10 @@ local function render()
 		card.gift.Text = if credits > 0 then `🎁 SEND ({credits})` else "🎁 GIFT"
 		if owned[pass.key] and pass.key == "BoltColours" then
 			parts.buy.Text = "🎨 CHOOSE COLOUR"
-			parts.status.Text = "✓ OWNED"
+			parts.status.Text = "✅ OWNED"
 			UI.setEnabled(parts.buy, true, COLORS.storm)
 		elseif owned[pass.key] then
-			parts.buy.Text = if gifted[pass.key] then "✓ OWNED (gift)" else "✓ OWNED"
+			parts.buy.Text = if gifted[pass.key] then "✅ OWNED (gift)" else "✅ OWNED"
 			parts.status.Text = ""
 			UI.setEnabled(parts.buy, false, COLORS.green)
 		elseif pass.id == 0 then
@@ -398,7 +398,7 @@ local function render()
 			parts.status.Text = "COMING SOON"
 			UI.setEnabled(parts.buy, false, COLORS.green)
 		elseif product.serverStorm and not BoostRules.stormHasRoom(stormLeft()) then
-			parts.buy.Text = "⛈ AT 60 MIN MAX"
+			parts.buy.Text = "⛈️ AT 60 MIN MAX"
 			UI.setEnabled(parts.buy, false, COLORS.green)
 		else
 			parts.buy.Text = `{price}  FOR ME`
@@ -457,7 +457,7 @@ local function renderPicker()
 			elseif vip then "VIP Gold"
 			else "Default"
 		local selected = swatch.index == picked
-		swatch.button.Text = if selected then `✓ {name}` else name
+		swatch.button.Text = if selected then `✅ {name}` else name
 		if swatch.index == 0 then
 			swatch.button.BackgroundColor3 = if vip then Config.VIP_GOLD else DEFAULT_BOLT
 		end
@@ -499,7 +499,7 @@ local function buildPicker(body: Frame)
 	UI.maxText(title, 26)
 	local close = UI.button({
 		Name = "Close",
-		Text = "✕",
+		Text = "X",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -10, 0, 8),
 		Size = UDim2.fromOffset(52, 42),

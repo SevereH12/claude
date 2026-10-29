@@ -61,14 +61,14 @@ function Ascension.bonusText(level: number): string
 	return `+{math.floor(Ascension.bonus(level) * 100 + 0.5)}%`
 end
 
--- "★★★" (a number after five stars, so it stays short: "★×12").
+-- "⭐⭐⭐" (a number after five stars, so it stays short: "⭐x12").
 function Ascension.stars(level: number): string
 	if level <= 0 then
 		return ""
 	elseif level <= 5 then
-		return string.rep("★", level)
+		return string.rep("⭐", level)
 	end
-	return `★×{level}`
+	return `⭐x{level}`
 end
 
 -- Can they ascend now? If not, the reason in plain words.

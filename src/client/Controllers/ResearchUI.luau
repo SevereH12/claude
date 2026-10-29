@@ -168,7 +168,7 @@ local function perkText(def: Types.ResearcherDef, level: number, rank: number): 
 end
 
 local function stars(rank: number): string
-	return if rank > 0 then ` <font color="#FFD23C">{string.rep("★", rank)}</font>` else ""
+	return if rank > 0 then ` <font color="#FFD23C">{string.rep("⭐", rank)}</font>` else ""
 end
 
 local function zoneName(tier: number): string
@@ -211,7 +211,7 @@ local function celebrate(card: Card, rank: number)
 	Sfx.play("level_up")
 	Celebrate.sparks()
 	Researchers.celebrate(card.def.id)
-	UI.toast(`{card.def.name} is now rank {rank}! {string.rep("★", rank)}`, "volt")
+	UI.toast(`{card.def.name} is now rank {rank}! {string.rep("⭐", rank)}`, "volt")
 end
 
 -- The best non-premium zone your bottle opens, and whether any hired
@@ -320,7 +320,7 @@ local function renderPicker(snapshot: Types.Snapshot)
 		local current = save ~= nil and save.post == postId
 		button.Text = if locked
 			then `🔒 {name} · RANK {ResearchMath.zoneTier(zone :: Types.ZoneDef)}`
-			elseif current then `✓ {name}`
+			elseif current then `✅ {name}`
 			else name
 		UI.setEnabled(button, not locked, if current then COLORS.volt else COLORS.storm)
 	end
@@ -401,7 +401,7 @@ local function renderCard(
 	if rank >= ResearchMath.maxRank() then
 		card.hire.Visible = true
 		card.promote.Visible = false
-		card.hire.Text = "★ TOP RANK"
+		card.hire.Text = "⭐ TOP RANK"
 		UI.setEnabled(card.hire, false, COLORS.green)
 		return
 	end

@@ -5,7 +5,7 @@ starts by finding the cause: read the code, explain the cause in the
 commit message, and fix that cause, not the symptom. The user's
 screenshots are in `docs/prompts/img/`; open them with the Read tool.
 
-- [ ] All four fixes, checked and pushed
+- [x] All four fixes, checked and pushed
 
 ## 1. The close button shows no X (`img/23-offer-x.png`)
 

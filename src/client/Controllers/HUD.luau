@@ -3,7 +3,7 @@
 --
 --   StormBottlerHUD (ScreenGui), every piece on a screen edge (LayoutMath.hud)
 --   ├── VoltsPanel   top left: ⚡ Volts (counts up)
---   ├── StormPill    under Volts: "⚡ STORM 1:12" / "☀ STORM IN 0:15"
+--   ├── StormPill    under Volts: "⚡ STORM 1:12" / "☀️ STORM IN 0:15"
 --   ├── BoostRow     one chip per running timed boost ("⚡ 14:32"): a row
 --   │                under the storm timer, a column beside Volts on a
 --   │                sideways phone or tablet (LayoutMath.hud.boosts)
@@ -228,7 +228,7 @@ local function buildGoalCard()
 			return
 		end
 		UI.pop(goalCard, 0.95)
-		if goal.kind == "hire" or goal.kind == "promote" then
+		if goal.kind == "promote" then
 			ResearchUI.open()
 		elseif goal.kind == "boots" then
 			ShopUI.openBoots()
@@ -677,17 +677,17 @@ local function renderStorm()
 		then math.max(0, math.ceil(state.supercellAt - workspace:GetServerTimeNow()))
 		else nil
 	if state.phase == "Storm" and state.supercell then
-		stormLabel.Text = `⛈ SUPERCELL  {clock}`
+		stormLabel.Text = `⛈️ SUPERCELL  {clock}`
 		stormPill.BackgroundColor3 = Color3.fromRGB(120, 60, 200)
 	elseif supercellIn then
 		-- the 30 s countdown to a Supercell (Systems/StormCycle)
-		stormLabel.Text = string.format("⛈ SUPERCELL IN 0:%02d", supercellIn)
+		stormLabel.Text = string.format("⛈️ SUPERCELL IN 0:%02d", supercellIn)
 		stormPill.BackgroundColor3 = Color3.fromRGB(120, 60, 200)
 	elseif state.phase == "Storm" then
 		stormLabel.Text = `⚡ STORM  {clock}`
 		stormPill.BackgroundColor3 = COLORS.storm
 	else
-		stormLabel.Text = `☀ STORM IN {clock}`
+		stormLabel.Text = `☀️ STORM IN {clock}`
 		stormPill.BackgroundColor3 = COLORS.calm
 	end
 	if lastPhase ~= state.phase then
@@ -714,7 +714,6 @@ local GOAL_TITLES: { [Goals.GoalKind]: string } = {
 	zone = "UNLOCK",
 	bottle = "NEXT BOTTLE:",
 	boots = "NEXT BOOTS:",
-	hire = "HIRE:",
 	promote = "PROMOTE:",
 	ascend = "ASCEND:",
 }

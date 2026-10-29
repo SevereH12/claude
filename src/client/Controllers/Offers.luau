@@ -375,7 +375,7 @@ local function buildCard()
 	UI.maxText(cardText, 20)
 	local close = UI.button({
 		Name = "Close",
-		Text = "✕",
+		Text = "X",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -8, 0, 8),
 		Size = UDim2.fromOffset(36, 36),

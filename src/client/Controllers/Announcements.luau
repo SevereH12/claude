@@ -105,7 +105,7 @@ local function onStorm(state: Types.StormState)
 		local seconds = math.max(0, math.ceil(state.supercellAt - workspace:GetServerTimeNow()))
 		Sfx.play("boost_start")
 		ZoneBanner.show(
-			"⛈ SUPERCELL INCOMING",
+			"⛈️ SUPERCELL INCOMING",
 			`Get into a storm zone! It hits in {seconds}s`,
 			SUPERCELL_COLOR,
 			BANNER_SECONDS
@@ -115,7 +115,7 @@ local function onStorm(state: Types.StormState)
 	if supercell and not lastSupercell then
 		Sfx.play("server_storm")
 		ZoneBanner.show(
-			"⛈ SUPERCELL!",
+			"⛈️ SUPERCELL!",
 			`Twice the strikes and {Config.SUPERCELL.goldenMultiplier}x the golden bolts`,
 			SUPERCELL_COLOR,
 			BANNER_SECONDS

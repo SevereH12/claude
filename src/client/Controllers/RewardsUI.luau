@@ -416,7 +416,7 @@ end
 local function renderGroup()
 	local percent = math.round(Config.GROUP_BONUS * 100)
 	if player:GetAttribute(PassRules.GROUP) == true then
-		groupText.Text = `✓ Group bonus active: +{percent}% Volts`
+		groupText.Text = `✅ Group bonus active: +{percent}% Volts`
 		groupButton.Visible = false
 	elseif requestPending then
 		groupText.Text = "Join request sent"
@@ -512,7 +512,7 @@ local function render(): (boolean, boolean, { number })
 		if day == current and canClaim then
 			setCard(card, image, text, "CLAIM", true, false)
 		elseif day < current or day == current then
-			setCard(card, image, text, "✓", false, false)
+			setCard(card, image, text, "✅", false, false)
 		else
 			setCard(card, image, text, nil, false, true)
 		end
@@ -528,7 +528,7 @@ local function render(): (boolean, boolean, { number })
 		local gift = Config.PLAYTIME_GIFTS[index]
 		local text, image = describe(gift.reward, snapshot)
 		if snapshot.gifts.claimed[index] then
-			setCard(card, image, text, "✓", false, true)
+			setCard(card, image, text, "✅", false, true)
 		elseif RewardRules.giftReady(gift, elapsed, false) then
 			setCard(card, image, text, "CLAIM", true, false)
 			anyReady = true
@@ -572,7 +572,7 @@ local function render(): (boolean, boolean, { number })
 			card.button.Visible = true
 			if view.claimed then
 				card.mode = nil
-				card.button.Text = "✓ DONE"
+				card.button.Text = "✅ DONE"
 				UI.setEnabled(card.button, false, COLORS.green)
 			elseif canClaimQuest then
 				card.mode = "claim"
@@ -834,7 +834,7 @@ function RewardsUI.init()
 	})
 	UI.maxText(nextLabel, 18)
 
-	heading(list, 4, "⏱ PLAYTIME GIFTS (today)")
+	heading(list, 4, "⏱️ PLAYTIME GIFTS (today)")
 	giftGrid = grid(list, 5, "Gifts", #Config.PLAYTIME_GIFTS)
 	local claimGift = Net.get("ClaimGift")
 	for index, gift in Config.PLAYTIME_GIFTS do

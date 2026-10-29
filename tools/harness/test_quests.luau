@@ -592,7 +592,7 @@ local expected = Config.PASS_VALUES.doubleVolts
 	* 1.5
 check(near(Passes.sellMultiplier(stack), expected), "stacks with passes, an event, a Surge and the Log")
 check(Passes.sale(100, Passes.withAscension({}, 3)) == 250, "a 100 Volt bottle sells for 250 at level 3")
-check(Ascension.bonusText(3) == "+150%" and Ascension.stars(2) == "★★", "the text")
+check(Ascension.bonusText(3) == "+150%" and Ascension.stars(2) == "⭐⭐", "the text")
 
 -- the save migration -------------------------------------------------------------------
 local fromV14 = PlayerData.migrate({ version = 14, volts = 1, bottleTier = 1 })
