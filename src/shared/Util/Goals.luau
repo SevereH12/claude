@@ -4,13 +4,12 @@
 --
 -- Goals.list gives every goal the player could work on now:
 --   - what Progression.nextGoals gives (the next bottle, boots, zone or world)
---   - hire: the next researcher not hired yet (they're hired in
---     Config.RESEARCHERS order), for their price in Volts
 --   - promote: the researcher at the top level closest to their next rank,
 --     Glints toward that rank's cost (Research.glintsFor)
 --   - ascend: once they own the top bottle, Volts toward the next Ascension
 -- Goals.pick gives the one closest to done, so the card always has a goal
--- (ascend is always there at the top).
+-- (ascend is always there at the top). Research goals are only promotions
+-- (Glints): hiring is left to the Research Center itself.
 
 local Config = require(script.Parent.Parent.Config)
 local Types = require(script.Parent.Parent.Types)
@@ -28,7 +27,7 @@ export type Progress = {
 	ascension: number,
 }
 
-export type GoalKind = Progression.GoalKind | "hire" | "promote" | "ascend"
+export type GoalKind = Progression.GoalKind | "promote" | "ascend"
 
 export type GoalUnit = "volts" | "glints"
 
@@ -54,19 +53,7 @@ local KIND_ORDER: { [GoalKind]: number } = {
 	zone = 3,
 	bottle = 4,
 	boots = 5,
-	hire = 6,
 }
-
--- 0.4 stays "0.4", 3.0 becomes "3".
-local function formatNumber(value: number): string
-	return if value == math.floor(value) then string.format("%d", value) else tostring(value)
-end
-
--- A researcher's perk at level 1, e.g. "Grounding Rod: +1 studs catch radius".
-local function perkText(def: Types.ResearcherDef): string
-	local text = string.gsub(def.perk, "{v}", formatNumber(def.values[1]))
-	return text
-end
 
 -- How far along a goal is, from 0 to 1.
 function Goals.fraction(goal: Goal): number
@@ -74,24 +61,6 @@ function Goals.fraction(goal: Goal): number
 		return 1
 	end
 	return math.clamp(goal.current / goal.target, 0, 1)
-end
-
-local function hireGoal(progress: Progress): Goal?
-	for _, def in Config.RESEARCHERS do
-		if progress.researchers[def.id] == nil then
-			return {
-				kind = "hire",
-				title = def.name,
-				detail = perkText(def),
-				current = progress.volts,
-				target = def.price,
-				unit = "volts",
-				ready = progress.volts >= def.price,
-				readyText = "Hire at the Research Center",
-			}
-		end
-	end
-	return nil
 end
 
 -- The hired researcher at the top level closest to their next rank (the
@@ -161,10 +130,6 @@ function Goals.list(progress: Progress): { Goal }
 			readyText = "Open the SHOP",
 		}
 		table.insert(goals, goal)
-	end
-	local hire = hireGoal(progress)
-	if hire then
-		table.insert(goals, hire)
 	end
 	local promote = promoteGoal(progress)
 	if promote then
