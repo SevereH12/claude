@@ -158,10 +158,10 @@ local function spotsFor(site: string): ({ CFrame }?, CFrame?)
 	return frames, floor * CFrame.new(0, 5, -6)
 end
 
--- "Dr. Isobar · Forecaster Lv3 ★★": a gold star per rank.
+-- "Dr. Isobar · Forecaster Lv3 ⭐⭐": a gold star per rank.
 local function tagText(roleId: string, level: number, rank: number): string
 	local def = ResearchMath.def(roleId)
-	local stars = if rank > 0 then ` <font color="#FFD23C">{string.rep("★", rank)}</font>` else ""
+	local stars = if rank > 0 then ` <font color="#FFD23C">{string.rep("⭐", rank)}</font>` else ""
 	return if def then `{def.name} · {def.role} Lv{level}{stars}` else roleId
 end
 

@@ -95,14 +95,14 @@ function Leaderboards.rankOf(entries: { Types.LeaderboardEntry }, userId: number
 	return nil
 end
 
--- A value as a board shows it: "1.2M ⚡", "3,402" bolts, "★3", "12 days".
+-- A value as a board shows it: "1.2M ⚡", "3,402" bolts, "⭐3", "12 days".
 function Leaderboards.format(key: string, value: number): string
 	if key == "volts" then
 		return `{Format.abbreviate(value)} ⚡`
 	elseif key == "streak" then
 		return if value == 1 then "1 day" else `{value} days`
 	elseif key == "ascension" then
-		return `★{value}`
+		return `⭐{value}`
 	end
 	return Format.abbreviate(value)
 end

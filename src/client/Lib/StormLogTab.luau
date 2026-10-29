@@ -332,7 +332,7 @@ function StormLogTab.render(snapshot: Types.Snapshot, describe: Describe): numbe
 		view.bar.setFraction(if total > 0 then count / total else 1)
 		view.bar.fill.BackgroundColor3 = if done then COLORS.green else COLORS.volt
 		view.count.Text = if done
-			then `✓ {count} / {total}  ·  +{math.round(Config.STORM_LOG.pageBonus * 100)}% Volts`
+			then `✅ {count} / {total}  ·  +{math.round(Config.STORM_LOG.pageBonus * 100)}% Volts`
 			else `{count} / {total}`
 		for _, card in view.rows do
 			local rowDone = StormLogRules.rowDone(card.row, found)
@@ -340,7 +340,7 @@ function StormLogTab.render(snapshot: Types.Snapshot, describe: Describe): numbe
 			local rewardText = describe(view.page.reward, snapshot)
 			card.reward.Text = (string.gsub(rewardText, "\n", " · "))
 			if claimed[card.row.id] then
-				card.button.Text = "✓ DONE"
+				card.button.Text = "✅ DONE"
 				UI.setEnabled(card.button, false, COLORS.green)
 			elseif canClaim then
 				card.button.Text = "CLAIM"

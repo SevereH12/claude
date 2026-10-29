@@ -251,7 +251,7 @@ local function build(root: Frame)
 	local boostChoices = Config.BOOSTS
 	local minuteChoices = Config.ADMIN.boostMinutes
 	local function showChoices()
-		banLength.Text = `⏱ {Ops.banLabel(banChoices[banIndex])}`
+		banLength.Text = `⏱️ {Ops.banLabel(banChoices[banIndex])}`
 		local boost = boostChoices[boostIndex]
 		boostKind.Text = if boost then `{boost.icon} {boost.name}` else "-"
 		boostLength.Text = `{minuteChoices[minutesIndex]} min`
@@ -323,7 +323,7 @@ local function build(root: Frame)
 			resetArmed = name
 			resetToken += 1
 			local mine = resetToken
-			resetButton.Text = `⚠ TAP AGAIN: RESET {string.upper(name)}?`
+			resetButton.Text = `⚠️ TAP AGAIN: RESET {string.upper(name)}?`
 			task.delay(CONFIRM_SECONDS, function()
 				if resetToken == mine then
 					resetArmed = nil

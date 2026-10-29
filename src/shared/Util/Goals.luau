@@ -34,7 +34,7 @@ export type GoalUnit = "volts" | "glints"
 
 export type Goal = {
 	kind: GoalKind,
-	title: string, -- "Vial", "Dr. Isobar", "Level 2 ★★"
+	title: string, -- "Vial", "Dr. Isobar", "Level 2 ⭐⭐"
 	detail: string, -- what it gives, or what it takes
 	current: number, -- Volts or Glints the player has toward it
 	target: number, -- Volts or Glints it takes

@@ -68,7 +68,7 @@ local function column(parent: Frame, x: number, title: string, color: Color3, li
 	UI.maxText(label, 24)
 	for index, line in lines do
 		local item = UI.label({
-			Text = `• {line}`,
+			Text = `- {line}`,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			Position = UDim2.new(0, 10, 0, 40 + (index - 1) * 34),
 			Size = UDim2.new(1, -20, 0, 30),

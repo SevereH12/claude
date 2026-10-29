@@ -268,7 +268,7 @@ function AfkUI.init()
 		Name = "HowToggle",
 		BackgroundTransparency = 1,
 		Font = UI.FONT_BODY,
-		Text = "How is this worked out? ▾",
+		Text = "How is this worked out? 🔽",
 		TextColor3 = CALM,
 		TextScaled = true,
 		Position = UDim2.fromOffset(14, 84),
@@ -280,8 +280,8 @@ function AfkUI.init()
 	toggle.Activated:Connect(function()
 		expanded = not expanded
 		toggle.Text = if expanded
-			then "How is this worked out? ▴"
-			else "How is this worked out? ▾"
+			then "How is this worked out? 🔼"
+			else "How is this worked out? 🔽"
 		if State.current then
 			render(State.current)
 		end
