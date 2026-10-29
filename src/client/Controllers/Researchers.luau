@@ -17,6 +17,7 @@ local RunService = game:GetService("RunService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 local ResearchMath = require(ReplicatedStorage.Shared.Util.Research)
+local Portals = require(ReplicatedStorage.Shared.Util.Portals)
 local ResearchSites = require(ReplicatedStorage.Shared.Util.ResearchSites)
 local Types = require(ReplicatedStorage.Shared.Types)
 local ResearcherModels = require(script.Parent.Parent.Lib.ResearcherModels)
@@ -33,13 +34,15 @@ local CYAN = Color3.fromRGB(90, 230, 255)
 
 -- Spots on a camp deck, in the camp box's own frame (x along the 28-stud
 -- width, z along the 14-stud depth; the zone is toward +Z). Front first.
+-- Kit.researchCamp puts the sign posts at x = -5 and 5 (z = 5.5) and the
+-- tent at x = 3.5 to 10.5: the front row stands clear of all of them.
 local CAMP_SPOTS: { Vector2 } = {
 	Vector2.new(-3, 4.5),
 	Vector2.new(1, 4.5),
 	Vector2.new(-7, 4.5),
-	Vector2.new(5, 4.5),
+	Vector2.new(7, 4.5),
 	Vector2.new(-11, 4.5),
-	Vector2.new(9, 4.5),
+	Vector2.new(10.5, 4.5),
 	Vector2.new(-1, 0.5),
 	Vector2.new(-10, 0.5),
 }
@@ -54,6 +57,7 @@ type Rig = {
 	rank: number,
 	model: Model,
 	pivot: CFrame,
+	lift: number, -- the promotion jump, on top of pivot
 	pos: Vector3,
 	seed: number,
 	brace: number, -- 0 calm .. 1 hood up
@@ -63,6 +67,7 @@ type Rig = {
 	jerkUntil: number,
 	fill: number,
 	tag: TextLabel?,
+	tagText: string,
 	arm: BasePart,
 	shoulder: CFrame,
 	hood: BasePart,
@@ -124,11 +129,28 @@ local function readPlayer(player: Player)
 	dirty = true
 end
 
+-- The Research Office in the world you're in. Every world's hub has one, so
+-- "the first one tagged" could be another world's, 5000 studs away (and which
+-- one comes first can change between calls).
+local function officeHere(): BasePart?
+	local offset = Portals.worldOf(localPlayer).offset
+	local best: BasePart? = nil
+	local bestDistance = math.huge
+	for _, office in ResearchSites.offices() do
+		local flat = office.Position - offset
+		local distance = Vector2.new(flat.X, flat.Z).Magnitude
+		if distance < bestDistance then
+			best, bestDistance = office, distance
+		end
+	end
+	return best
+end
+
 -- World frames for a site's spots, front first, or nil if the site isn't in
 -- the world (yet).
 local function spotsFor(site: string): ({ CFrame }?, CFrame?)
 	if site == "Office" then
-		local office = ResearchSites.offices()[1]
+		local office = officeHere()
 		if not office then
 			return nil, nil
 		end
@@ -235,6 +257,7 @@ local function makeRig(
 		rank = rank,
 		model = model,
 		pivot = CFrame.identity,
+		lift = 0,
 		pos = Vector3.zero,
 		seed = (userId % 97) * 0.7 + (roleOrder[roleId] or 1) * 1.9,
 		brace = 0,
@@ -244,6 +267,7 @@ local function makeRig(
 		jerkUntil = 0,
 		fill = 0,
 		tag = if own then makeTag(model, tagText(roleId, level, rank)) else nil,
+		tagText = "",
 		arm = arm,
 		shoulder = arm.CFrame * CFrame.new(0, 0.65 * S, 0),
 		hood = hood,
@@ -394,10 +418,8 @@ local function layout()
 				rig.rank = row.rank
 				rig.pivot = frame
 				rig.pos = frame.Position
-				rig.model:PivotTo(frame)
-				if rig.tag then
-					rig.tag.Text = tagText(rig.roleId, rig.level, rig.rank)
-				end
+				rig.model:PivotTo(frame * CFrame.new(0, rig.lift, 0))
+				rig.tagText = "" -- the tag is redrawn on the next frame
 			end
 		end
 		setBoard(site, boardAt, #list - slots)
@@ -427,7 +449,7 @@ local ARM_OFFSET = CFrame.new(0, -0.65 * S, 0)
 local function animate(rig: Rig, now: number, dt: number, stormy: boolean, tankFraction: number)
 	local t = now + rig.seed
 	local role = rig.roleId
-	local pivot = rig.pivot
+	local pivot = rig.pivot * CFrame.new(0, rig.lift, 0)
 	rig.brace += ((if stormy then 1 else 0) - rig.brace) * math.min(1, dt * 3)
 	local brace = rig.brace
 
@@ -512,6 +534,30 @@ local function animate(rig: Rig, now: number, dt: number, stormy: boolean, tankF
 	end
 end
 
+-- Your researcher's tag, with "Setting up 5s" under it while they set up at
+-- a new camp (the server's Research_ timer, from the snapshot).
+local function showTag(rig: Rig, snapshot: Types.Snapshot?, serverNow: number)
+	local label = rig.tag
+	if not label then
+		return
+	end
+	local readyAt = if snapshot then snapshot.setupUntil[rig.roleId] else nil
+	local left = if readyAt and rig.site ~= "Office" then math.ceil(readyAt - serverNow) else 0
+	local text = tagText(rig.roleId, rig.level, rig.rank)
+	if left > 0 then
+		text ..= `\nSetting up {left}s`
+	end
+	if text == rig.tagText then
+		return
+	end
+	rig.tagText = text
+	label.Text = text
+	local gui = label.Parent
+	if gui and gui:IsA("BillboardGui") then
+		gui.Size = UDim2.fromOffset(240, if left > 0 then 44 else 26)
+	end
+end
+
 local function update(dt: number)
 	local now = os.clock()
 	if dirty and now >= retryAt then
@@ -536,7 +582,11 @@ local function update(dt: number)
 		)
 	end
 
+	local serverNow = workspace:GetServerTimeNow()
 	for _, rig in rigList do
+		if rig.tag then
+			showTag(rig, snapshot, serverNow)
+		end
 		local offset = rig.pos - camPos
 		if offset:Dot(offset) <= ANIMATE_RANGE_SQ then
 			animate(rig, now, dt, stormy, tankFraction)
@@ -603,20 +653,26 @@ function Researchers.celebrate(roleId: string)
 	if not rig then
 		return
 	end
+	-- The jump is a lift on top of the rig's spot, never a new spot: if the
+	-- researcher is moved mid-jump they land at the new spot, not the old one.
 	task.spawn(function()
-		local base = rig.pivot
 		local start = os.clock()
 		for _ = 1, 2 do
 			repeat
 				local t = (os.clock() - start) / 0.45
-				rig.pivot = base * CFrame.new(0, math.sin(math.min(t, 1) * math.pi) * 2.4, 0)
-				rig.model:PivotTo(rig.pivot)
+				if rigs[rig.key] ~= rig then
+					return -- removed mid-jump
+				end
+				rig.lift = math.sin(math.min(t, 1) * math.pi) * 2.4
+				rig.model:PivotTo(rig.pivot * CFrame.new(0, rig.lift, 0))
 				RunService.Heartbeat:Wait()
 			until t >= 1
 			start = os.clock()
 		end
-		rig.pivot = base
-		rig.model:PivotTo(base)
+		rig.lift = 0
+		if rigs[rig.key] == rig then
+			rig.model:PivotTo(rig.pivot)
+		end
 	end)
 end
 
@@ -635,6 +691,10 @@ function Researchers.start()
 	end
 	Players.PlayerAdded:Connect(watchPlayer)
 	Players.PlayerRemoving:Connect(unwatchPlayer)
+	-- the Office spots are at the office of the world you're in
+	localPlayer:GetAttributeChangedSignal(Portals.WORLD_ATTRIBUTE):Connect(function()
+		dirty = true
+	end)
 	Net.get("Forecast").OnClientEvent:Connect(onForecast)
 	Net.get("StrikeWarning").OnClientEvent:Connect(onWarning)
 	Net.get("StrikeLanded").OnClientEvent:Connect(onLanded)
