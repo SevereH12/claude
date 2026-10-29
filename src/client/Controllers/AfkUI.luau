@@ -12,8 +12,8 @@
 -- Also pulses the lounge's charge tank (parts tagged AfkPulse), and keeps
 -- an AFK player connected: Roblox disconnects after about 20 idle minutes,
 -- so while AFK (only then) Players.LocalPlayer.Idled is answered with
--- VirtualUser. If that errors (logged once), or the idle time reaches
--- Config.AFK.idleRejoinMinutes, it asks the server for the backup
+-- VirtualUser (an error is logged once). Once the idle time reaches
+-- Config.AFK.idleRejoinMinutes (17), it asks the server for the backup
 -- (AfkRejoin: a move to a fresh server, back in the lounge; Systems/Afk).
 
 local CollectionService = game:GetService("CollectionService")
@@ -205,8 +205,11 @@ function AfkUI.onIdle(idleSeconds: number)
 		virtualFailed = true
 		warn(`[AfkUI] VirtualUser failed ({err}); using the server-hop backup`)
 	end
+	-- only after idleRejoinMinutes (17) without input, just before Roblox's
+	-- 20-minute kick: a failed nudge alone doesn't move anyone (it used to,
+	-- on the first Idled at about 2 minutes, so AFK players hopped too often)
 	local tooLong = idleSeconds >= Config.AFK.idleRejoinMinutes * 60
-	if (tooLong or not ok) and os.clock() - lastRejoinAsk > 60 then
+	if tooLong and os.clock() - lastRejoinAsk > 60 then
 		lastRejoinAsk = os.clock()
 		print("[AfkUI] asking the server to move us to a fresh server (AfkRejoin)")
 		Net.get("AfkRejoin"):FireServer()

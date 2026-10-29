@@ -18,8 +18,8 @@
 --
 -- Staying connected: Roblox disconnects after about 20 idle minutes. While
 -- AFK the client answers Players.LocalPlayer.Idled with VirtualUser
--- (Controllers/AfkUI). If that fails, or the idle time reaches
--- Config.AFK.idleRejoinMinutes, it sends AfkRejoin: only while the server
+-- (Controllers/AfkUI). Once the idle time reaches
+-- Config.AFK.idleRejoinMinutes (17), it sends AfkRejoin: only while the server
 -- agrees they're AFK, this saves the profile and moves them to a fresh
 -- server of this place (teleport data { afk = true }); there they're put
 -- straight back in the lounge (session locking waits for this server's
