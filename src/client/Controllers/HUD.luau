@@ -228,7 +228,7 @@ local function buildGoalCard()
 			return
 		end
 		UI.pop(goalCard, 0.95)
-		if goal.kind == "promote" then
+		if goal.kind == "hire" or goal.kind == "promote" then
 			ResearchUI.open()
 		elseif goal.kind == "boots" then
 			ShopUI.openBoots()
@@ -714,6 +714,7 @@ local GOAL_TITLES: { [Goals.GoalKind]: string } = {
 	zone = "UNLOCK",
 	bottle = "NEXT BOTTLE:",
 	boots = "NEXT BOOTS:",
+	hire = "HIRE:",
 	promote = "PROMOTE:",
 	ascend = "ASCEND:",
 }
