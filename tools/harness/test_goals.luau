@@ -63,9 +63,20 @@ check(fresh and not fresh.ready, "not ready with no Volts")
 local rich = Goals.pick(player({ volts = Config.BOTTLES[2].price }))
 check(rich and rich.ready and rich.kind == "bottle", "ready once they have the Volts")
 
--- No hire goal: Research goals are only promotions (Glints)
-local hiredNone = Goals.list(player({ volts = Config.RESEARCHERS[1].price }))
-check(find(hiredNone, "hire") == nil, "no hire goal, even with the Volts for one")
+-- Hire: the next researcher not hired yet, in Config.RESEARCHERS order
+local hired = {}
+for index, def in Config.RESEARCHERS do
+	local hire = find(Goals.list(player({ researchers = hired })), "hire")
+	check(hire ~= nil and hire.title == def.name, `hire #{index} is {def.name}`)
+	check(hire and hire.target == def.price and hire.unit == "volts", `{def.name} costs Volts`)
+	check(hire and hire.readyText == "Hire at the Research Center", "hire's ready text")
+	hired[def.id] = researcher(1, 0)
+end
+local allHired = Goals.list(player({ researchers = hired }))
+check(find(allHired, "hire") == nil, "no hire once all are hired")
+local first = Config.RESEARCHERS[1]
+local hireReady = find(Goals.list(player({ volts = first.price })), "hire")
+check(hireReady and hireReady.ready, "hire is ready with the price in Volts")
 
 -- Promote: only researchers at the top level, Glints from Research.glintsFor
 local a, b = Config.RESEARCHERS[1], Config.RESEARCHERS[2]
@@ -152,7 +163,7 @@ local second = Goals.pick(finished)
 check(second and second.target == Ascension.cost(1), "the next level costs more")
 check(second and string.find(second.title, "Level 2", 1, true) ~= nil, "Level 2 next")
 
--- The tie order: ascend, promote, zone, bottle, boots
+-- The tie order: ascend, promote, zone, bottle, boots, hire
 local function goal(kind, current, target)
 	return {
 		kind = kind,
@@ -166,6 +177,7 @@ local function goal(kind, current, target)
 	}
 end
 local all = {
+	goal("hire", 10, 10),
 	goal("boots", 10, 10),
 	goal("bottle", 10, 10),
 	goal("zone", 10, 10),
@@ -178,13 +190,13 @@ for _, g in all do
 	table.insert(order, g.kind)
 end
 check(
-	table.concat(order, ",") == "ascend,promote,zone,bottle,boots",
+	table.concat(order, ",") == "ascend,promote,zone,bottle,boots,hire",
 	`ready goals go by kind (got {table.concat(order, ",")})`
 )
 local same = { goal("bottle", 5, 100), goal("zone", 5, 100) }
 Goals.sort(same)
 check(same[1].kind == "zone", "a zone beats a bottle at the same price")
-local cheap = { goal("zone", 0, 300), goal("bottle", 0, 80), goal("boots", 0, 400) }
+local cheap = { goal("zone", 0, 300), goal("bottle", 0, 80), goal("hire", 0, 400) }
 Goals.sort(cheap)
 check(cheap[1].kind == "bottle", "with no Volts, the cheapest goes first")
 local closer = { goal("bottle", 50, 100), goal("promote", 30, 40) }
