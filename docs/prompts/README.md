@@ -97,6 +97,10 @@ and stops if it isn't. To run one, say: "Do `docs/prompts/<file>`".
     (25, 75 and 200 Glints for every zone tier, on sale) in the store. Part
     B: buy buttons stay tappable, and when you're short they offer the
     cheapest Volts or Glint pack that covers the difference.
+23. `23-fixes-x-bottle-researchers-goal.md`: one run. The missing X on
+    close buttons, a bottle that flies around the player, researchers not
+    moving to their new zone's camp, and goals only sending you to
+    Research for Glints.
 
 Researchers (all five parts done) live in `researchers/`.
 
