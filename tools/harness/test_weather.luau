@@ -29,21 +29,21 @@ end
 
 local golden, rainbow, ball =
 	Weather.boltDef("Golden"), Weather.boltDef("Rainbow"), Weather.boltDef("Ball")
-check(golden and golden.chance == 0.02 and golden.multiplier == 10, "Golden: 2%, x10")
+check(golden and golden.chance == 0.03 and golden.multiplier == 10, "Golden: 3%, x10")
 check(rainbow and rainbow.chance == 0.004 and rainbow.multiplier == 25, "Rainbow: 0.4%, x25")
 check(rainbow and rainbow.boostMinutes == 5, "Rainbow: 5 min of a boost")
-check(ball and ball.chance == 0.01 and ball.multiplier == 5, "Ball lightning: 1%, x5")
+check(ball and ball.chance == 0.015 and ball.multiplier == 5, "Ball lightning: 1.5%, x5")
 check(Weather.boltMultiplier("Normal") == 1 and Weather.boltMultiplier(nil) == 1, "Normal: x1")
 check(Weather.boltMultiplier("Golden") == 10, "Golden multiplier")
 
 -- the edges of the roll
 check(Weather.pickBoltType(0, false) == "Golden", "roll 0 is Golden")
-check(Weather.pickBoltType(0.0199, false) == "Golden", "roll just under 2% is Golden")
-check(Weather.pickBoltType(0.0201, false) == "Rainbow", "roll just over 2% is Rainbow")
-check(Weather.pickBoltType(0.0241, false) == "Ball", "roll just over 2.4% is Ball")
-check(Weather.pickBoltType(0.0341, false) == "Normal", "roll just over 3.4% is Normal")
+check(Weather.pickBoltType(0.0299, false) == "Golden", "roll just under 3% is Golden")
+check(Weather.pickBoltType(0.0301, false) == "Rainbow", "roll just over 3% is Rainbow")
+check(Weather.pickBoltType(0.0341, false) == "Ball", "roll just over 3.4% is Ball")
+check(Weather.pickBoltType(0.0491, false) == "Normal", "roll just over 4.9% is Normal")
 check(Weather.pickBoltType(0.999, false) == "Normal", "a high roll is Normal")
-check(Weather.pickBoltType(0.09, true) == "Golden", "Supercell: 9% is still Golden (x5 = 10%)")
+check(Weather.pickBoltType(0.14, true) == "Golden", "Supercell: 14% is still Golden (x5 = 15%)")
 
 -- the odds over 100k rolls
 local function odds(supercell)
@@ -60,12 +60,12 @@ local function odds(supercell)
 	return counts
 end
 local normal = odds(false)
-check(near(normal.Golden, 0.02, 0.002), `Golden about 2% (got {normal.Golden})`)
+check(near(normal.Golden, 0.03, 0.002), `Golden about 3% (got {normal.Golden})`)
 check(near(normal.Rainbow, 0.004, 0.001), `Rainbow about 0.4% (got {normal.Rainbow})`)
-check(near(normal.Ball, 0.01, 0.0015), `Ball about 1% (got {normal.Ball})`)
-check(near(normal.Normal, 0.966, 0.003), `Normal about 96.6% (got {normal.Normal})`)
+check(near(normal.Ball, 0.015, 0.0015), `Ball about 1.5% (got {normal.Ball})`)
+check(near(normal.Normal, 0.951, 0.003), `Normal about 95.1% (got {normal.Normal})`)
 local storm = odds(true)
-check(near(storm.Golden, 0.10, 0.004), `Supercell Golden about 10% (got {storm.Golden})`)
+check(near(storm.Golden, 0.15, 0.004), `Supercell Golden about 15% (got {storm.Golden})`)
 check(near(storm.Rainbow, 0.004, 0.001), `Supercell Rainbow unchanged (got {storm.Rainbow})`)
 
 -- Supercells ---------------------------------------------------------------
@@ -188,11 +188,11 @@ check(
 local GOAL = Config.SERVER_GOAL
 local Afk = world:require("ReplicatedStorage.Shared.Util.Afk")
 check(
-	GOAL.minutes == 15 and GOAL.surgeMinutes == 10 and GOAL.multiplier == 2,
-	"goal: 15 min, surge 10 min 2x"
+	GOAL.minutes == 10 and GOAL.surgeMinutes == 10 and GOAL.multiplier == 2,
+	"goal: 10 min, surge 10 min 2x"
 )
--- the size: the rates added up, times 15 minutes
-check(Weather.goalSize({ 10, 20 }, 0, 0) == 30 * 15 * 60, "two players at 10 and 20 V/s: 27,000")
+-- the size: the rates added up, times 10 minutes
+check(Weather.goalSize({ 10, 20 }, 0, 0) == 30 * 10 * 60, "two players at 10 and 20 V/s: 18,000")
 check(Weather.goalSize({}, 0, 0) == GOAL.minGoal, "an empty server: the smallest goal")
 -- long AFK players don't make the goal bigger
 local afkSeconds = GOAL.afkExcludeMinutes * 60
@@ -201,10 +201,10 @@ check(Weather.countsForGoal(nil), "a player out of the lounge counts")
 check(Weather.countsForGoal(afkSeconds - 1), "a player just in the lounge still counts")
 check(not Weather.countsForGoal(afkSeconds), "5 minutes in the lounge: not counted")
 check(Weather.goalSize({ 0.01 }, 0, 0) == GOAL.minGoal, "a tiny rate: the smallest goal")
-check(Weather.goalSize({ 0 / 0, -5, 10 }, 0, 0) == 9000, "NaN and negative rates are skipped")
+check(Weather.goalSize({ 0 / 0, -5, 10 }, 0, 0) == 6000, "NaN and negative rates are skipped")
 -- each goal this hour is 1.5x the last
-check(Weather.goalSize({ 10 }, 1, 0) == 13500, "the second goal is 1.5x")
-check(Weather.goalSize({ 10 }, 2, 0) == 20250, "the third is 2.25x")
+check(Weather.goalSize({ 10 }, 1, 0) == 9000, "the second goal is 1.5x")
+check(Weather.goalSize({ 10 }, 2, 0) == 13500, "the third is 2.25x")
 -- a full server of late players and a small early server take the same time
 local function minutesToFill(rates)
 	local sum = 0
@@ -226,13 +226,13 @@ for _ = 1, 2 do
 	local _, breakdown = Afk.rate({ bottleTier = 5, bootTier = 1 }, {}, false)
 	table.insert(early, breakdown.grindPerSecond)
 end
-check(near(minutesToFill(late), 15, 0.01), "12 late-game players: about 15 minutes")
-check(near(minutesToFill(early), 15, 0.01), "2 early players: about 15 minutes")
+check(near(minutesToFill(late), 10, 0.01), "12 late-game players: about 10 minutes")
+check(near(minutesToFill(early), 10, 0.01), "2 early players: about 10 minutes")
 -- never stuck: a big player leaves after the meter is mostly full
 local filled = 25000
 check(Weather.goalFloor(filled) == 27500, "the floor is filled + 10%")
 check(Weather.goalSize({ 1 }, 0, filled) == 27500, "the goal never drops below filled + 10%")
-check(Weather.goalSize({ 1000 }, 0, filled) == 900000, "a bigger goal stays as it is")
+check(Weather.goalSize({ 1000 }, 0, filled) == 600000, "a bigger goal stays as it is")
 check(Weather.goalSize({}, 3, 0) >= GOAL.minGoal, "rounds never go under the smallest goal")
 -- the hourly reset
 local round, start = Weather.goalRound(2, 100, 100 + 3599)

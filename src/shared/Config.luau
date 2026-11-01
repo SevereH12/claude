@@ -25,16 +25,21 @@ local BOTTLES: { Types.BottleDef } = {
 -- typical player walks into every zone at WALK_SPEED_IN_ZONE and every
 -- pair bought there makes them faster again. In-zone speed stays between
 -- ZONE_SPEED.min and ZONE_SPEED.max.
+-- Each pair costs a little more than the bottle before it and less than
+-- the bottle after (so the typical player, and every zone's storm drag,
+-- stay the same), near the bottom of that gap: boots used to be 38% of
+-- what a typical player spent on the way to the Storm Core, and slowed
+-- every bottle down.
 local BOOTS: { Types.BootsDef } = {
 	{ name = "Rain Boots", speedBonus = 0, price = 0 }, -- everyone starts with these
 	{ name = "Puddle Jumpers", speedBonus = 4, price = 300 },
-	{ name = "Squall Skippers", speedBonus = 8, price = 900 },
-	{ name = "Gale Striders", speedBonus = 12, price = 2_000 },
-	{ name = "Thunder Treads", speedBonus = 16, price = 10_000 },
-	{ name = "Coil Striders", speedBonus = 20, price = 35_000 },
-	{ name = "Arc Runners", speedBonus = 24, price = 150_000 },
-	{ name = "Sky Treads", speedBonus = 28, price = 600_000 },
-	{ name = "Cloud Walkers", speedBonus = 32, price = 3_000_000 },
+	{ name = "Squall Skippers", speedBonus = 8, price = 600 },
+	{ name = "Gale Striders", speedBonus = 12, price = 1_800 },
+	{ name = "Thunder Treads", speedBonus = 16, price = 9_000 },
+	{ name = "Coil Striders", speedBonus = 20, price = 20_000 },
+	{ name = "Arc Runners", speedBonus = 24, price = 60_000 },
+	{ name = "Sky Treads", speedBonus = 28, price = 300_000 },
+	{ name = "Cloud Walkers", speedBonus = 32, price = 1_500_000 },
 }
 
 local RESEARCHERS: { Types.ResearcherDef } = {
@@ -199,10 +204,12 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		id = "Tidewire",
 		world = "Voltcliff",
 		displayName = "Tidewire Beach",
-		tagline = "Everyone catches the tide storms, 150 Volts",
+		tagline = "Everyone catches the tide storms, 200 Volts",
 		color = Color3.fromRGB(80, 230, 150), -- sea green
 		mode = "Shared",
-		chargeValue = 150,
+		-- 200, not 150: the Dynamo Drum (200,000) was the slowest bottle to
+		-- save for, here
+		chargeValue = 200,
 		chargeSize = 5,
 		strikeInterval = 0.8,
 		order = 2,
@@ -251,10 +258,11 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		id = "Cloudshore",
 		world = "Stormspire",
 		displayName = "Cloudshore",
-		tagline = "Everyone catches the cloud storms, 3,000 Volts",
+		tagline = "Everyone catches the cloud storms, 4,000 Volts",
 		color = Color3.fromRGB(255, 205, 70), -- sun gold
 		mode = "Shared",
-		chargeValue = 3_000,
+		-- 4,000, not 3,000: the Storm Core (5,000,000) was a wall, here
+		chargeValue = 4_000,
 		chargeSize = 21,
 		strikeInterval = 0.8,
 		order = 2,
@@ -518,7 +526,7 @@ local STORE = {
 	purchaseHistory = 100, -- Volts pack purchase ids each profile remembers
 	-- for "about N minutes of catching" on a pack: bolts a steady player
 	-- catches a minute, selling trips included (an estimate: tune it)
-	catchesPerMinute = 10,
+	catchesPerMinute = 12,
 }
 
 -- Timed boosts (Util/Boosts, Systems/Boosts): each switches a Game Pass's
@@ -686,7 +694,7 @@ local GIFT_ICONS: { [string]: number } = {
 local BOLT_TYPES: { Types.BoltTypeDef } = {
 	{
 		key = "Golden",
-		chance = 0.02,
+		chance = 0.03,
 		multiplier = 10,
 		label = "GOLDEN",
 		color = Color3.fromRGB(255, 200, 40),
@@ -701,7 +709,7 @@ local BOLT_TYPES: { Types.BoltTypeDef } = {
 	},
 	{
 		key = "Ball",
-		chance = 0.01,
+		chance = 0.015,
 		multiplier = 5,
 		label = "BALL LIGHTNING",
 		color = Color3.fromRGB(150, 230, 255),
@@ -958,11 +966,15 @@ return table.freeze({
 
 	-- Strikes
 	WARNING_TIME = 1.5, -- seconds between the warning circle and the bolt
-	STRIKE_RADIUS = 8, -- studs; stand within this of the centre to catch
+	-- studs; stand within this of the centre to catch. (WARNING_TIME can't
+	-- grow instead: the warning hum is a 1.5 s sound.)
+	STRIKE_RADIUS = 10,
 	STRIKE_MAX_HEIGHT_ABOVE = 8, -- studs; you can catch mid-jump, but not from below a cliff
 	FORECAST_MAX_LEAD = 1.92, -- seconds; the top Forecaster perk at rank 6 (1.2 x 1.6). Public warnings wait this long
-	BALLOON_MIN_DISTANCE = 12, -- studs from the owner; Storm Chaser bolts land this near
-	BALLOON_MAX_DISTANCE = 20,
+	-- studs from the owner; Storm Chaser bolts land this near (4 to 12
+	-- studs past the edge of the catch ring)
+	BALLOON_MIN_DISTANCE = 14,
+	BALLOON_MAX_DISTANCE = 22,
 	STRIKE_INTERVAL_JITTER = 0.3, -- +/-30% randomness on strike timing
 	BOLT_TYPES = table.freeze(BOLT_TYPES),
 	-- Ball lightning: an orb that drifts across the zone for `seconds`; the
@@ -1041,8 +1053,8 @@ return table.freeze({
 	-- that rank costs, in Glints of its tier or higher, and each rank makes
 	-- the perk perkBonusPerRank stronger.
 	RESEARCH_PRESTIGE = table.freeze({
-		dataScale = table.freeze({ 0.95, 1.6, 2.9, 4.3, 4.9, 5.45, 5.45 }),
-		glintCost = table.freeze({ 50, 65, 135, 85, 165, 30 }),
+		dataScale = table.freeze({ 1.0, 1.45, 2.25, 3.1, 3.65, 3.85, 3.85 }),
+		glintCost = table.freeze({ 50, 65, 100, 85, 125, 35 }),
 		perkBonusPerRank = 0.10,
 	}),
 
@@ -1079,7 +1091,7 @@ return table.freeze({
 	-- and is at least `minGoal` Volts. Tapping the meter shows the top
 	-- `topCount` contributors.
 	SERVER_GOAL = table.freeze({
-		minutes = 15,
+		minutes = 10,
 		surgeMinutes = 10,
 		multiplier = 2,
 		growth = 1.5,

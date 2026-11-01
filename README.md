@@ -336,9 +336,9 @@ screens only draw it. The maths is in `src/shared/Util/Weather.luau`
 `Config.BOLT_TYPES`, `Config.BALL_LIGHTNING`, `Config.SUPERCELL` and
 `Config.EVENTS`.
 
-- **Rare bolts**: each strike has a 2% chance to be **Golden** (worth x10),
+- **Rare bolts**: each strike has a 3% chance to be **Golden** (worth x10),
   0.4% to be **Rainbow** (x25, plus 5 minutes of a random boost for the
-  catcher and a chat line for the whole server) and 1% to be **Ball
+  catcher and a chat line for the whole server) and 1.5% to be **Ball
   lightning** (x5): an orb that drifts across the zone for 8 seconds, and
   the first player with room in their bottle who touches it catches it.
   The ring shows the type (gold, rainbow colours, or the orb) before the
@@ -363,8 +363,8 @@ numbers in `Config.SERVER_GOAL`).
 - **Filling it**: every Volt sold in the server counts, at a station or
   with Remote Sell. The AFK Lounge doesn't count.
 - **How big it is**: each player's grinding rate (what the AFK screen
-  works out for their best zone) added up, times 15 minutes. So a full
-  server of late-game players and two new players both take about 15
+  works out for their best zone) added up, times 10 minutes. So a full
+  server of late-game players and two new players both take about 10
   minutes. Players who have been in the AFK Lounge for 5 minutes or more
   (`afkExcludeMinutes`) are left out, since they can't help fill it; they
   count again when they leave the lounge. It's worked out again when

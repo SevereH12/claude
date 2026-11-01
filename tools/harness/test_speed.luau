@@ -46,7 +46,7 @@ end
 check(Speed.typicalBootTier(1) == 1, "a new player has Rain Boots")
 check(Speed.typicalBootTier(3) == 1, "Flask before Puddle Jumpers")
 -- by the Storm Cell (8,000) they've bought every pair cheaper than it
--- (300, 900, 2,000) but not Thunder Treads (10,000)
+-- (300, 600, 1,800) but not Thunder Treads (9,000)
 check(Speed.typicalBootTier(5) == 4, `Storm Cell -> Gale Striders (got {Speed.typicalBootTier(5)})`)
 local last = 1
 for bottle = 1, #Config.BOTTLES do
