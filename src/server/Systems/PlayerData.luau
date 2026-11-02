@@ -24,7 +24,7 @@ local TutorialRules = require(ReplicatedStorage.Shared.Util.Tutorial)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local STORE_NAME = "StormBottler_PlayerData"
-local CURRENT_VERSION = 19
+local CURRENT_VERSION = 20
 -- A lock older than this belongs to a server that crashed; it may be taken.
 local LOCK_STALE_SECONDS = Config.AUTOSAVE_INTERVAL * 3
 local LOCKED_RETRIES = 5
@@ -154,6 +154,8 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 				end
 			end
 		end
+		-- these ranks come from today's tiers: step 19 leaves them alone
+		data.ranksFromNewTiers = true
 		return data
 	end,
 	-- sound settings (prompt 11)
@@ -225,6 +227,38 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 	-- daily reward, ...) count as seen; they get the rest
 	[18] = function(data: any): any
 		data.hintsSeen = HintRules.alreadyUsed(data)
+		return data
+	end,
+	-- every zone opens with its own bottle (World 2 a bottle earlier), so
+	-- Thunderhead Mesa is zone tier 4 on its own and Rune Spire, Cloudshore
+	-- and Ember Mesa moved up a tier. Researchers of rank 4 or more move up
+	-- a rank (every zone they could work in, they still can) and Glints of
+	-- tier 4 or more move up a tier with them (old tier 4 was mostly Rune
+	-- Spire's). A profile that went through step 9 just now already has
+	-- ranks from today's tiers and no Glints.
+	[19] = function(data: any): any
+		if data.ranksFromNewTiers then
+			data.ranksFromNewTiers = nil
+			return data
+		end
+		if typeof(data.researchers) == "table" then
+			for _, save in data.researchers do
+				local rank = if typeof(save) == "table" then save.rank else nil
+				if typeof(rank) == "number" and rank >= 4 then
+					save.rank = rank + 1
+				end
+			end
+		end
+		if typeof(data.glints) == "table" then
+			local old = data.glints
+			local moved: { number } = {}
+			for tier = 0, ResearchMath.maxRank() do
+				local from = if tier >= 5 then tier - 1 elseif tier == 4 then nil else tier
+				local count = if from then old[from + 1] else nil
+				moved[tier + 1] = if typeof(count) == "number" then count else 0
+			end
+			data.glints = moved
+		end
 		return data
 	end,
 }

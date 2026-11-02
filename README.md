@@ -127,7 +127,7 @@ The GLINTS tab sells the Glint packs in `Config.GLINT_PACKS`: 25, 75 and
 200 Glints (49, 129 and 299 Robux) for every zone tier researcher
 promotions use, named after the tier's first zone ("75 Mesa Glints").
 `Systems/Receipts` pays each purchase once, through `Research.addGlints`.
-The 18 products were made on sale by `create_store.py` (their ids and
+The 21 products were made on sale by `create_store.py` (their ids and
 icons are in `store_ids.json` and `GLINT_PACK_IDS` in Config). A new zone
 tier needs three new products (add them to `store_items.json`, run
 `make_icons.py` and `create_store.py`) and a new `GLINT_PACK_IDS` entry;
@@ -178,8 +178,8 @@ you back down, so every new zone starts out as a fresh race to the bolts.
   order the HUD's goals show). So a typical player walks into every zone
   at 18 (a little over Roblox's default 16; `Config.WALK_SPEED_IN_ZONE`),
   and every pair they buy while there makes them faster again.
-- Today's drags: Shoreline, Mesa and Aurora Reef 0, Generator Yard 12,
-  Tidewire Beach 20, Thunderhead Mesa and Rune Spire 24, Cloudshore 28,
+- Today's drags: Shoreline, Mesa and Aurora Reef 0, Generator Yard 8,
+  Tidewire Beach 12, Thunderhead Mesa 20, Rune Spire 24, Cloudshore 28,
   Ember Mesa 32. The Premium zone drags like your best zone.
 - Your speed in a zone never drops below 10 or goes above 28
   (`Config.ZONE_SPEED`), so leaving a zone always speeds you up.
@@ -218,9 +218,9 @@ server-hop backup only logs its attempt in the Output).
 
 ## Researcher ranks
 
-Researchers have a **rank** (0 to 6) and can only work in zones of their
+Researchers have a **rank** (0 to 7) and can only work in zones of their
 rank's tier or lower (tier = which bottle opens the zone: Shoreline 0,
-Mesa 1, ... Ember Mesa 6). At level 5 you can promote one at the Research
+Mesa 1, ... Ember Mesa 7; every zone opens with its own bottle). At level 5 you can promote one at the Research
 Office: it costs **Glints** (one for every bolt you catch, of that zone's
 tier; promotion to rank r takes Glints of tier r or higher), and sends the
 researcher back to level 1 a rank higher, with a 10% stronger perk.

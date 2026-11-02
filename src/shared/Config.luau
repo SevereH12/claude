@@ -11,10 +11,10 @@ local BOTTLES: { Types.BottleDef } = {
 	{ name = "Jar", capacity = 5, price = 0 },
 	{ name = "Vial", capacity = 10, price = 80 },
 	{ name = "Flask", capacity = 15, price = 250 },
-	{ name = "Battery Pack", capacity = 40, price = 1_500 },
-	{ name = "Storm Cell", capacity = 100, price = 8_000 },
-	{ name = "Tempest Tank", capacity = 250, price = 40_000 },
-	{ name = "Dynamo Drum", capacity = 600, price = 200_000 },
+	{ name = "Battery Pack", capacity = 40, price = 2_000 },
+	{ name = "Storm Cell", capacity = 100, price = 15_000 },
+	{ name = "Tempest Tank", capacity = 250, price = 60_000 },
+	{ name = "Dynamo Drum", capacity = 600, price = 275_000 },
 	{ name = "Rune Cell", capacity = 1_500, price = 1_000_000 },
 	{ name = "Storm Core", capacity = 4_000, price = 5_000_000 },
 }
@@ -34,11 +34,11 @@ local BOOTS: { Types.BootsDef } = {
 	{ name = "Rain Boots", speedBonus = 0, price = 0 }, -- everyone starts with these
 	{ name = "Puddle Jumpers", speedBonus = 4, price = 300 },
 	{ name = "Squall Skippers", speedBonus = 8, price = 600 },
-	{ name = "Gale Striders", speedBonus = 12, price = 1_800 },
-	{ name = "Thunder Treads", speedBonus = 16, price = 9_000 },
-	{ name = "Coil Striders", speedBonus = 20, price = 20_000 },
-	{ name = "Arc Runners", speedBonus = 24, price = 60_000 },
-	{ name = "Sky Treads", speedBonus = 28, price = 300_000 },
+	{ name = "Gale Striders", speedBonus = 12, price = 2_500 },
+	{ name = "Thunder Treads", speedBonus = 16, price = 17_500 },
+	{ name = "Coil Striders", speedBonus = 20, price = 35_000 },
+	{ name = "Arc Runners", speedBonus = 24, price = 90_000 },
+	{ name = "Sky Treads", speedBonus = 28, price = 400_000 },
 	{ name = "Cloud Walkers", speedBonus = 32, price = 1_500_000 },
 }
 
@@ -105,7 +105,7 @@ local WORLDS: { Types.WorldDef } = {
 		displayName = "Voltcliff Works",
 		tagline = "Copper coils, factory islands, bigger storms",
 		style = "StormPunk",
-		requiresBottle = 5, -- the Storm Cell
+		requiresBottle = 4, -- the Battery Pack
 		color = Color3.fromRGB(90, 238, 255),
 		-- far enough that the two 2048-stud seas don't meet
 		offset = Vector3.new(5000, 0, 0),
@@ -127,6 +127,9 @@ local WORLDS: { Types.WorldDef } = {
 -- then requiresBottle, then order), so a full bottle is always worth more
 -- in a bigger zone; and a zone's required bottle must hold at least 5 of
 -- its strikes. Keep both when adding a zone (tools/harness/test_formulas).
+-- Every non-premium zone also opens with its own bottle: two zones that
+-- open together leave the lower-paying one skipped (Thunderhead Mesa was,
+-- next to Rune Spire).
 local ZONES: { [string]: Types.ZoneDef } = {
 	Shoreline = {
 		id = "Shoreline",
@@ -139,7 +142,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		chargeSize = 1,
 		-- quick to leave: Mesa's size and fast strikes, so a new player has
 		-- the Flask in about 2 minutes of storm play
-		strikeInterval = 0.6,
+		strikeInterval = 0.48,
 		order = 1,
 		requiresBottle = 1, -- open to everyone
 		theme = "Beach",
@@ -156,7 +159,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		mode = "Single",
 		chargeValue = 20,
 		chargeSize = 2,
-		strikeInterval = 1.2,
+		strikeInterval = 0.96,
 		order = 2,
 		requiresBottle = 3, -- the Flask
 		theme = "Canyon",
@@ -173,7 +176,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		mode = "Shared",
 		chargeValue = 0, -- unused: pays PREMIUM_VALUE_MULTIPLIER x each player's best zone
 		chargeSize = 1, -- unused: a Premium zone fills like the player's best zone
-		strikeInterval = 0.6,
+		strikeInterval = 0.48,
 		order = 3,
 		requiresBottle = 1,
 		premium = true, -- Roblox Premium members only (no Game Pass)
@@ -187,14 +190,15 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		id = "Yard",
 		world = "Voltcliff",
 		displayName = "Generator Yard",
-		tagline = "Everyone catches the coil storms, 60 Volts",
+		tagline = "Everyone catches the coil storms, 40 Volts",
 		color = Color3.fromRGB(70, 160, 255), -- electric blue
 		mode = "Shared",
-		chargeValue = 60,
+		-- 40: it opens with the Battery Pack now, a bottle earlier than it did
+		chargeValue = 40,
 		chargeSize = 3,
-		strikeInterval = 0.9,
+		strikeInterval = 0.72,
 		order = 1,
-		requiresBottle = 5, -- the Storm Cell (the world's own entry rule)
+		requiresBottle = 4, -- the Battery Pack (the world's own entry rule)
 		theme = "Default",
 		width = 104,
 		depth = 116,
@@ -207,13 +211,11 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		tagline = "Everyone catches the tide storms, 200 Volts",
 		color = Color3.fromRGB(80, 230, 150), -- sea green
 		mode = "Shared",
-		-- 200, not 150: the Dynamo Drum (200,000) was the slowest bottle to
-		-- save for, here
 		chargeValue = 200,
 		chargeSize = 5,
-		strikeInterval = 0.8,
+		strikeInterval = 0.64,
 		order = 2,
-		requiresBottle = 6, -- the Tempest Tank
+		requiresBottle = 5, -- the Storm Cell
 		theme = "Beach",
 		width = 96,
 		depth = 104,
@@ -228,9 +230,9 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		mode = "Single",
 		chargeValue = 500,
 		chargeSize = 8,
-		strikeInterval = 1.2,
+		strikeInterval = 0.96,
 		order = 3,
-		requiresBottle = 7, -- the Dynamo Drum
+		requiresBottle = 6, -- the Tempest Tank
 		theme = "Canyon",
 		width = 100,
 		depth = 110,
@@ -246,7 +248,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		mode = "Shared",
 		chargeValue = 1_200,
 		chargeSize = 13,
-		strikeInterval = 0.9,
+		strikeInterval = 0.72,
 		order = 1,
 		requiresBottle = 7, -- the Dynamo Drum (the world's own entry rule)
 		theme = "Default",
@@ -264,7 +266,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		-- 4,000, not 3,000: the Storm Core (5,000,000) was a wall, here
 		chargeValue = 4_000,
 		chargeSize = 21,
-		strikeInterval = 0.8,
+		strikeInterval = 0.64,
 		order = 2,
 		requiresBottle = 8, -- the Rune Cell
 		theme = "Beach",
@@ -281,7 +283,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		mode = "Single",
 		chargeValue = 10_000,
 		chargeSize = 34,
-		strikeInterval = 1.2,
+		strikeInterval = 0.96,
 		order = 3,
 		requiresBottle = 9, -- the Storm Core
 		theme = "Canyon",
@@ -480,6 +482,12 @@ local GLINT_PACK_IDS: { { { number } } } = {
 		{ 3723409122, 137356781076828 },
 		{ 3723409129, 86927726189030 },
 	},
+	-- Thunderhead Mesa
+	{
+		{ 3727296461, 114007577209510 },
+		{ 3727296466, 113636564785881 },
+		{ 3727296474, 134761679585987 },
+	},
 	-- Rune Spire
 	{
 		{ 3723409131, 96480493320873 },
@@ -526,7 +534,7 @@ local STORE = {
 	purchaseHistory = 100, -- Volts pack purchase ids each profile remembers
 	-- for "about N minutes of catching" on a pack: bolts a steady player
 	-- catches a minute, selling trips included (an estimate: tune it)
-	catchesPerMinute = 12,
+	catchesPerMinute = 13,
 }
 
 -- Timed boosts (Util/Boosts, Systems/Boosts): each switches a Game Pass's
@@ -970,7 +978,7 @@ return table.freeze({
 	-- grow instead: the warning hum is a 1.5 s sound.)
 	STRIKE_RADIUS = 10,
 	STRIKE_MAX_HEIGHT_ABOVE = 8, -- studs; you can catch mid-jump, but not from below a cliff
-	FORECAST_MAX_LEAD = 1.92, -- seconds; the top Forecaster perk at rank 6 (1.2 x 1.6). Public warnings wait this long
+	FORECAST_MAX_LEAD = 2.04, -- seconds; the top Forecaster perk at rank 7 (1.2 x 1.7). Public warnings wait this long
 	-- studs from the owner; Storm Chaser bolts land this near (4 to 12
 	-- studs past the edge of the catch ring)
 	BALLOON_MIN_DISTANCE = 14,
@@ -1053,8 +1061,8 @@ return table.freeze({
 	-- that rank costs, in Glints of its tier or higher, and each rank makes
 	-- the perk perkBonusPerRank stronger.
 	RESEARCH_PRESTIGE = table.freeze({
-		dataScale = table.freeze({ 1.0, 1.45, 2.25, 3.1, 3.65, 3.85, 3.85 }),
-		glintCost = table.freeze({ 50, 65, 100, 85, 125, 35 }),
+		dataScale = table.freeze({ 0.3, 0.55, 1.1, 1.45, 1.95, 3.65, 4.0, 4.0 }),
+		glintCost = table.freeze({ 10, 40, 30, 55, 85, 125, 45 }),
 		perkBonusPerRank = 0.10,
 	}),
 

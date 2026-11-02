@@ -45,8 +45,8 @@ end
 -- goal until after the Flask, so a typical player opens Mesa in Rain Boots.
 check(Speed.typicalBootTier(1) == 1, "a new player has Rain Boots")
 check(Speed.typicalBootTier(3) == 1, "Flask before Puddle Jumpers")
--- by the Storm Cell (8,000) they've bought every pair cheaper than it
--- (300, 600, 1,800) but not Thunder Treads (9,000)
+-- by the Storm Cell (15,000) they've bought every pair cheaper than it
+-- (300, 600, 2,500) but not Thunder Treads (17,500)
 check(Speed.typicalBootTier(5) == 4, `Storm Cell -> Gale Striders (got {Speed.typicalBootTier(5)})`)
 local last = 1
 for bottle = 1, #Config.BOTTLES do

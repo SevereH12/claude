@@ -45,8 +45,8 @@ for rank = 0, Research.maxRank() do
 	)
 end
 check(Research.nextThreshold(#Config.RESEARCH_LEVELS) == nil, "no next threshold at max")
-local LEVEL5 = { 1000, 1450, 2250, 3100, 3650, 3850, 3850 }
-for rank = 0, 6 do
+local LEVEL5 = { 300, 550, 1100, 1450, 1950, 3650, 4000, 4000 }
+for rank = 0, 7 do
 	check(
 		Research.nextThreshold(4, rank) == LEVEL5[rank + 1],
 		`level 5 at rank {rank} needs {LEVEL5[rank + 1]} data`
@@ -114,14 +114,14 @@ local TIERS = {
 	Yard = 2,
 	Tidewire = 3,
 	Thunderhead = 4,
-	Spire = 4,
-	Cloudshore = 5,
-	Ember = 6,
+	Spire = 5,
+	Cloudshore = 6,
+	Ember = 7,
 }
 for id, tier in TIERS do
 	check(Config.ZONES[id] and Research.zoneTier(Config.ZONES[id]) == tier, `{id} is tier {tier}`)
 end
-check(Research.maxRank() == 6, "six ranks above 0")
+check(Research.maxRank() == 7, "seven ranks above 0")
 check(Research.tierZone(2) and Research.tierZone(2).id == "Yard", "tier 2's zone is Generator Yard")
 -- each tier is one more distinct bottle
 for _, zone in Config.ZONES do
@@ -157,10 +157,13 @@ check(Research.canPost(0, Config.ZONES.Shoreline), "rank 0 works in Shoreline")
 check(Research.canPost(0, Config.ZONES.Aurora), "and the Premium zone (tier 0)")
 check(not Research.canPost(0, Config.ZONES.Mesa), "but not Mesa")
 check(
-	Research.canPost(4, Config.ZONES.Spire) and Research.canPost(4, Config.ZONES.Thunderhead),
-	"rank 4: Thunderhead and Rune Spire"
+	Research.canPost(4, Config.ZONES.Thunderhead) and not Research.canPost(4, Config.ZONES.Spire),
+	"rank 4: Thunderhead Mesa, not Rune Spire"
 )
-check(not Research.canPost(4, Config.ZONES.Cloudshore), "not Cloudshore")
+check(
+	Research.canPost(5, Config.ZONES.Spire) and not Research.canPost(5, Config.ZONES.Cloudshore),
+	"rank 5: Rune Spire, not Cloudshore"
+)
 
 -- promotion: every refusal ---------------------------------------------------------
 local function glints(list)
@@ -170,28 +173,28 @@ local ok, why =
 	Research.canPromote({ level = 4, data = 0, post = "Office", rank = 0 }, glints({ 0, 999 }))
 check(not ok and why and string.find(why, "level 5"), `not before level 5 ({why})`)
 ok, why =
-	Research.canPromote({ level = 5, data = 0, post = "Office", rank = 0 }, glints({ 999, 10 }))
+	Research.canPromote({ level = 5, data = 0, post = "Office", rank = 0 }, glints({ 999, 4 }))
 check(
-	not ok and why == "Needs 40 more Mesa Glints",
+	not ok and why == "Needs 6 more Mesa Glints",
 	`rank 1 needs Mesa Glints, not Shoreline ones ({why})`
 )
 ok = Research.canPromote({ level = 5, data = 0, post = "Office", rank = 0 }, glints({ 0, 20, 30 }))
 check(ok, "Glints of a higher tier pay too")
 ok, why = Research.canPromote(
-	{ level = 5, data = 0, post = "Office", rank = 6 },
-	glints({ 999, 999, 999, 999, 999, 999, 999 })
+	{ level = 5, data = 0, post = "Office", rank = 7 },
+	glints({ 999, 999, 999, 999, 999, 999, 999, 999 })
 )
 check(not ok and why == "Already at the top rank", `the top rank can't go higher ({why})`)
 
 -- Glint spending: lowest eligible tier first, then higher ones ------------------------
-local after = Research.spendGlints({ 50, 20, 40, 0, 0, 0, 0 }, 1) -- costs 50 of tier 1+
+local after = Research.spendGlints({ 50, 4, 40, 0, 0, 0, 0, 0 }, 1) -- costs 10 of tier 1+
 check(
-	after and after[1] == 50 and after[2] == 0 and after[3] == 10,
-	"rank 1: Mesa's 20 first, then 30 Generator Yard"
+	after and after[1] == 50 and after[2] == 0 and after[3] == 34,
+	"rank 1: Mesa's 4 first, then 6 Generator Yard"
 )
-check(Research.spendGlints({ 100, 10 }, 1) == nil, "not enough: nothing spent")
-local exact = Research.spendGlints({ 0, 0, 65 }, 2)
-check(exact and exact[3] == 0 and #exact == 7, "spends to 0 and keeps the list whole")
+check(Research.spendGlints({ 100, 9 }, 1) == nil, "not enough: nothing spent")
+local exact = Research.spendGlints({ 0, 0, 40 }, 2)
+check(exact and exact[3] == 0 and #exact == 8, "spends to 0 and keeps the list whole")
 
 -- the migration: rank = the tier of the zone they're in, level kept or raised -------
 local PlayerData = world:require("ServerScriptService.Server.Systems.PlayerData")
@@ -222,10 +225,40 @@ check(
 	"level and data kept"
 )
 check(
-	migrated.researchers.Analyst.rank == 1 and migrated.researchers.Analyst.level == 4,
-	"Mesa rank 1: 1200 data is level 4 there"
+	migrated.researchers.Analyst.rank == 1 and migrated.researchers.Analyst.level == 5,
+	"Mesa rank 1: 1200 data is level 5 there"
 )
 check(migrated.researchers.Forecaster.level == 3, "never lowered")
+check(migrated.ranksFromNewTiers == nil, "the step-9 marker is gone after step 19")
+
+-- step 19: Thunderhead Mesa got its own tier (4), so ranks and Glints from
+-- tier 4 up move up one; nothing lower changes ---------------------------------
+local shifted = PlayerData.migrate({
+	version = 19,
+	volts = 0,
+	bottleTier = 9,
+	glints = { 1, 2, 3, 4, 5, 6, 7 },
+	researchers = {
+		Forecaster = { level = 5, data = 9000, post = "Tidewire", rank = 3 },
+		RodTech = { level = 2, data = 50, post = "Spire", rank = 4 },
+		Analyst = { level = 1, data = 0, post = "Ember", rank = 6 },
+	},
+})
+check(shifted.version == 20, "v20")
+check(shifted.researchers.Forecaster.rank == 3, "rank 3 stays")
+check(shifted.researchers.RodTech.rank == 5, "rank 4 (Rune Spire) is rank 5 now")
+check(shifted.researchers.Analyst.rank == 7, "rank 6 (Ember Mesa) is rank 7 now")
+check(
+	Research.canPost(shifted.researchers.RodTech.rank, Config.ZONES.Spire)
+		and Research.canPost(shifted.researchers.Analyst.rank, Config.ZONES.Ember),
+	"everyone can still work where they were posted"
+)
+local want = { 1, 2, 3, 4, 0, 5, 6, 7 }
+local same = #shifted.glints == #want
+for index, count in want do
+	same = same and shifted.glints[index] == count
+end
+check(same, "Glints of tier 4 and up move up a tier; tier 4 starts empty")
 
 if failures > 0 then
 	error(`{failures} research checks failed`)
