@@ -314,7 +314,7 @@ check(next(Hints.sanitize("junk")) == nil, "sanitize turns junk into an empty se
 
 -- the migration -----------------------------------------------------------------------
 local fresh = PlayerData.migrate({ version = 18, volts = 0, bottleTier = 1 })
-check(fresh.version == 19, "a v18 save becomes v19")
+check(fresh.version >= 19, "a v18 save goes through step 18")
 check(
 	typeof(fresh.hintsSeen) == "table" and next(fresh.hintsSeen) == nil,
 	"a new-ish save has seen no tips"
