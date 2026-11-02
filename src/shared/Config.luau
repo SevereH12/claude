@@ -808,8 +808,9 @@ local HINTS: { Types.HintDef } = {
 		id = "newZone",
 		when = "zoneOpen",
 		text = "A new zone is open past its gate. Bigger zones pay more per bolt!",
+		-- no glow: the next zone is a short walk away, so pointing at
+		-- TELEPORT this early (a minute or two in) only distracts
 		open = "teleport",
-		glow = "TELEPORT",
 	},
 	{
 		id = "rareBolt",
@@ -915,7 +916,9 @@ local HINTS: { Types.HintDef } = {
 	},
 	{
 		id = "teleport",
-		when = "zoneOpen",
+		-- only once there's another world to jump to: before that every
+		-- zone is a walk away
+		when = "worldOpen",
 		minutes = 11,
 		text = "TELEPORT jumps you to any zone or world you've unlocked.",
 		open = "teleport",

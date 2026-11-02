@@ -37,6 +37,13 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python packages
+        run: pip install pillow
+
       - name: Harness tests
         run: |
           status=0
@@ -50,6 +57,19 @@ jobs:
             lune run "$test" $args || status=1
           done
           exit $status
+
+      # test_layout's preview drawn per device (tools/render_ui.py), kept as
+      # the run's "hud-layout" artifact to look at
+      - name: Draw the HUD on every device
+        if: always()
+        run: python3 tools/render_ui.py "$RUNNER_TEMP/preview.json" "$RUNNER_TEMP/hud-layout.png"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hud-layout
+          path: ${{ runner.temp }}/hud-layout.png
+          if-no-files-found: ignore
 
   # The map checks (tools/check_world.sh Game): build every world, then
   # walkability, flicker and the top-down renders (Python with Pillow).

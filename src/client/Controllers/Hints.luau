@@ -106,8 +106,13 @@ local function clearGlow()
 end
 
 -- Puts the glow on `target` (a soft pulsing outline over the whole button).
+-- It goes in the button's UI.overlay, which undoes the button's padding and
+-- follows it: the title nudge moves the padding when the text's bounds
+-- change (the title font loading, a resize), and a glow placed from the
+-- padding once slid down the button until it was made again.
 local function glowOn(target: GuiObject)
-	if glow and glow.Parent == target then
+	local overlay = UI.overlay(target)
+	if glow and glow.Parent == overlay then
 		return
 	end
 	if glow then
@@ -119,25 +124,12 @@ local function glowOn(target: GuiObject)
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 40,
 	})
-	-- cover the whole button: UI.button pads its contents
-	local padding = target:FindFirstChildOfClass("UIPadding")
-	if padding then
-		local w = 1 - padding.PaddingLeft.Scale - padding.PaddingRight.Scale
-		local h = 1 - padding.PaddingTop.Scale - padding.PaddingBottom.Scale
-		frame.Position = UDim2.new(
-			-padding.PaddingLeft.Scale / w,
-			-padding.PaddingLeft.Offset,
-			-padding.PaddingTop.Scale / h,
-			-padding.PaddingTop.Offset
-		)
-		frame.Size = UDim2.fromScale(1 / w, 1 / h)
-	end
 	UI.corner(frame, UDim.new(0, 14))
 	local stroke = UI.stroke(frame, 3, UI.COLORS.volt)
 	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	stroke.Transparency = 0.15
 	TweenService:Create(stroke, PULSE, { Transparency = 0.75 }):Play()
-	frame.Parent = target
+	frame.Parent = overlay
 	glow = frame
 end
 
