@@ -16,8 +16,6 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 local StormLogRules = require(ReplicatedStorage.Shared.Util.StormLog)
 local Types = require(ReplicatedStorage.Shared.Types)
-local Layout = require(script.Parent.Layout)
-local LayoutMath = require(script.Parent.LayoutMath)
 local UI = require(script.Parent.UI)
 
 local COLORS = UI.COLORS
@@ -26,7 +24,9 @@ local BAR = 22
 local HEADER = 44 -- a row card's top line, at least (taller when CLAIM is)
 local BUTTON = 36
 local TILE = Vector2.new(84, 80)
+local TILE_GAP = 6
 local TOAST_SECONDS = 6
+local NARROW = 560 -- a page narrower than this puts a row's reward under its name
 
 -- What a reward gives this player, as text (Lib/RewardText.describe, so
 -- the LOG tab says the same as the REWARDS panel).
@@ -48,6 +48,7 @@ type RowCard = {
 	reward: TextLabel,
 	button: TextButton,
 	stroke: UIStroke,
+	cells: UIGridLayout,
 	tiles: { Tile },
 }
 
@@ -62,6 +63,7 @@ type PageView = {
 local StormLogTab = {}
 
 local bonusLabel: TextLabel
+local pageWidth = 0 -- the page's width at the last StormLogTab.fit
 local pageViews: { PageView } = {}
 local rowCards: { RowCard } = {}
 local openTab: () -> () = function() end
@@ -99,15 +101,17 @@ local function buildTile(parent: Instance, order: number, entry: StormLogRules.E
 		Size = UDim2.fromScale(0.8, 0.56),
 		Parent = button,
 	})
+	-- a name of any length: two lines that shrink to fit the tile
 	local caption = UI.label({
 		Name = "Caption",
 		Text = entry.label,
 		TextColor3 = COLORS.subtext,
-		Position = UDim2.fromScale(0.05, 0.64),
-		Size = UDim2.fromScale(0.9, 0.32),
+		TextWrapped = true,
+		Position = UDim2.fromScale(0.04, 0.62),
+		Size = UDim2.fromScale(0.92, 0.36),
 		Parent = button,
 	})
-	UI.maxText(caption, 14)
+	UI.maxText(caption, 15, 9)
 	local tile: Tile = {
 		entry = entry,
 		button = button,
@@ -147,33 +151,27 @@ local function buildRow(parent: Instance, order: number, row: StormLogRules.Row)
 		Name = "Title",
 		Text = row.label,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Size = UDim2.new(0.36, 0, 0, 24),
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.fromScale(0, 0.5),
 		Parent = header,
 	})
-	UI.maxText(title, 20)
+	UI.maxText(title, 20, 12)
+	-- what it pays can be long: two lines that shrink to fit
 	local reward = UI.label({
 		Name = "Reward",
 		Text = "",
 		TextColor3 = COLORS.subtext,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0.37, 0, 0.5, 0),
-		Size = UDim2.new(0.35, 0, 0, 22),
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = true,
 		Parent = header,
 	})
-	UI.maxText(reward, 15)
+	UI.maxText(reward, 16, 10)
 	local button = UI.button({
 		Name = "Claim",
 		Text = "CLAIM",
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.fromScale(1, 0.5),
-		Size = UDim2.new(0.26, 0, 0, BUTTON),
 		BackgroundColor3 = COLORS.green,
 		Parent = header,
 	})
-	UI.maxText(button, 18)
+	UI.maxText(button, 18, 11)
 	button.Activated:Connect(function()
 		if button.AutoButtonColor then
 			UI.pop(button)
@@ -188,9 +186,10 @@ local function buildRow(parent: Instance, order: number, row: StormLogRules.Row)
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Parent = frame,
 	})
-	UI.make(Instance.new("UIGridLayout"), {
+	local cells = UI.make(Instance.new("UIGridLayout"), {
 		CellSize = UDim2.fromOffset(TILE.X, TILE.Y),
-		CellPadding = UDim2.fromOffset(6, 6),
+		CellPadding = UDim2.fromOffset(TILE_GAP, TILE_GAP),
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = grid,
 	})
@@ -206,16 +205,49 @@ local function buildRow(parent: Instance, order: number, row: StormLogRules.Row)
 		reward = reward,
 		button = button,
 		stroke = stroke,
+		cells = cells,
 		tiles = tiles,
 	}
 end
 
--- CLAIM is TAP_MIN points tall on touch; the row's top line grows to fit.
-local function fit()
-	local button = LayoutMath.tapMin(Layout.class, Layout.scale, Vector2.new(0, BUTTON)).Y
+-- Lays the tab out for a page `width` wide (design pixels, the whole
+-- scrolling list). Each row's top line is the name, the reward and CLAIM
+-- side by side, or on a narrow page the name over the reward with CLAIM
+-- beside them; CLAIM is TAP_MIN points tall on touch and the line grows to
+-- fit. The entry tiles fill the card in as many columns as fit.
+function StormLogTab.fit(width: number)
+	pageWidth = width
+	local inner = UI.listWidth(width) - 20 -- less the card's padding
+	local narrow = width < NARROW
+	local button = UI.tall(BUTTON)
+	local _, tile = UI.columns(inner, TILE.X, TILE_GAP)
 	for _, card in rowCards do
-		card.header.Size = UDim2.new(1, 0, 0, math.max(HEADER, button + 8))
-		card.button.Size = UDim2.new(0.26, 0, 0, button)
+		if narrow then
+			local claim = math.clamp(math.floor(inner * 0.3), 96, 150)
+			local room = inner - claim - 10
+			card.header.Size = UDim2.new(1, 0, 0, math.max(72, button + 8))
+			card.title.AnchorPoint = Vector2.zero
+			card.title.Position = UDim2.fromOffset(0, 0)
+			card.title.Size = UDim2.fromOffset(room, 26)
+			card.reward.TextYAlignment = Enum.TextYAlignment.Top
+			card.reward.AnchorPoint = Vector2.zero
+			card.reward.Position = UDim2.fromOffset(0, 28)
+			card.reward.Size = UDim2.fromOffset(room, 40)
+			card.button.Size = UDim2.fromOffset(claim, button)
+		else
+			card.header.Size = UDim2.new(1, 0, 0, math.max(HEADER, button + 8))
+			card.title.AnchorPoint = Vector2.new(0, 0.5)
+			card.title.Position = UDim2.fromScale(0, 0.5)
+			card.title.Size = UDim2.new(0.36, 0, 0, 24)
+			card.reward.TextYAlignment = Enum.TextYAlignment.Center
+			card.reward.AnchorPoint = Vector2.new(0, 0.5)
+			card.reward.Position = UDim2.fromScale(0.37, 0.5)
+			card.reward.Size = UDim2.new(0.35, 0, 0, 36)
+			card.button.Size = UDim2.new(0.26, 0, 0, button)
+		end
+		card.button.AnchorPoint = Vector2.new(1, 0.5)
+		card.button.Position = UDim2.fromScale(1, 0.5)
+		card.cells.CellSize = UDim2.fromOffset(tile, TILE.Y)
 	end
 end
 
@@ -232,7 +264,7 @@ function StormLogTab.build(parent: ScrollingFrame, onOpen: () -> ())
 		Size = UDim2.new(1, 0, 0, 44),
 		Parent = parent,
 	})
-	UI.maxText(bonusLabel, 18)
+	UI.maxText(bonusLabel, 18, 11)
 	local order = 1
 	for _, page in StormLogRules.pages() do
 		order += 1
@@ -246,7 +278,7 @@ function StormLogTab.build(parent: ScrollingFrame, onOpen: () -> ())
 			Size = UDim2.new(1, 0, 0, HEADING),
 			Parent = parent,
 		})
-		UI.maxText(heading, 24)
+		UI.maxText(heading, 24, 14)
 		order += 1
 		local bar = UI.bar(parent, {
 			Name = `{page.id}Progress`,
@@ -270,7 +302,9 @@ function StormLogTab.build(parent: ScrollingFrame, onOpen: () -> ())
 		end
 		table.insert(pageViews, view)
 	end
-	UI.onLayout(fit)
+	if pageWidth > 0 then
+		StormLogTab.fit(pageWidth)
+	end
 end
 
 -- The toasts: new entries (one toast, however many) and finished rows.

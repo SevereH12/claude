@@ -24,6 +24,9 @@ local COLORS = UI.COLORS
 local GREY = Color3.fromRGB(150, 155, 175)
 local TAB_HEIGHT = 40
 local FOOTER_HEIGHT = 44
+local NARROW = 560 -- a panel narrower than this puts a row's label over its control
+local CONTROL_HEIGHT = 40 -- a row's button or slider (taller on touch: UI.tall)
+local VALUE_WIDTH = 56 -- a slider's "70%"
 local CONFIRM_SECONDS = 4 -- a second tap within this confirms a reset
 local CAPTURE_GRACE = 0.3 -- seconds: the tap that started listening isn't the new key
 local CONTROL_WIDTH = 0.5 -- of a row: the control's share (the label has the rest)
@@ -67,13 +70,26 @@ local function percent(value: number): string
 	return `{math.round(value * 100)}%`
 end
 
--- A row: the label and hint on the left, `height` tall; returns the row and
--- the area for its control on the right.
-local function row(page: Instance, order: number, def: Rules.Def, height: number): (Frame, Frame)
+-- A row's parts, placed by fitRows once the panel's width is known.
+type RowView = {
+	frame: Frame,
+	label: TextLabel,
+	hint: TextLabel?,
+	area: Frame, -- the control's room
+	fit: (width: number, height: number) -> (), -- arranges the control in `width` x `height`
+	lines: number, -- the room the hint needs, in lines (0 without one)
+	keys: boolean, -- a row of key buttons: it keeps the wide layout (no phone shows them)
+}
+
+local rowViews: { RowView } = {}
+
+-- A row: the label and hint on the left (or on top, on a narrow panel), and
+-- the control's area; returns the row and its area. fitRows sizes them.
+local function row(page: Instance, order: number, def: Rules.Def): (RowView, Frame)
 	local frame = UI.make(Instance.new("Frame"), {
 		Name = def.key,
 		LayoutOrder = order,
-		Size = UDim2.new(1, 0, 0, height),
+		Size = UDim2.new(1, 0, 0, 64),
 		BackgroundColor3 = COLORS.panelDark,
 		Parent = page,
 	})
@@ -83,45 +99,100 @@ local function row(page: Instance, order: number, def: Rules.Def, height: number
 		Title = true,
 		Text = string.upper(def.label),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Size = UDim2.new(1 - CONTROL_WIDTH, -8, 0, 24),
 		Parent = frame,
 	})
-	UI.maxText(label, 20)
+	UI.maxText(label, 20, 12)
+	local hint: TextLabel? = nil
 	if def.hint ~= "" then
-		local hint = UI.label({
+		-- one sentence: two lines at most, shrunk to fit
+		local made = UI.label({
 			Text = def.hint,
 			TextColor3 = COLORS.subtext,
 			TextXAlignment = Enum.TextXAlignment.Left,
+			TextYAlignment = Enum.TextYAlignment.Top,
 			TextWrapped = true,
-			Position = UDim2.fromOffset(0, 26),
-			Size = UDim2.new(1 - CONTROL_WIDTH, -8, 1, -26),
 			Parent = frame,
 		})
-		UI.maxText(hint, 14)
+		UI.maxText(made, 17, 10)
+		hint = made
 	end
 	local area = UI.make(Instance.new("Frame"), {
 		Name = "Control",
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.fromScale(1, 0.5),
-		Size = UDim2.fromScale(CONTROL_WIDTH, 1),
 		BackgroundTransparency = 1,
 		Parent = frame,
 	})
-	return frame, area
+	local view: RowView = {
+		frame = frame,
+		label = label,
+		hint = hint,
+		area = area,
+		fit = function() end,
+		lines = if hint then 2 else 0,
+		keys = false,
+	}
+	table.insert(rowViews, view)
+	return view, area
+end
+
+-- Sizes every row for a page `width` wide: the label and hint on the left
+-- and the control on the right (half each), or on a narrow page the label
+-- and hint over the control, which then has the whole width. A control is
+-- TAP_MIN points tall on touch, and the row grows to hold it.
+local function fitRows(width: number)
+	local inner = UI.listWidth(width) - 16 -- less the row's padding
+	local narrow = width < NARROW
+	local control = UI.tall(CONTROL_HEIGHT)
+	local line = math.max(UI.textSize(), 15) + 3
+	for _, view in rowViews do
+		local isKeys = view.keys
+		local hintHeight = view.lines * line
+		if narrow and not isKeys then
+			local top = 24 + (if view.hint then hintHeight + 2 else 0)
+			view.frame.Size = UDim2.new(1, 0, 0, top + 6 + control + 16)
+			view.label.Size = UDim2.new(1, 0, 0, 24)
+			view.label.Position = UDim2.fromOffset(0, 0)
+			if view.hint then
+				view.hint.Position = UDim2.fromOffset(0, 26)
+				view.hint.Size = UDim2.new(1, 0, 0, hintHeight)
+			end
+			view.area.AnchorPoint = Vector2.zero
+			view.area.Position = UDim2.fromOffset(0, top + 6)
+			view.area.Size = UDim2.fromOffset(inner, control)
+			view.fit(inner, control)
+		else
+			local height = math.max(if isKeys then 52 else 64, control + 16)
+			local side = math.floor(inner * CONTROL_WIDTH)
+			view.frame.Size = UDim2.new(1, 0, 0, height)
+			view.label.Size = UDim2.new(1, -(side + 8), 0, 24)
+			view.label.Position = UDim2.fromOffset(0, 0)
+			if view.hint then
+				view.hint.Position = UDim2.fromOffset(0, 26)
+				view.hint.Size = UDim2.new(1, -(side + 8), 1, -26)
+			end
+			view.area.AnchorPoint = Vector2.new(1, 0.5)
+			view.area.Position = UDim2.fromScale(1, 0.5)
+			view.area.Size = UDim2.fromOffset(side, height - 16)
+			view.fit(side, height - 16)
+		end
+	end
 end
 
 local function buildToggle(page: Instance, order: number, def: Rules.Def)
-	local _, area = row(page, order, def, 64)
+	local view, area = row(page, order, def)
 	local button = UI.button({
 		Name = "Toggle",
 		Text = "",
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.fromScale(1, 0.5),
-		Size = UDim2.new(0.6, 0, 0, 40),
 		BackgroundColor3 = COLORS.panelTop,
 		Parent = area,
 	})
-	UI.maxText(button, 20)
+	UI.maxText(button, 20, 12)
+	view.fit = function(width: number, height: number)
+		-- the whole width on a narrow page (under its label), else 60% of it
+		local across = if width >= 400 then width else math.max(width * 0.6, 120)
+		button.Size = UDim2.fromOffset(across, height)
+	end
 	button.Activated:Connect(function()
 		UI.pop(button)
 		SettingsStore.set(def.key, not SettingsStore.get(def.key))
@@ -135,29 +206,33 @@ end
 
 local function buildChoice(page: Instance, order: number, def: Rules.Def)
 	local choices = def.choices or {}
-	local _, area = row(page, order, def, 64)
-	UI.make(Instance.new("UIGridLayout"), {
-		CellSize = UDim2.new(1 / math.max(#choices, 1), -4, 0, 40),
-		CellPadding = UDim2.fromOffset(4, 0),
-		VerticalAlignment = Enum.VerticalAlignment.Center,
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = area,
-	})
+	local view, area = row(page, order, def)
 	local buttons: { [string]: TextButton } = {}
+	local ordered: { TextButton } = {}
 	for index, choice in choices do
 		local button = UI.button({
 			Name = choice,
 			Text = string.upper(choice),
-			LayoutOrder = index,
+			AnchorPoint = Vector2.new(0, 0.5),
 			BackgroundColor3 = COLORS.panelTop,
 			Parent = area,
 		})
-		UI.maxText(button, 16)
+		UI.maxText(button, 18, 11)
 		button.Activated:Connect(function()
 			UI.pop(button)
 			SettingsStore.set(def.key, choice)
 		end)
 		buttons[choice] = button
+		ordered[index] = button
+	end
+	-- the choices side by side, each an equal share of the width
+	view.fit = function(width: number, height: number)
+		local count = math.max(#ordered, 1)
+		local cell = math.floor((width - 4 * (count - 1)) / count)
+		for index, button in ordered do
+			button.Position = UDim2.new(0, (index - 1) * (cell + 4), 0.5, 0)
+			button.Size = UDim2.fromOffset(cell, height)
+		end
 	end
 	onRefresh(def.key, function()
 		local value = SettingsStore.get(def.key)
@@ -170,25 +245,24 @@ end
 local function buildSlider(page: Instance, order: number, def: Rules.Def)
 	local low, high, step = def.min or 0, def.max or 1, def.step or 0.05
 	local isVolume = def.section == "Sound"
-	local _, area = row(page, order, def, 64)
+	local view, area = row(page, order, def)
 	local minus = UI.button({
 		Name = "Minus",
 		Text = "-",
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.fromScale(0, 0.5),
-		Size = UDim2.fromOffset(36, 36),
 		BackgroundColor3 = COLORS.panelTop,
 		Parent = area,
 	})
 	local plus = UI.button({
 		Name = "Plus",
 		Text = "+",
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -58, 0.5, 0),
-		Size = UDim2.fromOffset(36, 36),
+		AnchorPoint = Vector2.new(0, 0.5),
 		BackgroundColor3 = COLORS.panelTop,
 		Parent = area,
 	})
+	UI.maxText(minus, 30, 14)
+	UI.maxText(plus, 30, 14)
 	local valueLabel = UI.label({
 		Title = true,
 		Text = "",
@@ -196,10 +270,10 @@ local function buildSlider(page: Instance, order: number, def: Rules.Def)
 		TextXAlignment = Enum.TextXAlignment.Right,
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.fromScale(1, 0.5),
-		Size = UDim2.fromOffset(54, 30),
+		Size = UDim2.fromOffset(VALUE_WIDTH, 30),
 		Parent = area,
 	})
-	UI.maxText(valueLabel, 18)
+	UI.maxText(valueLabel, 18, 12)
 	-- the bar: a wide invisible hit area round a thin track
 	local bar = UI.make(Instance.new("TextButton"), {
 		Name = "Bar",
@@ -208,10 +282,18 @@ local function buildSlider(page: Instance, order: number, def: Rules.Def)
 		Selectable = false,
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 46, 0.5, 0),
-		Size = UDim2.new(1, -150, 0, 36),
 		Parent = area,
 	})
+	-- left to right: [-] bar [+] value, in the width the control has
+	view.fit = function(width: number, height: number)
+		local button = math.min(math.max(36, UI.tapSize()), height)
+		local plusAt = width - VALUE_WIDTH - 6 - button
+		minus.Size = UDim2.fromOffset(button, button)
+		plus.Size = UDim2.fromOffset(button, button)
+		plus.Position = UDim2.new(0, plusAt, 0.5, 0)
+		bar.Position = UDim2.new(0, button + 8, 0.5, 0)
+		bar.Size = UDim2.fromOffset(math.max(plusAt - button - 16, 40), math.max(36, button))
+	end
 	local track = UI.make(Instance.new("Frame"), {
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.fromScale(0, 0.5),
@@ -383,7 +465,7 @@ local function buildControls(page: ScrollingFrame)
 		Size = UDim2.new(1, 0, 0, 60),
 		Parent = page,
 	})
-	UI.maxText(touchNote, 20)
+	UI.maxText(touchNote, 20, 12)
 	local header = UI.make(Instance.new("Frame"), {
 		Name = "Header",
 		LayoutOrder = 1,
@@ -401,12 +483,13 @@ local function buildControls(page: ScrollingFrame)
 			Size = UDim2.new(CONTROL_WIDTH / 2, -6, 1, 0),
 			Parent = header,
 		})
-		UI.maxText(label, 16)
+		UI.maxText(label, 16, 11)
 	end
 	for index, action in Rules.ACTIONS do
 		local def = Rules.def(Rules.bindKey("Keyboard", action.id)) :: Rules.Def
-		local frame, area = row(page, index + 1, def, 52)
-		table.insert(controlRows, frame)
+		local view, area = row(page, index + 1, def)
+		view.keys = true
+		table.insert(controlRows, view.frame)
 		for column, device in { "Keyboard", "Controller" } :: { Rules.Device } do
 			local key = Rules.bindKey(device, action.id)
 			local button = UI.button({
@@ -417,7 +500,7 @@ local function buildControls(page: ScrollingFrame)
 				BackgroundColor3 = COLORS.panelTop,
 				Parent = area,
 			})
-			UI.maxText(button, 18)
+			UI.maxText(button, 18, 11)
 			button.Activated:Connect(function()
 				if capture and capture.key == key then
 					stopCapture()
@@ -438,7 +521,7 @@ local function buildControls(page: ScrollingFrame)
 		Size = UDim2.new(1, 0, 0, 30),
 		Parent = page,
 	})
-	UI.maxText(closeNote, 14)
+	UI.maxText(closeNote, 14, 10)
 	table.insert(controlRows, closeNote)
 	local function applyDevice()
 		local touch = Layout.class == "Phone" or Layout.class == "Tablet"
@@ -453,6 +536,23 @@ end
 
 -- Tabs, pages and resets ---------------------------------------------------------
 
+-- Short wordings for the tabs, longest first (a phone's tab is narrow).
+local TAB_WORDS: { [string]: { string } } = {
+	Controls = { "CONTROLS", "KEYS" },
+	Sound = { "SOUND" },
+	Graphics = { "GRAPHICS", "GFX" },
+	["Accessibility & HUD"] = { "ACCESSIBILITY & HUD", "ACCESS + HUD", "HUD" },
+}
+
+local footerRoom = 120 -- the text room of a reset button, design pixels
+
+-- The reset buttons' words: the long wording where it fits.
+local function resetWords()
+	local size = math.max(UI.textSize(), 16)
+	resetTab.Text = UI.fitText({ "RESET THIS TAB", "RESET TAB" }, footerRoom, size)
+	resetAll.Text = UI.fitText({ "RESET ALL" }, footerRoom, size)
+end
+
 local function selectTab(tab: Tab)
 	stopCapture()
 	current = tab
@@ -460,8 +560,7 @@ local function selectTab(tab: Tab)
 		other.page.Visible = other == tab
 		UI.setEnabled(other.button, true, if other == tab then COLORS.volt else COLORS.panelDark)
 	end
-	resetTab.Text = "RESET THIS TAB"
-	resetAll.Text = "RESET ALL"
+	resetWords()
 	confirming = {}
 end
 
@@ -494,13 +593,15 @@ local function buildPage(body: Instance, section: string): ScrollingFrame
 			Size = UDim2.new(1, 0, 0, 60),
 			Parent = page,
 		})
-		UI.maxText(soon, 20)
+		UI.maxText(soon, 20, 12)
 	end
 	return page
 end
 
 -- A reset button: the first tap asks, a second within CONFIRM_SECONDS does it.
-local function confirmTap(button: TextButton, askText: string, doIt: () -> ())
+-- `ask` lists the wordings of the question, longest first; the one that fits
+-- the button shows.
+local function confirmTap(button: TextButton, ask: { string }, doIt: () -> ())
 	local now = os.clock()
 	if (confirming[button] or 0) > now then
 		confirming[button] = nil
@@ -509,6 +610,7 @@ local function confirmTap(button: TextButton, askText: string, doIt: () -> ())
 	end
 	confirming[button] = now + CONFIRM_SECONDS
 	local before = button.Text
+	local askText = UI.fitText(ask, footerRoom, math.max(UI.textSize(), 16))
 	button.Text = askText
 	task.delay(CONFIRM_SECONDS, function()
 		if (confirming[button] or 0) <= os.clock() and button.Text == askText then
@@ -524,18 +626,11 @@ function SettingsUI.init()
 	panel = window.panel
 	local body = window.body
 
-	local tabBar = UI.make(Instance.new("Frame"), {
-		Name = "Tabs",
-		Size = UDim2.new(1, 0, 0, TAB_HEIGHT),
-		BackgroundTransparency = 1,
-		Parent = body,
-	})
-	UI.make(Instance.new("UIGridLayout"), {
-		CellSize = UDim2.new(1 / #Rules.SECTIONS, -6, 1, 0),
-		CellPadding = UDim2.fromOffset(6, 0),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = tabBar,
-	})
+	local words: { { string } } = {}
+	for _, section in Rules.SECTIONS do
+		table.insert(words, TAB_WORDS[section] or { string.upper(section) })
+	end
+	local tabStrip = UI.tabs(body, words, TAB_HEIGHT, 18)
 
 	local footer = UI.make(Instance.new("Frame"), {
 		Name = "Footer",
@@ -552,7 +647,7 @@ function SettingsUI.init()
 		BackgroundColor3 = COLORS.panelTop,
 		Parent = footer,
 	})
-	UI.maxText(resetTab, 18)
+	UI.maxText(resetTab, 18, 11)
 	resetAll = UI.button({
 		Name = "ResetAll",
 		Text = "RESET ALL",
@@ -562,17 +657,10 @@ function SettingsUI.init()
 		BackgroundColor3 = COLORS.red,
 		Parent = footer,
 	})
-	UI.maxText(resetAll, 18)
+	UI.maxText(resetAll, 18, 11)
 
 	for order, section in Rules.SECTIONS do
-		local button = UI.button({
-			Name = section,
-			Text = string.upper(section),
-			LayoutOrder = order,
-			BackgroundColor3 = COLORS.panelDark,
-			Parent = tabBar,
-		})
-		UI.maxText(button, 15)
+		local button = tabStrip.buttons[order]
 		local tab: Tab = { name = section, button = button, page = buildPage(body, section) }
 		table.insert(tabs, tab)
 		button.Activated:Connect(function()
@@ -589,18 +677,19 @@ function SettingsUI.init()
 		if not tab then
 			return
 		end
-		confirmTap(resetTab, `TAP AGAIN: RESET {string.upper(tab.name)}`, function()
+		local ask = { `TAP AGAIN: RESET {string.upper(tab.name)}`, "TAP AGAIN: RESET", "TAP AGAIN" }
+		confirmTap(resetTab, ask, function()
 			local values = SettingsStore.all()
 			for _, def in Rules.inSection(tab.name) do
 				values[def.key] = def.default
 			end
 			SettingsStore.setAll(values)
-			resetTab.Text = "RESET THIS TAB"
+			resetWords()
 			UI.toast(`{tab.name} settings reset`, "good")
 		end)
 	end)
 	resetAll.Activated:Connect(function()
-		confirmTap(resetAll, "TAP AGAIN: RESET ALL", function()
+		confirmTap(resetAll, { "TAP AGAIN: RESET ALL", "TAP AGAIN" }, function()
 			-- everything back to default, except what's only remembered
 			-- (the device's Quality was set, the flashing question answered)
 			local values = Rules.defaults()
@@ -610,12 +699,28 @@ function SettingsUI.init()
 				end
 			end
 			SettingsStore.setAll(values)
-			resetAll.Text = "RESET ALL"
+			resetWords()
 			UI.toast("Every setting is back to its default", "good")
 		end)
 	end)
 
 	selectTab(tabs[1])
+	-- the sizes come from the body's width and the device
+	window.onResize(function(size: Vector2)
+		tabStrip.fit(size.X)
+		local top = tabStrip.height() + 8
+		local footerHeight = UI.tall(FOOTER_HEIGHT)
+		footer.Size = UDim2.new(1, 0, 0, footerHeight)
+		footerRoom = (size.X / 2 - 4) * 0.84 - 4
+		for _, tab in tabs do
+			tab.page.Position = UDim2.fromOffset(0, top)
+			tab.page.Size = UDim2.new(1, 0, 1, -(top + footerHeight + 8))
+		end
+		fitRows(size.X)
+		if not next(confirming) then
+			resetWords()
+		end
+	end)
 	SettingsStore.Changed:Connect(function(key: string)
 		for _, fn in refreshers[key] or {} do
 			fn()

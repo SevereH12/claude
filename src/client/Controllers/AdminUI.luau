@@ -30,8 +30,8 @@ local UI = require(script.Parent.Parent.Lib.UI)
 local COLORS = UI.COLORS
 local ATTRIBUTE = "Admin"
 local CONFIRM_SECONDS = 4
-local ROW = 0.075 -- one row's height, as a share of the panel body
-local GAP = 0.012
+local ROW = 44 -- one row's height in design pixels (taller on touch: UI.tall)
+local GAP = 8
 
 local player = Players.LocalPlayer
 
@@ -90,28 +90,33 @@ local function showErrors()
 	output.Text = table.concat(lines, "\n")
 end
 
-local function row(parent: Instance, index: number): Frame
-	return UI.make(Instance.new("Frame"), {
+-- The panel is one scrolling column of strips. A strip is a row of cells
+-- (boxes, buttons) that share its width; fit sets the sizes from the
+-- panel's width. A strip with a `least` width per cell puts its cells on
+-- as many lines as that needs, instead of squeezing them.
+type Cell = { object: GuiObject, share: number }
+type Strip = { frame: Frame, cells: { Cell }, least: number? }
+local strips: { Strip } = {}
+
+local function strip(parent: Instance, index: number, least: number?): Strip
+	local frame = UI.make(Instance.new("Frame"), {
 		Name = `Row{index}`,
+		LayoutOrder = index,
 		BackgroundTransparency = 1,
-		Position = UDim2.fromScale(0, (index - 1) * (ROW + GAP)),
-		Size = UDim2.fromScale(1, ROW),
+		Size = UDim2.new(1, 0, 0, ROW),
 		Parent = parent,
 	})
+	local made: Strip = { frame = frame, cells = {}, least = least }
+	table.insert(strips, made)
+	return made
 end
 
--- Pieces of a row, left to right, each `share` of its width.
-local function cells(shares: { number }): { UDim2 }
-	local spots = {}
-	local x = 0
-	for _, share in shares do
-		table.insert(spots, UDim2.new(x, if x > 0 then 4 else 0, 0, 0))
-		x += share
-	end
-	return spots
+local function add(row: Strip, object: GuiObject, share: number)
+	object.Parent = row.frame
+	table.insert(row.cells, { object = object, share = share })
 end
 
-local function box(parent: Instance, name: string, hint: string, x: UDim2, width: number): TextBox
+local function box(name: string, hint: string): TextBox
 	local textBox = UI.make(Instance.new("TextBox"), {
 		Name = name,
 		PlaceholderText = hint,
@@ -122,117 +127,153 @@ local function box(parent: Instance, name: string, hint: string, x: UDim2, width
 		TextColor3 = COLORS.text,
 		PlaceholderColor3 = COLORS.subtext,
 		BackgroundColor3 = COLORS.panelDark,
-		Position = x,
-		Size = UDim2.new(width, -4, 1, 0),
-		Parent = parent,
 	})
 	UI.corner(textBox, UDim.new(0, 10))
-	UI.maxText(textBox, 20)
+	UI.maxText(textBox, 20, 11)
 	return textBox
 end
 
-local function button(
-	parent: Instance,
-	name: string,
-	text: string,
-	color: Color3,
-	x: UDim2,
-	width: number
-): TextButton
+local function button(name: string, text: string, color: Color3): TextButton
 	local made = UI.button({
 		Name = name,
 		Text = text,
 		BackgroundColor3 = color,
-		Position = x,
-		Size = UDim2.new(width, -4, 1, 0),
-		Parent = parent,
 	})
-	UI.maxText(made, 18)
+	UI.maxText(made, 18, 11)
 	return made
+end
+
+-- Sizes every strip for items `width` wide: each cell its share of the
+-- width, in one line, or, where a strip has a `least` and the cells would
+-- be narrower than that, in as many lines as needed.
+local function fitStrips(width: number)
+	local height = UI.tall(ROW)
+	for _, row in strips do
+		local count = #row.cells
+		local columns = count
+		if row.least then
+			columns = UI.columns(width, row.least, GAP, count)
+		end
+		if columns == count then
+			local total = 0
+			for _, cell in row.cells do
+				total += cell.share
+			end
+			local room = width - GAP * (count - 1)
+			local x = 0
+			for _, cell in row.cells do
+				local across = math.floor(room * cell.share / total)
+				cell.object.Position = UDim2.fromOffset(x, 0)
+				cell.object.Size = UDim2.fromOffset(across, height)
+				x += across + GAP
+			end
+			row.frame.Size = UDim2.new(1, 0, 0, height)
+		else
+			local across = math.floor((width - GAP * (columns - 1)) / columns)
+			for index, cell in row.cells do
+				local column, line = (index - 1) % columns, (index - 1) // columns
+				local x, y = column * (across + GAP), line * (height + GAP)
+				cell.object.Position = UDim2.fromOffset(x, y)
+				cell.object.Size = UDim2.fromOffset(across, height)
+			end
+			local lines = math.ceil(count / columns)
+			row.frame.Size = UDim2.new(1, 0, 0, lines * height + (lines - 1) * GAP)
+		end
+	end
 end
 
 local function build(root: Frame)
 	local window =
 		UI.window(root, "AdminPanel", "🛡 ADMIN", COLORS.stormDeep, Vector2.new(660, 660))
 	panel = window.panel
-	local body = window.body
+	local scroller = UI.list(window.body, {
+		Name = "Admin",
+		Size = UDim2.fromScale(1, 1),
+		gap = GAP,
+	})
 
 	-- 1. who
-	local r1 = row(body, 1)
-	local s1 = cells({ 0.6, 0.4 })
-	targetBox = box(r1, "Target", "Username or user id", s1[1], 0.6)
-	local lookupButton = button(r1, "Lookup", "🔎 LOOK UP", COLORS.storm, s1[2], 0.4)
+	local r1 = strip(scroller, 1)
+	targetBox = box("Target", "Username or user id")
+	add(r1, targetBox, 0.6)
+	local lookupButton = button("Lookup", "🔎 LOOK UP", COLORS.storm)
+	add(r1, lookupButton, 0.4)
 
 	-- 2. why
-	local r2 = row(body, 2)
-	reasonBox = box(r2, "Reason", "Reason (for kick and ban)", UDim2.new(), 1)
+	local r2 = strip(scroller, 2)
+	reasonBox = box("Reason", "Reason (for kick and ban)")
+	add(r2, reasonBox, 1)
 
 	-- 3. kick, ban (for how long), unban
-	local r3 = row(body, 3)
-	local s3 = cells({ 0.22, 0.22, 0.3, 0.26 })
-	local kickButton = button(r3, "Kick", "👢 KICK", COLORS.voltDeep, s3[1], 0.22)
-	local banButton = button(r3, "Ban", "⛔ BAN", COLORS.red, s3[2], 0.22)
-	local banLength = button(r3, "BanLength", "", COLORS.panelTop, s3[3], 0.3)
-	local unbanButton = button(r3, "Unban", "✅ UNBAN", COLORS.green, s3[4], 0.26)
+	local r3 = strip(scroller, 3)
+	local kickButton = button("Kick", "👢 KICK", COLORS.voltDeep)
+	add(r3, kickButton, 0.22)
+	local banButton = button("Ban", "⛔ BAN", COLORS.red)
+	add(r3, banButton, 0.22)
+	local banLength = button("BanLength", "", COLORS.panelTop)
+	add(r3, banLength, 0.3)
+	local unbanButton = button("Unban", "✅ UNBAN", COLORS.green)
+	add(r3, unbanButton, 0.26)
 
 	-- 4. give Volts
-	local r4 = row(body, 4)
-	local s4 = cells({ 0.6, 0.4 })
-	voltsBox = box(r4, "Amount", "Volts to give (up to 1000000000000)", s4[1], 0.6)
-	local voltsButton = button(r4, "GiveVolts", "⚡ GIVE VOLTS", COLORS.volt, s4[2], 0.4)
+	local r4 = strip(scroller, 4)
+	voltsBox = box("Amount", "Volts to give (up to 1000000000000)")
+	add(r4, voltsBox, 0.6)
+	local voltsButton = button("GiveVolts", "⚡ GIVE VOLTS", COLORS.volt)
+	add(r4, voltsButton, 0.4)
 
 	-- 5. give a boost
-	local r5 = row(body, 5)
-	local s5 = cells({ 0.4, 0.2, 0.4 })
-	local boostKind = button(r5, "BoostKind", "", COLORS.panelTop, s5[1], 0.4)
-	local boostLength = button(r5, "BoostLength", "", COLORS.panelTop, s5[2], 0.2)
-	local boostButton = button(r5, "GiveBoost", "🚀 GIVE BOOST", COLORS.calm, s5[3], 0.4)
+	local r5 = strip(scroller, 5)
+	local boostKind = button("BoostKind", "", COLORS.panelTop)
+	add(r5, boostKind, 0.4)
+	local boostLength = button("BoostLength", "", COLORS.panelTop)
+	add(r5, boostLength, 0.2)
+	local boostButton = button("GiveBoost", "🚀 GIVE BOOST", COLORS.calm)
+	add(r5, boostButton, 0.4)
 
-	-- 6. reset, test error, test notification
-	local r6 = row(body, 6)
-	local s6 = cells({ 0.36, 0.32, 0.32 })
-	local resetButton = button(r6, "Reset", "🧨 RESET PROFILE", COLORS.red, s6[1], 0.36)
-	local testButton = button(r6, "TestError", "🐞 TEST ERROR", COLORS.panelTop, s6[2], 0.32)
-	local notifyButton = button(r6, "TestNotify", "🔔 TEST NOTIFY", COLORS.panelTop, s6[3], 0.32)
+	-- 6. reset, test error, test notification (a line each on a narrow panel)
+	local r6 = strip(scroller, 6, 150)
+	local resetButton = button("Reset", "🧨 RESET PROFILE", COLORS.red)
+	add(r6, resetButton, 0.36)
+	local testButton = button("TestError", "🐞 TEST ERROR", COLORS.panelTop)
+	add(r6, testButton, 0.32)
+	local notifyButton = button("TestNotify", "🔔 TEST NOTIFY", COLORS.panelTop)
+	add(r6, notifyButton, 0.32)
 
-	-- 7. what the server said
+	-- 7. what the server said (two lines at most, shrunk to fit)
 	status = UI.label({
 		Name = "Status",
 		Text = "",
 		TextColor3 = COLORS.subtext,
-		Position = UDim2.fromScale(0, 6 * (ROW + GAP)),
-		Size = UDim2.fromScale(1, ROW * 0.8),
-		Parent = body,
+		TextWrapped = true,
+		LayoutOrder = 7,
+		Size = UDim2.new(1, 0, 0, 40),
+		Parent = scroller,
 	})
-	UI.maxText(status, 18)
+	UI.maxText(status, 18, 11)
 
-	-- 8. errors or a lookup
-	local top = 7 * (ROW + GAP)
-	local r8 = UI.make(Instance.new("Frame"), {
-		Name = "OutputBar",
-		BackgroundTransparency = 1,
-		Position = UDim2.fromScale(0, top),
-		Size = UDim2.fromScale(1, ROW),
-		Parent = body,
-	})
+	-- 8. errors or a lookup: a title and ERRORS, then the text, which
+	-- grows to fit and scrolls with the rest of the panel
+	local r8 = strip(scroller, 8)
 	outputTitle = UI.label({
 		Name = "Title",
 		Text = "",
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Size = UDim2.fromScale(0.68, 1),
-		Parent = r8,
 	})
-	UI.maxText(outputTitle, 18)
-	local refresh =
-		button(r8, "Errors", "🔄 ERRORS", COLORS.panelTop, UDim2.fromScale(0.68, 0), 0.32)
-	local scroll = UI.list(body, {
+	UI.maxText(outputTitle, 18, 11)
+	add(r8, outputTitle, 0.68)
+	local refresh = button("Errors", "🔄 ERRORS", COLORS.panelTop)
+	add(r8, refresh, 0.32)
+	local outputBox = UI.make(Instance.new("Frame"), {
 		Name = "Output",
+		LayoutOrder = 9,
 		BackgroundColor3 = COLORS.panelDark,
-		BackgroundTransparency = 0,
-		Position = UDim2.fromScale(0, top + ROW + GAP),
-		Size = UDim2.fromScale(1, 1 - (top + ROW + GAP)),
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Parent = scroller,
 	})
-	UI.corner(scroll, UDim.new(0, 10))
+	UI.corner(outputBox, UDim.new(0, 10))
+	UI.padding(outputBox, 8)
 	output = UI.label({
 		Name = "Text",
 		Text = "",
@@ -243,8 +284,13 @@ local function build(root: Frame)
 		TextYAlignment = Enum.TextYAlignment.Top,
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Size = UDim2.new(1, 0, 0, 0),
-		Parent = scroll,
+		Parent = outputBox,
 	})
+	window.onResize(function(size: Vector2)
+		fitStrips(UI.listWidth(size.X))
+		status.Size = UDim2.new(1, 0, 0, 2 * (math.max(UI.textSize(), 16) + 4))
+		output.TextSize = math.max(15, UI.textSize())
+	end)
 
 	-- the cycling choices
 	local banChoices = Config.ADMIN.banSeconds

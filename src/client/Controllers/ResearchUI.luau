@@ -59,6 +59,11 @@ type Card = {
 	post: TextButton,
 	hire: TextButton,
 	promote: TextButton,
+	top: Frame, -- the rows of the card, for fitCard
+	portrait: ViewportFrame,
+	barRow: Frame,
+	statusRow: Frame,
+	buttonRow: Frame,
 }
 
 type Chip = {
@@ -78,10 +83,15 @@ local TIP_TEXT =
 	"Your researchers can't work here yet: catch bolts here for Glints and promote them at the Research Office."
 local DESIGN = Vector2.new(680, 560) -- the same as the REWARDS panel
 local TAB_HEIGHT = 40
-local STRIP = 80 -- the Glints strip
+local STRIP = 94 -- the Glints strip: a chip and the room for its scrollbar
 local GAP = 8
 local CHIP_GAP = 6
+-- a Glints chip is at least this wide with a mouse (18 more on touch); the
+-- strip scrolls sideways past that
+local CHIP_LEAST = 66
 local PICK_HEIGHT = 40 -- a post picker button
+local BUTTON = 38 -- a card's POST and HIRE buttons (taller on touch: UI.tall)
+local NARROW = 560 -- a panel narrower than this stacks a card's text under its portrait
 
 local ResearchUI = {}
 
@@ -95,11 +105,18 @@ local hireRemote: RemoteEvent
 local postRemote: RemoteEvent
 local promoteRemote: RemoteEvent
 local teamPage: Frame
+local teamList: ScrollingFrame
+local teamHint: TextLabel
 local logList: ScrollingFrame
+local tabStrip: UI.Tabs
 local teamTab: TextButton
 local logTab: TextButton
+local strip: ScrollingFrame
 local picker: TextButton -- the dim catcher over the panel (a tap on it closes the picker)
+local pickerBox: Frame
+local pickerButtonList: { TextButton } = {}
 local pickerTitle: TextLabel
+local buttonRoom = 120 -- the width a card's POST / PROMOTE text has (design pixels)
 local pickerButtons: { [string]: TextButton } = {}
 local pickerFor: Card? = nil
 local postNames: { [string]: string } = { Office = "Office" }
@@ -111,6 +128,7 @@ local lastBottleTier: number? = nil
 local rendered = false -- the first render is just loading in (no "hired" sound)
 local tipShown = false
 local logReady = false
+local logClaimable = 0 -- the count on the LOG tab
 
 local render: (snapshot: Types.Snapshot) -> ()
 
@@ -413,8 +431,10 @@ local function renderCard(
 	local confirming = (confirmUntil[def.id] or 0) > os.clock()
 	local block = promoteBlock(save, glints, atOffice)
 	if have < cost then
-		card.promote.Text =
-			`✨ {Format.abbreviate(have)}/{Format.abbreviate(cost)} {zoneName(target)}`
+		-- the zone's name too, where the button has the room for it
+		local count = `✨ {Format.abbreviate(have)}/{Format.abbreviate(cost)}`
+		local words = { `{count} {zoneName(target)}`, count }
+		card.promote.Text = UI.fitText(words, buttonRoom, math.max(UI.textSize(), 16))
 	elseif confirming then
 		card.promote.Text = "TAP AGAIN"
 		card.status.Text = `Promote: Lv 1, rank {target}, +{math.floor(
@@ -449,7 +469,14 @@ end
 -- LOG: the Storm Log, the tab's count and the menu's dot.
 local function renderLog(snapshot: Types.Snapshot)
 	local claimable = StormLogTab.render(snapshot, RewardText.describe)
-	logTab.Text = if claimable > 0 then `📖 LOG ({claimable})` else "📖 LOG"
+	if claimable ~= logClaimable then
+		logClaimable = claimable
+		if claimable > 0 then
+			tabStrip.setLabel(2, { `📖 LOG ({claimable})`, `LOG ({claimable})` })
+		else
+			tabStrip.setLabel(2, { "📖 LOG", "LOG" })
+		end
+	end
 	local ready = claimable > 0
 	if ready ~= logReady then
 		logReady = ready
@@ -519,6 +546,7 @@ local function buildPicker()
 		Size = UDim2.new(0.7, 0, 0.86, 0),
 		Parent = picker,
 	})
+	pickerBox = box
 	-- a tap on the box (between its buttons) isn't a tap outside it
 	UI.make(Instance.new("TextButton"), {
 		Name = "Absorb",
@@ -537,7 +565,7 @@ local function buildPicker()
 		Size = UDim2.new(1, 0, 0, 34),
 		Parent = box,
 	})
-	UI.maxText(pickerTitle, 26)
+	UI.maxText(pickerTitle, 26, 14)
 	local list = UI.list(box, {
 		Name = "Posts",
 		Position = UDim2.fromOffset(0, 42),
@@ -555,12 +583,13 @@ local function buildPicker()
 			BackgroundColor3 = COLORS.storm,
 			Parent = list,
 		})
-		UI.maxText(item, 20)
+		UI.maxText(item, 20, 12)
 		item.Activated:Connect(function()
 			UI.pop(item)
 			pick(postId)
 		end)
 		pickerButtons[postId] = item
+		table.insert(pickerButtonList, item)
 	end
 	button("Office")
 	for _, world in Config.WORLDS do
@@ -583,7 +612,7 @@ local function buildPicker()
 				Size = UDim2.new(1, 0, 0, 28),
 				Parent = list,
 			})
-			UI.maxText(heading, 20)
+			UI.maxText(heading, 20, 12)
 			for _, zone in zones do
 				button(zone.id)
 			end
@@ -599,15 +628,15 @@ local function buildPicker()
 end
 
 -- One Glints chip: a gem (a square turned 45°, with a gradient and an
--- outline), the count and the zone's name.
-local function buildChip(parent: Instance, tier: number, width: UDim)
+-- outline), the count and the zone's name (two lines, shrunk to fit).
+local function buildChip(parent: Instance, tier: number)
 	local button = UI.make(Instance.new("TextButton"), {
 		Name = `Tier{tier}`,
 		Text = "",
 		AutoButtonColor = true,
 		LayoutOrder = tier,
 		BackgroundColor3 = COLORS.panelDark,
-		Size = UDim2.new(width, UDim.new(1, 0)),
+		Size = UDim2.fromOffset(CHIP_LEAST, STRIP - 14),
 		Parent = parent,
 	})
 	UI.corner(button, UDim.new(0, 10))
@@ -616,8 +645,8 @@ local function buildChip(parent: Instance, tier: number, width: UDim)
 	local gem = UI.make(Instance.new("Frame"), {
 		Name = "Gem",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0, 20),
-		Size = UDim2.fromOffset(18, 18),
+		Position = UDim2.new(0.5, 0, 0, 13),
+		Size = UDim2.fromOffset(14, 14),
 		Rotation = 45,
 		BackgroundColor3 = COLORS.disabled,
 		Parent = button,
@@ -633,19 +662,20 @@ local function buildChip(parent: Instance, tier: number, width: UDim)
 		Title = true,
 		Name = "Count",
 		Text = "?",
-		Position = UDim2.fromOffset(0, 34),
-		Size = UDim2.new(1, 0, 0, 22),
+		Position = UDim2.fromOffset(0, 22),
+		Size = UDim2.new(1, 0, 0, 24),
 		Parent = button,
 	})
-	UI.maxText(count, 22)
+	UI.maxText(count, 22, 12)
 	local name = UI.label({
 		Name = "Zone",
 		Text = zoneName(tier),
-		Position = UDim2.new(0, 3, 0, 57),
-		Size = UDim2.new(1, -6, 0, 18),
+		TextWrapped = true,
+		Position = UDim2.new(0, 3, 0, 48),
+		Size = UDim2.new(1, -6, 1, -50),
 		Parent = button,
 	})
-	UI.maxText(name, 13)
+	UI.maxText(name, 15, 9)
 	button.Activated:Connect(function()
 		UI.pop(button)
 		UI.toast(chipInfo(tier), "info", 7)
@@ -661,25 +691,44 @@ local function buildChip(parent: Instance, tier: number, width: UDim)
 	})
 end
 
+-- The Glints strip: one chip a tier, side by side. When the panel is too
+-- narrow for all of them at CHIP_LEAST each, the strip scrolls sideways
+-- (its bar shows) instead of squeezing them or wrapping a second row.
 local function buildStrip(parent: Instance)
-	local strip = UI.make(Instance.new("Frame"), {
+	strip = UI.make(Instance.new("ScrollingFrame"), {
 		Name = "Glints",
 		Size = UDim2.new(1, 0, 0, STRIP),
 		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.X,
+		ScrollingDirection = Enum.ScrollingDirection.X,
+		ScrollBarThickness = 5,
+		ScrollBarImageColor3 = COLORS.subtext,
+		ScrollBarImageTransparency = 0.4,
+		HorizontalScrollBarInset = Enum.ScrollBarInset.ScrollBar,
 		Parent = parent,
 	})
 	UI.padding(strip, 3) -- room for the chip outlines
 	UI.make(Instance.new("UIListLayout"), {
 		FillDirection = Enum.FillDirection.Horizontal,
-		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		Padding = UDim.new(0, CHIP_GAP),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = strip,
 	})
-	local tiers = ResearchMath.maxRank() + 1
-	local width = UDim.new(1 / tiers, -CHIP_GAP * (tiers - 1) / tiers)
 	for tier = 0, ResearchMath.maxRank() do
-		buildChip(strip, tier, width)
+		buildChip(strip, tier)
+	end
+end
+
+-- The chips share the strip's width when each gets CHIP_LEAST or more.
+local function fitStrip(width: number)
+	local tiers = #chips
+	local room = width - 6 -- the strip's padding
+	local each = math.floor((room - CHIP_GAP * (tiers - 1)) / tiers)
+	each = math.max(each, if Layout.isTouch() then CHIP_LEAST + 18 else CHIP_LEAST)
+	for _, chip in chips do
+		chip.button.Size = UDim2.fromOffset(each, STRIP - 14)
 	end
 end
 
@@ -708,13 +757,14 @@ local function buildCard(list: Instance, index: number, def: Types.ResearcherDef
 		props.Parent = parent
 		props.TextXAlignment = props.TextXAlignment or Enum.TextXAlignment.Left
 		local label = UI.label(props)
-		UI.maxText(label, max)
+		UI.maxText(label, max, 11)
 		return label
 	end
 
 	-- the top: the portrait, and beside it the name, level, perk and next
 	local top = row(1, 70)
 	local portrait = UI.make(Instance.new("ViewportFrame"), {
+		Name = "Portrait",
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.fromScale(0, 0.5),
 		Size = UDim2.fromOffset(64, 64),
@@ -737,50 +787,49 @@ local function buildCard(list: Instance, index: number, def: Types.ResearcherDef
 	camera.Parent = portrait
 	portrait.CurrentCamera = camera
 
+	-- (fitCard places and sizes these four for the panel's width)
 	local title = text(top, {
 		Title = true,
 		Text = string.upper(`{def.name} · {def.role}`),
 		RichText = true, -- the gold rank stars
-		Position = UDim2.fromOffset(74, 0),
-		Size = UDim2.new(1, -74 - 96, 0, 26),
 	}, 22)
 	local level = text(top, {
 		Title = true,
 		Text = "Lv -",
 		TextColor3 = COLORS.volt,
-		TextXAlignment = Enum.TextXAlignment.Right,
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.fromScale(1, 0),
-		Size = UDim2.fromOffset(92, 26),
 	}, 22)
+	-- the perk and what comes next can be a sentence: they wrap and shrink
 	local now = text(top, {
 		Text = "",
-		Position = UDim2.fromOffset(74, 28),
-		Size = UDim2.new(1, -74, 0, 22),
-	}, 16)
+		TextWrapped = true,
+		TextYAlignment = Enum.TextYAlignment.Top,
+	}, 17)
 	local next = text(top, {
 		Text = "",
 		TextColor3 = COLORS.subtext,
-		Position = UDim2.fromOffset(74, 50),
-		Size = UDim2.new(1, -74, 0, 20),
-	}, 14)
+		TextWrapped = true,
+		TextYAlignment = Enum.TextYAlignment.Top,
+	}, 15)
 
-	local dataBar = UI.bar(row(2, 18), {
+	local barRow = row(2, 18)
+	local dataBar = UI.bar(barRow, {
 		Name = "DataBar",
 		Size = UDim2.fromScale(1, 1),
 		color = COLORS.storm,
-		text = 13,
+		text = 15,
 	})
 	local barText = dataBar.label :: TextLabel
 
-	local status = text(row(3, 18), {
+	local statusRow = row(3, 22)
+	local status = text(statusRow, {
 		Text = "",
 		TextColor3 = COLORS.calm,
+		TextWrapped = true,
 		Size = UDim2.fromScale(1, 1),
-	}, 14)
+	}, 15)
 
 	-- the bottom: POST and HIRE / PROMOTE side by side
-	local buttons = row(4, 38)
+	local buttons = row(4, BUTTON)
 	local post = UI.button({
 		Name = "Post",
 		Text = "📍 POST",
@@ -788,7 +837,7 @@ local function buildCard(list: Instance, index: number, def: Types.ResearcherDef
 		BackgroundColor3 = COLORS.storm,
 		Parent = buttons,
 	})
-	UI.maxText(post, 18)
+	UI.maxText(post, 18, 11)
 	local card: Card
 	post.Activated:Connect(function()
 		UI.pop(post)
@@ -805,7 +854,7 @@ local function buildCard(list: Instance, index: number, def: Types.ResearcherDef
 			BackgroundColor3 = color,
 			Parent = buttons,
 		})
-		UI.maxText(button, 18)
+		UI.maxText(button, 18, 11)
 		return button
 	end
 	local hire = right("Hire", COLORS.green)
@@ -877,8 +926,57 @@ local function buildCard(list: Instance, index: number, def: Types.ResearcherDef
 		post = post,
 		hire = hire,
 		promote = promote,
+		top = top,
+		portrait = portrait,
+		barRow = barRow,
+		statusRow = statusRow,
+		buttonRow = buttons,
 	}
 	table.insert(cards, card)
+end
+
+-- Places a card's parts for a card `inner` wide (design pixels): on a wide
+-- panel the name and level share a line beside the portrait; on a narrow
+-- one the portrait stands at the top left and the lines stack beside it, the
+-- level under the name, with room for the perk and the next one to wrap. The
+-- bar and the status line get a little more height there, and the buttons
+-- are TAP_MIN points tall on touch.
+local function fitCard(card: Card, inner: number, narrow: boolean)
+	local beside = inner - 74 -- the room right of the portrait
+	if narrow then
+		card.top.Size = UDim2.new(1, 0, 0, 132)
+		card.portrait.AnchorPoint = Vector2.zero
+		card.portrait.Position = UDim2.fromOffset(0, 0)
+		card.title.Position = UDim2.fromOffset(74, 0)
+		card.title.Size = UDim2.fromOffset(beside, 26)
+		card.level.TextXAlignment = Enum.TextXAlignment.Left
+		card.level.AnchorPoint = Vector2.zero
+		card.level.Position = UDim2.fromOffset(74, 28)
+		card.level.Size = UDim2.fromOffset(beside, 22)
+		card.now.Position = UDim2.fromOffset(74, 52)
+		card.now.Size = UDim2.fromOffset(beside, 44)
+		card.next.Position = UDim2.fromOffset(74, 96)
+		card.next.Size = UDim2.fromOffset(beside, 36)
+		card.barRow.Size = UDim2.new(1, 0, 0, 24)
+		card.statusRow.Size = UDim2.new(1, 0, 0, 40)
+	else
+		card.top.Size = UDim2.new(1, 0, 0, 74)
+		card.portrait.AnchorPoint = Vector2.new(0, 0.5)
+		card.portrait.Position = UDim2.fromScale(0, 0.5)
+		card.title.Position = UDim2.fromOffset(74, 0)
+		card.title.Size = UDim2.fromOffset(beside - 100, 26)
+		card.level.TextXAlignment = Enum.TextXAlignment.Right
+		card.level.AnchorPoint = Vector2.new(1, 0)
+		card.level.Position = UDim2.fromScale(1, 0)
+		card.level.Size = UDim2.fromOffset(96, 26)
+		card.now.Position = UDim2.fromOffset(74, 28)
+		card.now.Size = UDim2.fromOffset(beside, 22)
+		card.next.Position = UDim2.fromOffset(74, 50)
+		card.next.Size = UDim2.fromOffset(beside, 24)
+		card.barRow.Size = UDim2.new(1, 0, 0, 20)
+		card.statusRow.Size = UDim2.new(1, 0, 0, 22)
+	end
+	card.buttonRow.Size = UDim2.new(1, 0, 0, UI.tall(BUTTON))
 end
 
 -- The server publishes "<post>:<level>:<rank>" in Research_<RoleId> on the
@@ -921,27 +1019,10 @@ function ResearchUI.init()
 	panel = window.panel
 
 	-- the two tabs along the top
-	local tabBar = UI.make(Instance.new("Frame"), {
-		Name = "Tabs",
-		Size = UDim2.new(1, 0, 0, TAB_HEIGHT),
-		BackgroundTransparency = 1,
-		Parent = window.body,
-	})
-	UI.make(Instance.new("UIGridLayout"), {
-		CellSize = UDim2.new(1 / 2, -6, 1, 0),
-		CellPadding = UDim2.fromOffset(6, 0),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = tabBar,
-	})
-	local function tab(order: number, text: string, which: Tab): TextButton
-		local button = UI.button({
-			Name = if which == "team" then "TeamTab" else "LogTab",
-			Text = text,
-			LayoutOrder = order,
-			BackgroundColor3 = COLORS.panelDark,
-			Parent = tabBar,
-		})
-		UI.maxText(button, 18)
+	local words = { { "👥 TEAM", "TEAM" }, { "📖 LOG", "LOG" } }
+	tabStrip = UI.tabs(window.body, words, TAB_HEIGHT, 20)
+	local function tab(index: number, which: Tab): TextButton
+		local button = tabStrip.buttons[index]
 		button.Activated:Connect(function()
 			local page: GuiObject = if which == "team" then teamPage else logList
 			if not page.Visible then
@@ -952,8 +1033,8 @@ function ResearchUI.init()
 		end)
 		return button
 	end
-	teamTab = tab(1, "👥 TEAM", "team")
-	logTab = tab(2, "📖 LOG", "log")
+	teamTab = tab(1, "team")
+	logTab = tab(2, "log")
 
 	-- TEAM: the Glints strip over the researcher cards
 	teamPage = UI.make(Instance.new("Frame"), {
@@ -964,24 +1045,24 @@ function ResearchUI.init()
 		Parent = window.body,
 	})
 	buildStrip(teamPage)
-	local list = UI.list(teamPage, {
+	teamList = UI.list(teamPage, {
 		Name = "List",
 		Position = UDim2.fromOffset(0, STRIP + 4),
 		Size = UDim2.new(1, 0, 1, -(STRIP + 4)),
 		gap = 10,
 	})
-	local hint = UI.label({
+	teamHint = UI.label({
 		Name = "Hint",
 		LayoutOrder = 0,
 		Text = "Hire researchers at the Research Center island, then post them at a zone.",
 		TextColor3 = COLORS.subtext,
 		TextWrapped = true,
 		Size = UDim2.new(1, 0, 0, 22),
-		Parent = list,
+		Parent = teamList,
 	})
-	UI.maxText(hint, 15)
+	UI.maxText(teamHint, 17, 11)
 	for index, def in Config.RESEARCHERS do
-		buildCard(list, index, def)
+		buildCard(teamList, index, def)
 	end
 
 	-- LOG: the Storm Log (Lib/StormLogTab)
@@ -996,6 +1077,43 @@ function ResearchUI.init()
 	buildPicker()
 	selectTab("team")
 	watchLevels()
+
+	-- everything's sizes come from the body's size (and the device)
+	window.onResize(function(size: Vector2)
+		local narrow = size.X < NARROW
+		tabStrip.fit(size.X)
+		local top = tabStrip.height() + GAP
+		teamPage.Position = UDim2.fromOffset(0, top)
+		teamPage.Size = UDim2.new(1, 0, 1, -top)
+		logList.Position = UDim2.fromOffset(0, top)
+		logList.Size = UDim2.new(1, 0, 1, -top)
+		fitStrip(size.X)
+		teamList.Position = UDim2.fromOffset(0, STRIP + 4)
+		teamList.Size = UDim2.new(1, 0, 1, -(STRIP + 4))
+		-- the hint: a line on a wide panel, two on a narrow one
+		local hintLines = if narrow then 2 else 1
+		teamHint.Size = UDim2.new(1, 0, 0, hintLines * (math.max(UI.textSize(), 17) + 4))
+		local inner = UI.listWidth(size.X) - 20 -- less a card's padding
+		for _, card in cards do
+			fitCard(card, inner, narrow)
+		end
+		-- a button's text room: half the card less the gap and its padding
+		buttonRoom = (inner / 2 - 4) * 0.84 - 4
+		StormLogTab.fit(size.X)
+		-- the post picker: the whole panel on a narrow one, else the middle of it
+		if narrow then
+			pickerBox.Size = UDim2.new(1, -24, 1, -24)
+		else
+			pickerBox.Size = UDim2.new(0.7, 0, 0.86, 0)
+		end
+		local pickHeight = UI.tall(PICK_HEIGHT)
+		for _, button in pickerButtonList do
+			button.Size = UDim2.new(1, 0, 0, pickHeight)
+		end
+		if rendered and State.current then
+			render(State.current)
+		end
+	end)
 end
 
 function ResearchUI.start()

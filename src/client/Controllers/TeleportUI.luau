@@ -22,15 +22,28 @@ local State = require(script.Parent.State)
 local COLORS = UI.COLORS
 local PURPLE = Color3.fromRGB(165, 110, 255)
 local ROW_HEIGHT = 86
+local NARROW_ROW = 108 -- a row on a phone: the status gets two lines
+local NARROW = 500 -- a body narrower than this (a phone held upright)
 
 local player = Players.LocalPlayer
 
 type Row = { world: Types.WorldDef?, status: TextLabel, button: TextButton }
+-- a row's parts, for fit
+type View = {
+	frame: Frame,
+	name: TextLabel,
+	line: TextLabel,
+	status: TextLabel,
+	button: TextButton,
+}
 
 local TeleportUI = {}
 
 local panel: Frame
 local rows: { Row } = {}
+local views: { View } = {}
+local hint: TextLabel
+local rowList: ScrollingFrame
 
 function TeleportUI.open()
 	UI.openPanel(panel)
@@ -83,9 +96,10 @@ local function render()
 	end
 end
 
--- A row's frame, stripe, name, tagline, status line and GO button.
+-- A row's frame, stripe, name, tagline, status line and GO button (fit
+-- places them).
 local function rowFrame(
-	list: Instance,
+	parent: Instance,
 	index: number,
 	id: string,
 	title: string,
@@ -97,7 +111,7 @@ local function rowFrame(
 		LayoutOrder = index,
 		Size = UDim2.new(1, 0, 0, ROW_HEIGHT),
 		BackgroundColor3 = COLORS.panelDark,
-		Parent = list,
+		Parent = parent,
 	})
 	UI.corner(frame, UDim.new(0, 12))
 	UI.stroke(frame, 3)
@@ -114,40 +128,71 @@ local function rowFrame(
 		Text = title,
 		TextColor3 = color,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.new(0, 26, 0, 8),
-		Size = UDim2.new(0.68, -26, 0, 30),
 		Parent = frame,
 	})
-	UI.maxText(name, 28)
+	UI.maxText(name, 28, 14)
 	local line = UI.label({
 		Text = tagline,
 		TextColor3 = COLORS.text,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.new(0, 26, 0, 40),
-		Size = UDim2.new(0.68, -26, 0, 20),
 		Parent = frame,
 	})
-	UI.maxText(line, 18)
+	UI.maxText(line, 18, 11)
+	-- the status can be a sentence (what a locked world needs): it wraps
+	-- and shrinks to fit
 	local status = UI.label({
 		Text = "",
 		TextColor3 = COLORS.subtext,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.new(0, 26, 0, 61),
-		Size = UDim2.new(0.68, -26, 0, 18),
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = true,
 		Parent = frame,
 	})
-	UI.maxText(status, 16)
+	UI.maxText(status, 16, 10)
 	local button = UI.button({
 		Name = "Go",
 		Text = "GO",
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -12, 0.5, 0),
-		Size = UDim2.new(0.26, 0, 0, 52),
 		BackgroundColor3 = PURPLE,
 		Parent = frame,
 	})
-	UI.maxText(button, 26)
+	UI.maxText(button, 26, 12)
+	table.insert(views, {
+		frame = frame,
+		name = name,
+		line = line,
+		status = status,
+		button = button,
+	})
 	return status, button
+end
+
+-- Lays the panel out for a body `size`: rows tall enough for their text
+-- (two lines of status on a narrow panel), GO touch-sized at the right.
+local function fit(size: Vector2)
+	local narrow = size.X < NARROW
+	local width = UI.listWidth(size.X)
+	-- a touch screen's text can't shrink below the smallest legible size, so
+	-- its status gets two lines whatever the width
+	local height = if narrow or Layout.isTouch() then NARROW_ROW else ROW_HEIGHT
+	local goHeight = math.min(UI.tall(52), height - 16)
+	local goWidth = math.clamp(math.floor(width * 0.26), 90, 140)
+	local room = width - 26 - goWidth - 24
+	local hintHeight = if narrow then 2 * (math.max(UI.textSize(), 16) + 3) else 22
+	hint.Size = UDim2.new(1, 0, 0, hintHeight)
+	rowList.Position = UDim2.fromOffset(0, hintHeight + 8)
+	rowList.Size = UDim2.new(1, 0, 1, -(hintHeight + 8))
+	for _, view in views do
+		view.frame.Size = UDim2.new(1, 0, 0, height)
+		view.name.Position = UDim2.fromOffset(26, 8)
+		view.name.Size = UDim2.fromOffset(room, 30)
+		view.line.Position = UDim2.fromOffset(26, 40)
+		view.line.Size = UDim2.fromOffset(room, 22)
+		view.status.Position = UDim2.fromOffset(26, 62)
+		view.status.Size = UDim2.fromOffset(room, height - 62 - 6)
+		view.button.AnchorPoint = Vector2.new(1, 0.5)
+		view.button.Position = UDim2.new(1, -12, 0.5, 0)
+		view.button.Size = UDim2.fromOffset(goWidth, goHeight)
+	end
 end
 
 -- The AFK Lounge row, under the worlds.
@@ -208,23 +253,25 @@ function TeleportUI.init()
 	local _, root = Layout.screen("StormBottlerTeleport", 5)
 	local window = UI.window(root, "TeleportPanel", "🌀 TELEPORT", PURPLE, Vector2.new(560, 440))
 	panel = window.panel
-	local hint = UI.label({
+	hint = UI.label({
 		Text = "Jump to the hub of any world you've unlocked.",
 		TextColor3 = COLORS.subtext,
+		TextWrapped = true,
 		Size = UDim2.new(1, 0, 0, 22),
 		Parent = window.body,
 	})
-	UI.maxText(hint, 18)
-	local list = UI.list(window.body, {
+	UI.maxText(hint, 18, 11)
+	rowList = UI.list(window.body, {
 		Name = "List",
 		Position = UDim2.fromOffset(0, 30),
 		Size = UDim2.new(1, 0, 1, -30),
 		gap = 10,
 	})
 	for index, world in Config.WORLDS do
-		buildRow(list, index, world)
+		buildRow(rowList, index, world)
 	end
-	buildLoungeRow(list, #Config.WORLDS + 1)
+	buildLoungeRow(rowList, #Config.WORLDS + 1)
+	window.onResize(fit)
 end
 
 function TeleportUI.start()

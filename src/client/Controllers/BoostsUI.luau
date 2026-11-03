@@ -52,11 +52,11 @@ local State = require(script.Parent.State)
 
 local COLORS = UI.COLORS
 local ROBUX = utf8.char(0xE002) -- Roblox's fonts draw the Robux icon for this
-local CARD_HEIGHT = 168
 local CARD_GAP = 10
 local SWATCH_GAP = 10
 local TAB_HEIGHT = 46
-local TAB_COUNT = 4
+local BUY_HEIGHT = 48 -- a card's buttons (taller on touch: UI.tall)
+local CARD_LEAST = 280 -- a card is at least this wide, so a narrow panel has one column
 local DIM = 0.55 -- a Glint card for a tier you haven't reached
 local PINK = Color3.fromRGB(255, 120, 170) -- the GIFT buttons
 local SWATCH_HEIGHT = 56
@@ -75,6 +75,8 @@ type CardParts = {
 	buy: TextButton,
 	detail: TextLabel,
 	status: TextLabel,
+	gift: TextButton?, -- beside BUY on a pass or boost
+	packs: { TextButton }?, -- a Glint card's buttons across the bottom (the first is `buy`)
 }
 type Tab = { button: TextButton, grid: ScrollingFrame }
 type Placed = { tab: Tab, order: number, parts: CardParts } -- where a card is, for openAt
@@ -98,6 +100,11 @@ local cancelGift: RemoteEvent
 local panel: Frame
 local tabs: { Tab } = {}
 local grids: { UIGridLayout } = {}
+local tabStrip: UI.Tabs
+local allCards: { CardParts } = {}
+local gridTop = TAB_HEIGHT + 10 -- where a tab's cards start under the tabs
+local cardHeight = 168
+local columns = 2
 local placed: { [string]: Placed } = {} -- by pass, boost or pack key
 local passCards: { PassCard } = {}
 local packCards: { PackCard } = {}
@@ -106,6 +113,10 @@ local glintCards: { GlintCard } = {}
 local prices: { [string]: number } = {} -- pass, boost or pack key -> Robux, from Roblox
 local picker: Frame
 local pickerGrid: UIGridLayout
+local pickerSwatches: ScrollingFrame
+local pickerHint: TextLabel
+local pickerClose: TextButton
+local pickerTitle: TextLabel
 local swatches: { Swatch } = {}
 
 local function selectTab(selected: Tab)
@@ -114,10 +125,10 @@ local function selectTab(selected: Tab)
 		tab.button.BackgroundColor3 = if on then COLORS.volt else COLORS.panelDark
 		if on and not tab.grid.Visible then
 			-- slide the new page up into place
-			tab.grid.Position = UDim2.fromOffset(0, TAB_HEIGHT + 30)
+			tab.grid.Position = UDim2.fromOffset(0, gridTop + 20)
 			tab.grid.Visible = true
 			TweenService:Create(tab.grid, UI.TWEEN.open, {
-				Position = UDim2.fromOffset(0, TAB_HEIGHT + 10),
+				Position = UDim2.fromOffset(0, gridTop),
 			}):Play()
 		elseif not on then
 			tab.grid.Visible = false
@@ -125,24 +136,77 @@ local function selectTab(selected: Tab)
 	end
 end
 
-local function oneColumn(): boolean
-	return Layout.class == "Phone" and Layout.portrait
+-- A card's buttons along its bottom edge, `height` tall: BUY alone, BUY
+-- and GIFT, or a Glint card's packs. Scale and offset, so they fill the
+-- card's width however wide the column is.
+local function placeButtons(parts: CardParts, height: number)
+	local packs = parts.packs
+	local gift = parts.gift
+	if packs then
+		local count = #packs
+		local gaps = 20 + 8 * (count - 1) -- 10 each side, 8 between
+		local step = 8 - gaps / count -- how far each button's offset moves on from the last
+		for index, button in packs do
+			button.AnchorPoint = Vector2.new(0, 1)
+			button.Position = UDim2.new((index - 1) / count, 10 + (index - 1) * step, 1, -10)
+			button.Size = UDim2.new(1 / count, -gaps / count, 0, height)
+		end
+	elseif gift then
+		parts.buy.AnchorPoint = Vector2.new(0, 1)
+		parts.buy.Position = UDim2.new(0, 10, 1, -10)
+		parts.buy.Size = UDim2.new(0.58, -15, 0, height)
+		gift.AnchorPoint = Vector2.new(1, 1)
+		gift.Position = UDim2.new(1, -10, 1, -10)
+		gift.Size = UDim2.new(0.42, -15, 0, height)
+	else
+		parts.buy.AnchorPoint = Vector2.new(0.5, 1)
+		parts.buy.Position = UDim2.new(0.5, 0, 1, -10)
+		parts.buy.Size = UDim2.new(1, -20, 0, height)
+	end
 end
 
--- Two cards a row, one on a phone held upright (colour swatches: three
--- a row, two upright).
-local function fitColumns()
-	local one = oneColumn()
-	for _, grid in grids do
-		-- the cells and the gaps between them fill the width (whole pixels,
-		-- rounded so the last one never wraps)
-		grid.CellSize = if one
-			then UDim2.new(1, 0, 0, CARD_HEIGHT)
-			else UDim2.new(0.5, -CARD_GAP / 2, 0, CARD_HEIGHT)
+-- Lays the store out for a body `size`: the tabs on one line, then cards
+-- in as many columns of at least CARD_LEAST as fit (one on a phone held
+-- upright), each card tall enough for its text and touch-sized buttons.
+local function fit(size: Vector2)
+	tabStrip.fit(size.X)
+	gridTop = tabStrip.height() + 10
+	local buy = UI.tall(BUY_HEIGHT)
+	-- 10 above the title, 26 + 4, two lines of detail (44), the status
+	-- line (18), 6, the buttons, 10 below
+	cardHeight = 118 + buy
+	local width = UI.listWidth(size.X)
+	local count, cell = UI.columns(width, CARD_LEAST, CARD_GAP, 2)
+	columns = count
+	for _, tab in tabs do
+		tab.grid.Position = UDim2.fromOffset(0, gridTop)
+		tab.grid.Size = UDim2.new(1, 0, 1, -gridTop)
 	end
-	pickerGrid.CellSize = if one
-		then UDim2.new(0.5, -SWATCH_GAP / 2, 0, SWATCH_HEIGHT)
-		else UDim2.new(1 / 3, -math.ceil(SWATCH_GAP * 2 / 3), 0, SWATCH_HEIGHT)
+	for _, grid in grids do
+		grid.CellSize = UDim2.fromOffset(cell, cardHeight)
+		grid.CellPadding = UDim2.fromOffset(CARD_GAP, CARD_GAP)
+	end
+	for _, parts in allCards do
+		placeButtons(parts, buy)
+	end
+	-- the colour picker covers the body: its swatches in as many columns
+	-- as fit (three, two on a narrow panel), each as tall as a button
+	picker.Size = UDim2.fromOffset(size.X, size.Y)
+	local swatchWidth = UI.listWidth(size.X - 20)
+	local _, swatchCell = UI.columns(swatchWidth, 120, SWATCH_GAP, 3)
+	local hintHeight = 2 * (math.max(UI.textSize(), 16) + 3)
+	pickerHint.Size = UDim2.new(1, -28, 0, hintHeight)
+	local close = UI.tall(42)
+	pickerClose.Size = UDim2.fromOffset(math.max(52, close), close)
+	pickerTitle.Size = UDim2.new(1, -(math.max(52, close) + 34), 0, math.max(36, close))
+	-- the hint sits under the title and the X
+	local under = math.max(close, 36) + 12
+	pickerHint.Position = UDim2.fromOffset(14, under)
+	local swatchTop = under + hintHeight + 8
+	pickerSwatches.Position = UDim2.fromOffset(10, swatchTop)
+	pickerSwatches.Size = UDim2.new(1, -20, 1, -(swatchTop + 10))
+	pickerGrid.CellSize = UDim2.fromOffset(swatchCell, UI.tall(SWATCH_HEIGHT))
+	pickerGrid.CellPadding = UDim2.fromOffset(SWATCH_GAP, SWATCH_GAP)
 end
 
 function BoostsUI.open()
@@ -162,11 +226,10 @@ function BoostsUI.openAt(key: string)
 	end
 	selectTab(card.tab)
 	-- scroll once the grid has laid out (a frame later)
-	local columns = if oneColumn() then 1 else 2
 	local row = (card.order - 1) // columns
 	task.spawn(function()
 		RunService.Heartbeat:Wait()
-		card.tab.grid.CanvasPosition = Vector2.new(0, row * (CARD_HEIGHT + CARD_GAP))
+		card.tab.grid.CanvasPosition = Vector2.new(0, row * (cardHeight + CARD_GAP))
 	end)
 	local stroke = card.parts.frame:FindFirstChildOfClass("UIStroke")
 	if stroke then
@@ -227,46 +290,48 @@ local function buildCard(parent: Instance, order: number, card: Card, onLook: ()
 		})
 		UI.maxText(icon, 44)
 	end
+	-- one line for the name, two for the description, one for the status;
+	-- any of them shrinks to fit rather than running past the card
 	local name = UI.label({
 		Name = "Title",
 		Title = true,
 		Text = string.upper(card.name),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.new(0, 76, 0, 12),
+		Position = UDim2.new(0, 76, 0, 10),
 		Size = UDim2.new(1, -86, 0, 26),
 		Parent = frame,
 	})
-	UI.maxText(name, 24)
+	UI.maxText(name, 24, 13)
 	local detail = UI.label({
 		Text = card.detail,
 		TextColor3 = COLORS.subtext,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextWrapped = true,
-		Position = UDim2.new(0, 76, 0, 40),
-		Size = UDim2.new(1, -86, 0, 42),
+		Position = UDim2.new(0, 76, 0, 38),
+		Size = UDim2.new(1, -86, 0, 44),
 		Parent = frame,
 	})
-	UI.maxText(detail, 17)
+	UI.maxText(detail, 18, 11)
 	local status = UI.label({
 		Text = "",
 		TextColor3 = COLORS.volt,
-		Position = UDim2.new(0, 10, 0, 86),
-		Size = UDim2.new(1, -20, 0, 16),
+		Position = UDim2.new(0, 10, 0, 84),
+		Size = UDim2.new(1, -20, 0, 18),
 		Parent = frame,
 	})
-	UI.maxText(status, 14)
+	UI.maxText(status, 15, 11)
 	local buy = UI.button({
 		Name = "Buy",
 		Text = `{ROBUX} {Format.abbreviate(card.price)}`,
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -10),
-		Size = UDim2.new(1, -20, 0, 48),
 		BackgroundColor3 = COLORS.green,
 		Parent = frame,
 	})
-	UI.maxText(buy, 24)
-	return { frame = frame, title = name, buy = buy, detail = detail, status = status }
+	UI.maxText(buy, 24, 11)
+	local parts: CardParts =
+		{ frame = frame, title = name, buy = buy, detail = detail, status = status }
+	table.insert(allCards, parts)
+	return parts
 end
 
 -- Seconds left as a clock: "4:05", or "1:04:05" past an hour.
@@ -488,7 +553,7 @@ local function buildPicker(body: Frame)
 	})
 	UI.corner(picker, UDim.new(0, 14))
 	UI.stroke(picker, 3)
-	local title = UI.label({
+	pickerTitle = UI.label({
 		Title = true,
 		Text = "🎨 CHOOSE YOUR LIGHTNING",
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -496,8 +561,8 @@ local function buildPicker(body: Frame)
 		Size = UDim2.new(1, -86, 0, 36),
 		Parent = picker,
 	})
-	UI.maxText(title, 26)
-	local close = UI.button({
+	UI.maxText(pickerTitle, 26, 14)
+	pickerClose = UI.button({
 		Name = "Close",
 		Text = "X",
 		AnchorPoint = Vector2.new(1, 0),
@@ -506,30 +571,32 @@ local function buildPicker(body: Frame)
 		BackgroundColor3 = COLORS.red,
 		Parent = picker,
 	})
-	close.Activated:Connect(function()
-		UI.pop(close)
+	pickerClose.Activated:Connect(function()
+		UI.pop(pickerClose)
 		picker.Visible = false
 	end)
-	local hint = UI.label({
+	pickerHint = UI.label({
 		Text = "Your lightning arcs and bottle glow in this colour. Everyone sees it!",
 		TextColor3 = COLORS.subtext,
 		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = true,
 		Position = UDim2.fromOffset(14, 52),
-		Size = UDim2.new(1, -28, 0, 20),
+		Size = UDim2.new(1, -28, 0, 44),
 		Parent = picker,
 	})
-	UI.maxText(hint, 17)
-	local grid = UI.list(picker, {
+	UI.maxText(pickerHint, 17, 11)
+	pickerSwatches = UI.list(picker, {
 		Name = "Swatches",
-		Position = UDim2.fromOffset(10, 82),
-		Size = UDim2.new(1, -20, 1, -92),
+		Position = UDim2.fromOffset(10, 104),
+		Size = UDim2.new(1, -20, 1, -114),
 		layout = false,
 	})
 	pickerGrid = UI.make(Instance.new("UIGridLayout"), {
 		CellPadding = UDim2.fromOffset(SWATCH_GAP, SWATCH_GAP),
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = grid,
+		Parent = pickerSwatches,
 	})
 	local remote = Net.get("SetBoltColour")
 	for index = 0, #Config.BOLT_COLOURS do
@@ -540,9 +607,9 @@ local function buildPicker(body: Frame)
 			BackgroundColor3 = if index == 0
 				then DEFAULT_BOLT
 				else Config.BOLT_COLOURS[index].color,
-			Parent = grid,
+			Parent = pickerSwatches,
 		})
-		UI.maxText(button, 20)
+		UI.maxText(button, 20, 11)
 		button.Activated:Connect(function()
 			UI.pop(button)
 			remote:FireServer(index)
@@ -582,19 +649,14 @@ end
 -- A card's BUY (or FOR ME) on the left and GIFT on the right: opens the
 -- gift window for the gift product `giftKey`.
 local function giftButton(parts: CardParts, cardKey: string, giftKey: string): TextButton
-	parts.buy.AnchorPoint = Vector2.new(0, 1)
-	parts.buy.Position = UDim2.new(0, 10, 1, -10)
-	parts.buy.Size = UDim2.new(0.6, -15, 0, 48)
 	local gift = UI.button({
 		Name = "Gift",
 		Text = "🎁 GIFT",
-		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -10, 1, -10),
-		Size = UDim2.new(0.4, -15, 0, 48),
 		BackgroundColor3 = PINK,
 		Parent = parts.frame,
 	})
-	UI.maxText(gift, 20)
+	parts.gift = gift
+	UI.maxText(gift, 20, 11)
 	gift.Activated:Connect(function()
 		UI.pop(gift)
 		storeEvent:FireServer("card", cardKey)
@@ -713,9 +775,7 @@ local function buildGlintCard(tab: Tab, order: number, tier: number, packs: { Ty
 	end)
 	parts.title.TextColor3 = ZoneColours.of(zone, COLORS.storm)
 	local buttons: { TextButton } = {}
-	local count = #packs
-	local gaps = 20 + 8 * (count - 1) -- 10 each side, 8 between
-	local step = 8 - gaps / count -- how far each button's offset moves on from the last
+	parts.packs = buttons
 	for index, pack in packs do
 		local button = parts.buy
 		if index > 1 then
@@ -726,15 +786,12 @@ local function buildGlintCard(tab: Tab, order: number, tier: number, packs: { Ty
 				Parent = parts.frame,
 			})
 		end
-		-- `count` buttons across the bottom
-		button.AnchorPoint = Vector2.new(0, 1)
-		button.Position = UDim2.new((index - 1) / count, 10 + (index - 1) * step, 1, -10)
-		button.Size = UDim2.new(1 / count, -gaps / count, 0, 48)
+		-- (placeButtons puts the `count` buttons across the bottom)
 		local limit = button:FindFirstChildOfClass("UITextSizeConstraint")
 		if limit then
 			limit.MaxTextSize = 18 -- the card's own BUY (two lines now)
 		else
-			UI.maxText(button, 18)
+			UI.maxText(button, 18, 10)
 		end
 		button.Activated:Connect(function()
 			UI.pop(button)
@@ -755,16 +812,7 @@ local function buildGlintCard(tab: Tab, order: number, tier: number, packs: { Ty
 end
 
 local function buildTab(body: Frame, order: number, title: string): Tab
-	-- TAB_COUNT tabs across, 6 apart
-	local button = UI.button({
-		Name = title,
-		Text = title,
-		Position = UDim2.new((order - 1) / TAB_COUNT, (order - 1) * 6 / TAB_COUNT, 0, 0),
-		Size = UDim2.new(1 / TAB_COUNT, -6 * (TAB_COUNT - 1) / TAB_COUNT, 0, TAB_HEIGHT),
-		BackgroundColor3 = COLORS.panelDark,
-		Parent = body,
-	})
-	UI.maxText(button, 22)
+	local button = tabStrip.buttons[order]
 	local grid = UI.list(body, {
 		Name = title .. "Grid",
 		Position = UDim2.fromOffset(0, TAB_HEIGHT + 10),
@@ -795,6 +843,9 @@ function BoostsUI.init()
 	local _, root = Layout.screen("StormBottlerBoosts", 5)
 	local window = UI.window(root, "BoostsPanel", "🚀 BOOSTS", COLORS.volt, Vector2.new(680, 560))
 	panel = window.panel
+	-- four tabs on one line: the short wording where the long one won't fit
+	local words = { { "GAME PASSES", "PASSES" }, { "BOOSTS" }, { "VOLTS" }, { "GLINTS" } }
+	tabStrip = UI.tabs(window.body, words, TAB_HEIGHT, 22)
 
 	local passTab = buildTab(window.body, 1, "GAME PASSES")
 	for index, pass in Config.PASSES do
@@ -826,8 +877,7 @@ function BoostsUI.init()
 	end
 	buildPicker(window.body)
 	selectTab(passTab)
-	fitColumns()
-	Layout.Changed:Connect(fitColumns)
+	window.onResize(fit)
 	render()
 end
 

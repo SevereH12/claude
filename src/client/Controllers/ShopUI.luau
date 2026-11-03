@@ -26,7 +26,10 @@ local State = require(script.Parent.State)
 local TopUpUI = require(script.Parent.TopUpUI)
 
 local COLORS = UI.COLORS
-local ROW_HEIGHT = 76 -- pixels; the list scrolls when the rows don't fit
+local ROW_HEIGHT = 76 -- design pixels; the list scrolls when the rows don't fit
+local PHONE_ROW = 92 -- a row on a phone: room for two lines of text at its smallest size
+local ROW_GAP = 10
+local TAB_HEIGHT = 46
 
 -- What a row shows, whichever kind of item it is. `describe`, if set,
 -- re-reads the badge and detail from the latest snapshot (Big Bottles).
@@ -43,6 +46,8 @@ type Row = {
 	frame: Frame,
 	button: TextButton,
 	badge: TextLabel,
+	badgeFrame: Frame,
+	name: TextLabel,
 	detail: TextLabel,
 }
 type Tab = {
@@ -61,7 +66,9 @@ local panel: Frame
 local body: Frame -- under the window's header (UI.window)
 local hint: TextLabel
 local tabs: { Tab } = {}
+local tabStrip: UI.Tabs
 local current: Tab? = nil
+local rowHeight = ROW_HEIGHT -- the rows' height now (taller on a phone)
 local PURPLE = Color3.fromRGB(170, 110, 255)
 type AscendRow = { frame: Frame, title: TextLabel, detail: TextLabel, button: TextButton }
 local ascendRow: AscendRow? = nil
@@ -158,12 +165,42 @@ function ShopUI.focusBottle(tier: number): GuiObject?
 	end
 	for _, row in bottles.rows do
 		if row.tier == tier then
-			-- rows are ROW_HEIGHT tall with 10 between them, in tier order
-			bottles.list.CanvasPosition = Vector2.new(0, (tier - 1) * (ROW_HEIGHT + 10))
+			-- rows are rowHeight tall with ROW_GAP between them, in tier order
+			bottles.list.CanvasPosition = Vector2.new(0, (tier - 1) * (rowHeight + ROW_GAP))
 			return row.button
 		end
 	end
 	return nil
+end
+
+-- Where a row's pieces go for a row `width` x `height`: the badge on the
+-- left, the buy button on the right, the name and detail between. Numbers,
+-- not scales, so the text always has the room worked out here.
+local function placeParts(
+	width: number,
+	height: number,
+	badge: Frame?,
+	title: TextLabel,
+	detail: TextLabel,
+	button: TextButton
+)
+	local pad = 8
+	local round = math.min(height - 2 * pad, 64)
+	local buttonWidth = math.clamp(math.floor(width * 0.3), 96, 150)
+	local buttonHeight = math.min(height - 2 * pad, UI.tall(46))
+	local left = if badge then pad + round + 10 else 14
+	local room = width - left - buttonWidth - 2 * pad - 4
+	if badge then
+		badge.Position = UDim2.fromOffset(pad, (height - round) / 2)
+		badge.Size = UDim2.fromOffset(round, round)
+	end
+	title.Position = UDim2.fromOffset(left, pad)
+	title.Size = UDim2.fromOffset(room, 30)
+	detail.Position = UDim2.fromOffset(left, pad + 32)
+	detail.Size = UDim2.fromOffset(room, height - 2 * pad - 32)
+	button.AnchorPoint = Vector2.new(1, 0.5)
+	button.Position = UDim2.new(1, -pad, 0.5, 0)
+	button.Size = UDim2.fromOffset(buttonWidth, buttonHeight)
 end
 
 local function buildRow(tab: Tab, tier: number, item: Item)
@@ -180,10 +217,6 @@ local function buildRow(tab: Tab, tier: number, item: Item)
 	-- capacity / speed badge
 	local badge = UI.make(Instance.new("Frame"), {
 		Name = "Badge",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.fromScale(0.03, 0.5),
-		Size = UDim2.fromScale(0.75, 0.75),
-		SizeConstraint = Enum.SizeConstraint.RelativeYY,
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		Parent = frame,
 	})
@@ -193,41 +226,38 @@ local function buildRow(tab: Tab, tier: number, item: Item)
 	local badgeText = UI.label({
 		Title = true,
 		Text = item.badge,
-		Position = UDim2.fromScale(0.12, 0.15),
-		Size = UDim2.fromScale(0.76, 0.7),
+		Position = UDim2.fromScale(0.1, 0.15),
+		Size = UDim2.fromScale(0.8, 0.7),
 		Parent = badge,
 	})
-	UI.maxText(badgeText, 30)
+	UI.maxText(badgeText, 30, 10)
 
 	local name = UI.label({
 		Title = true,
 		Text = string.upper(item.name),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromScale(0.25, 0.12),
-		Size = UDim2.fromScale(0.42, 0.42),
 		Parent = frame,
 	})
-	UI.maxText(name, 28)
+	UI.maxText(name, 26, 14)
+	-- the detail is a sentence of any length: it wraps inside its box and
+	-- shrinks to fit rather than running into the button
 	local detail = UI.label({
 		Text = item.detail,
 		TextColor3 = COLORS.subtext,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromScale(0.25, 0.56),
-		Size = UDim2.fromScale(0.42, 0.3),
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = true,
 		Parent = frame,
 	})
-	UI.maxText(detail, 20)
+	UI.maxText(detail, 19, 12)
 
 	local button = UI.button({
 		Name = "Buy",
 		Text = "...",
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.fromScale(0.97, 0.5),
-		Size = UDim2.fromScale(0.29, 0.66),
 		BackgroundColor3 = COLORS.green,
 		Parent = frame,
 	})
-	UI.maxText(button, 24)
+	UI.maxText(button, 24, 13)
 	button.Activated:Connect(function()
 		UI.pop(button)
 		-- the next tier, short of Volts: offer a top-up instead of asking
@@ -245,6 +275,8 @@ local function buildRow(tab: Tab, tier: number, item: Item)
 		frame = frame,
 		button = button,
 		badge = badgeText,
+		badgeFrame = badge,
+		name = name,
 		detail = detail,
 	})
 end
@@ -256,21 +288,11 @@ local function buildTab(
 	remote: RemoteEvent,
 	ownedTier: (Types.Snapshot) -> number
 ): Tab
-	local tabButton = UI.button({
-		Name = title,
-		Text = title,
-		Position = UDim2.new((order - 1) * 0.5, if order == 1 then 0 else 6, 0, 0),
-		Size = UDim2.new(0.5, -6, 0, 46),
-		BackgroundColor3 = COLORS.panelDark,
-		Parent = body,
-	})
-	UI.maxText(tabButton, 22)
+	local tabButton = tabStrip.buttons[order]
 	local list = UI.list(body, {
 		Name = title .. "List",
-		Position = UDim2.fromOffset(0, 86),
-		Size = UDim2.new(1, 0, 1, -86),
 		Visible = false,
-		gap = 10,
+		gap = ROW_GAP,
 	})
 	local tab: Tab = {
 		title = title,
@@ -292,20 +314,51 @@ local function buildTab(
 	return tab
 end
 
+-- Lays the panel out for a body `size` wide and tall: the tabs, the hint
+-- (two lines on a narrow panel, never cut off), the lists under them and
+-- every row's parts.
+local function fit(size: Vector2)
+	local compact = size.X < 560
+	tabStrip.fit(size.X)
+	local top = tabStrip.height() + 6
+	local lines = if compact then 2 else 1
+	local hintHeight = lines * (math.max(UI.textSize(), 16) + 4)
+	hint.Position = UDim2.fromOffset(0, top)
+	hint.Size = UDim2.new(1, 0, 0, hintHeight)
+	local under = top + hintHeight + 8
+	-- (a touch screen's text can't shrink below the smallest legible size, so
+	-- its rows have room for two lines whatever the width)
+	rowHeight = if compact or Layout.isTouch() then PHONE_ROW else ROW_HEIGHT
+	local width = UI.listWidth(size.X)
+	for _, tab in tabs do
+		tab.list.Position = UDim2.fromOffset(0, under)
+		tab.list.Size = UDim2.new(1, 0, 1, -under)
+		for _, row in tab.rows do
+			row.frame.Size = UDim2.new(1, 0, 0, rowHeight)
+			placeParts(width, rowHeight, row.badgeFrame, row.name, row.detail, row.button)
+		end
+	end
+	local row = ascendRow
+	if row then
+		row.frame.Size = UDim2.new(1, 0, 0, rowHeight)
+		placeParts(width, rowHeight, nil, row.title, row.detail, row.button)
+	end
+end
+
 function ShopUI.init()
 	local _, screenGui = Layout.screen("StormBottlerShop", 5)
 	local window =
 		UI.window(screenGui, "ShopPanel", "🛒 SHOP", COLORS.green, Vector2.new(600, 520))
 	panel = window.panel
 	body = window.body
+	tabStrip = UI.tabs(body, { { "BOTTLES" }, { "BOOTS" } }, TAB_HEIGHT, 22)
 	hint = UI.label({
 		Text = "",
 		TextColor3 = COLORS.subtext,
-		Position = UDim2.fromOffset(0, 54),
-		Size = UDim2.new(1, 0, 0, 24),
+		TextWrapped = true,
 		Parent = body,
 	})
-	UI.maxText(hint, 18)
+	UI.maxText(hint, 18, 12)
 
 	local bottles = buildTab(
 		1,
@@ -346,30 +399,25 @@ function ShopUI.init()
 			Text = "ASCEND",
 			TextColor3 = PURPLE,
 			TextXAlignment = Enum.TextXAlignment.Left,
-			Position = UDim2.fromScale(0.04, 0.12),
-			Size = UDim2.fromScale(0.6, 0.42),
 			Parent = frame,
 		})
-		UI.maxText(title, 28)
+		UI.maxText(title, 26, 14)
 		local detail = UI.label({
 			Text = "",
 			TextColor3 = COLORS.subtext,
 			TextXAlignment = Enum.TextXAlignment.Left,
-			Position = UDim2.fromScale(0.04, 0.56),
-			Size = UDim2.fromScale(0.63, 0.3),
+			TextYAlignment = Enum.TextYAlignment.Top,
+			TextWrapped = true,
 			Parent = frame,
 		})
-		UI.maxText(detail, 18)
+		UI.maxText(detail, 18, 12)
 		local button = UI.button({
 			Name = "AscendButton",
 			Text = "🌟 ASCEND",
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.fromScale(0.97, 0.5),
-			Size = UDim2.fromScale(0.29, 0.66),
 			BackgroundColor3 = PURPLE,
 			Parent = frame,
 		})
-		UI.maxText(button, 24)
+		UI.maxText(button, 24, 13)
 		button.Activated:Connect(function()
 			UI.pop(button)
 			local snapshot = State.current
@@ -420,6 +468,7 @@ function ShopUI.init()
 	end
 
 	selectTab(bottles)
+	window.onResize(fit)
 end
 
 function ShopUI.start()

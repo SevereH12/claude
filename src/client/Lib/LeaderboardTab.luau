@@ -16,8 +16,6 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 local LeaderboardRules = require(ReplicatedStorage.Shared.Util.Leaderboards)
 local Types = require(ReplicatedStorage.Shared.Types)
-local Layout = require(script.Parent.Layout)
-local LayoutMath = require(script.Parent.LayoutMath)
 local Sfx = require(script.Parent.Sfx)
 local UI = require(script.Parent.UI)
 
@@ -25,6 +23,8 @@ local COLORS = UI.COLORS
 local BUTTON = 36
 local ROW = 40
 local AVATAR = 32
+local BOARD_GAP = 6
+local WIDE = 860 -- a page this wide fits the four board buttons in one row; narrower, two by two
 local RANK_COLORS = {
 	Color3.fromRGB(255, 205, 60), -- gold
 	Color3.fromRGB(205, 215, 230), -- silver
@@ -47,6 +47,7 @@ local selected = Config.LEADERBOARDS.boards[1].key
 local view: Types.LeaderboardView? = nil
 local boardButtons: { [string]: TextButton } = {}
 local buttonBar: Frame
+local boardGrid: UIGridLayout
 local youLabel: TextLabel
 local noteLabel: TextLabel
 local rows: { Row } = {}
@@ -101,7 +102,7 @@ local function buildRow(parent: Instance, index: number): Row
 		Size = UDim2.new(0, 44, 1, -8),
 		Parent = frame,
 	})
-	UI.maxText(rank, 18)
+	UI.maxText(rank, 18, 11)
 	local avatar = UI.make(Instance.new("ImageLabel"), {
 		Name = "Avatar",
 		AnchorPoint = Vector2.new(0, 0.5),
@@ -111,6 +112,7 @@ local function buildRow(parent: Instance, index: number): Row
 		Parent = frame,
 	})
 	UI.corner(avatar, UDim.new(1, 0))
+	-- the score gets a third of the row, the name what is left of it
 	local name = UI.label({
 		Name = "PlayerName",
 		Text = "",
@@ -119,7 +121,7 @@ local function buildRow(parent: Instance, index: number): Row
 		Size = UDim2.new(0.62, -(56 + AVATAR + 8), 1, -12),
 		Parent = frame,
 	})
-	UI.maxText(name, 18)
+	UI.maxText(name, 18, 11)
 	local value = UI.label({
 		Title = true,
 		Name = "Score",
@@ -130,7 +132,7 @@ local function buildRow(parent: Instance, index: number): Row
 		Size = UDim2.new(0.36, -10, 1, -12),
 		Parent = frame,
 	})
-	UI.maxText(value, 18)
+	UI.maxText(value, 18, 11)
 	return {
 		frame = frame,
 		rank = rank,
@@ -141,10 +143,18 @@ local function buildRow(parent: Instance, index: number): Row
 	}
 end
 
--- The board buttons are TAP_MIN points tall on touch screens.
-local function fit()
-	local height = LayoutMath.tapMin(Layout.class, Layout.scale, Vector2.new(0, BUTTON)).Y
-	buttonBar.Size = UDim2.new(1, 0, 0, height)
+-- The board buttons: four in a row on a wide page, two by two otherwise,
+-- each TAP_MIN points tall on touch, so a long name never gets a sliver.
+-- `width` is the page's whole width (design pixels).
+function LeaderboardTab.fit(width: number)
+	local inner = UI.listWidth(width)
+	local count = #Config.LEADERBOARDS.boards
+	local columns = if width >= WIDE then count else math.min(2, count)
+	local cell = math.floor((inner - BOARD_GAP * (columns - 1)) / columns)
+	local height = UI.tall(BUTTON)
+	local rowsHigh = math.ceil(count / columns)
+	boardGrid.CellSize = UDim2.fromOffset(cell, height)
+	buttonBar.Size = UDim2.new(1, 0, 0, rowsHigh * height + (rowsHigh - 1) * BOARD_GAP)
 end
 
 function LeaderboardTab.build(parent: ScrollingFrame)
@@ -155,10 +165,10 @@ function LeaderboardTab.build(parent: ScrollingFrame)
 		Size = UDim2.new(1, 0, 0, BUTTON),
 		Parent = parent,
 	})
-	local count = #Config.LEADERBOARDS.boards
-	UI.make(Instance.new("UIGridLayout"), {
-		CellSize = UDim2.new(1 / count, -6, 1, 0),
-		CellPadding = UDim2.fromOffset(6, 0),
+	boardGrid = UI.make(Instance.new("UIGridLayout"), {
+		CellSize = UDim2.fromOffset(100, BUTTON),
+		CellPadding = UDim2.fromOffset(BOARD_GAP, BOARD_GAP),
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = buttonBar,
 	})
@@ -170,7 +180,7 @@ function LeaderboardTab.build(parent: ScrollingFrame)
 			BackgroundColor3 = COLORS.panelDark,
 			Parent = buttonBar,
 		})
-		UI.maxText(button, 16)
+		UI.maxText(button, 18, 11)
 		button.Activated:Connect(function()
 			if selected ~= board.key then
 				UI.pop(button)
@@ -181,7 +191,6 @@ function LeaderboardTab.build(parent: ScrollingFrame)
 		end)
 		boardButtons[board.key] = button
 	end
-	UI.onLayout(fit)
 	youLabel = UI.label({
 		Title = true,
 		Name = "You",
@@ -191,7 +200,7 @@ function LeaderboardTab.build(parent: ScrollingFrame)
 		Size = UDim2.new(1, 0, 0, 30),
 		Parent = parent,
 	})
-	UI.maxText(youLabel, 22)
+	UI.maxText(youLabel, 22, 12)
 	noteLabel = UI.label({
 		Name = "Note",
 		LayoutOrder = 3,
@@ -200,7 +209,7 @@ function LeaderboardTab.build(parent: ScrollingFrame)
 		Size = UDim2.new(1, 0, 0, 20),
 		Parent = parent,
 	})
-	UI.maxText(noteLabel, 16)
+	UI.maxText(noteLabel, 16, 11)
 	for index = 1, Config.LEADERBOARDS.top do
 		table.insert(rows, buildRow(parent, index))
 	end

@@ -58,7 +58,6 @@ local Types = require(ReplicatedStorage.Shared.Types)
 local Celebrate = require(script.Parent.Parent.Lib.Celebrate)
 local Layout = require(script.Parent.Parent.Lib.Layout)
 local LeaderboardTab = require(script.Parent.Parent.Lib.LeaderboardTab)
-local LayoutMath = require(script.Parent.Parent.Lib.LayoutMath)
 local SettingsStore = require(script.Parent.Parent.Lib.SettingsStore)
 local RewardText = require(script.Parent.Parent.Lib.RewardText)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
@@ -78,6 +77,9 @@ local ICON = 40
 local BUTTON = 36 -- CLAIM's height; at least TAP_MIN points on touch
 local TAB_HEIGHT = 40
 local QUEST_HEIGHT = 92 -- a quest card, at least (taller when its button is)
+local DAY_LEAST = 80 -- a day card is at least this wide, else the days go four to a row
+local GIFT_LEAST = 170 -- a gift card (text beside its icon) is at least this wide
+local NARROW = 560 -- a panel narrower than this stacks a card's text over its button
 
 -- `wide`: a gift card (the text beside the icon); otherwise a day card
 -- (title, icon, text and CLAIM stacked)
@@ -113,9 +115,14 @@ local panel: Frame
 local list: ScrollingFrame
 local questList: ScrollingFrame
 local topList: ScrollingFrame
+local tabStrip: UI.Tabs
 local rewardsTab: TextButton
 local questsTab: TextButton
 local topTab: TextButton
+local groupCard: Frame
+local inviteCard: Frame
+local inviteText: TextLabel
+local inviteButton: TextButton
 local dailyQuestCards: { QuestCard } = {}
 local weeklyQuestCards: { QuestCard } = {}
 local dailyNote: TextLabel
@@ -225,7 +232,7 @@ local function buildCard(
 		Size = UDim2.new(1, -2 * PAD, 0, TITLE),
 		Parent = frame,
 	})
-	UI.maxText(heading, 18)
+	UI.maxText(heading, 18, 11)
 	local image = UI.make(Instance.new("ImageLabel"), {
 		Name = "Icon",
 		Size = UDim2.fromOffset(ICON, ICON),
@@ -240,7 +247,7 @@ local function buildCard(
 		TextXAlignment = if wide then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center,
 		Parent = frame,
 	})
-	UI.maxText(text, 16)
+	UI.maxText(text, 16, 10)
 	local button = UI.button({
 		Name = "Claim",
 		Text = "",
@@ -249,7 +256,7 @@ local function buildCard(
 		BackgroundColor3 = COLORS.green,
 		Parent = frame,
 	})
-	UI.maxText(button, 18)
+	UI.maxText(button, 18, 11)
 	button.Activated:Connect(function()
 		UI.pop(button)
 		onClaim()
@@ -285,27 +292,34 @@ local function placeCard(card: Card, button: number, textHeight: number): number
 	return top + ICON + 4 + textHeight + 4 + button + 6
 end
 
--- Sizes both grids for this screen: 7 days and 3 gifts a row (4 and 2 on a
--- phone held upright); on touch the CLAIM buttons are TAP_MIN points tall
--- and text can't shrink below 14 points, so the cards are taller there.
-local function fitCards()
-	local upright = Layout.class == "Phone" and Layout.portrait
+-- Sizes both grids for a list `width` wide: as many cards a row as fit (7
+-- days a row, else 4; 3 gifts a row, else 2), stretched to fill it. On
+-- touch the CLAIM buttons are TAP_MIN points tall and the cards taller, so
+-- the text keeps its room.
+local function fitCards(width: number)
 	local touch = Layout.isTouch()
-	local button = LayoutMath.tapMin(Layout.class, Layout.scale, Vector2.new(0, BUTTON)).Y
+	local button = UI.tall(BUTTON)
+	local inner = UI.listWidth(width)
 	local function fit(grid: Grid, cards: { Card }, columns: number, textHeight: number)
 		local height = 0
 		for _, card in cards do
 			height = placeCard(card, button, textHeight)
 		end
 		local rows = math.ceil(grid.count / columns)
-		-- the cells and the gaps between them fill the width (offsets are
-		-- whole pixels: rounded up, so the last cell never wraps)
-		local trim = math.ceil(GAP * (columns - 1) / columns)
-		grid.layout.CellSize = UDim2.new(1 / columns, -trim, 0, height)
+		local cell = math.floor((inner - GAP * (columns - 1)) / columns)
+		grid.layout.CellSize = UDim2.fromOffset(cell, height)
 		grid.frame.Size = UDim2.new(1, 0, 0, rows * height + (rows - 1) * GAP)
 	end
-	fit(dayGrid, dayCards, if upright then 4 else 7, if touch then 84 else 60)
-	fit(giftGrid, giftCards, if upright then 2 else 3, if touch then 52 else 44)
+	-- seven days a row if each card gets DAY_LEAST (more on touch, where the
+	-- text can't shrink), else four
+	local days = 7
+	if math.floor((inner - GAP * 6) / 7) < (if touch then DAY_LEAST + 30 else DAY_LEAST) then
+		days = 4
+	end
+	-- the last day pays Volts and two boosts: up to five short lines
+	fit(dayGrid, dayCards, days, if touch then 84 else 60)
+	local gifts = if math.floor((inner - GAP * 2) / 3) >= GIFT_LEAST then 3 else 2
+	fit(giftGrid, giftCards, gifts, if touch then 52 else 44)
 end
 
 -- A quest card: what to do, a progress bar, the reward, and its button.
@@ -331,7 +345,7 @@ local function buildQuestCard(
 		Size = UDim2.new(0.7, -6, 0, 24),
 		Parent = frame,
 	})
-	UI.maxText(title, 20)
+	UI.maxText(title, 20, 12)
 	local bar = UI.bar(frame, {
 		Name = "Bar",
 		Position = UDim2.fromOffset(2, 26),
@@ -348,7 +362,7 @@ local function buildQuestCard(
 		Size = UDim2.new(0.7, -6, 0, 22),
 		Parent = frame,
 	})
-	UI.maxText(reward, 16)
+	UI.maxText(reward, 16, 11)
 	local button = UI.button({
 		Name = "Action",
 		Text = "",
@@ -358,7 +372,7 @@ local function buildQuestCard(
 		BackgroundColor3 = COLORS.green,
 		Parent = frame,
 	})
-	UI.maxText(button, 18)
+	UI.maxText(button, 18, 11)
 	local card: QuestCard = {
 		frame = frame,
 		title = title,
@@ -382,7 +396,7 @@ end
 
 -- Quest buttons are TAP_MIN points tall on touch; the cards grow to fit.
 local function fitQuests()
-	local button = LayoutMath.tapMin(Layout.class, Layout.scale, Vector2.new(0, BUTTON)).Y
+	local button = UI.tall(BUTTON)
 	local height = math.max(QUEST_HEIGHT, button + 20)
 	for _, cards in { dailyQuestCards, weeklyQuestCards } do
 		for _, card in cards do
@@ -390,6 +404,35 @@ local function fitQuests()
 			card.button.Size = UDim2.new(0.28, 0, 0, button)
 		end
 	end
+end
+
+-- The group and invite cards: their text beside the button on a wide
+-- panel, over it on a narrow one (a sentence that long doesn't fit beside
+-- a touch-sized button). `groupButton` is gone once the bonus is on, and
+-- the card closes up round the text then.
+local function fitGroupCards(width: number)
+	local narrow = width < NARROW
+	local button = UI.tall(48)
+	local function place(card: Frame, text: TextLabel, action: TextButton, textHeight: number)
+		if narrow then
+			local height = 8 + textHeight + 8 + (if action.Visible then button + 10 else 0)
+			card.Size = UDim2.new(1, 0, 0, height)
+			text.Position = UDim2.fromOffset(14, 8)
+			text.Size = UDim2.new(1, -28, 0, textHeight)
+			action.AnchorPoint = Vector2.new(1, 1)
+			action.Position = UDim2.new(1, -10, 1, -10)
+			action.Size = UDim2.new(0.5, 0, 0, button)
+		else
+			card.Size = UDim2.new(1, 0, 0, math.max(GROUP_HEIGHT, button + 16))
+			text.Position = UDim2.new(0, 14, 0, 8)
+			text.Size = UDim2.new(0.68, -14, 1, -16)
+			action.AnchorPoint = Vector2.new(1, 0.5)
+			action.Position = UDim2.new(1, -10, 0.5, 0)
+			action.Size = UDim2.new(0.28, 0, 0, button)
+		end
+	end
+	place(groupCard, groupText, groupButton, 2 * (math.max(UI.textSize(), 20) + 4))
+	place(inviteCard, inviteText, inviteButton, 4 * (math.max(UI.textSize(), 17) + 3))
 end
 
 local function setCard(
@@ -413,6 +456,7 @@ local function setCard(
 end
 
 -- The group card: active, a request sent, or JOIN.
+local bodyWidth = 0 -- the panel body's width at the last fit
 local function renderGroup()
 	local percent = math.round(Config.GROUP_BONUS * 100)
 	if player:GetAttribute(PassRules.GROUP) == true then
@@ -428,6 +472,9 @@ local function renderGroup()
 		groupButton.Visible = true
 		groupButton.Text = "JOIN"
 		UI.setEnabled(groupButton, true, COLORS.storm)
+	end
+	if bodyWidth > 0 then
+		fitGroupCards(bodyWidth)
 	end
 end
 
@@ -658,7 +705,7 @@ local function heading(parent: Instance, order: number, text: string): TextLabel
 		Size = UDim2.new(1, 0, 0, HEADING),
 		Parent = parent,
 	})
-	UI.maxText(label, 24)
+	UI.maxText(label, 24, 13)
 	return label
 end
 
@@ -729,19 +776,14 @@ function RewardsUI.init()
 	local _, root = Layout.screen("StormBottlerRewards", 5)
 	local window = UI.window(root, "RewardsPanel", "🎁 REWARDS", PINK, Vector2.new(680, 560))
 	panel = window.panel
-	-- the three tabs along the top
-	local tabBar = UI.make(Instance.new("Frame"), {
-		Name = "Tabs",
-		Size = UDim2.new(1, 0, 0, TAB_HEIGHT),
-		BackgroundTransparency = 1,
-		Parent = window.body,
-	})
-	UI.make(Instance.new("UIGridLayout"), {
-		CellSize = UDim2.new(1 / 3, -6, 1, 0),
-		CellPadding = UDim2.fromOffset(6, 0),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = tabBar,
-	})
+	-- the three tabs along the top, on one line (the short wording where
+	-- the long one won't fit)
+	local words = {
+		{ "🎁 REWARDS", "REWARDS" },
+		{ "📋 QUESTS", "QUESTS" },
+		{ "🏆 TOP", "TOP" },
+	}
+	tabStrip = UI.tabs(window.body, words, TAB_HEIGHT, 20)
 	-- each tab is one scrolling column: it all fits on a monitor, and
 	-- scrolls on a phone
 	local function page(name: string): ScrollingFrame
@@ -756,17 +798,8 @@ function RewardsUI.init()
 	questList = page("Quests")
 	topList = page("Top")
 	local pages: { [Tab]: ScrollingFrame } = { rewards = list, quests = questList, top = topList }
-	local function tab(order: number, text: string, which: Tab): TextButton
-		local names: { [Tab]: string } =
-			{ rewards = "RewardsTab", quests = "QuestsTab", top = "TopTab" }
-		local button = UI.button({
-			Name = names[which],
-			Text = text,
-			LayoutOrder = order,
-			BackgroundColor3 = COLORS.panelDark,
-			Parent = tabBar,
-		})
-		UI.maxText(button, 18)
+	local function tab(index: number, which: Tab): TextButton
+		local button = tabStrip.buttons[index]
 		button.Activated:Connect(function()
 			if not pages[which].Visible then
 				UI.pop(button)
@@ -776,9 +809,9 @@ function RewardsUI.init()
 		end)
 		return button
 	end
-	rewardsTab = tab(1, "🎁 REWARDS", "rewards")
-	questsTab = tab(2, "📋 QUESTS", "quests")
-	topTab = tab(3, "🏆 TOP", "top")
+	rewardsTab = tab(1, "rewards")
+	questsTab = tab(2, "quests")
+	topTab = tab(3, "top")
 
 	-- the TOP tab (Lib/LeaderboardTab)
 	LeaderboardTab.build(topList)
@@ -796,7 +829,7 @@ function RewardsUI.init()
 		Size = UDim2.new(1, 0, 0, 22),
 		Parent = questList,
 	})
-	UI.maxText(dailyNote, 18)
+	UI.maxText(dailyNote, 18, 11)
 	heading(questList, 11, "🏆 WEEKLY QUEST")
 	for index = 1, Config.QUESTS.weekly do
 		table.insert(weeklyQuestCards, buildQuestCard(questList, 11 + index, "weekly", index))
@@ -809,8 +842,7 @@ function RewardsUI.init()
 		Size = UDim2.new(1, 0, 0, 22),
 		Parent = questList,
 	})
-	UI.maxText(weeklyNote, 18)
-	UI.onLayout(fitQuests)
+	UI.maxText(weeklyNote, 18, 11)
 	selectTab("rewards")
 
 	heading(list, 1, "📅 DAILY STREAK")
@@ -832,7 +864,7 @@ function RewardsUI.init()
 		Size = UDim2.new(1, 0, 0, 22),
 		Parent = list,
 	})
-	UI.maxText(nextLabel, 18)
+	UI.maxText(nextLabel, 18, 11)
 
 	heading(list, 4, "⏱️ PLAYTIME GIFTS (today)")
 	giftGrid = grid(list, 5, "Gifts", #Config.PLAYTIME_GIFTS)
@@ -845,10 +877,9 @@ function RewardsUI.init()
 			end)
 		)
 	end
-	UI.onLayout(fitCards)
 
 	heading(list, 6, `👥 {string.upper(Config.GROUP_NAME)} GROUP`)
-	local groupCard = UI.make(Instance.new("Frame"), {
+	groupCard = UI.make(Instance.new("Frame"), {
 		Name = "Group",
 		LayoutOrder = 7,
 		BackgroundColor3 = COLORS.panelDark,
@@ -866,7 +897,7 @@ function RewardsUI.init()
 		Size = UDim2.new(0.68, -14, 1, -16),
 		Parent = groupCard,
 	})
-	UI.maxText(groupText, 22)
+	UI.maxText(groupText, 22, 12)
 	groupButton = UI.button({
 		Name = "Join",
 		Text = "JOIN",
@@ -876,7 +907,7 @@ function RewardsUI.init()
 		BackgroundColor3 = COLORS.storm,
 		Parent = groupCard,
 	})
-	UI.maxText(groupButton, 24)
+	UI.maxText(groupButton, 24, 12)
 	groupButton.Activated:Connect(function()
 		UI.pop(groupButton)
 		joinGroup()
@@ -884,7 +915,7 @@ function RewardsUI.init()
 	renderGroup()
 
 	heading(list, 8, "✉️ INVITE FRIENDS")
-	local inviteCard = UI.make(Instance.new("Frame"), {
+	inviteCard = UI.make(Instance.new("Frame"), {
 		Name = "Invite",
 		LayoutOrder = 9,
 		BackgroundColor3 = COLORS.panelDark,
@@ -899,8 +930,7 @@ function RewardsUI.init()
 			reward = product
 		end
 	end
-	local inviteText = UI.label({
-		Title = true,
+	inviteText = UI.label({
 		Text = `New players you invite get a welcome gift, you get a {reward.name} once they've played {Config.INVITES.playMinutes} min. Friends here: +{math.round(
 			Config.FRIENDS.perFriend * 100
 		)}% Volts each`,
@@ -910,8 +940,8 @@ function RewardsUI.init()
 		Size = UDim2.new(0.68, -14, 1, -16),
 		Parent = inviteCard,
 	})
-	UI.maxText(inviteText, 18)
-	local inviteButton = UI.button({
+	UI.maxText(inviteText, 18, 11)
+	inviteButton = UI.button({
 		Name = "InviteButton",
 		Text = "INVITE",
 		AnchorPoint = Vector2.new(1, 0.5),
@@ -920,7 +950,7 @@ function RewardsUI.init()
 		BackgroundColor3 = PINK,
 		Parent = inviteCard,
 	})
-	UI.maxText(inviteButton, 24)
+	UI.maxText(inviteButton, 24, 12)
 	inviteButton.Activated:Connect(function()
 		UI.pop(inviteButton)
 		invite()
@@ -933,6 +963,21 @@ function RewardsUI.init()
 			Celebrate.sparks()
 			UI.toast(`Group bonus active: +{percent}% Volts!`, "good", 5)
 		end
+	end)
+
+	-- everything's sizes come from the body's width (and the device)
+	window.onResize(function(size: Vector2)
+		bodyWidth = size.X
+		tabStrip.fit(size.X)
+		local top = tabStrip.height() + 8
+		for _, scroller in { list, questList, topList } do
+			scroller.Position = UDim2.fromOffset(0, top)
+			scroller.Size = UDim2.new(1, 0, 1, -top)
+		end
+		fitCards(size.X)
+		fitQuests()
+		fitGroupCards(size.X)
+		LeaderboardTab.fit(size.X)
 	end)
 end
 

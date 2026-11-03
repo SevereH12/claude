@@ -21,6 +21,9 @@ local UI = require(script.Parent.Parent.Lib.UI)
 local COLORS = UI.COLORS
 local PURPLE = Color3.fromRGB(170, 110, 255)
 local BANNER_SECONDS = 3.5
+local NARROW = 560 -- a panel narrower than this stacks RESETS over STAYS
+local HEADING_TEXT = 21 -- the offer's text size, design pixels (at least the smallest legible)
+local LINE_TEXT = 18 -- a line in RESETS or STAYS
 
 type Offer = {
 	token: string,
@@ -35,8 +38,14 @@ local AscensionUI = {}
 
 local remote: RemoteEvent
 local panel: Frame
+local scroller: ScrollingFrame
 local heading: TextLabel
+local columns: Frame
+local columnLayout: UIListLayout
+local columnFrames: { Frame } = {}
+local lineLabels: { TextLabel } = {}
 local countdown: TextLabel
+local cancelButton: TextButton
 local confirmButton: TextButton
 local banner: TextLabel
 local current: Offer? = nil
@@ -47,35 +56,77 @@ function AscensionUI.ask()
 	remote:FireServer()
 end
 
-local function column(parent: Frame, x: number, title: string, color: Color3, lines: { string })
+-- One column of lines (what resets, what stays) in the columns row. It grows
+-- to hold its lines, each of which wraps: nothing is cut off, and the
+-- panel scrolls if it is long.
+local function column(parent: Frame, order: number, title: string, color: Color3, lines: { string })
 	local frame = UI.make(Instance.new("Frame"), {
 		Name = title,
-		Position = UDim2.new(x, if x > 0 then 6 else 0, 0, 92),
-		Size = UDim2.new(0.5, -6, 1, -170),
+		LayoutOrder = order,
+		Size = UDim2.new(0.5, -6, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = COLORS.panelDark,
 		Parent = parent,
 	})
 	UI.corner(frame, UDim.new(0, 12))
 	UI.stroke(frame, 3, color)
+	UI.padding(frame, 10)
+	UI.make(Instance.new("UIListLayout"), {
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = frame,
+	})
 	local label = UI.label({
 		Title = true,
 		Text = title,
 		TextColor3 = color,
-		Position = UDim2.new(0, 10, 0, 6),
-		Size = UDim2.new(1, -20, 0, 30),
+		LayoutOrder = 0,
+		Size = UDim2.new(1, 0, 0, 30),
 		Parent = frame,
 	})
-	UI.maxText(label, 24)
+	UI.maxText(label, 24, 14)
 	for index, line in lines do
 		local item = UI.label({
 			Text = `- {line}`,
 			TextXAlignment = Enum.TextXAlignment.Left,
-			Position = UDim2.new(0, 10, 0, 40 + (index - 1) * 34),
-			Size = UDim2.new(1, -20, 0, 30),
+			TextScaled = false,
+			TextSize = LINE_TEXT,
+			TextWrapped = true,
+			LayoutOrder = index,
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
 			Parent = frame,
 		})
-		UI.maxText(item, 18)
+		table.insert(lineLabels, item)
 	end
+	table.insert(columnFrames, frame)
+end
+
+-- Lays the confirm screen out for a body `size`: the offer and the two
+-- columns scroll above the countdown and the two buttons, which stay put.
+local function fit(size: Vector2)
+	local narrow = size.X < NARROW
+	local button = UI.tall(54)
+	local legible = math.max(UI.textSize(), 1)
+	local countdownHeight = (if narrow then 2 else 1) * (math.max(legible, 16) + 4)
+	local bottom = button + countdownHeight + 14
+	scroller.Size = UDim2.new(1, 0, 1, -bottom)
+	heading.TextSize = math.max(HEADING_TEXT, legible)
+	for _, item in lineLabels do
+		item.TextSize = math.max(LINE_TEXT, legible)
+	end
+	-- side by side, or one over the other on a narrow panel
+	columnLayout.FillDirection = if narrow
+		then Enum.FillDirection.Vertical
+		else Enum.FillDirection.Horizontal
+	for _, frame in columnFrames do
+		frame.Size = if narrow then UDim2.new(1, 0, 0, 0) else UDim2.new(0.5, -6, 0, 0)
+	end
+	countdown.AnchorPoint = Vector2.new(0, 1)
+	countdown.Position = UDim2.new(0, 0, 1, -(button + 8))
+	countdown.Size = UDim2.new(1, 0, 0, countdownHeight)
+	cancelButton.Size = UDim2.new(0.5, -6, 0, button)
+	confirmButton.Size = UDim2.new(0.5, -6, 0, button)
 end
 
 local function showOffer(offer: Offer)
@@ -105,22 +156,40 @@ local function showOffer(offer: Offer)
 	end)
 end
 
+local bannerToken = 0
+
 local function celebrate(level: number)
 	UI.closePanels()
 	Sfx.play("level_up")
 	banner.Text = `🌟 ASCENDED! Level {level} {AscensionRules.stars(level)}\n`
 		.. `{AscensionRules.bonusText(level)} Volts on every sale`
+	local outline = banner:FindFirstChildOfClass("UIStroke")
 	banner.TextTransparency = 0
+	if outline then
+		outline.Transparency = 0
+	end
 	banner.Visible = true
 	UI.pop(banner, 1.4)
 	for burst = 0, 2 do
 		task.delay(burst * 0.35, Celebrate.sparks)
 	end
 	UI.toast(`🌟 Ascension level {level}! Back to Barometer Bay with a fresh start.`, "volt")
+	bannerToken += 1
+	local mine = bannerToken
 	task.delay(BANNER_SECONDS, function()
-		local fade = TweenService:Create(banner, TweenInfo.new(0.6), { TextTransparency = 1 })
+		if bannerToken ~= mine then
+			return -- another ascension is showing it
+		end
+		-- the text and its outline fade together, so no outline is left behind
+		local info = TweenInfo.new(0.6)
+		local fade = TweenService:Create(banner, info, { TextTransparency = 1 })
+		if outline then
+			TweenService:Create(outline, info, { Transparency = 1 }):Play()
+		end
 		fade.Completed:Once(function()
-			banner.Visible = false
+			if bannerToken == mine then
+				banner.Visible = false
+			end
 		end)
 		fade:Play()
 	end)
@@ -146,26 +215,46 @@ function AscensionUI.init()
 	local window = UI.window(screenGui, "AscendPanel", "🌟 ASCEND", PURPLE, Vector2.new(620, 540))
 	panel = window.panel
 	local body = window.body
+	scroller = UI.list(body, {
+		Name = "Offer",
+		Size = UDim2.new(1, 0, 1, -100),
+		gap = 10,
+	})
+	-- the offer: any length, so it grows to its text instead of being cut
 	heading = UI.label({
 		Text = "",
-		Position = UDim2.fromOffset(0, 0),
-		Size = UDim2.new(1, 0, 0, 80),
+		LayoutOrder = 1,
+		TextScaled = false,
+		TextSize = HEADING_TEXT,
 		TextWrapped = true,
-		Parent = body,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Parent = scroller,
 	})
-	UI.maxText(heading, 22)
-	column(body, 0, "RESETS", COLORS.red, AscensionRules.RESETS :: any)
-	column(body, 0.5, "STAYS", COLORS.green, AscensionRules.KEEPS :: any)
+	columns = UI.make(Instance.new("Frame"), {
+		Name = "Columns",
+		LayoutOrder = 2,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Parent = scroller,
+	})
+	columnLayout = UI.make(Instance.new("UIListLayout"), {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 12),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = columns,
+	})
+	column(columns, 1, "RESETS", COLORS.red, AscensionRules.RESETS :: any)
+	column(columns, 2, "STAYS", COLORS.green, AscensionRules.KEEPS :: any)
 	countdown = UI.label({
 		Text = "",
 		TextColor3 = COLORS.subtext,
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 0, 1, -62),
-		Size = UDim2.new(1, 0, 0, 22),
+		TextWrapped = true,
 		Parent = body,
 	})
-	UI.maxText(countdown, 18)
-	local cancel = UI.button({
+	UI.maxText(countdown, 18, 11)
+	cancelButton = UI.button({
 		Name = "Cancel",
 		Text = "NOT YET",
 		AnchorPoint = Vector2.new(0, 1),
@@ -174,8 +263,8 @@ function AscensionUI.init()
 		BackgroundColor3 = COLORS.panelDark,
 		Parent = body,
 	})
-	UI.maxText(cancel, 24)
-	cancel.Activated:Connect(function()
+	UI.maxText(cancelButton, 24, 12)
+	cancelButton.Activated:Connect(function()
 		current = nil
 		UI.closePanels()
 	end)
@@ -188,7 +277,7 @@ function AscensionUI.init()
 		BackgroundColor3 = PURPLE,
 		Parent = body,
 	})
-	UI.maxText(confirmButton, 26)
+	UI.maxText(confirmButton, 26, 12)
 	confirmButton.Activated:Connect(function()
 		local offer = current
 		if not offer then
@@ -211,7 +300,8 @@ function AscensionUI.init()
 		Visible = false,
 		Parent = screenGui,
 	})
-	UI.maxText(banner, 64)
+	UI.maxText(banner, 64, 20)
+	window.onResize(fit)
 	remote.OnClientEvent:Connect(onMessage)
 end
 

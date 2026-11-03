@@ -30,6 +30,7 @@ local COLORS = UI.COLORS
 local PINK = Color3.fromRGB(255, 120, 170)
 local ROBUX = utf8.char(0xE002)
 local ROW_HEIGHT = 64
+local NARROW = 500 -- a body narrower than this (a phone held upright) stacks and widens things
 
 local GiftUI = {}
 
@@ -45,6 +46,9 @@ local confirmAvatar: ImageLabel
 local confirmText: TextLabel
 local confirmStatus: TextLabel
 local buyButton: TextButton
+local backButton: TextButton
+local findButton: TextButton
+local hereLabel: TextLabel
 
 local gift: string? = nil -- the gift product being given ("GiftVIP", "LuckyBoost")
 local chosen: Types.FoundPlayer? = nil
@@ -151,7 +155,7 @@ local function fillPlayers()
 				Size = UDim2.new(1, -(ROW_HEIGHT + 14), 0, ROW_HEIGHT - 28),
 				Parent = row,
 			})
-			UI.maxText(label, 22)
+			UI.maxText(label, 22, 12)
 			UI.clickSound(row)
 			row.Activated:Connect(function()
 				UI.pop(row)
@@ -305,6 +309,75 @@ local function onNews(kind: string, a: any, b: any)
 	end
 end
 
+-- Lays both pages out for a body `size`. The pick page: the question, the
+-- name box with FIND beside it, one status line (two on a narrow panel),
+-- and the players under it, which scroll. The confirm page: the avatar over
+-- the question and the buttons when the body is tall enough for that; on a
+-- short, wide one (a phone on its side) the avatar sits at the left and the
+-- rest beside it, so nothing runs off the bottom.
+local function fit(size: Vector2)
+	local narrow = size.X < NARROW
+	local box = UI.tall(48)
+	local lineHeight = math.max(UI.textSize(), 16) + 3
+	local statusHeight = if narrow then 2 * lineHeight else 22
+	local findWidth = math.clamp(math.floor(size.X * 0.32), 110, 190)
+	title.Size = UDim2.new(1, 0, 0, 30)
+	nameBox.Position = UDim2.fromOffset(0, 38)
+	nameBox.Size = UDim2.new(1, -(findWidth + 8), 0, box)
+	findButton.Position = UDim2.new(1, 0, 0, 38)
+	findButton.Size = UDim2.fromOffset(findWidth, box)
+	local statusAt = 38 + box + 6
+	pickStatus.Position = UDim2.fromOffset(0, statusAt)
+	pickStatus.Size = UDim2.new(1, 0, 0, statusHeight)
+	local hereAt = statusAt + statusHeight + 6
+	hereLabel.Position = UDim2.fromOffset(0, hereAt)
+	hereLabel.Size = UDim2.new(1, 0, 0, 24)
+	playerList.Position = UDim2.fromOffset(0, hereAt + 30)
+	playerList.Size = UDim2.new(1, 0, 1, -(hereAt + 30))
+
+	local buyHeight = UI.tall(56)
+	local backHeight = UI.tall(44)
+	local sideways = size.Y < 400 and size.X >= 520
+	if sideways then
+		local portrait = math.min(112, size.Y - 12)
+		local left = portrait + 16
+		local room = size.X - left
+		confirmAvatar.AnchorPoint = Vector2.new(0, 0.5)
+		confirmAvatar.Position = UDim2.new(0, 0, 0.5, 0)
+		confirmAvatar.Size = UDim2.fromOffset(portrait, portrait)
+		confirmText.AnchorPoint = Vector2.zero
+		confirmText.Position = UDim2.fromOffset(left, 0)
+		confirmText.Size = UDim2.fromOffset(room, 70)
+		buyButton.AnchorPoint = Vector2.zero
+		buyButton.Position = UDim2.fromOffset(left, 78)
+		buyButton.Size = UDim2.fromOffset(room, buyHeight)
+		backButton.AnchorPoint = Vector2.zero
+		backButton.Position = UDim2.fromOffset(left, 78 + buyHeight + 8)
+		backButton.Size = UDim2.fromOffset(math.floor(room * 0.4), backHeight)
+		local backWidth = math.floor(room * 0.4)
+		confirmStatus.Position = UDim2.fromOffset(left + backWidth + 10, 78 + buyHeight + 8)
+		confirmStatus.Size = UDim2.fromOffset(room - backWidth - 10, backHeight)
+	else
+		local portrait = if narrow then 104 else 120
+		confirmAvatar.AnchorPoint = Vector2.new(0.5, 0)
+		confirmAvatar.Position = UDim2.new(0.5, 0, 0, 6)
+		confirmAvatar.Size = UDim2.fromOffset(portrait, portrait)
+		local textAt = portrait + 16
+		confirmText.AnchorPoint = Vector2.zero
+		confirmText.Position = UDim2.fromOffset(0, textAt)
+		confirmText.Size = UDim2.new(1, 0, 0, 70)
+		local buyAt = textAt + 80
+		buyButton.AnchorPoint = Vector2.new(0.5, 0)
+		buyButton.Position = UDim2.new(0.5, 0, 0, buyAt)
+		buyButton.Size = UDim2.new(if narrow then 1 else 0.7, 0, 0, buyHeight)
+		backButton.AnchorPoint = Vector2.new(0.5, 0)
+		backButton.Position = UDim2.new(0.5, 0, 0, buyAt + buyHeight + 8)
+		backButton.Size = UDim2.new(if narrow then 0.6 else 0.4, 0, 0, backHeight)
+		confirmStatus.Position = UDim2.fromOffset(0, buyAt + buyHeight + backHeight + 16)
+		confirmStatus.Size = UDim2.new(1, 0, 0, 2 * lineHeight + 4)
+	end
+end
+
 function GiftUI.init()
 	local _, root = Layout.screen("StormBottlerGift", 6)
 	local window = UI.window(root, "GiftPanel", "🎁 SEND A GIFT", PINK, Vector2.new(560, 520))
@@ -324,7 +397,7 @@ function GiftUI.init()
 		Size = UDim2.new(1, 0, 0, 30),
 		Parent = pickPage,
 	})
-	UI.maxText(title, 26)
+	UI.maxText(title, 26, 14)
 	nameBox = UI.make(Instance.new("TextBox"), {
 		Name = "Username",
 		PlaceholderText = "Username",
@@ -341,6 +414,7 @@ function GiftUI.init()
 	})
 	UI.corner(nameBox, UDim.new(0, 10))
 	UI.stroke(nameBox, 2)
+	UI.maxText(nameBox, 26, 14)
 	UI.make(Instance.new("UIPadding"), {
 		PaddingLeft = UDim.new(0, 10),
 		PaddingTop = UDim.new(0, 8),
@@ -352,7 +426,7 @@ function GiftUI.init()
 			find()
 		end
 	end)
-	local findButton = UI.button({
+	findButton = UI.button({
 		Name = "Find",
 		Text = "FIND",
 		AnchorPoint = Vector2.new(1, 0),
@@ -361,20 +435,23 @@ function GiftUI.init()
 		BackgroundColor3 = COLORS.storm,
 		Parent = pickPage,
 	})
-	UI.maxText(findButton, 22)
+	UI.maxText(findButton, 22, 12)
 	findButton.Activated:Connect(function()
 		UI.pop(findButton)
 		find()
 	end)
+	-- what the server said: a sentence that wraps rather than running off
 	pickStatus = UI.label({
 		Text = "",
 		TextColor3 = COLORS.subtext,
+		TextWrapped = true,
+		TextYAlignment = Enum.TextYAlignment.Top,
 		Position = UDim2.fromOffset(0, 92),
 		Size = UDim2.new(1, 0, 0, 20),
 		Parent = pickPage,
 	})
-	UI.maxText(pickStatus, 17)
-	local here = UI.label({
+	UI.maxText(pickStatus, 17, 11)
+	hereLabel = UI.label({
 		Title = true,
 		Text = "IN THIS SERVER",
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -382,7 +459,7 @@ function GiftUI.init()
 		Size = UDim2.new(1, 0, 0, 22),
 		Parent = pickPage,
 	})
-	UI.maxText(here, 18)
+	UI.maxText(hereLabel, 18, 12)
 	playerList = UI.list(pickPage, {
 		Name = "Players",
 		Position = UDim2.fromOffset(0, 146),
@@ -416,7 +493,7 @@ function GiftUI.init()
 		Size = UDim2.new(1, 0, 0, 70),
 		Parent = confirmPage,
 	})
-	UI.maxText(confirmText, 28)
+	UI.maxText(confirmText, 28, 13)
 	buyButton = UI.button({
 		Name = "Buy",
 		Text = "",
@@ -426,12 +503,12 @@ function GiftUI.init()
 		BackgroundColor3 = COLORS.green,
 		Parent = confirmPage,
 	})
-	UI.maxText(buyButton, 26)
+	UI.maxText(buyButton, 26, 12)
 	buyButton.Activated:Connect(function()
 		UI.pop(buyButton)
 		buy()
 	end)
-	local back = UI.button({
+	backButton = UI.button({
 		Name = "Back",
 		Text = "BACK",
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -440,9 +517,9 @@ function GiftUI.init()
 		BackgroundColor3 = COLORS.panelTop,
 		Parent = confirmPage,
 	})
-	UI.maxText(back, 20)
-	back.Activated:Connect(function()
-		UI.pop(back)
+	UI.maxText(backButton, 20, 12)
+	backButton.Activated:Connect(function()
+		UI.pop(backButton)
 		showPick()
 	end)
 	confirmStatus = UI.label({
@@ -453,8 +530,9 @@ function GiftUI.init()
 		Size = UDim2.new(1, 0, 0, 40),
 		Parent = confirmPage,
 	})
-	UI.maxText(confirmStatus, 18)
+	UI.maxText(confirmStatus, 18, 11)
 
+	window.onResize(fit)
 	Net.get("GiftNews").OnClientEvent:Connect(onNews)
 end
 

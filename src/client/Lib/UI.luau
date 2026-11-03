@@ -104,19 +104,71 @@ end
 local textLimits: { [UITextSizeConstraint]: boolean } = setmetatable({}, { __mode = "k" }) :: any
 
 local function minText(limit: UITextSizeConstraint)
-	limit.MinTextSize = math.min(
-		LayoutMath.minTextSize(Layout.class, Layout.scale, Layout.textLevel),
-		limit.MaxTextSize
-	)
+	local least = LayoutMath.minTextSize(Layout.class, Layout.scale, Layout.textLevel)
+	local floor = limit:GetAttribute("FloorText")
+	if typeof(floor) == "number" then
+		least = math.min(least, floor)
+	end
+	limit.MinTextSize = math.max(1, math.min(least, limit.MaxTextSize))
 end
 
-function UI.maxText(parent: Instance, size: number)
+-- Caps the text at `size`. On a phone (or with a bigger Text size) it also
+-- keeps the text from going below the smallest legible size, unless `floor`
+-- is given: then it may shrink to `floor`. Text of unknown length gets a
+-- `floor`, so it shrinks to fit its box instead of running past it.
+function UI.maxText(parent: Instance, size: number, floor: number?)
 	local limit = UI.make(Instance.new("UITextSizeConstraint"), {
 		MaxTextSize = size,
 		Parent = parent,
 	})
+	if floor then
+		limit:SetAttribute("FloorText", floor)
+	end
 	textLimits[limit] = true
 	minText(limit)
+end
+
+-- Sizes in design pixels for the device: the least a button may be (TAP_MIN
+-- points on touch, nothing on a PC), the smallest legible text, and a
+-- height raised to the touch minimum.
+function UI.tapSize(): number
+	return LayoutMath.tapMin(Layout.class, Layout.scale, Vector2.zero).Y
+end
+
+function UI.textSize(): number
+	return LayoutMath.minTextSize(Layout.class, Layout.scale, Layout.textLevel)
+end
+
+function UI.tall(height: number): number
+	return math.max(height, UI.tapSize())
+end
+
+-- The first of `options` (longest first) whose text fits `width` at text
+-- `size`, else the last: how a label picks its wording on a narrow panel.
+function UI.fitText(options: { string }, width: number, size: number): string
+	for _, text in options do
+		if LayoutMath.textWidth(text, size) <= width then
+			return text
+		end
+	end
+	return options[#options]
+end
+
+-- How many cells at least `least` wide fit across `width` with `gap`
+-- between them (at most `most`), and how wide each is. Whole pixels, so the
+-- last one of a UIGridLayout row never wraps.
+function UI.columns(width: number, least: number, gap: number, most: number?): (number, number)
+	local count = math.max(1, math.floor((width + gap) / (least + gap)))
+	if most then
+		count = math.min(count, most)
+	end
+	return count, math.floor((width - gap * (count - 1)) / count)
+end
+
+-- The width inside a UI.list that a full-width item gets, when `width` is
+-- the list's own (its padding and the scrollbar come off).
+function UI.listWidth(width: number): number
+	return width - 2 * UI.STROKE_ROOM - 8
 end
 
 -- Every button's size limit, so touch screens can keep it TAP_MIN points.
@@ -613,12 +665,43 @@ function UI.anyPanelOpen(): boolean
 	return next(openPanels) ~= nil
 end
 
-export type Window = { panel: Frame, body: Frame, close: TextButton }
+-- `size` is the body's size in design pixels; `onResize(apply)` runs `apply`
+-- with it now and again whenever the layout changes (a rotation, another
+-- device, the Text size setting), so a panel lays itself out from numbers,
+-- not from what the screen measured mid-animation.
+export type Window = {
+	panel: Frame,
+	body: Frame,
+	close: TextButton,
+	size: Vector2,
+	onResize: (apply: (size: Vector2) -> ()) -> (),
+}
+
+local HEADER = 58 -- a panel's title strip, at least
+local CLOSE = 42 -- the X, at least (TAP_MIN points on touch)
+local PHONE_EDGE = 8 -- a phone's panel keeps this clear of the safe area
+
+-- A panel's size: its design size, shrunk to fit. A phone gives a content
+-- panel (designed 400 or more tall) the whole safe area under the top bar,
+-- up to half as tall again as designed, since every pixel counts there; it
+-- scrolls inside. A small dialog keeps its size.
+local function windowSize(design: Vector2): Vector2
+	local free = Layout.area - Vector2.new(0, Layout.topbar.height)
+	if Layout.class == "Phone" then
+		local grown = if design.Y >= 400 then design.Y * 1.5 else design.Y
+		return Vector2.new(
+			math.min(design.X, free.X - 2 * PHONE_EDGE),
+			math.min(grown, free.Y - 2 * PHONE_EDGE)
+		)
+	end
+	return LayoutMath.fit(design, free)
+end
 
 -- A standard panel: a header in `color` with the title and a close button,
 -- and a body frame under it to fill. Centred, hidden until opened. It's
--- `design` pixels, shrunk to fit smaller screens (LayoutMath.fit), so it
--- looks the same on every device.
+-- `design` pixels, shrunk to fit smaller screens (windowSize). The title is
+-- one line that scales down to fit beside the X, and the X is a touch
+-- target (TAP_MIN points), so the header grows a little on a phone.
 function UI.window(
 	parent: Instance,
 	name: string,
@@ -633,16 +716,9 @@ function UI.window(
 		Visible = false,
 		Parent = parent,
 	})
-	-- centred in the space under Roblox's top bar
-	UI.onLayout(function()
-		local top = Layout.topbar.height
-		local size = LayoutMath.fit(design, Layout.area - Vector2.new(0, top))
-		panel.Size = UDim2.fromOffset(size.X, size.Y)
-		panel.Position = UDim2.new(0.5, 0, 0.5, top / 2)
-	end)
 	local header = UI.make(Instance.new("Frame"), {
 		Name = "Header",
-		Size = UDim2.new(1, 0, 0, 58),
+		Size = UDim2.new(1, 0, 0, HEADER),
 		BackgroundColor3 = color,
 		Parent = panel,
 	})
@@ -667,18 +743,19 @@ function UI.window(
 		Title = true,
 		Text = title,
 		TextXAlignment = Enum.TextXAlignment.Left,
+		TextWrapped = false,
 		Position = UDim2.new(0, 18, 0.15, 0),
 		Size = UDim2.new(1, -90, 0.7, 0),
 		ZIndex = filler.ZIndex + 1,
 		Parent = header,
 	})
-	UI.maxText(heading, 34)
+	UI.maxText(heading, 34, 16)
 	local close = UI.button({
 		Name = "Close",
 		Text = "X",
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -10, 0.5, 0),
-		Size = UDim2.fromOffset(42, 42),
+		Size = UDim2.fromOffset(CLOSE, CLOSE),
 		BackgroundColor3 = UI.COLORS.red,
 		ZIndex = filler.ZIndex + 1,
 		Parent = header,
@@ -688,12 +765,118 @@ function UI.window(
 	end)
 	local body = UI.make(Instance.new("Frame"), {
 		Name = "Body",
-		Position = UDim2.new(0, 14, 0, 70),
-		Size = UDim2.new(1, -28, 1, -82),
+		Position = UDim2.new(0, 14, 0, HEADER + 12),
+		Size = UDim2.new(1, -28, 1, -(HEADER + 24)),
 		BackgroundTransparency = 1,
 		Parent = panel,
 	})
-	return { panel = panel, body = body, close = close }
+	local resizers: { (Vector2) -> () } = {}
+	local window: Window
+	window = {
+		panel = panel,
+		body = body,
+		close = close,
+		size = Vector2.zero,
+		onResize = function(apply: (Vector2) -> ())
+			table.insert(resizers, apply)
+			apply(window.size)
+		end,
+	}
+	-- centred in the space under Roblox's top bar
+	UI.onLayout(function()
+		local top = Layout.topbar.height
+		local size = windowSize(design)
+		local button = math.max(CLOSE, UI.tapSize())
+		local strip = math.max(HEADER, button + 12)
+		local side = if Layout.class == "Phone" then 10 else 14
+		panel.Size = UDim2.fromOffset(size.X, size.Y)
+		panel.Position = UDim2.new(0.5, 0, 0.5, top / 2)
+		header.Size = UDim2.new(1, 0, 0, strip)
+		close.Size = UDim2.fromOffset(button, button)
+		heading.Size = UDim2.new(1, -(button + 36), 0.7, 0)
+		body.Position = UDim2.fromOffset(side, strip + 12)
+		body.Size = UDim2.new(1, -2 * side, 1, -(strip + 24))
+		-- every layout change, even at the same size: the touch minimums and
+		-- the smallest text change with the device and the Text size setting
+		local inner = Vector2.new(size.X - 2 * side, size.Y - strip - 24)
+		window.size = inner
+		for _, apply in resizers do
+			apply(inner)
+		end
+	end)
+	return window
+end
+
+-- A row of tabs that never leaves one line. `labels[i]` lists tab i's
+-- wordings, longest first: each tab shows the first that fits its share of
+-- the width (so a phone gets "PASSES" where a monitor gets "GAME PASSES").
+-- Tabs are as tall as `height`, raised to the touch minimum on touch.
+-- `fit(width)` lays them out; `setLabel(i, wordings)` changes a tab's text.
+export type Tabs = {
+	frame: Frame,
+	buttons: { TextButton },
+	height: () -> number,
+	fit: (width: number) -> (),
+	setLabel: (index: number, wordings: { string }) -> (),
+}
+
+local TAB_GAP = 6
+
+function UI.tabs(parent: Instance, labels: { { string } }, height: number, textMax: number?): Tabs
+	local frame = UI.make(Instance.new("Frame"), {
+		Name = "Tabs",
+		Size = UDim2.new(1, 0, 0, height),
+		BackgroundTransparency = 1,
+		Parent = parent,
+	})
+	local buttons: { TextButton } = {}
+	local wordings: { { string } } = table.clone(labels)
+	for index, options in labels do
+		local button = UI.button({
+			Name = `Tab{index}`,
+			Text = options[#options],
+			LayoutOrder = index,
+			BackgroundColor3 = UI.COLORS.panelDark,
+			Parent = frame,
+		})
+		UI.maxText(button, textMax or 20, 12)
+		table.insert(buttons, button)
+	end
+	local lastWidth = 0
+	local function place()
+		local count = #buttons
+		if count == 0 or lastWidth <= 0 then
+			return
+		end
+		local tall = UI.tall(height)
+		frame.Size = UDim2.new(1, 0, 0, tall)
+		local cell = math.floor((lastWidth - TAB_GAP * (count - 1)) / count)
+		-- the text area is the button less its 8% padding each side
+		local room = cell * 0.84 - 4
+		local size = math.max(UI.textSize(), 18)
+		for index, button in buttons do
+			button.Position = UDim2.fromOffset((index - 1) * (cell + TAB_GAP), 0)
+			button.Size = UDim2.fromOffset(cell, tall)
+			button.Text = UI.fitText(wordings[index], room, size)
+		end
+	end
+	local tabs: Tabs = {
+		frame = frame,
+		buttons = buttons,
+		height = function()
+			return frame.Size.Y.Offset
+		end,
+		fit = function(width: number)
+			lastWidth = width
+			place()
+		end,
+		setLabel = function(index: number, options: { string })
+			wordings[index] = options
+			place()
+		end,
+	}
+	Layout.Changed:Connect(place)
+	return tabs
 end
 
 -- Puts `object` at a layout rectangle (design pixels, LayoutMath.Rect).
