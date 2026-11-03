@@ -85,7 +85,12 @@ end
 -- Is the tutorial's step card up? (Offers wait: the first minutes are its.)
 local function tutorialOn(): boolean
 	local snapshot = State.current
-	return snapshot ~= nil and TutorialRules.isActive(snapshot.tutorialStep)
+	if snapshot == nil then
+		return false
+	end
+	local step = snapshot.tutorialStep
+	return TutorialRules.isActive(step)
+		or TutorialRules.showsBoots(step, snapshot.bootTier, snapshot.volts)
 end
 
 -- Does the player already have what this offer sells? ("Trial": used, or

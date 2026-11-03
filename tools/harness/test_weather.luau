@@ -75,9 +75,9 @@ local origin, east = Vector3.new(0, 0, 0), Vector3.new(30, 0, 0)
 check(Weather.spreadPick({}, { origin }) == nil, "no spots: no strike")
 local first = Vector3.new(5, 0, 5)
 check(Weather.spreadPick({ first, east }, {}) == first, "nothing recent: the first spot")
-local near, far, mid = Vector3.new(10, 0, 10), Vector3.new(15, 0, -20), Vector3.new(-20, 0, 0)
+local close, wide, between = Vector3.new(10, 0, 10), Vector3.new(15, 0, -20), Vector3.new(-20, 0, 0)
 check(
-	Weather.spreadPick({ near, far, mid }, { origin, east }) == far,
+	Weather.spreadPick({ close, wide, between }, { origin, east }) == wide,
 	"the spot whose nearest recent strike is furthest (25 studs, not 14 or 20)"
 )
 local above, aside = Vector3.new(5, 100, 0), Vector3.new(20, 0, 0)

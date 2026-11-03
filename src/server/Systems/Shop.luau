@@ -72,6 +72,7 @@ local function onBuyBoots(player: Player, tier: unknown)
 	profile.bootTier = tier
 	Sync.markDirty(player)
 	Analytics.boughtBoots(player)
+	Tutorial.boughtBoots(player)
 end
 
 function Shop.init()

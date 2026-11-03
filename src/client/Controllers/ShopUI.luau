@@ -173,6 +173,25 @@ function ShopUI.focusBottle(tier: number): GuiObject?
 	return nil
 end
 
+-- The tutorial's BOOTS step: shows the BOOTS tab, scrolled to this tier's
+-- row, and returns its Buy button to point at (nil if there's no such row).
+function ShopUI.focusBoots(tier: number): GuiObject?
+	for _, tab in tabs do
+		if tab.title == "BOOTS" then
+			if current ~= tab then
+				selectTab(tab)
+			end
+			for _, row in tab.rows do
+				if row.tier == tier then
+					tab.list.CanvasPosition = Vector2.new(0, (tier - 1) * (rowHeight + ROW_GAP))
+					return row.button
+				end
+			end
+		end
+	end
+	return nil
+end
+
 -- Where a row's pieces go for a row `width` x `height`: the badge on the
 -- left, the buy button on the right, the name and detail between. Numbers,
 -- not scales, so the text always has the room worked out here.

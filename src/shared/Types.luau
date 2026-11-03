@@ -30,7 +30,7 @@ export type Profile = {
 	quests: QuestsSave, -- daily and weekly quests (Util/Quests, Systems/Quests)
 	logClaimed: { [string]: boolean }, -- Storm Log rows whose reward was claimed, by row id (Util/StormLog)
 	ascension: number, -- Ascension level: times the player has ascended (Util/Ascension), 0 = never
-	tutorialStep: number, -- the new-player tutorial's step (Util/Tutorial): 1-4, 0 = done or skipped
+	tutorialStep: number, -- the new-player tutorial's step (Util/Tutorial): 1-4, 6 = boots, 0 = done or skipped
 	loginRun: number, -- days in a row the daily reward was claimed (keeps counting past day 7), 0 = never
 	bestLoginRun: number, -- the longest loginRun ever (the "Longest streak" leaderboard)
 	notifyAsked: boolean, -- asked "Remind me when my daily reward is ready?" (asked once, ever)

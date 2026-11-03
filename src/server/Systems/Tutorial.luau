@@ -5,7 +5,9 @@
 -- when something happens:
 --   Movement calls Tutorial.entered (in a zone), Strikes Tutorial.caught
 --   (which also notices a full bottle), Selling Tutorial.sold and Shop
---   Tutorial.boughtBottle.
+--   Tutorial.boughtBottle and Tutorial.boughtBoots.
+-- After the reward a player still in Rain Boots goes on to the BOOTS step
+-- (Util/Tutorial): buying any boots, or SKIP, ends it.
 -- Finishing pays Config.TUTORIAL.rewardCharges charges (Systems/Rewards, so
 -- it celebrates like any reward) and tells the client "finished" on the
 -- Tutorial remote. Old players (a Vial or better, or ascended) never see it.
@@ -39,10 +41,13 @@ local caught: { [Player]: number } = {} -- step 2's catches this visit
 -- Runs one event through the rules and saves the new step.
 local function handle(player: Player, event: TutorialRules.Event)
 	local profile = PlayerData.get(player)
-	if not profile or not TutorialRules.isActive(profile.tutorialStep) then
+	if not profile then
 		return
 	end
 	local before = profile.tutorialStep
+	if not TutorialRules.isActive(before) and before ~= TutorialRules.BOOTS then
+		return
+	end
 	local after = TutorialRules.advance({ step = before, caught = caught[player] or 0 }, event)
 	if event == "caught" and after.caught ~= (caught[player] or 0) then
 		remote:FireClient(player, "caught", after.caught) -- the card's count
@@ -52,7 +57,7 @@ local function handle(player: Player, event: TutorialRules.Event)
 		return
 	end
 	if after.step == TutorialRules.FINISHED then
-		profile.tutorialStep = TutorialRules.DONE
+		profile.tutorialStep = TutorialRules.afterFinish(profile.bootTier)
 		caught[player] = nil
 		giveReward(player, profile, { charges = Config.TUTORIAL.rewardCharges }, "Tutorial")
 		remote:FireClient(player, "finished")
@@ -90,6 +95,10 @@ function Tutorial.boughtBottle(player: Player)
 	handle(player, "bottle")
 end
 
+function Tutorial.boughtBoots(player: Player)
+	handle(player, "boots")
+end
+
 local function onRemote(player: Player, action: unknown)
 	if not allow(player, "Tutorial", 2, 4) or typeof(action) ~= "string" then
 		return
@@ -98,7 +107,8 @@ local function onRemote(player: Player, action: unknown)
 		return
 	end
 	local profile = PlayerData.get(player)
-	if not profile or not TutorialRules.isActive(profile.tutorialStep) then
+	local step = if profile then profile.tutorialStep else TutorialRules.DONE
+	if not profile or not (TutorialRules.isActive(step) or step == TutorialRules.BOOTS) then
 		return
 	end
 	profile.tutorialStep = TutorialRules.skip({ step = profile.tutorialStep, caught = 0 }).step

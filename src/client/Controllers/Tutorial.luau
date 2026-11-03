@@ -12,6 +12,9 @@
 --   * step 3: once the bottle is full, a Beam to the nearest sell pad
 --   * step 4: once they can afford it, it points at the MENU button, then
 --     the SHOP tile, then the next bottle's Buy button, in turn
+--   * the BOOTS step (after the reward, still in Rain Boots): nothing while
+--     they save; once they can afford the next pair, the card and the same
+--     pointer: MENU, SHOP, then that pair's Buy on the BOOTS tab
 --   * "finished" (Tutorial remote): "You're a Storm Bottler!" for a few
 --     seconds; the reward itself celebrates like any reward (Rewarded)
 -- Everything here is local and only shows things: the server decides.
@@ -59,6 +62,7 @@ local caught = 0 -- step 2's catches (the server says)
 local finishUntil = 0
 local lastStep = -1
 local shopWasOpen = false
+local wasGuiding = false -- the BOOTS step's card was showing last update
 
 -- the path: a Beam from the player's feet to a spot, and a beacon there
 local pathFolder: Folder? = nil
@@ -221,12 +225,13 @@ local function nextBottle(tier: number): Types.BottleDef
 	return Config.BOTTLES[math.min(tier + 1, #Config.BOTTLES)]
 end
 
--- Step 4's pointer: MENU, then SHOP, then the bottle's Buy button.
-local function pointForShop(tier: number)
+-- Step 4's pointer: MENU, then SHOP, then the bottle's Buy button (the
+-- BOOTS step's: the boots' Buy button, `focus` = ShopUI.focusBoots).
+local function pointForShop(tier: number, focus: ((number) -> GuiObject?)?)
 	if ShopUI.isOpen() then
 		local button: GuiObject? = pointerTarget
 		if not shopWasOpen or not button or not button:IsDescendantOf(game) then
-			button = ShopUI.focusBottle(tier + 1)
+			button = (focus or ShopUI.focusBottle)(tier + 1)
 		end
 		shopWasOpen = true
 		pointAt(button, "left")
@@ -250,11 +255,42 @@ local function update()
 	local snapshot = State.current
 	local finishing = os.clock() < finishUntil
 	local step = if snapshot then snapshot.tutorialStep else TutorialRules.DONE
-	if skipped and not TutorialRules.isActive(step) then
+	if skipped and not TutorialRules.isActive(step) and step ~= TutorialRules.BOOTS then
 		skipped = false
 	end
 	local active = TutorialRules.isActive(step) and not skipped
-	card.Visible = active or finishing
+	local guiding = snapshot ~= nil
+		and not skipped
+		and TutorialRules.showsBoots(step, snapshot.bootTier, snapshot.volts)
+	card.Visible = active or guiding or finishing
+	if guiding and not finishing then
+		if not wasGuiding then
+			Sfx.play("tab")
+			UI.pop(card, 1.06)
+		end
+		wasGuiding = true
+		if not confirming then
+			skipButton.Visible = true
+		end
+		local nextBoots = Config.BOOTS[(snapshot :: Types.Snapshot).bootTier + 1]
+		line.Text = if confirming
+			then "Skip the tutorial?"
+			else TutorialRules.cardText(TutorialRules.BOOTS, {
+				calm = false,
+				secondsLeft = 0,
+				caught = 0,
+				full = false,
+				nextBottle = "",
+				price = 0,
+				volts = 0,
+				nextBoots = nextBoots.name,
+			})
+		showPath(nil)
+		pointForShop((snapshot :: Types.Snapshot).bootTier, ShopUI.focusBoots)
+		lastStep = step
+		return
+	end
+	wasGuiding = false
 	if not active or not snapshot then
 		showPath(nil)
 		pointAt(nil)

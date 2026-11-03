@@ -468,11 +468,16 @@ of the screen with one line at a time:
    pointing hand show each button in turn).
 5. "You're a Storm Bottler!" and a reward of 50 charges (paid in Volts,
    like every reward: 250 Volts on Shoreline).
+6. Still in Rain Boots: once they can afford the first boots, the card
+   comes back and the same pointer leads to them (MENU, SHOP, the BOOTS
+   tab, their Buy). Nothing shows while they save up, and tips and offers
+   carry on meanwhile; buying any boots (or SKIP) ends it.
 
 - **Skipping**: SKIP asks "Skip the tutorial?" first (YES / NO).
 - **Saving**: the step is saved (`tutorialStep` in the profile), so it
   carries on after a rejoin. Anyone who owns a Vial or better (or has
-  ascended) never sees it.
+  ascended) never sees steps 1-4; step 6 carries on for a player still in
+  Rain Boots.
 
 **Gameplay tips** (`Config.HINTS`, `Util/Hints`, `Systems/Hints`,
 `Controllers/Hints`). After the tutorial, the rest of the game is shown a

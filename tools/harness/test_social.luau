@@ -75,6 +75,47 @@ check(string.find(Tutorial.cardText(Tutorial.BUY, info), "25 / 80") ~= nil, "sho
 info.volts = 80
 check(string.find(Tutorial.cardText(Tutorial.BUY, info), "SHOP") ~= nil, "enough Volts: open the SHOP")
 
+-- after the reward: the BOOTS step, pointing at the first boots once affordable
+local firstBoots = Config.BOOTS[2]
+check(Tutorial.afterFinish(1) == Tutorial.BOOTS, "still in Rain Boots: on to the boots step")
+check(Tutorial.afterFinish(2) == Tutorial.DONE, "already in boots: done")
+check(not Tutorial.isActive(Tutorial.BOOTS), "the boots step isn't the tutorial running (tips carry on)")
+check(
+	not Tutorial.showsBoots(Tutorial.BOOTS, 1, firstBoots.price - 1),
+	"saving up for boots: nothing shows"
+)
+check(Tutorial.showsBoots(Tutorial.BOOTS, 1, firstBoots.price), "can afford boots: the card and pointer show")
+check(not Tutorial.showsBoots(Tutorial.DONE, 1, 1e9), "a finished tutorial never points at boots")
+check(not Tutorial.showsBoots(Tutorial.BOOTS, 2, 1e9), "already in boots: nothing shows")
+local booting = { step = Tutorial.BOOTS, caught = 0 }
+check(Tutorial.advance(booting, "bottle").step == Tutorial.BOOTS, "a bottle doesn't end the boots step")
+check(Tutorial.advance(booting, "boots").step == Tutorial.DONE, "buying boots ends it")
+check(Tutorial.skip(booting).step == Tutorial.DONE, "SKIP ends it too")
+check(
+	Tutorial.loadStep({ bottleTier = 3, bootTier = 1, ascension = 0, tutorialStep = Tutorial.BOOTS })
+		== Tutorial.BOOTS,
+	"the boots step carries on after a rejoin (a Vial owner too)"
+)
+check(
+	Tutorial.loadStep({ bottleTier = 3, bootTier = 2, ascension = 0, tutorialStep = Tutorial.BOOTS })
+		== Tutorial.DONE,
+	"boots bought elsewhere: done on rejoin"
+)
+local bootsLine = Tutorial.cardText(Tutorial.BOOTS, {
+	calm = false,
+	secondsLeft = 0,
+	caught = 0,
+	full = false,
+	nextBottle = "",
+	price = 0,
+	volts = 0,
+	nextBoots = firstBoots.name,
+})
+check(
+	string.find(bootsLine, firstBoots.name, 1, true) ~= nil and string.find(bootsLine, "BOOTS", 1, true) ~= nil,
+	`the boots card names the pair and the BOOTS tab ({bootsLine})`
+)
+
 -- the migration
 local function migrated(bottleTier, ascension)
 	return PlayerData.migrate({ version = 15, volts = 0, bottleTier = bottleTier, ascension = ascension })

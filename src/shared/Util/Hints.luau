@@ -16,6 +16,7 @@
 
 local Config = require(script.Parent.Parent.Config)
 local Stats = require(script.Parent.Stats)
+local Tutorial = require(script.Parent.Tutorial)
 local Types = require(script.Parent.Parent.Types)
 
 local Hints = {}
@@ -25,6 +26,7 @@ local Hints = {}
 export type Facts = {
 	minutes: number, -- minutes into this visit
 	tutorialDone: boolean,
+	tutorialBoots: boolean?, -- on the tutorial's BOOTS step (it points at the boots)
 	bottleTier: number,
 	bootTier: number,
 	volts: number,
@@ -132,7 +134,8 @@ Hints.CONDITIONS = {
 	-- still in the starter boots, and the next pair is affordable
 	bootsAffordable = function(f: Facts): boolean
 		local next = Config.BOOTS[2]
-		return f.bootTier <= 1 and next ~= nil and f.volts >= next.price
+		-- the tutorial's BOOTS step points at them instead
+		return f.bootTier <= 1 and next ~= nil and f.volts >= next.price and not f.tutorialBoots
 	end,
 	-- nobody hired, and the cheapest researcher is affordable
 	canHire = function(f: Facts): boolean
@@ -212,7 +215,9 @@ function Hints.facts(snapshot: SnapshotLike, session: Session): Facts
 	end
 	return {
 		minutes = session.minutes,
-		tutorialDone = snapshot.tutorialStep == 0,
+		-- the BOOTS step (after the reward) isn't the tutorial running
+		tutorialDone = not Tutorial.isActive(snapshot.tutorialStep),
+		tutorialBoots = snapshot.tutorialStep == Tutorial.BOOTS,
 		bottleTier = snapshot.bottleTier,
 		bootTier = snapshot.bootTier,
 		volts = snapshot.volts,
