@@ -565,7 +565,7 @@ function LayoutMath.hud(
 			if rowW <= right - left then
 				local both = rowW + G + friendsW <= right - left
 				local total = if both then rowW + G + friendsW else rowW
-				local x = math.clamp((W - total) / 2, left, right - total)
+				local x = math.clamp((W - total) / 2, left, math.max(left, right - total))
 				boosts = rect(x, M, rowW, chipH)
 				friends = if both
 					then rect(x + rowW + G, M, friendsW, chipH)
@@ -603,8 +603,10 @@ function LayoutMath.hud(
 
 		-- the bottle bar
 		if sideways then
+			-- (math.max: when the bar only just fits, hi - width can come out a
+			-- hair under lo, and clamp refuses a max under its min)
 			local width = math.min(H.barWidth, hi - lo)
-			local x = math.clamp((W - width) / 2, lo, hi - width)
+			local x = math.clamp((W - width) / 2, lo, math.max(lo, hi - width))
 			bar = rect(x, T - M - H.barHeight, width, H.barHeight)
 		else
 			bar = rect((W - H.barWidth) / 2, T - M - H.barHeight, H.barWidth, H.barHeight)
