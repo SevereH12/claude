@@ -46,11 +46,11 @@ local SETS = {
 -- (Util/Speed.typicalBootTier), so every row runs at the same in-zone
 -- speed: the zone's storm drag cancels the boots (Util/Speed).
 local ROWS = {
-	{ "Shoreline", 1, 1, { 2291, 4582, 5796, 6376, 12751 } }, -- Rain Boots, Jar
-	{ "Mesa", 1, 3, { 4295, 8591, 11592, 12751, 25503 } }, -- Rain Boots, Flask
+	{ "Shoreline", 1, 1, { 1208, 2417, 3057, 3363, 6726 } }, -- Rain Boots, Jar
+	{ "Mesa", 1, 3, { 4532, 9063, 12229, 13452, 26904 } }, -- Rain Boots, Flask
 	{ "Yard", 3, 4, { 9107, 18214, 24192, 26611, 53223 } }, -- Squall Skippers, Battery Pack
 	{ "Spire", 7, 7, { 281700, 563400, 717791, 789570, 1579141 } }, -- Arc Runners, Dynamo Drum
-	{ "Ember", 9, 9, { 2284078, 4568157, 5778718, 6356590, 12713180 } }, -- Cloud Walkers, Storm Core
+	{ "Ember", 9, 9, { 2409577, 4819154, 6096230, 6705853, 13411706 } }, -- Cloud Walkers, Storm Core
 }
 
 -- the table, and Premium paying exactly 1.5x -----------------------------------------

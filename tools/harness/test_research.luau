@@ -45,7 +45,7 @@ for rank = 0, Research.maxRank() do
 	)
 end
 check(Research.nextThreshold(#Config.RESEARCH_LEVELS) == nil, "no next threshold at max")
-local LEVEL5 = { 300, 550, 1100, 1450, 1950, 3650, 4000, 4000 }
+local LEVEL5 = { 250, 550, 1150, 1150, 2100, 3400, 4150, 4150 }
 for rank = 0, 7 do
 	check(
 		Research.nextThreshold(4, rank) == LEVEL5[rank + 1],

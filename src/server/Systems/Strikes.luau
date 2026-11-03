@@ -41,6 +41,7 @@ local ROOT_HEIGHT = 3
 local random = Random.new()
 local nextStrikeId = 0
 local balloonInFlight: { [number]: boolean } = {} -- owner UserId -> has a bolt coming
+local recentStrikes: { [string]: { Vector3 } } = {} -- zone id -> its last strikes' spots, oldest first
 
 local warningRemote: RemoteEvent
 local landedRemote: RemoteEvent
@@ -386,10 +387,33 @@ local function orbEnd(zonePart: BasePart, from: Vector3): Vector3?
 	return nil
 end
 
+-- A spot for a zone's next strike: of STRIKE_SPREAD.candidates random
+-- spots, the one furthest from the zone's last few strikes
+-- (Weather.spreadPick), so bolts rarely land on top of each other.
+local function spreadPoint(zone: Types.ZoneDef, zonePart: BasePart): Vector3?
+	local candidates: { Vector3 } = {}
+	for _ = 1, Config.STRIKE_SPREAD.candidates do
+		local point = randomGroundPoint(zonePart)
+		if point then
+			table.insert(candidates, point)
+		end
+	end
+	local recent = recentStrikes[zone.id] or {}
+	local position = Weather.spreadPick(candidates, recent)
+	if position then
+		table.insert(recent, position)
+		while #recent > Config.STRIKE_SPREAD.remember do
+			table.remove(recent, 1)
+		end
+		recentStrikes[zone.id] = recent
+	end
+	return position
+end
+
 -- The position is picked now. The public warning goes out FORECAST_MAX_LEAD
 -- later, and each Forecaster owner hears about it `lead` seconds before that.
 local function spawnStrike(zone: Types.ZoneDef, zonePart: BasePart)
-	local position = randomGroundPoint(zonePart)
+	local position = spreadPoint(zone, zonePart)
 	if not position then
 		return
 	end

@@ -12,7 +12,8 @@
 --     added this session (from the server). Every pass card also has GIFT
 --     (the gift window, Controllers/GiftUI; SEND when a gift is already paid
 --     for), and a pass someone gifted you says OWNED (gift).
---   BOOSTS: Config.BOOST_PRODUCTS. FOR ME buys one for yourself (first
+--   BOOSTS: Config.BOOST_PRODUCTS. The price button (FOR ME: it shows
+--     just the price, like a pass's BUY) buys one for yourself (first
 --     telling the server, CancelGift, that a gift of it chosen earlier
 --     isn't this purchase); GIFT opens the gift window. A card says how
 --     long its boost has left, or that a pass you own makes it add nothing.
@@ -466,7 +467,7 @@ local function render()
 			parts.buy.Text = "⛈️ AT 60 MIN MAX"
 			UI.setEnabled(parts.buy, false, COLORS.green)
 		else
-			parts.buy.Text = `{price}  FOR ME`
+			parts.buy.Text = price
 			UI.setEnabled(parts.buy, true, COLORS.green)
 		end
 	end

@@ -120,6 +120,18 @@ for index, zone in progression do
 	end
 end
 
+-- every zone has the same strikes for its size: STRIKE_DENSITY a second per
+-- 10,000 square studs of strike area (the zone inset by STRIKE_RADIUS + 2)
+local inset = 2 * (Config.STRIKE_RADIUS + 2)
+for _, zone in Config.ZONES do
+	local area = (zone.width - inset) * (zone.depth - inset)
+	local density = 10000 / (zone.strikeInterval * area)
+	check(
+		math.abs(density - Config.STRIKE_DENSITY) <= 0.02 * Config.STRIKE_DENSITY,
+		`{zone.id}: {string.format("%.2f", density)} strikes/s per 10,000 studs² (want {Config.STRIKE_DENSITY})`
+	)
+end
+
 -- partial fills pay that fraction, rounded down, at least 1
 local units, value = Formulas.fill(3, 60, 10)
 check(units == 3 and value == 60, "a strike that fits fills its size and pays its value")

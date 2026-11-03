@@ -68,6 +68,28 @@ function Weather.pickBoltType(roll: number, supercell: boolean): Types.BoltType
 	return "Normal"
 end
 
+-- Strike spread ----------------------------------------------------------
+
+-- Of `candidates` (random spots for a zone's next strike), the one whose
+-- nearest strike in `recent` (that zone's last few) is furthest away, on
+-- the ground (height ignored), so bolts rarely land on top of each other.
+-- The first candidate when nothing is recent; nil when there are none.
+function Weather.spreadPick(candidates: { Vector3 }, recent: { Vector3 }): Vector3?
+	local best: Vector3? = nil
+	local bestGap = -1
+	for _, spot in candidates do
+		local gap = math.huge
+		for _, other in recent do
+			local dx, dz = spot.X - other.X, spot.Z - other.Z
+			gap = math.min(gap, math.sqrt(dx * dx + dz * dz))
+		end
+		if gap > bestGap then
+			best, bestGap = spot, gap
+		end
+	end
+	return best
+end
+
 -- Supercells --------------------------------------------------------------
 
 -- When the next Supercell starts, `from` (seconds) plus the interval and

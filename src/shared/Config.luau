@@ -127,6 +127,10 @@ local WORLDS: { Types.WorldDef } = {
 -- then requiresBottle, then order), so a full bottle is always worth more
 -- in a bigger zone; and a zone's required bottle must hold at least 5 of
 -- its strikes. Keep both when adding a zone (tools/harness/test_formulas).
+-- Every zone has the same lightning for its size: strikeInterval is
+-- 10,000 / (STRIKE_DENSITY x its strike area), the strike area being the
+-- zone inset by STRIKE_RADIUS + 2 all round ((width - 24) x (depth - 24)),
+-- rounded to 0.01 s (test_formulas checks each is within 2%).
 -- Every non-premium zone also opens with its own bottle: two zones that
 -- open together leave the lower-paying one skipped (Thunderhead Mesa was,
 -- next to Rune Spire).
@@ -140,9 +144,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		mode = "Shared",
 		chargeValue = 5,
 		chargeSize = 1,
-		-- quick to leave: Mesa's size and fast strikes, so a new player has
-		-- the Flask in about 2 minutes of storm play
-		strikeInterval = 0.48,
+		strikeInterval = 0.91,
 		order = 1,
 		requiresBottle = 1, -- open to everyone
 		theme = "Beach",
@@ -159,7 +161,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		mode = "Single",
 		chargeValue = 20,
 		chargeSize = 2,
-		strikeInterval = 0.96,
+		strikeInterval = 0.91,
 		order = 2,
 		requiresBottle = 3, -- the Flask
 		theme = "Canyon",
@@ -176,7 +178,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		mode = "Shared",
 		chargeValue = 0, -- unused: pays PREMIUM_VALUE_MULTIPLIER x each player's best zone
 		chargeSize = 1, -- unused: a Premium zone fills like the player's best zone
-		strikeInterval = 0.48,
+		strikeInterval = 0.81,
 		order = 3,
 		requiresBottle = 1,
 		premium = true, -- Roblox Premium members only (no Game Pass)
@@ -213,7 +215,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		mode = "Shared",
 		chargeValue = 200,
 		chargeSize = 5,
-		strikeInterval = 0.64,
+		strikeInterval = 0.91,
 		order = 2,
 		requiresBottle = 5, -- the Storm Cell
 		theme = "Beach",
@@ -230,7 +232,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		mode = "Single",
 		chargeValue = 500,
 		chargeSize = 8,
-		strikeInterval = 0.96,
+		strikeInterval = 0.81,
 		order = 3,
 		requiresBottle = 6, -- the Tempest Tank
 		theme = "Canyon",
@@ -266,7 +268,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		-- 4,000, not 3,000: the Storm Core (5,000,000) was a wall, here
 		chargeValue = 4_000,
 		chargeSize = 21,
-		strikeInterval = 0.64,
+		strikeInterval = 0.55,
 		order = 2,
 		requiresBottle = 8, -- the Rune Cell
 		theme = "Beach",
@@ -283,7 +285,7 @@ local ZONES: { [string]: Types.ZoneDef } = {
 		mode = "Single",
 		chargeValue = 10_000,
 		chargeSize = 34,
-		strikeInterval = 0.96,
+		strikeInterval = 0.91,
 		order = 3,
 		requiresBottle = 9, -- the Storm Core
 		theme = "Canyon",
@@ -977,6 +979,13 @@ return table.freeze({
 
 	-- Strikes
 	WARNING_TIME = 1.5, -- seconds between the warning circle and the bolt
+	-- strikes a second for every 10,000 square studs of a zone's strike area:
+	-- the same in every zone (each ZONES entry's strikeInterval follows it)
+	STRIKE_DENSITY = 1.9,
+	-- each strike tries `candidates` random spots and takes the one furthest
+	-- from its zone's last `remember` strikes, so bolts rarely land on top
+	-- of each other (Util/Weather.spreadPick, Systems/Strikes)
+	STRIKE_SPREAD = table.freeze({ candidates = 3, remember = 4 }),
 	-- studs; stand within this of the centre to catch. (WARNING_TIME can't
 	-- grow instead: the warning hum is a 1.5 s sound.)
 	STRIKE_RADIUS = 10,
@@ -1064,8 +1073,8 @@ return table.freeze({
 	-- that rank costs, in Glints of its tier or higher, and each rank makes
 	-- the perk perkBonusPerRank stronger.
 	RESEARCH_PRESTIGE = table.freeze({
-		dataScale = table.freeze({ 0.3, 0.55, 1.1, 1.45, 1.95, 3.65, 4.0, 4.0 }),
-		glintCost = table.freeze({ 10, 40, 30, 55, 85, 125, 45 }),
+		dataScale = table.freeze({ 0.25, 0.55, 1.15, 1.15, 2.1, 3.4, 4.15, 4.15 }),
+		glintCost = table.freeze({ 10, 40, 30, 55, 85, 125, 50 }),
 		perkBonusPerRank = 0.10,
 	}),
 
