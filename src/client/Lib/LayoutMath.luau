@@ -569,7 +569,12 @@ function LayoutMath.hud(
 				boosts = rect(x, M, rowW, chipH)
 				friends = if both
 					then rect(x + rowW + G, M, friendsW, chipH)
-					else rect(serverGoal.x, serverGoal.y + serverGoal.h + G, serverGoal.w, chipH)
+					else rect(
+						serverGoal.x,
+						serverGoal.y + serverGoal.h + G,
+						serverGoal.w,
+						chipH
+					)
 				stripBottom = M + chipH
 			else
 				-- no room along the top: a column under the storm timer
