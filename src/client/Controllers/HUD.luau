@@ -1,12 +1,15 @@
 --!strict
 -- Always-on screen UI. Shows state, never changes it.
 --
---   StormBottlerHUD (ScreenGui), every piece on a screen edge (LayoutMath.hud)
+--   StormBottlerHUD (ScreenGui), every piece on a screen edge or corner, the
+--   middle of the screen left clear (LayoutMath.hud, LayoutMath.playArea)
 --   ├── VoltsPanel   top left: ⚡ Volts (counts up)
 --   ├── StormPill    under Volts: "⚡ STORM 1:12" / "☀️ STORM IN 0:15"
---   ├── BoostRow     one chip per running timed boost ("⚡ 14:32"): a row
---   │                under the storm timer, a column beside Volts on a
---   │                sideways phone or tablet (LayoutMath.hud.boosts)
+--   ├── BoostRow     one chip per running timed boost ("⚡ 14:32"; an hour or
+--   │                more shows minutes, "⚡ 65m"): a row under the storm
+--   │                timer on a PC, along the top of a sideways phone or
+--   │                tablet, a column in the left side band held upright
+--   │                (LayoutMath.hud.boosts)
 --   ├── GoalCard     top right: the goal closest to done (Util/Goals), a button
 --   ├── StormChip    under it, while a Server Storm is on (Systems/Boosts,
 --   │                read from workspace attributes): its latest buyer and
@@ -16,14 +19,17 @@
 --   ├── FriendsChip  "👥 +10% friends" while Roblox friends are in your server
 --   │                (Systems/Friends): under the boosts' chips
 --   │  Every chip is sized for its text (LayoutMath.chipText/chipWidth) and
---   │  shows the longest wording that fits it (LayoutMath.fitText), so a
---   │  number is never cut off on any screen or Text size.
+--   │  shows the longest wording that fits it (LayoutMath.fitText), down to
+--   │  an icon and the time, so a number is never cut off and a chip never
+--   │  wraps onto a second line on any screen or Text size.
 --   ├── ServerGoal   a slim meter under that (Systems/ServerGoal, read from
 --   │                workspace attributes): "⚡ Server goal 62%", or the
 --   │                Server Surge's time left while one is on. Tap it: a
 --   │                toast with this round's top 3 contributors
---   ├── BottleBar    bottom centre (top centre on touch): fill + "JAR 3 / 5",
---   │                with the Chemist's TANK count beside it
+--   ├── BottleBar    bottom centre (between the thumbstick and the jump
+--   │                button on a sideways phone or tablet, in the top stack
+--   │                held upright): fill + "JAR 3 / 5", with the Chemist's
+--   │                TANK count above it (below it when the bar is at the top)
 --   └── RemoteSell   Remote Sell pass owners: a SELL button at the bar's
 --                    right end (the bar shrinks to make room); it charges
 --                    up for 1.5s, then sells (keyboard V, gamepad L1). Its
@@ -572,7 +578,7 @@ function HUD.remoteSell()
 	end)
 end
 
--- Each running boost's time left ("⚡ 14:32"; over an hour, "⚡ 1:05:00").
+-- Each running boost's time left ("⚡ 14:32"; over an hour, "⚡ 65m").
 local function renderBoosts()
 	local snapshot = State.current
 	local now = workspace:GetServerTimeNow()
@@ -582,16 +588,11 @@ local function renderBoosts()
 		local left = if ends then math.ceil(ends - now) else 0
 		chip.Visible = left > 0
 		if left > 0 then
-			-- the chips are sized for "⚡ 1:05:00" (LayoutMath.BOOST_SAMPLE);
-			-- ten hours or more shows hours only
+			-- the chips are sized for "⚡ 59:59" (LayoutMath.BOOST_SAMPLE): an hour
+			-- or more shows minutes, ten hours or more hours only
 			local clock = if left >= 36000
 				then `{left // 3600}h`
-				elseif left >= 3600 then string.format(
-					"%d:%02d:%02d",
-					left // 3600,
-					left // 60 % 60,
-					left % 60
-				)
+				elseif left >= 3600 then `{left // 60}m`
 				else string.format("%d:%02d", left // 60, left % 60)
 			chip.Text = `{boost.icon} {clock}`
 			chip.LayoutOrder = index
@@ -617,6 +618,7 @@ local function renderServerStorm()
 		end
 		table.insert(options, `🌩️ SERVER 2x · {clock}`)
 		table.insert(options, `🌩️ 2x · {clock}`)
+		table.insert(options, `🌩️ {clock}`)
 		stormChip.Text = fit(options, Layout.hud.serverStorm)
 	end
 end
@@ -633,6 +635,7 @@ local function renderEvent()
 			`🎉 {event.name} · {left}`,
 			`🎉 {event.multiplier}x EVENT · {left}`,
 			`🎉 {event.multiplier}x · {left}`,
+			`🎉 {string.match(left, "^%S+") or left}`,
 		}, Layout.hud.event)
 	end
 end
@@ -658,12 +661,15 @@ local function renderGoalMeter()
 			`⚡ SERVER SURGE {multiplier}x · {clock}`,
 			`⚡ SURGE {multiplier}x · {clock}`,
 			`⚡ {multiplier}x · {clock}`,
+			`⚡ {clock}`,
 		}, Layout.hud.serverGoal)
 	else
 		goalMeter.BackgroundColor3 = COLORS.panelDark
 		local percent = math.floor(fraction * 100)
-		goalMeterLabel.Text =
-			fit({ `⚡ Server goal {percent}%`, `⚡ Goal {percent}%` }, Layout.hud.serverGoal)
+		goalMeterLabel.Text = fit(
+			{ `⚡ Server goal {percent}%`, `⚡ Goal {percent}%`, `⚡ {percent}%` },
+			Layout.hud.serverGoal
+		)
 	end
 end
 
@@ -798,10 +804,10 @@ local function render(snapshot: Types.Snapshot)
 end
 
 -- Every piece on its edge (LayoutMath.hud): Volts and the storm timer top
--- left, the goal top right, the bottle bar bottom centre (top centre on
--- touch). The TANK count sits just past the bar's right end, on the side
+-- left, the goal top right, the bottle bar bottom centre (in the top stack
+-- held upright). The TANK count sits over the bar's right end, on the side
 -- away from the screen edge. With Remote Sell, the SELL button takes the
--- right end of the bar's place.
+-- right end of the bar's place, as tall as a fingertip needs on touch.
 function HUD.place()
 	local hud = Layout.hud
 	UI.place(voltsPanel, hud.volts)
@@ -840,16 +846,20 @@ function HUD.place()
 		UI.setEnabled(sellButton, true, COLORS.green)
 	end
 	if showSell then
-		local barWidth = bar.w - SELL_WIDTH - LayoutMath.GAP
+		-- at least 44 points each way on touch (centred on the bar's height)
+		local tap = LayoutMath.tapMin(Layout.class, Layout.scale, Vector2.new(SELL_WIDTH, bar.h))
+		local barWidth = bar.w - tap.X - LayoutMath.GAP
 		UI.place(bottleBar, { x = bar.x, y = bar.y, w = barWidth, h = bar.h })
-		UI.place(
-			sellButton,
-			{ x = bar.x + bar.w - SELL_WIDTH, y = bar.y, w = SELL_WIDTH, h = bar.h }
-		)
+		UI.place(sellButton, {
+			x = bar.x + bar.w - tap.X,
+			y = bar.y + (bar.h - tap.Y) / 2,
+			w = tap.X,
+			h = tap.Y,
+		})
 	else
 		UI.place(bottleBar, bar)
 	end
-	local atBottom = not Layout.isTouch()
+	local atBottom = bar.y > Layout.area.Y / 2
 	tankLabel.AnchorPoint = Vector2.new(1, if atBottom then 1 else 0)
 	tankLabel.Position = if atBottom then UDim2.new(1, -10, 0, -4) else UDim2.new(1, -10, 1, 4)
 end

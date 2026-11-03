@@ -6,8 +6,9 @@
 
 One tile per device, drawn to the same height so the shapes compare:
 the screen, Roblox's top-bar buttons (grey corners), the TV-safe edge (console), the
-thumbstick and jump areas (touch, red), and every HUD piece in design
-pixels times the device's UI scale, as it would sit on that screen.
+thumbstick and jump areas (touch, red), the play area (the middle of the
+screen, green: nothing may sit in it) and every HUD piece in design pixels
+times the device's UI scale, as it would sit on that screen.
 """
 
 import json
@@ -25,6 +26,7 @@ COLORS = {
     "serverGoal": (90, 220, 255),
     "friends": (120, 230, 160),
     "tutorial": (255, 255, 255),
+    "offer": (255, 120, 60),
     "bar": (70, 90, 230),
     "menu": (44, 52, 92),
     "card": (120, 130, 170),
@@ -42,6 +44,7 @@ LABELS = {
     "serverGoal": "SERVER GOAL",
     "friends": "FRIENDS",
     "tutorial": "tutorial card",
+    "offer": "Robux offer",
     "bar": "BOTTLE",
     "menu": "MENU",
     "card": "menu card (open)",
@@ -76,21 +79,28 @@ def main():
                     [(ox + x0 * s) * k, oy * k, (ox + x1 * s) * k, (oy + height * s) * k],
                     fill=(90, 90, 100),
                 )
+        px, py, pw, ph = d["play"]
+        dr.rectangle(
+            [(ox + px * s) * k, (oy + py * s) * k, (ox + (px + pw) * s) * k, (oy + (py + ph) * s) * k],
+            outline=(90, 220, 120),
+        )
+        dr.text(((ox + px * s) * k + 3, (oy + py * s) * k + 2), "play area", fill=(90, 220, 120))
         for z in d["thumbs"]:
             x, y, w, h = z
             dr.rectangle(
                 [(ox + x * s) * k, (oy + y * s) * k, (ox + (x + w) * s) * k, (oy + (y + h) * s) * k],
                 outline=(235, 75, 75),
             )
-        order = ["card", "banner", "toasts", "test", "volts", "storm", "boosts", "goal", "serverStorm", "event", "serverGoal", "friends", "bar", "menu", "tutorial"]
+        outlined = ("card", "banner", "toasts", "test", "tutorial", "offer")
+        order = ["card", "banner", "toasts", "test", "volts", "storm", "boosts", "goal", "serverStorm", "event", "serverGoal", "friends", "bar", "menu", "tutorial", "offer"]
         for key in order:
             x, y, w, h = d["hud"][key]
             box = [(ox + x * s) * k, (oy + y * s) * k, (ox + (x + w) * s) * k, (oy + (y + h) * s) * k]
-            if key in ("card", "banner", "toasts", "test", "tutorial"):
+            if key in outlined:
                 dr.rectangle(box, outline=COLORS[key])
             else:
                 dr.rounded_rectangle(box, radius=4, fill=COLORS[key], outline=(6, 8, 18))
-            dr.text((box[0] + 3, box[1] + 2), LABELS[key], fill=(0, 0, 0) if key not in ("card", "banner", "toasts", "test", "tutorial", "menu", "bar", "serverStorm") else (255, 255, 255))
+            dr.text((box[0] + 3, box[1] + 2), LABELS[key], fill=(0, 0, 0) if key not in outlined + ("menu", "bar", "serverStorm") else (255, 255, 255))
         dr.text((4, TILE_H + 8), f"{d['name']}  ({d['class']}, UI scale {s:.2f})", fill=(255, 255, 255))
         tiles.append(img)
 

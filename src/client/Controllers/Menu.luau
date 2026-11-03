@@ -1,8 +1,11 @@
 --!strict
--- The one MENU button on the left edge and the card it opens: five tiles,
--- SHOP, RESEARCH, TELEPORT, BOOSTS and REWARDS (three across, the last two
--- centred under them), that pop in one after another over a dimmed
--- screen. A red dot on REWARDS and on the MENU button means a reward is
+-- The one MENU button and the card it opens: six tiles, SHOP, RESEARCH,
+-- TELEPORT, BOOSTS, REWARDS and SETTINGS (three across, two rows), that pop
+-- in one after another over a dimmed screen. The button sits in the bottom
+-- left corner on a PC or console, under the storm timer on a sideways phone
+-- or tablet and in the left side band held upright, never in the middle.
+-- Every key shortcut (Controllers/Shortcuts) is a tile here, so touch
+-- players reach everything. A red dot on REWARDS and on the MENU button means a reward is
 -- ready to claim; a yellow dot on SHOP means you can afford the next bottle
 -- or boots, on RESEARCH the next researcher.
 -- Picking a tile closes the card and opens that panel. The card also
@@ -365,9 +368,9 @@ local function buildTile(index: number, item: Item)
 	UI.padHint(tile, item.action)
 end
 
--- The button and its card go where LayoutMath.hud says: the left edge,
--- in the middle on a PC or console, higher on touch (clear of the
--- thumbstick), with the card beside it.
+-- The button and its card go where LayoutMath.hud says: on the left edge
+-- (clear of the thumbstick on touch), with the card beside or above it. The
+-- card opens over the dimmed screen, so it may reach into the middle.
 local function place()
 	UI.place(dock, Layout.hud.menu)
 	UI.place(card, Layout.hud.card)

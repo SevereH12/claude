@@ -4,6 +4,10 @@
 -- pack Util/TopUp picks: the cheapest that covers what you're short, else
 -- the biggest. Systems/Receipts pays it; it never buys the item itself: the
 -- player taps the item again. The server still checks every price.
+-- It has no card of its own to place: Roblox's purchase window is system UI,
+-- drawn by Roblox over the whole screen on every device, and the buy buttons
+-- that call this are the panels' (at least 44 points on touch). REPEAT_SECONDS
+-- keeps a fumbled double tap from prompting twice.
 
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")

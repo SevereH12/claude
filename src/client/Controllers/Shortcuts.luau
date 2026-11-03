@@ -4,6 +4,13 @@
 -- research, T teleport, P boosts, G rewards, V Remote Sell, Comma settings;
 -- Y menu and L1 Remote Sell on a gamepad). Esc and gamepad B always close.
 -- Small chips on the buttons name them (UI.padHint), nothing on touch.
+--
+-- Every shortcut has a touch way too, so a phone or tablet reaches all of
+-- it: M, B, R, T, P, G and Comma are the MENU button's tiles (Controllers/
+-- Menu: SHOP, RESEARCH, TELEPORT, BOOSTS, REWARDS, SETTINGS), V is the SELL
+-- button by the bottle bar (Controllers/HUD), and Esc / gamepad B is the X
+-- on a panel or a tap on the dimmed screen behind it. Nothing in the game
+-- needs a mouse hover or a right click.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")

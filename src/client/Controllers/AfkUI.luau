@@ -1,6 +1,6 @@
 --!strict
 -- The AFK screen: while you're in the AFK Lounge (snapshot.afk, from
--- Systems/Afk), a calm card across the middle of the screen:
+-- Systems/Afk), a calm card above the bottle bar (Layout.hud.tutorial's slot):
 --   "💤 AFK: +12,345 Volts/hour", "10% of your best grinding (Ember Mesa)"
 --   (Premium members: 15%, with the Premium icon), what you've earned and
 --   for how long, and "How is this worked out?", which opens the breakdown
@@ -29,7 +29,6 @@ local Types = require(ReplicatedStorage.Shared.Types)
 local BoostRules = require(ReplicatedStorage.Shared.Util.Boosts)
 local Progression = require(ReplicatedStorage.Shared.Util.Progression)
 local Layout = require(script.Parent.Parent.Lib.Layout)
-local LayoutMath = require(script.Parent.Parent.Lib.LayoutMath)
 local UI = require(script.Parent.Parent.Lib.UI)
 local State = require(script.Parent.State)
 
@@ -84,19 +83,16 @@ local function percent(fraction: number): string
 	return `{math.floor(fraction * 100 + 0.5)}%`
 end
 
--- Where the card goes: centred under the top pieces, never over MENU.
+-- Where the card goes: in the tutorial's slot (Layout.hud.tutorial: above the
+-- bottle bar, or under the bar on a screen held upright), so the middle of
+-- the screen stays clear. Opened out, it grows away from the nearer edge.
 local function place()
-	local hud = Layout.hud
-	local area = Layout.area
-	local width = math.min(WIDTH, area.X - 2 * LayoutMath.MARGIN)
-	local x = (area.X - width) / 2
-	local y = hud.banner.y
-	local menu = hud.menu
-	if x < menu.x + menu.w and x + width > menu.x then
-		y = math.max(y, menu.y + menu.h + LayoutMath.GAP)
-	end
+	local slot = Layout.hud.tutorial
+	local width = math.min(WIDTH, slot.w)
 	local height = HEAD + (if expanded then lines * LINE + 10 else 0)
-	UI.place(card, { x = x, y = y, w = width, h = height })
+	local atBottom = slot.y > Layout.area.Y / 2
+	local y = if atBottom then slot.y + slot.h - height else slot.y
+	UI.place(card, { x = slot.x + (slot.w - width) / 2, y = y, w = width, h = height })
 end
 
 local function line(order: number, text: string, color: Color3?)

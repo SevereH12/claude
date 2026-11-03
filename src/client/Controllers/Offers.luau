@@ -2,11 +2,18 @@
 -- Offers at the right moment, the free 2x Volts trial, and purchase thanks.
 --
 -- Fair play: an offer is a small card (the pass's icon, one line, SEE and
--- ✕) that never blocks play, hides itself after a while, and never opens a
--- purchase window: SEE opens the store at that pass (BoostsUI.openAt), and
--- only the store's BUY prompts. When one may show is Util/Store.canOffer:
--- never in a session's first 3 minutes, at most one every 5 minutes, each
--- once a session, never over the menu or a panel, never for an owned pass.
+-- ✕, in one row) that never blocks play, hides itself after a while, and
+-- never opens a purchase window: SEE opens the store at that pass
+-- (BoostsUI.openAt), and only the store's BUY prompts. When one may show is
+-- Util/Store.canOffer: never in a session's first 3 minutes, at most one
+-- every 5 minutes, each once a session, never over the menu or a panel,
+-- never for an owned pass, and never over the tutorial's step card.
+--
+-- Where it sits is Layout.hud.offer: a strip above the bottle bar (under
+-- the bar, shared with the toasts, on a screen held upright), clear of the
+-- thumbstick, the jump button and the middle of the screen. SEE and ✕ are
+-- laid out for fingers (LayoutMath.tapMin: at least 44 points) and never
+-- overlap; the card sinks taps, so a tap on it never reaches the game.
 --
 --   Triggers: a full bottle far from a sell station (Remote Sell, or Big
 --   Bottles for Remote Sell owners; the locked SELL by the bottle bar shows
@@ -32,9 +39,11 @@ local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Net = require(ReplicatedStorage.Shared.Net)
 local PassRules = require(ReplicatedStorage.Shared.Util.Passes)
 local Store = require(ReplicatedStorage.Shared.Util.Store)
+local TutorialRules = require(ReplicatedStorage.Shared.Util.Tutorial)
 local Types = require(ReplicatedStorage.Shared.Types)
 local Celebrate = require(script.Parent.Parent.Lib.Celebrate)
 local Layout = require(script.Parent.Parent.Lib.Layout)
+local LayoutMath = require(script.Parent.Parent.Lib.LayoutMath)
 local SettingsStore = require(script.Parent.Parent.Lib.SettingsStore)
 local Sfx = require(script.Parent.Parent.Lib.Sfx)
 local UI = require(script.Parent.Parent.Lib.UI)
@@ -44,8 +53,7 @@ local Menu = require(script.Parent.Menu)
 local State = require(script.Parent.State)
 
 local COLORS = UI.COLORS
-local CARD_HEIGHT = 112
-local SLIDE = 30 -- design pixels the card slides in from
+local SLIDE = 30 -- design pixels the card slides in from (toward the nearest edge)
 local OFFER_SECONDS = 20 -- an offer hides itself after this
 local SUMMARY_SECONDS = 12
 local CHECK_INTERVAL = 0.5
@@ -59,6 +67,7 @@ local card: Frame
 local cardImage: ImageLabel
 local cardEmoji: TextLabel
 local cardText: TextLabel
+local cardClose: TextButton
 local cardAction: TextButton
 local onAction: (() -> ())? = nil
 local token = 0 -- bumped whenever the card changes, so old timers leave it alone
@@ -71,6 +80,12 @@ local researchLevels: { [string]: number }? = nil -- role -> level, to spot hire
 
 local function uiOpen(): boolean
 	return Menu.isOpen() or UI.anyPanelOpen()
+end
+
+-- Is the tutorial's step card up? (Offers wait: the first minutes are its.)
+local function tutorialOn(): boolean
+	local snapshot = State.current
+	return snapshot ~= nil and TutorialRules.isActive(snapshot.tutorialStep)
 end
 
 -- Does the player already have what this offer sells? ("Trial": used, or
@@ -86,11 +101,21 @@ local function owns(key: string): boolean
 	return snapshot.passes[key] == true
 end
 
--- Where the card goes: the top of the menu card's place (free whenever the
--- menu is closed, and offers never show while it's open).
-local function slot(): (number, number, number)
-	local rect = Layout.hud.card
-	return rect.x, rect.y, rect.w
+-- Lays the card out in the offer rectangle (Layout.hud.offer; the row is
+-- LayoutMath.offerRow, so SEE and ✕ are at least 44 points on touch and
+-- never overlap). Returns where the card goes and which way it slides in
+-- (toward the nearer edge of the screen).
+local function layoutCard(): (number, number, number)
+	local rect = Layout.hud.offer
+	local row = LayoutMath.offerRow(Layout.class, Layout.scale, rect.w, rect.h)
+	card.Size = UDim2.fromOffset(rect.w, row.height)
+	UI.place(cardImage, row.icon)
+	UI.place(cardEmoji, row.icon)
+	UI.place(cardText, row.text)
+	UI.place(cardClose, row.close)
+	UI.place(cardAction, row.see)
+	local dir = if rect.y > Layout.area.Y / 2 then 1 else -1
+	return rect.x, rect.y, dir
 end
 
 local function hide()
@@ -100,9 +125,9 @@ local function hide()
 	token += 1
 	local mine = token
 	onAction = nil
-	local x, y = slot()
+	local x, y, dir = layoutCard()
 	local out = TweenService:Create(card, UI.TWEEN.fast, {
-		Position = UDim2.fromOffset(x - SLIDE, y),
+		Position = UDim2.fromOffset(x, y + dir * SLIDE),
 	})
 	out.Completed:Once(function()
 		if token == mine then
@@ -132,9 +157,8 @@ local function show(
 	cardText.Text = text
 	cardAction.Text = actionText
 	onAction = action
-	local x, y, w = slot()
-	card.Size = UDim2.fromOffset(w, CARD_HEIGHT)
-	card.Position = UDim2.fromOffset(x - SLIDE, y)
+	local x, y, dir = layoutCard()
+	card.Position = UDim2.fromOffset(x, y + dir * SLIDE)
 	card.Visible = true
 	TweenService:Create(card, UI.TWEEN.open, { Position = UDim2.fromOffset(x, y) }):Play()
 	task.delay(seconds, function()
@@ -155,6 +179,7 @@ end
 local function allowed(key: string): boolean
 	return SettingsStore.get("showOffers")
 		and not card.Visible
+		and not tutorialOn()
 		and Store.canOffer(offerState, key, os.clock(), uiOpen(), owns(key))
 end
 
@@ -270,7 +295,7 @@ end
 local function onLanded(landed: Types.StrikeLanded)
 	if table.find(landed.assayed, player.UserId) then
 		local percent = math.round(Config.PASS_VALUES.luckyChance * 100)
-		offer("LuckyCharges", `Like doubles? {percent}% of catches with Lucky Charges`)
+		offer("LuckyCharges", `Want doubles? Lucky Charges: {percent}% of catches`)
 	end
 end
 
@@ -287,7 +312,7 @@ local function onState(snapshot: Types.Snapshot)
 	end
 	researchLevels = levels
 	if grew then
-		offer("LabGrant", "Lab Grant: researchers set up instantly and learn 2x faster")
+		offer("LabGrant", "Lab Grant: instant setup and 2x faster learning")
 	end
 
 	-- the trial just started
@@ -343,6 +368,7 @@ local function buildCard()
 	local _, root = Layout.screen("StormBottlerOffers", 3)
 	card = UI.panel({
 		Name = "OfferCard",
+		Active = true, -- a tap on the card is the card's, not the game's
 		Visible = false,
 		Parent = root,
 	})
@@ -350,48 +376,35 @@ local function buildCard()
 		Name = "Icon",
 		BackgroundTransparency = 1,
 		ScaleType = Enum.ScaleType.Fit,
-		Position = UDim2.fromOffset(10, 10),
-		Size = UDim2.fromOffset(56, 56),
 		Parent = card,
 	})
 	UI.corner(cardImage, UDim.new(0, 10))
 	cardEmoji = UI.label({
 		Title = true,
 		Text = "",
-		Position = UDim2.fromOffset(10, 10),
-		Size = UDim2.fromOffset(56, 56),
 		Parent = card,
 	})
 	UI.maxText(cardEmoji, 44)
 	cardText = UI.label({
 		Text = "",
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextYAlignment = Enum.TextYAlignment.Top,
 		TextWrapped = true,
-		Position = UDim2.fromOffset(76, 10),
-		Size = UDim2.new(1, -122, 0, 56),
 		Parent = card,
 	})
 	UI.maxText(cardText, 20)
-	local close = UI.button({
+	cardClose = UI.button({
 		Name = "Close",
 		Text = "X",
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -8, 0, 8),
-		Size = UDim2.fromOffset(36, 36),
 		BackgroundColor3 = COLORS.panelDark,
 		Parent = card,
 	})
-	close.Activated:Connect(function()
-		UI.pop(close)
+	cardClose.Activated:Connect(function()
+		UI.pop(cardClose)
 		hide()
 	end)
 	cardAction = UI.button({
 		Name = "Action",
 		Text = "SEE",
-		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -10, 1, -10),
-		Size = UDim2.fromOffset(120, 36),
 		BackgroundColor3 = COLORS.green,
 		Parent = card,
 	})
@@ -404,10 +417,10 @@ local function buildCard()
 			action()
 		end
 	end)
+	layoutCard()
 	Layout.Changed:Connect(function()
+		local x, y = layoutCard()
 		if card.Visible then
-			local x, y, w = slot()
-			card.Size = UDim2.fromOffset(w, CARD_HEIGHT)
 			card.Position = UDim2.fromOffset(x, y)
 		end
 	end)

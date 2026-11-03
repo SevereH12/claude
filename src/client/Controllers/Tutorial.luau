@@ -1,9 +1,10 @@
 --!strict
 -- The new-player tutorial, as the player sees it (the rules: Util/Tutorial;
 -- the server moves the step on: Systems/Tutorial). While a step is on:
---   * a step card in the middle of the top (Layout.hud.tutorial; the toasts
---     move under it) with one short line and SKIP, which asks "Skip the
---     tutorial?" first (YES sends "skip" on the Tutorial remote)
+--   * a step card above the bottle bar (Layout.hud.tutorial; the strip under
+--     the bar on a screen held upright, shared with the toasts) with one
+--     short line and SKIP, which asks "Skip the tutorial?" first (YES sends
+--     "skip" on the Tutorial remote)
 --   * step 1: a glowing Beam from the player to the first zone's gate, and
 --     a beacon there
 --   * step 2: the catch count, or (when it's calm) the storm timer
@@ -253,7 +254,6 @@ local function update()
 		skipped = false
 	end
 	local active = TutorialRules.isActive(step) and not skipped
-	Layout.setTutorial(active or finishing)
 	card.Visible = active or finishing
 	if not active or not snapshot then
 		showPath(nil)

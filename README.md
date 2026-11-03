@@ -759,6 +759,34 @@ lines.
     effects, music and sound, and the tutorial.
   - `Lib/`: UI helpers (`UI`, `Layout`, `LayoutMath`), sounds (`Sfx`),
     settings, toasts and the Log and leaderboard tabs.
+  - Panels (shop, boosts, rewards, research, settings, teleport, gift,
+    ascension, admin) are built with `UI.window` and lay themselves out
+    from the body's size in design pixels (`window.onResize`), never from
+    what the screen measured: nothing wraps or drops under its card. On a
+    phone the window takes the whole safe area under the top bar and its
+    content scrolls; tabs (`UI.tabs`) stay on one line and swap to a short
+    wording where the long one won't fit; cards use as many columns as the
+    width allows (`UI.columns`); buttons are `UI.tall` (TAP_MIN points on
+    touch); text of unknown length wraps in a box with room for it and
+    shrinks to a floor (`UI.maxText(label, size, floor)`) instead of being
+    cut off.
+  - The gameplay screen (`LayoutMath.hud`, drawn by `Controllers/HUD`,
+    `Menu`, `Offers`, `Tutorial`, `ZoneBanner`) keeps the middle of the
+    screen clear (`LayoutMath.playArea`: the middle half of the width and
+    30 to 40% of the height, a little less with a bigger Text size).
+    Everything hugs an edge or corner, clear of Roblox's top bar, the
+    thumbstick and the jump button: Volts, the storm timer and the goal at
+    the top corners; the bottle bar bottom middle (between the thumbs held
+    sideways, under the stats held upright); MENU bottom left on a PC or
+    console, down the left edge on a sideways phone or tablet, in the left
+    side band upright; toasts across the top; the tutorial's card, the
+    Robux offer card and the AFK card in one strip above the bar (under it
+    upright, shared with the toasts). A touch screen shows the zone title as
+    a toast. Nothing wraps: chips are sized for their text
+    and pick the longest wording that fits (down to an icon and a time),
+    and the offer card is one row (icon, text, SEE, X) whose buttons are
+    at least 44 points. `tools/harness/test_layout.luau` checks all of
+    it on every device and Text size, and `tools/render_ui.py` draws it.
 - `plugin/` → the Studio updater plugin (not part of the game).
 - `tools/` → the test harness (`tools/harness`, run with Lune), map
   checks and renders, and store, audio and ops scripts.

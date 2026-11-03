@@ -1144,7 +1144,9 @@ function UI.toast(
 		end
 		UI.pop(frame, 1.06)
 	else
-		toastFrames[entry.id] = buildToast(entry, action, wrap)
+		-- a phone's toasts always may take two lines: at its smallest text
+		-- size one line can't hold a long tip, and it would be cut off
+		toastFrames[entry.id] = buildToast(entry, action, wrap or Layout.class == "Phone")
 	end
 	local id, generation = entry.id, entry.generation
 	task.delay(duration, function()

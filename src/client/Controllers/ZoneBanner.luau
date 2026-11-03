@@ -1,6 +1,9 @@
 --!strict
 -- Big title card when you walk into a zone ("SHORELINE - everyone in the
--- circle catches"), plus toasts (UI.toast): how much the zone's storm slows
+-- circle catches") on a PC or console, where it sits under the toasts at the
+-- top (Layout.hud.banner). A phone or tablet has no room for it above the
+-- middle of the screen (Layout.hud.banner is zero high there), so the same
+-- words come as a toast. Plus toasts (UI.toast): how much the zone's storm slows
 -- you down when you walk in (Util/Speed), a short note when you leave a zone
 -- (speed boost) and why a zone is locked when you walk up to its gate. Every other message is a toast too; this banner is only for zone
 -- titles and Server Storms (Controllers/Announcements). Each shows once per event: the card not again for the same zone
@@ -41,6 +44,11 @@ local showToken = 0
 -- A title card for SHOW_TIME seconds (or `seconds`). Each show bumps the
 -- token; a hide only runs for the show that scheduled it, and ends invisible.
 function ZoneBanner.show(text: string, subtext: string, color: Color3, seconds: number?)
+	if Layout.hud.banner.h <= 0 then
+		local time = math.max(seconds or SHOW_TIME, UI.TOAST_TIME)
+		UI.toast(`{text} · {subtext}`, "volt", time, nil, true)
+		return
+	end
 	showToken += 1
 	local token = showToken
 	title.Text = text

@@ -2,6 +2,18 @@
 -- Device class, UI scale and the edge-anchored HUD layout (client/Lib/
 -- LayoutMath) on every screen the game must fit.
 --   lune run tools/harness/test_layout.luau [preview.json]
+-- The rules it enforces, on every device at every Text size:
+--   * every piece is on screen, clear of Roblox's top bar buttons and of
+--     each other;
+--   * nothing sits in the play area (the middle of the screen,
+--     LayoutMath.playArea): not a HUD piece, a toast, the zone banner, the
+--     tutorial's card or the Robux offer card. The timed chips (boosts,
+--     friends, server chips) are held to it at Normal text size; bigger
+--     text makes them bigger than the side bands can hold;
+--   * nothing wraps or drops to a second line: every chip is wide enough
+--     for its shortest wording, the strips are wide enough for their text;
+--   * on touch, nothing is under the thumbstick or the jump button, and
+--     the offer card's SEE and X are at least 44 points and never overlap.
 -- With a path, also writes every device's HUD rectangles there, for
 -- tools/render_ui.py to draw.
 local fs = require("@lune/fs")
@@ -36,16 +48,53 @@ local devices = {
 	{ "iPhone portrait", Vector2.new(390, 844), touch, "Phone" },
 	{ "iPhone landscape", Vector2.new(844, 390), touch, "Phone" },
 	{ "small phone portrait", Vector2.new(360, 640), touch, "Phone" },
+	{ "small phone landscape", Vector2.new(640, 360), touch, "Phone" },
+	{ "iPhone SE portrait", Vector2.new(375, 667), touch, "Phone" },
+	{ "iPhone SE landscape", Vector2.new(667, 375), touch, "Phone" },
 	{ "iPad landscape", Vector2.new(1024, 768), touch, "Tablet" },
 	{ "iPad portrait", Vector2.new(768, 1024), touch, "Tablet" },
 	{ "1080p desktop", Vector2.new(1920, 1080), pc, "Desktop" },
 	{ "4K desktop", Vector2.new(3840, 2160), pc, "Desktop" },
 	{ "small window", Vector2.new(800, 600), pc, "Desktop" },
+	{ "tall window", Vector2.new(600, 900), pc, "Desktop" },
 	{ "ultrawide", Vector2.new(3440, 1440), pc, "Desktop" },
 	{ "console at 1080p", Vector2.new(1920, 1080), pad, "Console" },
 }
 
-local STAY = { "volts", "storm", "boosts", "goal", "serverStorm", "event", "serverGoal", "friends", "bar", "menu" } -- always on screen
+-- always on screen, and never over one another
+local STAY = {
+	"volts",
+	"storm",
+	"boosts",
+	"goal",
+	"serverStorm",
+	"event",
+	"serverGoal",
+	"friends",
+	"bar",
+	"menu",
+}
+-- the pieces that hold to the play area at every Text size
+local CORE = { "volts", "storm", "goal", "bar", "menu", "toasts", "banner", "tutorial", "offer" }
+-- the timed chips: held to the play area and the thumb zones at Normal text
+local CHIPS = { "boosts", "serverStorm", "event", "serverGoal", "friends" }
+-- strips for passing things: they appear one at a time
+local STRIPS = { "toasts", "banner", "tutorial", "offer" }
+-- each chip's shortest wording (the HUD shows the longest that fits)
+local SHORTEST = {
+	serverStorm = "🌩️ 59:59",
+	event = "🎉 59:59",
+	serverGoal = "⚡ 100%",
+	friends = LayoutMath.FRIENDS_SAMPLE,
+}
+
+local function solid(r)
+	return r.w > 0 and r.h > 0
+end
+local function rectOf(x, y, w, h)
+	return { x = x, y = y, w = w, h = h }
+end
+
 local preview = {}
 
 -- every device at every Text size setting (0 Normal, 1 Large, 2 Extra large)
@@ -71,7 +120,20 @@ for _, level in { 0, 1, 2 } do
 				height = TOPBAR / scale,
 			}
 		local chipText = LayoutMath.chipText(got, scale, level)
-		local hud = LayoutMath.hud(got, area, topbar, nil, chipText)
+		local hud = LayoutMath.hud(got, area, topbar, chipText, level)
+		local play = LayoutMath.playArea(got, area, level)
+		local upright = area.Y > area.X
+		local isTouch = LayoutMath.isTouch(got)
+
+		-- the play area is a box in the middle of the screen
+		check(LayoutMath.inside(play, area), `{name}: the play area is on screen`)
+		check(
+			math.abs(play.x + play.w / 2 - area.X / 2) < 1e-6
+				and math.abs(play.y + play.h / 2 - area.Y / 2) < 1e-6,
+			`{name}: the play area is centred`
+		)
+		check(play.w >= 0.4 * area.X - 1e-6, `{name}: the play area is at least 40% of the width`)
+
 		-- chips: tall enough for their text at the smallest size Roblox may
 		-- draw it, and wide enough for the whole of it (no cut-off numbers)
 		check(
@@ -90,20 +152,28 @@ for _, level in { 0, 1, 2 } do
 			`{name}: a boost chip fits "{LayoutMath.BOOST_SAMPLE}" ({boostChip.X} wide)`
 		)
 		check(boostChip.Y + 1e-6 >= chipH, `{name}: a boost chip is tall enough for its text`)
-		-- every other chip's shortest wording fits (the HUD shows the longest that does)
-		local shortest = {
-			serverStorm = "🌩️ 2x · 59:59",
-			event = "🎉 2x · 23h 59m",
-			serverGoal = "⚡ 2x · 59:59",
-			friends = "👥 +50%",
-		}
-		for key, text in shortest do
+		-- every other chip's shortest wording fits: nothing wraps or is cut off
+		for key, text in SHORTEST do
 			check(
-				LayoutMath.chipWidth(text, chipText) <= hud[key].w,
-				`{name}: {key} fits "{text}"`
+				LayoutMath.chipWidth(text, chipText) <= hud[key].w + 1e-6,
+				`{name}: {key} fits "{text}" ({hud[key].w} wide)`
 			)
 			check(hud[key].h >= chipText + 6, `{name}: {key} is tall enough for its text`)
 		end
+		-- the strips are wide enough for their text; the banner is a big card
+		-- where it has room (PC, console) and zero high where it is a toast
+		check(hud.toasts.w >= 260, `{name}: toasts are wide enough ({hud.toasts.w})`)
+		check(hud.tutorial.w >= 380, `{name}: the tutorial card is wide enough`)
+		check(hud.offer.w >= 380, `{name}: the offer card is wide enough`)
+		check(
+			hud.banner.h == 0 or hud.banner.w >= 260,
+			`{name}: the zone banner is wide enough or a toast`
+		)
+		check(
+			hud.banner.h == 0 or not isTouch,
+			`{name}: a touch screen shows the zone banner as a toast`
+		)
+
 		for _, block in LayoutMath.topbarBlocks(area, topbar) do
 			for key, r in hud do
 				check(
@@ -112,74 +182,127 @@ for _, level in { 0, 1, 2 } do
 				)
 			end
 		end
-
 		for key, r in hud do
 			if key ~= "test" then
 				check(LayoutMath.inside(r, area), `{name}: {key} is on screen`)
 			end
 		end
+
+		-- nothing overlaps: the always-on pieces with each other, the strips
+		-- with every piece
 		for i, a in STAY do
 			for j = i + 1, #STAY do
 				local b = STAY[j]
 				check(not LayoutMath.overlaps(hud[a], hud[b]), `{name}: {a} and {b} don't overlap`)
 			end
-			check(not LayoutMath.overlaps(hud.toasts, hud[a]), `{name}: toasts clear {a}`)
-			check(not LayoutMath.overlaps(hud.banner, hud[a]), `{name}: zone banner clears {a}`)
-		end
-		-- while the tutorial shows, its step card takes the toasts' place and
-		-- they (and the zone banner) move under it: everything still fits,
-		-- and the card stays clear of every HUD piece and the thumb controls
-		local withCard = LayoutMath.hud(got, area, topbar, true, chipText)
-		for key, r in withCard do
-			if key ~= "test" then
-				check(LayoutMath.inside(r, area), `{name} (tutorial): {key} is on screen`)
+			for _, strip in STRIPS do
+				check(not LayoutMath.overlaps(hud[strip], hud[a]), `{name}: {strip} clears {a}`)
 			end
 		end
-		for _, key in STAY do
+		-- the strips apart: held upright they share the one strip under the bar
+		-- (one shows at a time: Offers wait for the tutorial, a banner is a
+		-- toast); elsewhere the toasts are across the top and the cards above
+		-- the bar, and the offer and the tutorial's card share their slot
+		if upright then
+			for _, strip in { "tutorial", "offer" } do
+				check(
+					math.abs(hud[strip].y - hud.toasts.y) < 1e-6,
+					`{name}: the {strip} card shares the toasts' strip`
+				)
+			end
+		else
+			for _, strip in { "banner", "tutorial", "offer" } do
+				check(
+					not LayoutMath.overlaps(hud.toasts, hud[strip]),
+					`{name}: toasts clear the {strip}`
+				)
+			end
 			check(
-				LayoutMath.overlaps(withCard[key], hud[key]) or withCard[key].w == 0,
-				`{name} (tutorial): {key} stays where it was`
-			)
-			check(
-				not LayoutMath.overlaps(withCard.tutorial, withCard[key]),
-				`{name} (tutorial): the step card clears {key}`
-			)
-			check(
-				not LayoutMath.overlaps(withCard.toasts, withCard[key]),
-				`{name} (tutorial): toasts clear {key}`
-			)
-			check(
-				not LayoutMath.overlaps(withCard.banner, withCard[key]),
-				`{name} (tutorial): zone banner clears {key}`
+				not LayoutMath.overlaps(hud.banner, hud.tutorial)
+					and not LayoutMath.overlaps(hud.banner, hud.offer),
+				`{name}: the banner clears the cards`
 			)
 		end
-		check(
-			not LayoutMath.overlaps(withCard.tutorial, withCard.toasts),
-			`{name} (tutorial): the step card clears the toasts`
-		)
-		if LayoutMath.isTouch(got) then
-			for _, zone in LayoutMath.thumbZones(area) do
+
+		-- the middle of the screen stays clear (the chips at Normal text size)
+		for _, key in CORE do
+			check(not LayoutMath.overlaps(hud[key], play), `{name}: {key} is clear of the play area`)
+		end
+		if level == 0 then
+			for _, key in CHIPS do
 				check(
-					not LayoutMath.overlaps(withCard.tutorial, zone),
-					`{name} (tutorial): the step card is clear of the thumb controls`
+					not LayoutMath.overlaps(hud[key], play),
+					`{name}: {key} is clear of the play area`
 				)
 			end
 		end
+
+		-- the menu's card opens over a dimmed screen, so it may reach into the
+		-- middle, but it must be on screen and clear of the button and of the
+		-- core pieces
 		check(
 			not LayoutMath.overlaps(hud.card, hud.menu),
 			`{name}: the menu card opens beside the button`
 		)
-		for _, key in { "volts", "storm", "boosts", "goal", "serverStorm", "event", "serverGoal", "friends", "bar" } do
+		for _, key in { "volts", "storm", "goal", "bar" } do
 			check(
 				not LayoutMath.overlaps(hud.card, hud[key]),
 				`{name}: the open menu card clears {key}`
 			)
 		end
-		if LayoutMath.isTouch(got) then
+
+		-- the offer card: its row (icon, text, SEE, X) fits the card, SEE and
+		-- X are fingertip-sized and apart, and the card (grown to hold them)
+		-- keeps clear of the middle and the thumb controls
+		local row = LayoutMath.offerRow(got, scale, hud.offer.w, hud.offer.h)
+		local cardBox = rectOf(0, 0, hud.offer.w, row.height)
+		for _, key in { "icon", "text", "see", "close" } do
+			check(LayoutMath.inside(row[key], Vector2.new(cardBox.w, cardBox.h)), `{name}: offer {key} is in the card`)
+		end
+		local parts = { "icon", "text", "see", "close" }
+		for i, a in parts do
+			for j = i + 1, #parts do
+				check(
+					not LayoutMath.overlaps(row[a], row[parts[j]]),
+					`{name}: offer {a} and {parts[j]} don't overlap`
+				)
+			end
+		end
+		check(row.text.w >= 150, `{name}: the offer's text has room ({row.text.w})`)
+		if isTouch then
+			for _, key in { "see", "close" } do
+				check(
+					row[key].w * scale >= 44 - 1e-6 and row[key].h * scale >= 44 - 1e-6,
+					`{name}: offer {key} is at least 44 points`
+				)
+			end
+		end
+		local grown = rectOf(hud.offer.x, hud.offer.y, hud.offer.w, row.height)
+		check(LayoutMath.inside(grown, area), `{name}: the offer card still fits on screen`)
+		check(not LayoutMath.overlaps(grown, play), `{name}: the offer card is clear of the play area`)
+		check(not LayoutMath.overlaps(grown, hud.bar), `{name}: the offer card clears the bar`)
+		-- the tutorial's SKIP (and YES / NO) fit the card at fingertip size
+		if isTouch then
+			check(
+				hud.tutorial.h * scale >= 44 - 1e-6,
+				`{name}: the tutorial card is tall enough for a 44 point button`
+			)
+		end
+
+		if isTouch then
+			local pieces = {}
+			for _, key in STAY do
+				if level == 0 or not table.find(CHIPS, key) then
+					pieces[key] = hud[key]
+				end
+			end
+			pieces.tutorial = hud.tutorial
+			pieces.offer = grown
+			pieces.toasts = hud.toasts
 			for _, zone in LayoutMath.thumbZones(area) do
-				for _, key in STAY do
+				for key, r in pieces do
 					check(
-						not LayoutMath.overlaps(hud[key], zone),
+						not LayoutMath.overlaps(r, zone),
 						`{name}: {key} is clear of the thumb controls`
 					)
 				end
@@ -189,6 +312,10 @@ for _, level in { 0, 1, 2 } do
 			check(
 				tap.X >= 44 - 1e-6 and tap.Y >= 44 - 1e-6,
 				`{name}: a small button grows to 44 points`
+			)
+			check(
+				hud.menu.w * scale >= 44 - 1e-6 and hud.menu.h * scale >= 44 - 1e-6,
+				`{name}: MENU is at least 44 points`
 			)
 		end
 		if got == "Phone" then
@@ -233,8 +360,9 @@ for _, level in { 0, 1, 2 } do
 			edge = edge,
 			topbar = { topbar.left, topbar.right, topbar.height },
 			hud = rects,
+			play = { play.x, play.y, play.w, play.h },
 			panel = { panel.X, panel.Y },
-			thumbs = if LayoutMath.isTouch(got)
+			thumbs = if isTouch
 				then (function()
 					local out = {}
 					for _, z in LayoutMath.thumbZones(area) do
@@ -256,6 +384,11 @@ check(
 	LayoutMath.scale("Desktop", Vector2.new(3840, 2160))
 		== 2 * LayoutMath.scale("Desktop", Vector2.new(1920, 1080)),
 	"4K is twice 1080p"
+)
+-- a zero-size rectangle (the banner shown as a toast) overlaps nothing
+check(
+	not LayoutMath.overlaps(rectOf(5, 5, 0, 0), rectOf(0, 0, 100, 100)),
+	"a zero-size rectangle overlaps nothing"
 )
 -- the HUD picks the longest wording that fits, else the shortest
 check(
