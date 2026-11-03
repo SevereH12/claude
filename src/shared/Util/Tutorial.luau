@@ -44,9 +44,12 @@ end
 
 -- The step a profile starts at when it loads: DONE for old players,
 -- otherwise the saved step (a real step, or DONE).
-function Tutorial.loadStep(
-	profile: { bottleTier: number, bootTier: number?, ascension: number, tutorialStep: any }
-): number
+function Tutorial.loadStep(profile: {
+	bottleTier: number,
+	bootTier: number?,
+	ascension: number,
+	tutorialStep: any,
+}): number
 	local step = profile.tutorialStep
 	-- the boots step comes after the Vial, so it outlives "old player"
 	if step == Tutorial.BOOTS then
